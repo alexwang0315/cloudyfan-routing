@@ -1,0 +1,49 @@
+{
+  "source_workspace": "CloudyFan (local workspace; original has no Git repository)",
+  "extracted_at": "2026-10-18",
+  "policy_version": "hierarchical50-binary-v1",
+  "sources": [
+    {
+      "path": "artifacts/hierarchical50-20261018/routing.py",
+      "sha256": "d86bde1282b66a59005b64774f323228323cfbe7808fdcc2cac3345bbd1edc76"
+    },
+    {
+      "path": "artifacts/hierarchical50-20261018/client.py",
+      "sha256": "088ed07bf683e19dc1d83e8112121d473ef93a2c1434c75973f065ded9e0acd4"
+    },
+    {
+      "path": "artifacts/hierarchical50-20261018/driver.py",
+      "sha256": "641be49dced464fd287d2298f082d54d25aa459f62bf7008193dd717bc934719"
+    },
+    {
+      "path": "artifacts/hierarchical50-20261018/calibrated-profiles.json",
+      "sha256": "2e8070a0e5e4af92958fcff924fa5d7b19f86129c6597db04b546a00f3a3b127"
+    },
+    {
+      "path": "artifacts/hierarchical50-20261018/decision-profile.json",
+      "sha256": "b546742b3f0fd830045c5cd59b264fe8382b8f36d9382f4161ae49566e0133e6"
+    },
+    {
+      "path": "src/cloudyfan/decision_v2.py",
+      "sha256": "ffb1c54e5852f18f5217ca31c3691f0eb04e06d7543d5f985a7ec8b0cbfee3f7"
+    },
+    {
+      "path": "src/cloudyfan/errors.py",
+      "sha256": "8c00bc095575e9397ba28002e4da962f45e603291bec4a5e6a0b92c2246efaa7"
+    },
+    {
+      "path": "tests/test_hierarchical50_routing.py",
+      "sha256": "763268c87d85f2755ff628a01cfba18125fe6cda08f5a633e5bed2502aec1a19"
+    },
+    {
+      "path": "tests/test_hierarchical50_client.py",
+      "sha256": "4e121fe9c9709947223715574fabef28c369fac3af228fe14fafe0c7f723a73e"
+    },
+    {
+      "path": "tests/test_decision_v2.py",
+      "sha256": "506031690f4d9b78a633670262b74aaf04a2e0ec8c3d3ff3cb059730466c9378"
+    }
+  ],
+  "raw_responses_or_secrets_copied": false,
+  "historical_experiments_modified": false
+}

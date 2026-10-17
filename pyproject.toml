@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cloudyfan-jev-core"
+version = "0.1.0"
+description = "Open-source-first validation and two-stage binary Jev routing core"
+requires-python = ">=3.12"
+dependencies = ["httpx>=0.28,<1"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10", "ruff>=0.11,<1"]
+
+[project.scripts]
+cloudyfan-jev-demo = "cloudyfan_jev.demo:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cloudyfan_jev"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "tests", "examples", "docs", "README.md", "AGENTS.md", "pyproject.toml", "uv.lock", ".env.example", ".gitignore", ".github"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 110
+
+[tool.ruff.lint]
+select = ["F"]

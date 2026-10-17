@@ -1,0 +1,179 @@
+{
+  "snapshot_date": "2026-10-18",
+  "notice": "Historical experimental profiles; not current model availability or price guarantees. Requalify before new paid workloads. No holdout answers included.",
+  "profiles": {
+    "high": {
+      "model": "openai/gpt-6-astra",
+      "model_version": "openai/gpt-6-astra-20260903",
+      "accepted_models": [
+        "openai/gpt-6-astra",
+        "openai/gpt-6-astra-20260903"
+      ],
+      "effort": "xhigh",
+      "provider": "openai",
+      "provider_name": "OpenAI",
+      "capability_card": {
+        "public_calibration": {
+          "category": {
+            "documents_data": {
+              "n": 1,
+              "public_pass": 1
+            },
+            "files_git": {
+              "n": 1,
+              "public_pass": 1
+            },
+            "reasoning": {
+              "n": 1,
+              "public_pass": 1
+            },
+            "source_retrieval": {
+              "n": 1,
+              "public_pass": 1
+            },
+            "web_image": {
+              "n": 1,
+              "public_pass": 1
+            }
+          },
+          "n": 5,
+          "public_pass": 5,
+          "tool_calls": 20
+        },
+        "warning": "Only one independent case per category; these counts are not estimated correctness probabilities. No holdout results used."
+      },
+      "external_score": 116.2
+    },
+    "low": {
+      "model": "openai/gpt-6-sol",
+      "model_version": "openai/gpt-6-sol-20260922",
+      "accepted_models": [
+        "openai/gpt-6-sol",
+        "openai/gpt-6-sol-20260922"
+      ],
+      "effort": "low",
+      "provider": "openai",
+      "provider_name": "OpenAI",
+      "capability_card": {
+        "public_calibration": {
+          "category": {
+            "documents_data": {
+              "n": 1,
+              "public_pass": 1
+            },
+            "files_git": {
+              "n": 1,
+              "public_pass": 1
+            },
+            "reasoning": {
+              "n": 1,
+              "public_pass": 1
+            },
+            "source_retrieval": {
+              "n": 1,
+              "public_pass": 1
+            },
+            "web_image": {
+              "n": 1,
+              "public_pass": 1
+            }
+          },
+          "n": 5,
+          "public_pass": 5,
+          "tool_calls": 21
+        },
+        "warning": "Only one independent case per category; these counts are not estimated correctness probabilities. No holdout results used."
+      },
+      "external_score": 35.4
+    },
+    "mid": {
+      "model": "openai/gpt-6.1-sol",
+      "model_version": "openai/gpt-6.1-sol-20260929",
+      "accepted_models": [
+        "openai/gpt-6.1-sol",
+        "openai/gpt-6.1-sol-20260929"
+      ],
+      "effort": "high",
+      "provider": "openai",
+      "provider_name": "OpenAI",
+      "capability_card": {
+        "public_calibration": {
+          "category": {
+            "documents_data": {
+              "n": 1,
+              "public_pass": 1
+            },
+            "files_git": {
+              "n": 1,
+              "public_pass": 1
+            },
+            "reasoning": {
+              "n": 1,
+              "public_pass": 1
+            },
+            "source_retrieval": {
+              "n": 1,
+              "public_pass": 1
+            },
+            "web_image": {
+              "n": 1,
+              "public_pass": 1
+            }
+          },
+          "n": 5,
+          "public_pass": 5,
+          "tool_calls": 18
+        },
+        "warning": "Only one independent case per category; these counts are not estimated correctness probabilities. No holdout results used."
+      },
+      "external_score": 99.9
+    },
+    "open_source": {
+      "model": "openai/gpt-oss-120b",
+      "model_version": "openai/gpt-oss-120b",
+      "accepted_models": [
+        "openai/gpt-oss-120b"
+      ],
+      "effort": "low",
+      "provider": "baseten/fp4",
+      "provider_name": "BaseTen",
+      "capability_card": {
+        "public_calibration": {
+          "category": {
+            "documents_data": {
+              "n": 1,
+              "public_pass": 1
+            },
+            "files_git": {
+              "n": 1,
+              "public_pass": 1
+            },
+            "reasoning": {
+              "n": 1,
+              "public_pass": 1
+            },
+            "source_retrieval": {
+              "n": 1,
+              "public_pass": 1
+            },
+            "web_image": {
+              "n": 1,
+              "public_pass": 1
+            }
+          },
+          "n": 5,
+          "public_pass": 5,
+          "tool_calls": 12
+        },
+        "warning": "Only one independent case per category; these counts are not estimated correctness probabilities. No holdout results used."
+      },
+      "external_score": null
+    }
+  },
+  "decision": {
+    "model": "typesafe/jev-1.13",
+    "version": "typesafe/jev-1.13-20260917",
+    "provider": "typesafe",
+    "provider_name": "TypeSafe"
+  }
+}

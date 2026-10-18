@@ -1,5 +1,6 @@
 """Public Core.run privacy seam; all network boundaries are offline spies."""
 import socket
+import json
 
 import httpx
 import pytest
@@ -116,3 +117,135 @@ def test_resume_cannot_change_frozen_privacy_policy(tmp_path, change):
     with pytest.raises(ValueError, match='Resume evidence changed'):
         changed.run('frozen', {'prompt': '1+1'}, ArithmeticEnvironment, contract_version='v1')
     assert len(calls) == 1
+
+
+class ToolCapableFixtureBackend:
+    """Injected system-boundary fake; the production local adapter is text-only."""
+    def __init__(self, backend, handler):
+        self.config = backend.descriptor()
+        self.config['protocol'] = 'fixture-tools-v1'
+        self.root = backend.root
+        self.http = httpx.Client(transport=httpx.MockTransport(handler))
+    def descriptor(self): return dict(self.config)
+    def matches_profile(self, profile):
+        return all(profile.get(key) == self.config[key] for key in
+                   ('model_version', 'quantization', 'engine', 'execution_location'))
+    def _directory(self, cid): return self.root / 'calls' / cid
+    def _load(self, directory): return json.loads((directory / 'response.json').read_text())
+    def call(self, cid, payload):
+        directory = self._directory(cid)
+        if (directory / 'response.json').exists():
+            return self._load(directory)
+        directory.mkdir(parents=True, exist_ok=True)
+        response = self.http.post(self.config['endpoint'], json=payload)
+        record = {'raw': response.text}
+        (directory / 'response.json').write_text(json.dumps(record))
+        return record
+    def checked(self, record):
+        assert json.loads(record['raw'])['model'] == self.config['model_version']
+        return {'execution_kind': 'local', 'cost_unknown': False, 'cost_usd': '0'}
+
+
+def private_local_core(tmp_path, local_handler, *, classifier='cloud:typesafe', tools=None, tool_fixture=False):
+    from test_local_backend import local_engine
+    base = local_engine(tmp_path, local_handler)
+    for profile in base.profiles.values():
+        if profile.get('backend') != 'local':
+            profile['execution_location'] = 'cloud:example'
+    backend = ToolCapableFixtureBackend(base.local_backend, local_handler) if tool_fixture else base.local_backend
+    return Core(base.client, base.profiles, base.decision, local_backend=backend,
+                execution_policy=ExecutionPolicy(mode='local_only', origin='home:fixture',
+                                                 classifier=classifier, tools=tools or {}))
+
+
+def test_private_local_pass_and_completed_resume_need_no_cloud_or_classifier(tmp_path):
+    from test_local_backend import TextContract, response
+    local_calls = []
+    def local(request):
+        local_calls.append(request)
+        return response()
+    engine = private_local_core(tmp_path, local)
+    first = engine.run('local-private', {'prompt': '1+1'}, TextContract, contract_version='v1')
+    second = engine.run('local-private', {'prompt': '1+1'}, TextContract, contract_version='v1')
+    assert first == second
+    assert first['status'] == 'passed' and first['selection'] is None
+    assert first['costs']['api_usd'] == '0'
+    assert len(local_calls) == 1
+
+
+@pytest.mark.parametrize('mode,classifier,stage,reason', [
+    ('cloudyfan', 'cloud:typesafe', 'classifier', 'outside_origin'),
+    ('cloudyfan', None, 'classifier', 'unknown_location'),
+    ('cloudyfan', 'home:fixture', 'classifier', 'backend_location_mismatch'),
+    ('open_source_first', 'cloud:typesafe', 'generation', 'outside_origin'),
+])
+def test_private_local_failure_cannot_escape_through_classifier_or_direct_fallback(
+        tmp_path, mode, classifier, stage, reason):
+    from test_local_backend import TextContract, response
+    from cloudyfan_jev.ledger import summarize
+    local_calls = []
+    def local(request):
+        local_calls.append(request)
+        return response('3')
+    engine = private_local_core(tmp_path, local, classifier=classifier)
+    for _ in range(2):
+        with pytest.raises(PolicyDenied) as stopped:
+            engine.run('no-cloud', {'prompt': '1+1'}, TextContract, contract_version='v1', mode=mode)
+        assert stopped.value.details == {'stage': stage, 'reason': reason}
+    assert len(local_calls) == 1, 'Resume must reuse the first local response'
+    assert summarize(engine.local_backend)['calls'] == 1
+    assert summarize(engine.client)['calls'] == 0
+
+
+@pytest.mark.parametrize('location,reason', [
+    (None, 'unknown_location'), ('cloud:search', 'outside_origin'),
+    ('company:fixture', 'outside_origin'), ('home:other', 'outside_origin'),
+])
+def test_private_local_tool_cannot_egress_on_first_attempt_or_resume(tmp_path, location, reason):
+    from test_local_backend import TextContract, response
+    local_calls = []
+    def local(request):
+        local_calls.append(request)
+        return response(choices=[{'finish_reason': 'tool_calls', 'message': {'content': None,
+            'tool_calls': [{'id': 't1', 'type': 'function',
+                'function': {'name': 'search', 'arguments': '{"query":"private data"}'}}]}}])
+    class Env(TextContract):
+        def call(self, name, arguments):
+            pytest.fail('Blocked tool executed')
+    engine = private_local_core(tmp_path, local, tools={'search': location} if location else {}, tool_fixture=True)
+    for _ in range(2):
+        with pytest.raises(PolicyDenied) as stopped:
+            engine.run('private-tool', {'prompt': 'private data'}, Env, contract_version='v1')
+        assert stopped.value.details == {'stage': 'tool', 'reason': reason}
+    assert len(local_calls) == 1
+
+
+def test_allowed_local_tool_and_replay_remain_inside_the_origin(tmp_path):
+    from test_local_backend import TextContract, response
+    local_calls, environments = [], []
+    def local(request):
+        local_calls.append(request)
+        if len(local_calls) == 1:
+            return response(choices=[{'finish_reason': 'tool_calls', 'message': {'content': None,
+                'tool_calls': [{'id': 't1', 'type': 'function',
+                    'function': {'name': 'write', 'arguments': '{"value":"2"}'}}]}}])
+        return response()
+    class Env(TextContract):
+        def __init__(self):
+            self.value = None
+            environments.append(self)
+        def call(self, name, arguments):
+            assert name == 'write'
+            self.value = arguments['value']
+            return {'ok': True}
+        def validate(self, text):
+            if len(environments) == 1:
+                raise RuntimeError('fixture verifier interruption')
+            return {'passed': self.value == '2' and text == '2'}
+    engine = private_local_core(tmp_path, local, tools={'write': 'home:fixture'}, tool_fixture=True)
+    with pytest.raises(RuntimeError, match='fixture verifier interruption'):
+        engine.run('tool-replay', {'prompt': '1+1'}, Env, contract_version='v1')
+    result = engine.run('tool-replay', {'prompt': '1+1'}, Env, contract_version='v1')
+    assert result['status'] == 'passed' and result['resumed'] is True
+    assert len(local_calls) == 2 and len(environments) == 2
+    assert result['costs']['api_usd'] == '0'

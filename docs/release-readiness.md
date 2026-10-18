@@ -1,6 +1,6 @@
 # Routing Core 正式放行索引
 
-更新日期：2026-10-18。範圍限於[主規格 #1](https://github.com/alexwang0315/cloudyfan-routing/issues/1) 的 routing core 與 T01～T12 直接配套；不涵蓋其他部門、商業定價或硬體採購。
+更新日期：2026-10-19。範圍限於[主規格 #1](https://github.com/alexwang0315/cloudyfan-routing/issues/1) 的 routing core 與 T01～T12 直接配套；不涵蓋其他部門、商業定價或硬體採購。
 
 ## 狀態與使用方式
 
@@ -18,7 +18,7 @@
 | **RG-01：公開驗收與修正**，所有執行模式 | [公開診斷契約](public-diagnostics.md)、[HTTP 契約](http-task-api.md)；`Core.run` 注入驗收器測試已驗證版本、失敗／未知、修正及不重送邊界。 | 應用領域的契約語義、歧義審查、驗收器正反例與工具 sandbox 審核；公開訊息不得洩漏隱藏答案。更換驗收實作須新契約版本，完成獨立核對後才可套用到該領域。 | 責任角色（應用／驗收負責者）；先核定任務與資料使用範圍。離線通過不授權真實資料處理。 |
 | **RG-02：模型、強度與量化資格**，每個領域及實際候選 | [資格包](qualification.md) 已測精確設定、缺項排除及固定輸入核定；目前交付僅合成包，沒有核定真實模型或門檻。 | 具名核定 domain、source、thresholds、coverage、expiry、access 與每個 config；固定版本／強度／供應商／能力／上下文／估計依據。本地配置另須量化、引擎與權重身分；不能繼承基礎模型分數當成量化品質。須通過當下有效的 `qualified_snapshot` 路徑。 | 責任角色（領域及模型資格審查者）；實際校準或模型請求需另有計畫、成本及執行授權，且不得依 holdout 調門檻。 |
 | **RG-03：來源權限、時效與更新營運**，啟用的每個評分來源 | [評分整合](score-integration.md) 記錄 LiveBench 公開唯讀歷史證據；[更新操作](score-update-operations.md) 已離線測預覽、競態、原子切換及固定舊任務。 | 核對實際帳戶存取、資料使用／再散布條款、主來源版本與原生尺度；AA／OpenRouter authenticated access、CodexRadar 遠端能力仍未驗證。指定時效、更新執行帳號／頻率、檔案權限、失敗處理及核定者；實際驗證過期阻擋與更新 audit，不能只以新下載時間延長資料效期。 | 責任角色（來源／更新營運者）；來源存取及背景排程需相應授權。受控匯入可保留為明確模式，不冒稱已驗證遠端 API。 |
-| **RG-04：完整成本與可強制上限**，任何受控模型／工具執行 | [預算 admission](budget-admission.md) 已離線測完整預留、精確金額、併發、歷史與未知停止；[供應商 adapter](provider-bounds.md) 與獨立[元件上界](component-bounds.md) 已測 admission／派送／撤銷／核帳。未附真實供應商封頂或元件資格，普通 key 額度不放行。 | 精確請求／模型／供應商／工具的可強制上限，涵蓋分類、advisor、生成、唯一修正及失敗。可採合格供應商美元封頂，或獨立核定的完整數量／有效費率上界；元件證據含拒絕輸入、cache、tier、價格變動、在途及失敗保障。核對帳戶配置、歷史與未知費用；估價與 token 參數本身仍不足。 | 責任角色（帳務及供應商整合負責者）；有效付費授權、完整預留與停止規則仍必要。真實資格與 reviewer 尚待核定；本地零模型費不能推論主機免費。 |
+| **RG-04：完整成本與可強制上限**，任何受控模型／工具執行 | [預算 admission](budget-admission.md) 已離線測完整預留、精確金額、併發、歷史與未知停止；[供應商 adapter](provider-bounds.md) 與獨立[元件上界](component-bounds.md) 已測 admission／派送／撤銷／核帳。未附真實供應商封頂或元件資格，普通 key 額度不放行。 | 精確請求／模型／供應商／工具的可強制上限，涵蓋分類、advisor、生成、唯一修正及失敗。可採合格供應商美元封頂，或獨立核定的完整數量／有效費率上界；v2 完整零費率元件可省略用量上限，須有全路徑保證與來源、獨立審查，不由零標價推定。元件證據含拒絕輸入、cache、tier、價格變動、在途及失敗保障。核對帳戶配置、歷史與未知費用；估價與 token 參數本身仍不足。 | 責任角色（帳務及供應商整合負責者）；有效付費授權、完整預留與停止規則仍必要。真實資格與 reviewer 尚待核定；本地零模型費不能推論主機免費。 |
 | **G-01：local_only 與工具外送隔離**，宣稱本地限定的部署 | [執行位置政策](execution-policy.md) 與 [local backend](local-backend.md) 已用注入後端／MockTransport 檢查生成、分類與工具位置；公開通過跳過分類，失敗不偷渡雲端。 | 核對實際 engine、代理、工具、驗收器、憑證與 egress；在目標環境證明同一 origin 限制，包含失敗／修正路徑。可信位置聲明不是 OS 網路 sandbox。實際 LocalBackend 目前不支援 tools，不得引用 test-only backend 充當支援證據。 | 責任角色（隱私及執行環境負責者）；先核定資料、網路觀察及隔離測試範圍，實機操作另需授權。 |
 | **RG-05：身份、保留及應用隔離**，HTTP／Ollama／Queue 接入 | [HTTP 安全邊界](http-task-api.md) 已離線測擁有者、結果／費用投影、allowlist、私有 workspace 與安全錯誤，並加入[本地 API token 身份](identity.md)與[保留整合](retention.md)：scope、到期／撤銷、帳號停用、TTL、退休標記與明確批准清除。 | 尚缺部署身份／TLS、secret 管理與角色核定、契約 factory／工具 sandbox、儲存／備份／記錄存取控制，以及實際保留政策與維護 fence 核定。結果不得洩漏其他使用者資料、私人 prompt、原始收據或共享帳務。 | 責任角色（身份／資料保護及應用營運者）；先指定私有測試資料與授權範圍，保留或刪除作業遵守各自核定，不由本索引觸發。 |
 | **G-02：真實客戶端互通**，宣稱 Ollama 文字子集或指定產品接入 | 已以[官方 Python 同步 SDK 0.6.3](ollama-sdk.md)對接 WSGI／模擬上游，固定 `cloudyfan-ollama-text-v2`；認證、文字回應、錯誤、重連不重送與不支援功能拒絕已測。SDK 會忽略擴充 metadata，完整帳務以同 run GET 讀取。 | 由放行責任人審閱精確 SDK／協定／HTTP 擴充範圍與收據；不把單一同步 SDK 證據擴及 Async／JS／產品 client、真實 TCP／TLS／代理或完整 Ollama。正式 registry 仍 pending，未核定部署 scope。 | 責任角色（客戶端整合者）；本輪授權只含固定 SDK 與 mock 上游。真實模型須另過 RG-02／RG-04，實際接入／部署另依授權。 |

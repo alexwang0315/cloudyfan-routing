@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "rg04-zero-rate-offline",
+  "baseline_commit": "c271ddbbc94fbdefb5fca2a6de0f9da53b9b5dea",
+  "tested_tree": "uncommitted executable/test/build inputs identified by source_digest",
+  "source_digest": "89ed1980ff527fb940d93fb018365a9cc4b44aee21eef39ecff1c8f5e9adeafd",
+  "tests_passed": 944,
+  "added_component_cases": 50,
+  "focused_component_tests_passed": 100,
+  "finished_at": "2026-10-18T22:53:17.843243+00:00",
+  "integration_receipt_sha256": "980aae4d07073719b28f021a5c6ff54560021d96c503852febf1e64555467012",
+  "private_receipt_path": "runtime/checks/aca2fb840e7c45089bb325d80fcc4c58/checks.json",
+  "console_sha256": "bad97e076a9be2a7a0332f56915861b70f6a03f50a350e9ad284b8708797bfee",
+  "private_console_path": "runtime/rg04-zero-rate/integration-console.log",
+  "checks": [
+    "locked-offline-sync",
+    "dependency-consistency",
+    "project-records",
+    "ruff",
+    "pytest",
+    "core-high-mock",
+    "score-high-mock",
+    "sdist-wheel"
+  ],
+  "real_api_calls": 0,
+  "real_api_cost_usd": "0",
+  "deployment": false,
+  "source_push": false,
+  "committed": false,
+  "production_qualified": false,
+  "confirmed": [
+    "v2 explicit bounded-quantity or independently guaranteed zero-rate evidence per component",
+    "no token quantity needed for fully guaranteed zero-rate dimensions; nonzero rates retain caps",
+    "all eight fee dimensions explicit; no cross-component exemption or price-snapshot conversion",
+    "all-path zero guarantees cover rejection/failure/cancellation/retries, price changes and in-flight validity",
+    "complete Core.run selection and repair with mixed v1/v2 evidence and exact reservations",
+    "zero-only Core.run flow with accounting; unknown interruption and observed positive-charge breach stop without resend",
+    "legacy v1 artifact and descriptor compatibility, proof hash binding, expiry and durable review withdrawal",
+    "separately paid reasoning and cache remain reserved; reconciliation replaces receipts once"
+  ],
+  "limits": [
+    "all supplier promises and approvals exercised by tests are synthetic, not real qualification",
+    "no real supplier all-path quantity/rate/inventory/failure guarantee is supplied",
+    "no API request, deployment, source push or new Git commit",
+    "hashes and named reviews do not authenticate humans or prove supplier behavior",
+    "operational text/provider/payload/max_tokens restrictions remain; zero price does not imply zero execution resources",
+    "source and reviewer guarantees must include all components and in-flight paths before real qualification"
+  ],
+  "review": {
+    "method": "integrator source/contract/diff inspection with regression tests; no independent human or supplier approval",
+    "blocking_findings_remaining": 0
+  },
+  "tdd_observations": [
+    "new decision zero-output/reasoning flow failed on v1-only validation before v2 support, then passed",
+    "new zero-output Chat flow failed dispatch with no max_units before operational/monetary separation, then passed",
+    "fixture-only corrections retained one-answer Chat setup and existing durable-violation accounting expectations; no budget/accounting implementation weakened"
+  ],
+  "workspace_documents": [
+    {
+      "workspace_relative_path": "GLOSSARY.md",
+      "sha256": "02f0b9a6d3922c8d4928ad0784c61093da955c0736c6f51552e4d347a98737d6",
+      "outside_core_git": true
+    },
+    {
+      "workspace_relative_path": "README.md",
+      "sha256": "1d50cc1d0b98b98752deed404a63a7adca9e55add437c8eb7f38df8adf4914a9",
+      "outside_core_git": true
+    },
+    {
+      "workspace_relative_path": "docs/adr/0002-qualified-component-cost-bounds.md",
+      "sha256": "e5e7eba695d410742029e64212e19d3fe59caaebbd22f97eca78a1b9e27550ac",
+      "outside_core_git": true
+    }
+  ]
+}

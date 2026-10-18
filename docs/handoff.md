@@ -77,3 +77,12 @@ durable withdrawal registry incarnation; no supplier HMAC endpoint is fabricated
 Real quantity/rate/inventory/failure evidence is not bundled. The original
 supplier-ceiling verifier remains available and RG-04 stays pending. Do not
 reinterpret historical price snapshots or ordinary key limits as qualifications.
+
+The subsequent RG-04 zero-rate extension accepts schema v2 component evidence:
+an independently reviewed binding all-path zero rate can replace that component's
+numerical quantity cap. V1 remains strict; no price snapshot is converted into a
+waiver. Complete fee inventory, paid-unit caps, current review/withdrawal and
+exact dispatch restrictions remain required. Unknown outcomes are still unknown,
+and positive charges against a zero-only bound create a durable shared violation.
+No real supplier guarantee or production approval is supplied. Current scope and
+verification are identified by project-state and the [v2 contract](component-bounds.md).

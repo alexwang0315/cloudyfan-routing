@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "rg04-components-offline",
+  "baseline_commit": "b11a2efb4c50d7e8a6ad5b6165a5ce131391808a",
+  "tested_tree": "uncommitted executable/test/build inputs identified by source_digest",
+  "source_digest": "d276cff46322d56170e2ffdd472ad0cd8f60e919e0673bd784f683b1cfad1492",
+  "tests_passed": 894,
+  "added_component_cases": 50,
+  "finished_at": "2026-10-18T13:29:51.777134+00:00",
+  "integration_receipt_sha256": "a3a6c1015d3b82989e00a26001932854c5a1ebfb26f45116463fc876818550b3",
+  "private_receipt_path": "runtime/checks/09c63c1c5bc744259cf37a258497b201/checks.json",
+  "checks": [
+    "locked-offline-sync",
+    "dependency-consistency",
+    "project-records",
+    "ruff",
+    "pytest",
+    "core-high-mock",
+    "score-high-mock",
+    "sdist-wheel"
+  ],
+  "real_api_calls": 0,
+  "real_api_cost_usd": "0",
+  "deployment": false,
+  "source_push": false,
+  "production_qualified": false,
+  "confirmed": [
+    "complete two-classifier/initial/sole-repair reservation and cost retention",
+    "complete eight-dimensional component schema and trusted exact-artifact review",
+    "exact monetary sums/products through shared budget independent of ambient precision",
+    "fixed classifier version used in actual request",
+    "strict text/provider/variant scope",
+    "persistent review withdrawal bound to shared registry path and incarnation",
+    "one-use request lease, post-intent and post-registry-read expiry checks",
+    "failed paid response retained; unknown outcome stops without retransmission",
+    "provider reconciliation replaces provisional charges once; breach preserves durable stop"
+  ],
+  "limits": [
+    "all approvals and quantity/rate/inventory/failure sources in tests are synthetic",
+    "no real supplier component guarantee or account-default control is qualified",
+    "no live API or deployment; ten formal release gates pending",
+    "reviewer labels and source hashes do not authenticate humans or establish supplier truth",
+    "registry history must be shared and preserved; malicious complete rollback is not detected",
+    "shared-budget exact monetary reporting is verified; no claim that every unrelated reporting arithmetic module changed"
+  ],
+  "initial_pass": {
+    "path": "docs/evidence/rg04-components-initial-pass.json",
+    "sha256": "c912db0470b53c189e2f89e0183b03c5849d14c1e95e05d64740f123f4a32024",
+    "tests_passed": 893
+  },
+  "review": {
+    "method": "independent agent read-only source/test inspection; no independent test execution or human production qualification",
+    "blocking_findings_remaining": 0,
+    "fixed": [
+      "budget Decimal context rounding",
+      "implicit paid model variants",
+      "withdrawal persistence and registry path/incarnation reuse",
+      "pinned classifier dispatch",
+      "expiry and completed concurrent withdrawal during registry read"
+    ]
+  },
+  "purpose": "Historical verified baseline for zero-rate extension; no new suite claimed",
+  "previous_evidence": {
+    "path": "docs/evidence/rg04-components-precommit.json",
+    "sha256": "cdd0df66b1a946a41893f3859e8b1f84c3ba15aa6b0bb2e45c17b7e69de5033a"
+  },
+  "commit_review": {
+    "fixed_point": "b11a2efb4c50d7e8a6ad5b6165a5ce131391808a",
+    "scope": "tracked working diff plus all eight original untracked RG-04 files",
+    "standards": {
+      "findings": 0,
+      "blocking_findings": 0,
+      "method": "independent read-only source and contract inspection"
+    },
+    "spec": {
+      "findings": 0,
+      "blocking_findings": 0,
+      "method": "independent read-only requirements and source inspection"
+    },
+    "fresh_checks": [
+      "project-state consistency",
+      "current source digest matches tested tree",
+      "all eight actual integration steps and receipt hash match",
+      "staged inventory/diff and local commit hooks checked before commit"
+    ],
+    "full_suite_rerun": false
+  },
+  "supplier_qualification_priority": "Pinned Jev Decisions complete billed quantity envelope: input overhead and rejected requests, output/reasoning, internal retries/failure/cancellation, and in-flight guarantees. Binding effective rate inventory follows; no Chat token-cap inheritance.",
+  "workspace_documents_preserved": [
+    {
+      "workspace_relative_path": "README.md",
+      "sha256": "75117344e1bd0b9827502b444462d3fd5b4d47eb1564517d8428d12d76db2062",
+      "outside_core_git": true
+    },
+    {
+      "workspace_relative_path": "GLOSSARY.md",
+      "sha256": "b054ea3fcc78adc3e6680d31a887f105decbd8823143dc97567cac6f67b2a441",
+      "outside_core_git": true
+    },
+    {
+      "workspace_relative_path": "docs/adr/0002-qualified-component-cost-bounds.md",
+      "sha256": "755898d4d024b8c19a147b4ab20cdce56e75db686f6612ad5a85cf34fe6d0e59",
+      "outside_core_git": true
+    }
+  ],
+  "tested_commit": "c271ddbbc94fbdefb5fca2a6de0f9da53b9b5dea"
+}

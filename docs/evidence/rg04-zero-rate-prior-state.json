@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "scope": "rg04-components-offline",
+  "phase": "offline_verified",
+  "baseline_commit": "b11a2efb4c50d7e8a6ad5b6165a5ce131391808a",
+  "integration_branch": "codex/implement-routing-spec-1",
+  "constraints": {
+    "paid_api": false,
+    "deployment": false,
+    "source_push": false,
+    "hardware": false,
+    "model_downloads": false
+  },
+  "release_registry": "docs/release-gates.json",
+  "work_plan": "docs/work-plan.json",
+  "last_verified": {
+    "path": "docs/evidence/rg04-components-baseline.json",
+    "sha256": "3345a809f6effb3397b95c4d1de652ce38e06f3d0fd8d6caa8fa81034069f7cf"
+  },
+  "current_verification": {
+    "path": "docs/evidence/rg04-components-precommit.json",
+    "sha256": "cdd0df66b1a946a41893f3859e8b1f84c3ba15aa6b0bb2e45c17b7e69de5033a"
+  },
+  "history": [
+    {
+      "path": "docs/implementation-spec1.md",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/verification.md",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg04-components-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg04-components-initial-pass.json",
+      "record_kind": "historical"
+    }
+  ],
+  "next_steps": [
+    {
+      "gate": "G-02",
+      "action": "Review exact synchronous ollama==0.6.3 / text-v2 / companion task GET evidence before formal G-02 qualification; no Async, product-client, TCP/TLS/proxy claim.",
+      "requires_authorization": true
+    },
+    {
+      "gate": "RG-04",
+      "action": "First qualify pinned Jev Decisions billed quantity ceilings (including output/reasoning, rejected input, retries/failures and in-flight guarantees); then bind complete effective rates. No Chat cap inheritance. Paid validation requires a separate approved plan.",
+      "requires_authorization": true
+    },
+    {
+      "gate": "RG-05",
+      "action": "Qualify deployed identity/TLS/secret ownership, actual retention policy and storage/backup coverage, and exclusive maintenance-writer fence.",
+      "requires_authorization": true
+    },
+    {
+      "gate": "RG-02",
+      "action": "Qualify real domain/model configurations before production model use.",
+      "requires_authorization": true
+    }
+  ]
+}

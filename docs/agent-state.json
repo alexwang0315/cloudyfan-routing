@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "scope": "rg04-components-offline",
+  "scope": "rg04-zero-rate-offline",
   "phase": "offline_verified",
-  "baseline_commit": "b11a2efb4c50d7e8a6ad5b6165a5ce131391808a",
+  "baseline_commit": "c271ddbbc94fbdefb5fca2a6de0f9da53b9b5dea",
   "integration_branch": "codex/implement-routing-spec-1",
   "constraints": {
     "paid_api": false,
@@ -14,12 +14,12 @@
   "release_registry": "docs/release-gates.json",
   "work_plan": "docs/work-plan.json",
   "last_verified": {
-    "path": "docs/evidence/rg04-components-baseline.json",
-    "sha256": "3345a809f6effb3397b95c4d1de652ce38e06f3d0fd8d6caa8fa81034069f7cf"
+    "path": "docs/evidence/rg04-zero-rate-baseline.json",
+    "sha256": "9509518eb0f25e7e0570cb8049dbe2b52a60d2b06123c48a6f2c045154a0e25d"
   },
   "current_verification": {
-    "path": "docs/evidence/rg04-components-precommit.json",
-    "sha256": "cdd0df66b1a946a41893f3859e8b1f84c3ba15aa6b0bb2e45c17b7e69de5033a"
+    "path": "docs/evidence/rg04-zero-rate-precommit.json",
+    "sha256": "b2c5163d061602ddda46a19719e2169fefdbc4394e85236e98999b72302e4dce"
   },
   "history": [
     {
@@ -37,6 +37,14 @@
     {
       "path": "docs/evidence/rg04-components-initial-pass.json",
       "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg04-zero-rate-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg04-zero-rate-offline.json",
+      "record_kind": "historical"
     }
   ],
   "next_steps": [
@@ -47,7 +55,7 @@
     },
     {
       "gate": "RG-04",
-      "action": "First qualify pinned Jev Decisions billed quantity ceilings (including output/reasoning, rejected input, retries/failures and in-flight guarantees); then bind complete effective rates. No Chat cap inheritance. Paid validation requires a separate approved plan.",
+      "action": "Qualify pinned Jev Decisions cumulative billed input and all-path effective rates, including binding zero rates where proven, retry/failure/cancellation and in-flight coverage. No real supplier guarantees supplied. Paid validation requires a separate approved plan.",
       "requires_authorization": true
     },
     {

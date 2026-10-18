@@ -38,6 +38,13 @@ dispatch, tests and handoff. The existing durable Client lease hook is consumed
 unchanged. An independent agent performed read-only review, with no file ownership
 or edits. The current plan, not older ownership tables, identifies active owners.
 
+The subsequent `rg04-zero-rate` plan supersedes the component-bound work plan,
+preserved as `docs/evidence/rg04-zero-rate-prior-work-plan.json`. One integrator
+owns the versioned component-evidence interface, its public-boundary regression
+tests and documentation. Budget and transport interfaces are consumed unchanged;
+there are no delegated edits. Workspace-root glossary/ADR/README updates record
+the same user-confirmed zero-rate decision outside the standalone Git repository.
+
 ## Before dispatch and merge
 
 1. Record exact project-relative paths, owner role and task status. Do not assign

@@ -32,6 +32,23 @@ REQUIRED_CLAIMS = frozenset({
     'failure_cancellation_and_inflight_charges_bounded',
     'guarantees_survive_expiry_or_revocation_for_dispatched_requests',
 })
+REQUIRED_CLAIMS_V2 = frozenset({
+    'billed_input_accounting_includes_serialization_and_rejected_requests',
+    'nonzero_rate_components_have_enforced_cumulative_billed_unit_caps',
+    'effective_rate_ceilings_cover_cache_tiers_and_price_changes',
+    'classification_fee_complete_without_double_counting',
+    'complete_inventory_no_unlisted_or_embedded_charges',
+    'no_advisor_plugins_media_tools_byok_or_implicit_features',
+    'single_post_includes_all_upstream_attempt_charges',
+    'failure_cancellation_and_inflight_charges_bounded',
+    'guarantees_survive_expiry_or_revocation_for_dispatched_requests',
+})
+ZERO_RATE_CLAIMS = frozenset({
+    'zero_rate_binds_exact_configuration_endpoint_account_and_validity',
+    'zero_rate_covers_all_usage_success_rejection_failure_cancellation_and_upstream_attempts',
+    'no_separate_or_reclassified_component_charges',
+    'zero_rate_survives_price_changes_expiry_and_withdrawal_for_dispatched_requests',
+})
 _FIELDS = {'schema_version', 'mechanism', 'model_version', 'endpoint', 'credential_sha256',
            'configuration_sha256', 'max_payload_bytes', 'output_control', 'reasoning_mode',
            'components', 'claims', 'sources', 'issued_at', 'expires_at'}
@@ -62,6 +79,61 @@ def _rate(value):
     if not isinstance(value, str) or len(value) > 128 or not _RATE.fullmatch(value):
         raise ValueError('Finite plain decimal USD rate required')
     return money(value)
+
+
+def _claims(value, expected):
+    return (isinstance(value, list) and all(isinstance(v, str) for v in value)
+            and len(value) == len(expected) and set(value) == expected)
+
+
+def _v2_ceiling(schedule):
+    """Validate explicit quantity proofs or reviewed all-path zero-rate proofs.
+
+    A missing unit cap is not represented as zero usage. Zero-price claims remain
+    trusted evidence, bound to the whole review/registry/configuration envelope.
+    """
+    components = schedule['components']
+    if not isinstance(components, dict) or set(components) != COMPONENTS:
+        raise ValueError('Every billing dimension must be explicit')
+    units = {}
+    with localcontext() as context:
+        context.prec = 512
+        ceiling = Decimal(0)
+        for name, component in components.items():
+            if not isinstance(component, dict):
+                raise ValueError('Explicit component evidence basis required')
+            rate = _rate(component.get('unit_usd'))
+            if component.get('basis') == 'bounded_quantity':
+                if set(component) != {'basis', 'max_units', 'unit_usd'}:
+                    raise ValueError('Complete bounded quantity and rate required')
+                units[name] = _units(component['max_units'])
+                ceiling += rate * units[name]
+            elif component.get('basis') == 'guaranteed_zero_rate':
+                if set(component) != {'basis', 'unit_usd', 'guarantee'} or rate != 0:
+                    raise ValueError('Zero-rate evidence cannot carry units or nonzero rates')
+                guarantee = component['guarantee']
+                if (not isinstance(guarantee, dict) or set(guarantee) != {'source_sha256', 'claims'}
+                        or not isinstance(guarantee['source_sha256'], str)
+                        or not _DIGEST.fullmatch(guarantee['source_sha256'])
+                        or not _claims(guarantee['claims'], ZERO_RATE_CLAIMS)):
+                    raise ValueError('Complete all-path zero-rate guarantee required')
+                units[name] = None  # Unknown/unbounded usage, never a claim of zero tokens.
+            else:
+                raise ValueError('Unknown component evidence basis')
+    decision = schedule['endpoint'] == DECISIONS
+    if (any(units[k] is not None and units[k] <= 0 for k in ('input', 'output'))
+            or any(units[k] is not None and units[k] != 1 for k in ('request', 'failure'))
+            or (units['classification'] is not None and units['classification'] != int(decision))
+            or (not decision and _rate(components['classification']['unit_usd']) != 0)
+            or schedule['output_control'] != ('binding_zero_rate' if units['output'] is None else
+                'qualified_endpoint_cap' if decision else 'request_max_tokens')
+            or (units['reasoning'] is None and schedule['reasoning_mode'] != 'binding_zero_rate')
+            or (units['reasoning'] is not None and (
+                schedule['reasoning_mode'] not in ('included_in_output', 'separate_endpoint_cap')
+                or (schedule['reasoning_mode'] == 'included_in_output' and (
+                    units['reasoning'] != 0 or _rate(components['reasoning']['unit_usd']) != 0))))):
+        raise ValueError('Inconsistent endpoint or billing controls')
+    return ceiling
 
 
 def _text_json(value, depth=0):
@@ -111,7 +183,8 @@ class ComponentBoundVerifier:
         self.last_check = {'allowed': False, 'reason': 'not_checked'}
 
     def descriptor(self):
-        return {'version': 'qualified-components-v1', 'credential_sha256': self._credential,
+        version = 2 if any(s.get('schema_version') == 2 for s in self._schedules) else 1
+        return {'version': f'qualified-components-v{version}', 'credential_sha256': self._credential,
                 'configurations_sha256': _sha(self._configurations),
                 'schedules_sha256': _sha(self._schedules), 'reviews_sha256': _sha(self._reviews),
                 'withdrawal_root_sha256': self._registry_hash(),
@@ -173,8 +246,9 @@ class ComponentBoundVerifier:
                 or not _instant(review['reviewed_at']) <= now < _instant(review['expires_at'])):
             raise ValueError('Invalid or expired review')
         config = self._configurations[identity]
-        if (set(s) != _FIELDS or type(s['schema_version']) is not int or s['schema_version'] != 1
-                or s['mechanism'] != 'qualified_components_v1'
+        version = s.get('schema_version')
+        if (set(s) != _FIELDS or type(version) is not int or version not in (1, 2)
+                or s['mechanism'] != f'qualified_components_v{version}'
                 or s['credential_sha256'] != self._credential
                 or s['configuration_sha256'] != _sha(config)
                 or s['endpoint'] not in (CHAT, DECISIONS)
@@ -184,11 +258,24 @@ class ComponentBoundVerifier:
                 or not _instant(s['issued_at']) <= review['reviewed_at'] <= now < _instant(s['expires_at'])
                 or review['expires_at'] > s['expires_at']
                 or not 0 < _units(s['max_payload_bytes']) <= 2 ** 20
-                or not isinstance(s['claims'], list) or set(s['claims']) != REQUIRED_CLAIMS
-                or len(s['claims']) != len(REQUIRED_CLAIMS)
+                or not _claims(s['claims'], REQUIRED_CLAIMS if version == 1 else REQUIRED_CLAIMS_V2)
                 or not isinstance(s['sources'], dict) or set(s['sources']) != _SOURCES
                 or any(not isinstance(v, str) or not _DIGEST.fullmatch(v) for v in s['sources'].values())):
             raise ValueError('Incomplete qualified component evidence')
+        if version == 2:
+            ceiling = _v2_ceiling(s)
+        else:
+            ceiling = self._v1_ceiling(s)
+        if (self._withdrawals.root / ('withdrawn-' + digest + '.json')).exists():
+            raise ValueError('Component review withdrawn during verification')
+        now = _instant(self.clock())
+        if not s['issued_at'] <= now < s['expires_at'] or not review['reviewed_at'] <= now < review['expires_at']:
+            raise ValueError('Component evidence expired during verification')
+        return s, review, digest, str(ceiling)
+
+    @staticmethod
+    def _v1_ceiling(s):
+        """Retain the exact legacy quantity/rate contract; no inferred waivers."""
         c = s['components']
         if not isinstance(c, dict) or set(c) != COMPONENTS:
             raise ValueError('Every billing dimension must be explicit')
@@ -214,12 +301,7 @@ class ComponentBoundVerifier:
             # remains exact even under an application's low Decimal precision.
             context.prec = 512
             ceiling = sum((_rate(v['unit_usd']) * v['max_units'] for v in c.values()), Decimal(0))
-        if (self._withdrawals.root / ('withdrawn-' + digest + '.json')).exists():
-            raise ValueError('Component review withdrawn during verification')
-        now = _instant(self.clock())
-        if not s['issued_at'] <= now < s['expires_at'] or not review['reviewed_at'] <= now < review['expires_at']:
-            raise ValueError('Component evidence expired during verification')
-        return s, review, digest, str(ceiling)
+        return ceiling
 
     def bound_for(self, identity):
         """Return a derived bound only after full trusted-artifact validation."""
@@ -254,9 +336,11 @@ class ComponentBoundVerifier:
             provider = {'only': [config['provider']], 'allow_fallbacks': False}
             if endpoint == CHAT:
                 provider['require_parameters'] = True
+                output_cap = s['components']['output'].get('max_units')
                 if (set(payload) - {'session_id'} != {'model', 'provider', 'messages', 'max_tokens', 'reasoning'}
                         or type(payload.get('max_tokens')) is not int
-                        or not 0 < payload['max_tokens'] <= s['components']['output']['max_units']
+                        or not 0 < payload['max_tokens'] <= 2 ** 31
+                        or (output_cap is not None and payload['max_tokens'] > output_cap)
                         or payload['reasoning'] != {'effort': config['effort']}
                         or ('session_id' in payload and not isinstance(payload['session_id'], str))
                         or not isinstance(payload['messages'], list) or not payload['messages']

@@ -18,7 +18,7 @@ and endpoint, pure text, no tools, plugins, advisor, media, BYOK, implicit paid
 features or provider/model fallback. Router prefixes, `~`/`*` aliases and all `:`
 variants are rejected, including `:online` and `:free`.
 
-CHAT allows only text system/user/assistant messages, bounded `max_tokens`, exact
+CHAT allows only text system/user/assistant messages, positive operational `max_tokens`, exact
 effort, optional string session ID and one exact provider with
 `require_parameters: true`. Decisions allows a text JSON state and exactly one
 binary choice question; nested media/tool/plugin structures are rejected. This
@@ -31,15 +31,17 @@ Real-world proofs still require independent approval before formal qualification
 
 ## Complete fee calculation
 
-All eight components must explicitly provide integer `max_units` and a
-nonnegative plain decimal USD string `unit_usd`:
+All eight components must remain explicit. Schema v1 requires integer
+`max_units` and a nonnegative plain decimal USD string `unit_usd` for every
+component. Schema v2 additionally accepts an independently guaranteed zero rate
+without a quantity cap; an ordinary zero price does not select this route.
 
 | Component | Quantity/control requiring independent evidence |
 |---|---|
 | `input` | Maximum billed tokens including provider serialization, schema overhead and rejected requests; a context limit on accepted input alone is insufficient. |
 | `output` | CHAT's provider-enforced `max_tokens`, or a separately qualified Decisions endpoint output cap. |
 | `reasoning` | Included in output budget/rate (zero separate quantity/rate), or separately enforced native cap and rate. |
-| `cache_read`, `cache_write` | Each conservatively bounded by the full input cap; reserve both fee dimensions. Zero rates require evidence of inclusion/exclusion. |
+| `cache_read`, `cache_write` | V1 bounds each by the full input cap. V2 carries each paid dimension's independently qualified cumulative cap; a zero-price input does not make cache free. Reserve both dimensions. |
 | `request` | One complete client POST including its maximum fixed fee. |
 | `classification` | One binary decision fee for Decisions; explicit zero for CHAT. No duplication of fees already included elsewhere. |
 | `failure` | One maximum additional failure surcharge covering all failure/cancellation/upstream-attempt paths; ordinary token/request fees remain reserved. |
@@ -48,6 +50,9 @@ nonnegative plain decimal USD string `unit_usd`:
 U_call = I*P_input + O*P_output + R*P_reasoning
          + I*P_cache_read + I*P_cache_write
          + F_request + is_decision*F_classification + F_failure
+
+V2: U_call = sum(max_units * unit_usd for bounded_quantity components)
+             + 0 for each independently guaranteed_zero_rate component
 ```
 
 Summing exclusive cache branches is deliberately conservative. This is a bound,
@@ -81,6 +86,84 @@ Each exact schema-version-1 artifact contains:
   for previously dispatched requests;
 - four source digests: `quantities`, `rates`, `inventory`, `failures`;
 - finite Unix `issued_at` / `expires_at`.
+
+### Schema v2: explicit all-path zero-rate evidence
+
+Use `schema_version: 2` with `mechanism: qualified_components_v2`.
+Top-level fields, credential/configuration/endpoint/time binding, four global
+source digests and whole-artifact independent review are unchanged. Each of the
+eight components must have **exactly one** of these shapes:
+
+```text
+bounded_quantity:
+  {"basis": "bounded_quantity", "max_units": <integer>, "unit_usd": "<decimal>"}
+
+guaranteed_zero_rate:
+  {"basis": "guaranteed_zero_rate", "unit_usd": "0",
+   "guarantee": {"source_sha256": "<retained supplier guarantee SHA256>",
+                 "claims": [<every ZERO_RATE_CLAIMS assertion exactly once>]}}
+```
+
+`guaranteed_zero_rate` **forbids** `max_units` (including null or zero): omitted
+quantity means no billed-unit bound is claimed, not that usage is zero. Its
+plain-decimal rate must parse to exactly zero. A nonzero rate, missing guarantee,
+unknown/extra field, incomplete scope or ordinary price snapshot cannot waive a
+quantity cap. Conversely, `bounded_quantity` still requires its numeric cap even
+when its rate is zero; there is no inference or automatic conversion between
+evidence bases. All eight dimensions remain mandatory even when all are free.
+
+Each zero-rate guarantee must explicitly assert every `ZERO_RATE_CLAIMS` item:
+
+- `zero_rate_binds_exact_configuration_endpoint_account_and_validity`;
+- `zero_rate_covers_all_usage_success_rejection_failure_cancellation_and_upstream_attempts`;
+- `no_separate_or_reclassified_component_charges`;
+- `zero_rate_survives_price_changes_expiry_and_withdrawal_for_dispatched_requests`.
+
+These assertions cover all usage/hidden processing for the named component,
+all internal/duplicate/child attempts and all failure/cancellation paths. They
+must be supported by the retained source and the independent review; writing
+the strings and a SHA256 is not proof. `source_sha256` identifies a guarantee,
+not a catalog export or the fictional examples in the tests. The whole review
+binds every component guarantee; changing one source requires a new review.
+The shared registry and artifact expiry still apply, including zero-only proofs.
+
+The global v2 claims are `REQUIRED_CLAIMS_V2`, each exactly once: complete billed
+input accounting including serialization/rejection; enforced cumulative caps
+for every nonzero-rate dimension; binding effective rates; nonduplicated
+classification fees; complete inventory; no implicit features; all upstream
+attempt charges; failure/cancellation/in-flight coverage; and guarantees for
+already-dispatched requests after expiry/withdrawal. The four global source
+digests (`quantities`, `rates`, `inventory`, `failures`) remain mandatory even in
+a zero-only artifact. For zero-only evidence, the quantities source can record
+why unit caps are unnecessary under the qualified zero-rate guarantees; it does
+not require an invented numerical cap. A real reviewer must verify the sources
+and all these scope statements; the parser cannot certify their real-world truth.
+
+For bounded components, input/output caps stay positive; request/failure units
+stay one and classification units stay one for Decisions, zero for CHAT.
+V2 cache caps are independently proved, not inferred from a missing free-input
+cap. Separately billed reasoning still needs its own cap/rate. Included reasoning
+retains the explicit zero separate quantity/rate convention.
+
+If output uses `guaranteed_zero_rate`, set `output_control: binding_zero_rate`;
+otherwise use the v1 endpoint-specific control. If reasoning uses it, set
+`reasoning_mode: binding_zero_rate`; otherwise retain `included_in_output` or
+`separate_endpoint_cap`. Free output does not imply free reasoning. There is no
+cross-component exemption or unlisted fee allowance.
+
+CHAT still sends a positive integer `max_tokens` (at most 2**31), exact reasoning
+effort and text-only payload. The token parameter is an operational limit: a
+zero-price output does not require proof that the provider enforces a monetary
+token cap. For bounded output, dispatch additionally checks `max_tokens` against
+the proved cap. Decisions still has no inherited Chat `max_tokens` control.
+The 1 MiB local payload limit, fixed provider and all feature restrictions remain.
+
+V1 artifacts and reviews retain their original exact shapes and validation;
+zero-rate waivers cannot be smuggled into v1. Mixed v1/v2 schedules are allowed.
+The verifier descriptor remains `qualified-components-v1` for v1-only schedules
+and becomes `qualified-components-v2` when any v2 schedule is present. Changing
+artifacts/reviews changes the frozen descriptor and reservation identity: never
+rewrite an old run or resend paid requests to migrate its proof.
 
 Retain source documents in the reviewed evidence package. The verifier does not
 download them or infer truth from hashes. Do not invent a source or sign a local
@@ -168,11 +251,20 @@ commitments, native endpoint behavior, account defaults, actual reviewer identit
 failure billing coverage and live authorization remain unqualified. RG-04 stays
 pending; this mechanism does not turn OpenRouter public pricing into those proofs.
 
-The first supplier-qualification priority is the pinned **Jev Decisions billed
-quantity envelope**: native output/reasoning limits, billed input including
-serialization/rejected requests, and cumulative units across internal retries,
-failure and cancellation. Its current request does not carry Chat's `max_tokens`;
-do not inherit a Chat cap. Obtain a binding guarantee covering in-flight requests
-and a complete fee inventory before attaching effective rate ceilings and doing
-any separately authorized live billing validation. An unbounded classifier keeps
-the whole repair workflow unqualified, even if generation endpoints are bounded.
+The first supplier-qualification priority is pinned **Jev Decisions cumulative
+billed input and complete effective fee coverage**: serialization/rejected input,
+all upstream retry/failure/cancellation paths, and in-flight price guarantees.
+Output/reasoning may use a binding all-path zero-rate guarantee instead of a
+numerical token cap, but free output never implies no separate reasoning fees.
+Do not inherit Chat's `max_tokens` or promote a catalog snapshot to either proof.
+No actual supplier guarantee is supplied by the v2 implementation. Missing proof
+for even one chargeable classifier component keeps the repair workflow
+unqualified. Any live billing validation requires a separately authorized plan.
+
+V2 regression evidence additionally covers mixed paid/free components, zero-only
+workflows, missing guarantees, nonzero-rate waivers, v1 nonconversion, proof
+tampering, expiry/withdrawal, precise reservations and receipt reconciliation.
+Even for zero-only schedules an interrupted call remains unknown; an observed
+positive charge is retained in the durable violation and stops shared dispatch.
+This does not fabricate a successful free receipt or discard the breach amount.
+See [v2 offline evidence](evidence/rg04-zero-rate-offline.json) for actual results.

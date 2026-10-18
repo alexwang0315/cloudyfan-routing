@@ -1,16 +1,24 @@
 {
   "schema_version": 1,
   "integration_branch": "codex/implement-routing-spec-1",
-  "baseline_commit": "b11a2efb4c50d7e8a6ad5b6165a5ce131391808a",
+  "baseline_commit": "c271ddbbc94fbdefb5fca2a6de0f9da53b9b5dea",
   "merger_owner": "root",
   "shared_interfaces": [
     {
-      "id": "budget-verifier-hooks",
+      "id": "qualified-component-schema",
       "owner": "root",
+      "owned_files": [
+        "src/cloudyfan_jev/component_bounds.py"
+      ],
+      "provided_by": "rg04-zero-rate"
+    },
+    {
+      "id": "budget-verifier-hooks",
+      "owner": "integration-maintainer",
       "owned_files": [
         "src/cloudyfan_jev/budget.py"
       ],
-      "provided_by": "rg04-components"
+      "provided_by": null
     },
     {
       "id": "durable-transport-lease",
@@ -19,45 +27,33 @@
         "src/cloudyfan_jev/client.py"
       ],
       "provided_by": null
-    },
-    {
-      "id": "pinned-classifier-dispatch",
-      "owner": "root",
-      "owned_files": [
-        "src/cloudyfan_jev/engine.py"
-      ],
-      "provided_by": "rg04-components"
     }
   ],
   "tasks": [
     {
-      "id": "rg04-components",
+      "id": "rg04-zero-rate",
       "owner": "root",
       "status": "completed",
       "owned_files": [
         "src/cloudyfan_jev/component_bounds.py",
         "tests/test_component_bounds.py",
         "docs/component-bounds.md",
-        "docs/provider-bounds.md",
-        "docs/budget-admission.md",
-        "docs/release-readiness.md",
         "docs/handoff.md",
+        "docs/coordination.md",
+        "docs/release-readiness.md",
         "docs/verification.md",
         "docs/agent-state.json",
         "docs/work-plan.json",
-        "docs/coordination.md",
-        "docs/evidence/rg04-components-baseline.json",
-        "docs/evidence/rg04-components-prior-state.json",
-        "docs/evidence/rg04-components-prior-work-plan.json",
-        "docs/evidence/rg04-components-offline.json",
         "README.md",
-        "src/cloudyfan_jev/budget.py",
-        "src/cloudyfan_jev/engine.py",
-        "docs/evidence/rg04-components-initial-pass.json",
-        "docs/evidence/rg04-components-precommit.json"
+        "docs/evidence/rg04-zero-rate-baseline.json",
+        "docs/evidence/rg04-zero-rate-prior-state.json",
+        "docs/evidence/rg04-zero-rate-prior-work-plan.json",
+        "docs/evidence/rg04-zero-rate-offline.json",
+        "docs/evidence/rg04-zero-rate-precommit.json"
       ],
       "depends_on": [],
       "consumed_interfaces": [
+        "budget-verifier-hooks",
         "durable-transport-lease"
       ]
     }

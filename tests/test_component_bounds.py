@@ -20,6 +20,25 @@ from test_engine import API, ArithmeticEnvironment, TASK, core
 
 NOW = datetime(2026, 10, 18, tzinfo=timezone.utc).timestamp()
 
+# Version-2 contracts are literal synthetic supplier assertions, not real proofs.
+V2_CLAIMS = [
+    'billed_input_accounting_includes_serialization_and_rejected_requests',
+    'nonzero_rate_components_have_enforced_cumulative_billed_unit_caps',
+    'effective_rate_ceilings_cover_cache_tiers_and_price_changes',
+    'classification_fee_complete_without_double_counting',
+    'complete_inventory_no_unlisted_or_embedded_charges',
+    'no_advisor_plugins_media_tools_byok_or_implicit_features',
+    'single_post_includes_all_upstream_attempt_charges',
+    'failure_cancellation_and_inflight_charges_bounded',
+    'guarantees_survive_expiry_or_revocation_for_dispatched_requests',
+]
+ZERO_CLAIMS = [
+    'zero_rate_binds_exact_configuration_endpoint_account_and_validity',
+    'zero_rate_covers_all_usage_success_rejection_failure_cancellation_and_upstream_attempts',
+    'no_separate_or_reclassified_component_charges',
+    'zero_rate_survives_price_changes_expiry_and_withdrawal_for_dispatched_requests',
+]
+
 
 def digest(value):
     return hashlib.sha256(_encoded(value)).hexdigest()
@@ -98,6 +117,239 @@ def test_reviewed_components_reserve_and_account_full_two_stage_tree(tmp_path):
     assert [p['model'] for p in api.requests] == ['example/open_source', 'typesafe/jev-1.13',
                                                 'typesafe/jev-1.13', 'example/high']
     assert controlled.enforcement_descriptor()['version'] == 'qualified-components-v1'
+
+
+def qualify_zero_components(schedule, review, names):
+    """Explicit new artifact/review; never reinterpret a v1 zero price as a waiver."""
+    if schedule['schema_version'] == 1:
+        schedule.update(schema_version=2, mechanism='qualified_components_v2', claims=V2_CLAIMS.copy())
+        for component in schedule['components'].values():
+            component['basis'] = 'bounded_quantity'
+    for name in names:
+        schedule['components'][name] = {'basis': 'guaranteed_zero_rate', 'unit_usd': '0',
+            'guarantee': {'source_sha256': digest('SYNTHETIC zero-rate promise: ' + name),
+                          'claims': ZERO_CLAIMS.copy()}}
+        if name == 'output': schedule['output_control'] = 'binding_zero_rate'
+        if name == 'reasoning': schedule['reasoning_mode'] = 'binding_zero_rate'
+    review['evidence_sha256'] = digest(schedule)
+
+
+def test_independently_guaranteed_free_decision_output_needs_no_token_cap(tmp_path):
+    engine, api, schedules, reviews, clock, make, app = component_setup(tmp_path)
+    for schedule, review in zip(schedules, reviews, strict=True):
+        if schedule['endpoint'] == DECISIONS:
+            qualify_zero_components(schedule, review, ['output', 'reasoning'])
+    verifier = make()
+    # Synthetic all-path zero output replaces .000128, retaining every other fee.
+    assert verifier.bound_for(engine.decision['version']).usd == '0.0033000'
+    result = app(verifier).run('free-decision-output', TASK, ArithmeticEnvironment, contract_version='v1')
+    assert result['final_public_pass'] is True
+    assert result['selection']['classifier_calls'] == 2
+    assert result['budget']['shared']['reservations'][0]['amount'] == '0.0455680'
+    assert result['budget']['run_total_usd'] == '0.0202'
+    assert len(api.requests) == 4
+    assert verifier.descriptor()['version'] == 'qualified-components-v2'
+
+
+def test_zero_price_chat_output_keeps_text_limits_without_claiming_a_billed_token_cap(tmp_path):
+    engine, api, schedules, reviews, clock, make, app = component_setup(tmp_path, api=API(first='2'))
+    for schedule, review in zip(schedules, reviews, strict=True):
+        if schedule['model_version'] == 'example/high':
+            schedule['components']['input']['unit_usd'] = '0.00002'
+            qualify_zero_components(schedule, review, ['output', 'reasoning'])
+    verifier = make()
+    # .020 input + .0002 read + .0015 write + .0001 request + .0003 failure.
+    assert verifier.bound_for('example/high').usd == '0.0221000'
+    result = app(verifier).run('free-chat-output', TASK, ArithmeticEnvironment,
+                               contract_version='v1', mode='fixed_high')
+    assert result['status'] == 'passed'
+    assert result['budget']['run_total_usd'] == '0.01'
+    assert api.requests[0]['max_tokens'] == engine.limits.max_tokens
+    # Operational shape limits and paid features are still enforced.
+    payload = text_payload(engine)
+    payload['max_tokens'] = 0
+    assert verifier.verify_dispatch(engine.client, CHAT, payload, verifier.bound_for('example/high')) is False
+    payload = text_payload(engine)
+    payload['plugins'] = [{'id': 'web'}]
+    assert verifier.verify_dispatch(engine.client, CHAT, payload, verifier.bound_for('example/high')) is False
+
+
+@pytest.mark.parametrize(('name', 'expected'), [
+    ('input', '0.018484'), ('output', '0.003100'), ('reasoning', '0.019484'),
+    ('cache_read', '0.019284'), ('cache_write', '0.017984'), ('request', '0.019384'),
+    ('classification', '0.019484'), ('failure', '0.019184'),
+])
+def test_each_guaranteed_zero_component_needs_no_quantity_but_retains_other_fees(tmp_path, name, expected):
+    engine, api, schedules, reviews, clock, make, app = component_setup(tmp_path)
+    for schedule, review in zip(schedules, reviews, strict=True):
+        if schedule['model_version'] == 'example/high':
+            qualify_zero_components(schedule, review, [name])
+    # Independent hand-worked fee sums; input-free does not make cache free.
+    assert Decimal(make().bound_for('example/high').usd) == Decimal(expected)
+    assert api.requests == []
+
+
+def test_free_output_does_not_make_separately_billed_reasoning_free(tmp_path):
+    engine, api, schedules, reviews, clock, make, app = component_setup(tmp_path)
+    for schedule, review in zip(schedules, reviews, strict=True):
+        if schedule['endpoint'] == DECISIONS:
+            qualify_zero_components(schedule, review, ['output'])
+            schedule['reasoning_mode'] = 'separate_endpoint_cap'
+            schedule['components']['reasoning'].update(max_units=7, unit_usd='0.001')
+            review['evidence_sha256'] = digest(schedule)
+    assert Decimal(make().bound_for(engine.decision['version']).usd) == Decimal('0.0103')
+
+
+@pytest.mark.parametrize('problem', [
+    'no_guarantee', 'no_source', 'bad_source', 'no_claims', 'missing_path_claim', 'duplicate_claim',
+    'nonzero_price', 'float_zero', 'negative_zero', 'units_null', 'units_zero', 'extra_fee',
+    'missing_input_cap', 'missing_paid_reasoning_cap', 'catalog_zero_without_cap',
+    'wrong_output_control', 'wrong_reasoning_control', 'missing_component',
+    'missing_inventory_claim', 'missing_retry_claim', 'missing_inflight_claim', 'missing_global_source',
+    'wrong_version', 'wrong_mechanism', 'legacy_claims', 'legacy_schema', 'expired', 'no_review',
+])
+def test_zero_rate_waiver_requires_complete_exact_reviewed_evidence(tmp_path, problem):
+    engine, api, schedules, reviews, clock, make, app = component_setup(tmp_path)
+    schedule = next(s for s in schedules if s['endpoint'] == DECISIONS)
+    review = next(r for r in reviews if r['evidence_sha256'] == digest(schedule))
+    qualify_zero_components(schedule, review, ['output', 'reasoning'])
+    output = schedule['components']['output']
+    if problem == 'no_guarantee': del output['guarantee']
+    elif problem == 'no_source': del output['guarantee']['source_sha256']
+    elif problem == 'bad_source': output['guarantee']['source_sha256'] = 'catalog-price-is-not-a-proof'
+    elif problem == 'no_claims': output['guarantee']['claims'] = []
+    elif problem == 'missing_path_claim': output['guarantee']['claims'].remove(ZERO_CLAIMS[1])
+    elif problem == 'duplicate_claim': output['guarantee']['claims'].append(ZERO_CLAIMS[0])
+    elif problem == 'nonzero_price': output['unit_usd'] = '0.00000000001'
+    elif problem == 'float_zero': output['unit_usd'] = 0.0
+    elif problem == 'negative_zero': output['unit_usd'] = '-0'
+    elif problem == 'units_null': output['max_units'] = None
+    elif problem == 'units_zero': output['max_units'] = 0
+    elif problem == 'extra_fee': output['request_surcharge'] = '0.1'
+    elif problem == 'missing_input_cap': del schedule['components']['input']['max_units']
+    elif problem == 'missing_paid_reasoning_cap':
+        schedule['reasoning_mode'] = 'separate_endpoint_cap'
+        schedule['components']['reasoning'] = {'basis': 'bounded_quantity', 'unit_usd': '0.01'}
+    elif problem == 'catalog_zero_without_cap':
+        output.clear()
+        output.update(basis='bounded_quantity', unit_usd='0')
+        schedule['output_control'] = 'qualified_endpoint_cap'
+    elif problem == 'wrong_output_control': schedule['output_control'] = 'qualified_endpoint_cap'
+    elif problem == 'wrong_reasoning_control': schedule['reasoning_mode'] = 'included_in_output'
+    elif problem == 'missing_component': del schedule['components']['failure']
+    elif problem == 'missing_inventory_claim': schedule['claims'].remove('complete_inventory_no_unlisted_or_embedded_charges')
+    elif problem == 'missing_retry_claim': schedule['claims'].remove('single_post_includes_all_upstream_attempt_charges')
+    elif problem == 'missing_inflight_claim': schedule['claims'].remove('guarantees_survive_expiry_or_revocation_for_dispatched_requests')
+    elif problem == 'missing_global_source': del schedule['sources']['failures']
+    elif problem == 'wrong_version': schedule['schema_version'] = 3
+    elif problem == 'wrong_mechanism': schedule['mechanism'] = 'qualified_components_v1'
+    elif problem == 'legacy_claims': schedule['claims'] = sorted(REQUIRED_CLAIMS)
+    elif problem == 'legacy_schema':
+        schedule.update(schema_version=1, mechanism='qualified_components_v1', claims=sorted(REQUIRED_CLAIMS))
+    elif problem == 'expired': clock[0] = NOW + 301
+    elif problem == 'no_review': reviews.remove(review)
+    review['evidence_sha256'] = digest(schedule)
+    with pytest.raises(ValueError):
+        make().bound_for(engine.decision['version'])
+    assert api.requests == []
+
+
+def test_changed_zero_rate_guarantee_requires_a_new_independent_review(tmp_path):
+    engine, api, schedules, reviews, clock, make, app = component_setup(tmp_path)
+    schedule = next(s for s in schedules if s['endpoint'] == DECISIONS)
+    review = next(r for r in reviews if r['evidence_sha256'] == digest(schedule))
+    qualify_zero_components(schedule, review, ['output', 'reasoning'])
+    schedule['components']['output']['guarantee']['source_sha256'] = digest('different supplier promise')
+    with pytest.raises(ValueError, match='review'):
+        make().bound_for(engine.decision['version'])
+    assert api.requests == []
+
+
+@pytest.mark.parametrize('version', [1, 2])
+def test_a_zero_price_without_a_guarantee_still_requires_the_quantity_cap(tmp_path, version):
+    engine, api, schedules, reviews, clock, make, app = component_setup(tmp_path)
+    schedule = next(s for s in schedules if s['endpoint'] == DECISIONS)
+    review = next(r for r in reviews if r['evidence_sha256'] == digest(schedule))
+    if version == 2:
+        qualify_zero_components(schedule, review, [])
+    schedule['components']['output'].update(max_units=None, unit_usd='0')
+    review['evidence_sha256'] = digest(schedule)
+    with pytest.raises(ValueError):
+        make().bound_for(engine.decision['version'])
+    assert api.requests == []
+
+
+def test_mixed_zero_rate_workflow_preserves_exact_reservation_at_low_decimal_precision(tmp_path):
+    engine, api, schedules, reviews, clock, make, app = component_setup(tmp_path)
+    for schedule, review in zip(schedules, reviews, strict=True):
+        qualify_zero_components(schedule, review, [k for k in schedule['components'] if k != 'input'])
+        schedule['components']['input'].update(max_units=1, unit_usd='0.010000000000000000000000000001')
+        review['evidence_sha256'] = digest(schedule)
+    with localcontext() as context:
+        context.prec = 3
+        result = app(make()).run('exact-zero-mix', TASK, ArithmeticEnvironment, contract_version='v1')
+    assert result['budget']['shared']['reservations'][0]['amount'] == '0.040000000000000000000000000004'
+    assert result['budget']['run_total_usd'] == '0.0202'
+    assert result['final_public_pass'] is True
+
+
+@pytest.mark.parametrize('change', ['expiry', 'withdrawal', 'new_registry'])
+def test_zero_rate_review_still_expires_or_can_be_withdrawn_before_post(tmp_path, change):
+    engine, api, schedules, reviews, clock, make, app = component_setup(tmp_path)
+    for schedule, review in zip(schedules, reviews, strict=True):
+        if schedule['endpoint'] == DECISIONS:
+            qualify_zero_components(schedule, review, ['output', 'reasoning'])
+    verifier, payload = make(), decision_payload()
+    bound = verifier.bound_for(engine.decision['version'])
+    assert verifier.verify_dispatch(engine.client, DECISIONS, payload, bound) is True
+    if change == 'expiry': clock[0] = NOW + 301
+    elif change == 'withdrawal': make().revoke(bound.evidence.removeprefix('component-cap:'))
+    else:
+        with pytest.raises(ValueError, match='review'):
+            make(tmp_path / 'different-registry').bound_for(engine.decision['version'])
+        return
+    assert verifier.verify_post(engine.client, DECISIONS, payload, bound) is False
+    assert api.requests == []
+
+
+@pytest.mark.parametrize('outcome', ['zero', 'unknown', 'breach'])
+def test_whole_zero_rate_flow_preserves_accounting_unknowns_and_breach_stops(tmp_path, outcome):
+    api = API(first='3', choices=('mid', 'high'))
+    attempts = []
+    def transport(request):
+        attempts.append(request.method)
+        if outcome == 'unknown': raise httpx.ReadTimeout('synthetic interrupted zero-rate request')
+        response = api(request).json()
+        response['usage']['cost'] = '0.0001' if outcome == 'breach' else '0'
+        return httpx.Response(200, json=response)
+    engine, _, schedules, reviews, clock, make, app = component_setup(tmp_path, api=transport)
+    for schedule, review in zip(schedules, reviews, strict=True):
+        qualify_zero_components(schedule, review, list(schedule['components']))
+    verifier = make()
+    assert verifier.bound_for('example/high').usd == '0'
+    controlled = app(verifier)
+    if outcome == 'zero':
+        result = controlled.run('all-free', TASK, ArithmeticEnvironment, contract_version='v1')
+        assert result['final_public_pass'] is True and result['selection']['classifier_calls'] == 2
+        assert result['budget']['run_total_usd'] == '0'
+        assert result['budget']['shared']['reservations'][0]['amount'] == '0'
+        assert attempts == ['POST'] * 4
+    else:
+        with pytest.raises(RuntimeError):
+            controlled.run('all-free', TASK, ArithmeticEnvironment, contract_version='v1')
+        report = controlled.store.report()
+        if outcome == 'unknown':
+            assert report['unknown_events'] == 1
+            assert report['dispatch_blocked'] is True
+        else:
+            # A breached guarantee keeps the event unresolved and preserves the
+            # observed charge in the durable violation, never overwriting it as 0.
+            assert report['unknown_events'] == 1 and report['total_usd'] is None
+            assert report['violations'][0]['observed_cost'] == '0.0001'
+            assert report['dispatch_blocked'] is True
+        with pytest.raises(BudgetError):
+            app(make()).run('all-free', TASK, ArithmeticEnvironment, contract_version='v1')
+        assert attempts == ['POST']
 
 
 def test_prices_claims_and_key_alone_do_not_approve_component_evidence(tmp_path):
@@ -312,7 +564,8 @@ def test_more_than_28_digits_survive_complete_workflow_reservation(tmp_path):
     assert result['budget']['shared']['reservations'][0]['amount'] == '0.040000000000000000000000000004'
 
 
-def test_generation_reconciliation_replaces_provisional_fees_once_for_every_phase(tmp_path):
+@pytest.mark.parametrize('decision_zero_rate', [False, True])
+def test_generation_reconciliation_replaces_provisional_fees_once_for_every_phase(tmp_path, decision_zero_rate):
     api, reads = API(first='3', choices=('mid', 'high')), []
     def transport(request):
         if request.method == 'POST':
@@ -325,6 +578,10 @@ def test_generation_reconciliation_replaces_provisional_fees_once_for_every_phas
         return httpx.Response(200, json={'data': {'id': gid, 'total_cost': '0.00015' if decision else '0.01',
             'model': payload['model'], 'provider_name': 'TypeSafe' if decision else 'Example'}})
     engine, _, schedules, reviews, clock, make, app = component_setup(tmp_path, api=transport)
+    if decision_zero_rate:
+        for schedule, review in zip(schedules, reviews, strict=True):
+            if schedule['endpoint'] == DECISIONS:
+                qualify_zero_components(schedule, review, ['output', 'reasoning'])
     controlled = app(make())
     result = controlled.run('reconciled', TASK, ArithmeticEnvironment, contract_version='v1')
     assert result['budget']['run_total_usd'] == '0.0202'

@@ -3,12 +3,15 @@
 Run from this checkout (or pass its absolute script path):
 
 ```sh
-./scripts/check                 # locked dev environment, dependency consistency, Ruff, pytest
+./scripts/check                 # locked dev environment, dependency consistency, project records, Ruff, pytest
 ./scripts/check --integration   # also both mocked high-route demos and sdist/wheel build
-./scripts/check --quick         # environment, dependency consistency and Ruff only
+./scripts/check --quick         # environment, dependency consistency, project records and Ruff only
 ```
 
 All modes first run `uv sync --locked --offline --extra dev --no-python-downloads`.
+Every mode then validates the [current handoff](handoff.md), release records and
+shared-interface plan. Pending production gates are valid; fabricated or stale
+qualification evidence fails. A record failure stops before Ruff, tests or demos.
 Tests and Ruff execute with `.venv/bin/python -m ...`, never a global pytest binary.
 The runner fixes the environment location to this checkout and removes inherited
 PYTHONPATH, PYTHONHOME and VIRTUAL_ENV. Each failing command stops the gate and

@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "retro-1-2-and-release-index",
+  "tested_commit": "d8af729668a0e4a2ebe6572d7f50d26ff1db8efa",
+  "tests_passed": 567,
+  "integration_receipt_sha256": "fb1222263ec589a2452aa3ae24dccf4ef59bfbd3a4c9c5f0d27d60423374d95f",
+  "checks": [
+    "dependency-consistency",
+    "ruff",
+    "pytest",
+    "core-high-mock",
+    "score-high-mock",
+    "sdist-wheel"
+  ],
+  "limits": [
+    "local only",
+    "remote CI not run",
+    "not production qualification"
+  ]
+}

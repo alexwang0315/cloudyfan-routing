@@ -93,7 +93,7 @@ result = engine.run("job-001", task, make_fresh_isolated_environment,
                     contract_version="public-contract-v1")
 ```
 
-每層先依任務需求及供應商限制準備一個候選，不額外支付分類費；Jev 接到明確模型／強度、公開能力卡與評分證據。任何一池或開源設定不符合需求，整個新任務在呼叫前拒絕，不暗中放寬。`ScoreCore` 在綁定與真正開始前檢查時效，且只允許同一 run ID。已建立 manifest 的續跑可以使用過期的原快照，仍必須維持原任務、公開契約、候選、分類設定與限制；已付費回答依既有機制重用。
+每層先依任務需求及供應商限制準備一個候選，不額外支付分類費；Jev 接到顯示模型名稱、必填的固定 `model_version`、強度、明確提供的供應商身份，以及公開能力卡與評分證據。候選只投影這些允許欄位；憑證、隱藏答案與其他附加欄位不會進入分類請求。固定版本變更即使同一模型家族名稱不變，分類輸入也會改變。任何一池或開源設定不符合需求，整個新任務在呼叫前拒絕，不暗中放寬。`ScoreCore` 在綁定與真正開始前檢查時效，且只允許同一 run ID。已建立 manifest 的續跑可以使用過期的原快照，仍必須維持原任務、公開契約、候選、分類設定與限制；已付費回答依既有機制重用。
 
 **生產整合先使用 `qualified_snapshot(pack, now=...)` 通過[資格審查](qualification.md)，再使用 `ScoreCore`。** 低階 `compile_snapshot`／`SnapshotStore` 是可信程式注入介面，不會代替人員審批；CLI `build` 現在要求 `--review`。 CLI `select` 是檢視／整合輸出；將其結果交給普通 `Core` 不會額外執行評分快照時效檢查。
 
@@ -112,3 +112,7 @@ result = engine.run("job-001", task, make_fresh_isolated_environment,
 ## 更新營運
 
 新增離線 `update-preview`／`update`／`update-inspect`，以核定包顯示前後變動並保存可重跑操作紀錄。流程、並行衝突與排程啟用清單見 [score-update-operations.md](score-update-operations.md)。沒有安裝排程或實際發送通知。
+
+## 分類投影版本
+
+路由政策 `hierarchical50-binary-v2` 將候選固定版本與明確供應商身份納入分類輸入。舊 `v1` manifest／實驗計畫不能在新版核心續跑；原始 intent、回答與核帳紀錄保持不變，不重送已付費請求。需要續用舊凍結流程時應保留原版執行環境，不能直接改寫歷史版本標記。這項相容性限制不表示新版分類效果或節省率已實測。

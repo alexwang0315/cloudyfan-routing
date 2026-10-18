@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "integration_branch": "codex/implement-routing-spec-1",
+  "baseline_commit": "d8af729668a0e4a2ebe6572d7f50d26ff1db8efa",
+  "merger_owner": "root",
+  "shared_interfaces": [
+    {
+      "id": "core-configuration-descriptor",
+      "owner": "integration-maintainer",
+      "owned_files": [
+        "src/cloudyfan_jev/engine.py"
+      ],
+      "provided_by": null
+    },
+    {
+      "id": "receipt-store",
+      "owner": "integration-maintainer",
+      "owned_files": [
+        "src/cloudyfan_jev/receipt_store.py"
+      ],
+      "provided_by": null
+    },
+    {
+      "id": "task-result-projection",
+      "owner": "integration-maintainer",
+      "owned_files": [
+        "src/cloudyfan_jev/http_api.py"
+      ],
+      "provided_by": null
+    }
+  ],
+  "tasks": [
+    {
+      "id": "budget-and-integration",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/budget.py",
+        "tests/test_budget.py",
+        "tests/test_budget_reconciliation.py",
+        "docs/budget-admission.md",
+        "docs/verification.md",
+        "docs/review-fixes.md",
+        "docs/agent-state.json",
+        "docs/work-plan.json",
+        "docs/coordination.md",
+        "docs/evidence/review-fixes-offline.json",
+        "docs/evidence/retro35-work-plan.json",
+        "tests/test_http_api.py",
+        "tests/test_transport_contracts.py",
+        "docs/evidence/review-fixes-precommit.json"
+      ],
+      "depends_on": [
+        "local-and-routing",
+        "report-calibration"
+      ],
+      "consumed_interfaces": []
+    },
+    {
+      "id": "local-and-routing",
+      "owner": "routing-worker",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/local.py",
+        "src/cloudyfan_jev/routing.py",
+        "tests/test_local_backend.py",
+        "tests/test_routing.py",
+        "docs/local-backend.md",
+        "docs/score-integration.md"
+      ],
+      "depends_on": [],
+      "consumed_interfaces": [
+        "receipt-store"
+      ]
+    },
+    {
+      "id": "report-calibration",
+      "owner": "report-worker",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/reports.py",
+        "tests/test_reports.py",
+        "docs/comparison-reports.md",
+        "examples/synthetic-comparison-report.json",
+        "examples/synthetic-comparison-report.md"
+      ],
+      "depends_on": [],
+      "consumed_interfaces": []
+    }
+  ]
+}

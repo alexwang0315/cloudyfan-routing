@@ -34,6 +34,8 @@ with open(os.environ['TRACE'], 'a') as f:
 code = int(os.environ.get('FAIL_SYNC', '0')) if args[:1] == ['sync'] else 0
 if name == 'python' and args[:2] == ['-m', 'pytest']:
     code = int(os.environ.get('FAIL_TESTS', '0'))
+if name == 'python' and args and args[0].endswith('project_state.py'):
+    code = int(os.environ.get('FAIL_STATE', '0'))
 sys.exit(code)
 '''
     executable(tmp_path / 'bin/uv', program)
@@ -66,7 +68,8 @@ def test_quick_uses_project_python_after_locked_offline_sync(runner):
     root, invoke = runner
     result, trace, reports = invoke('--quick')
     assert result.returncode == 0, result.stderr
-    assert [t['args'][:2] for t in trace] == [['sync', '--project'], ['pip', 'check'], ['-m', 'ruff']]
+    assert [t['args'][:2] for t in trace] == [['sync', '--project'], ['pip', 'check'],
+        [str(root / 'scripts/project_state.py'), 'check'], ['-m', 'ruff']]
     assert {'--locked', '--offline', '--extra', 'dev', '--no-python-downloads'} <= set(trace[0]['args'])
     for t in trace:
         assert t['env'] == {'UV_PROJECT_ENVIRONMENT': str(root / '.venv'), 'UV_OFFLINE': '1',
@@ -80,7 +83,16 @@ def test_test_failure_blocks_demos_and_build(runner):
     result, trace, reports = invoke('--integration', FAIL_TESTS='9')
     assert result.returncode == 9
     assert trace[-1]['args'] == ['-m', 'pytest', '-q']
-    assert len(trace) == 4
+    assert len(trace) == 5
+    assert reports[0]['passed'] is False
+
+
+def test_invalid_project_records_stop_before_lint_tests_or_build(runner):
+    _, invoke = runner
+    result, trace, reports = invoke('--integration', FAIL_STATE='7')
+    assert result.returncode == 7
+    assert len(trace) == 3
+    assert trace[-1]['args'][-1] == 'check'
     assert reports[0]['passed'] is False
 
 

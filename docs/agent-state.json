@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "scope": "review-five-fixes-offline",
+  "phase": "offline_verified",
+  "baseline_commit": "d8af729668a0e4a2ebe6572d7f50d26ff1db8efa",
+  "integration_branch": "codex/implement-routing-spec-1",
+  "constraints": {
+    "paid_api": false,
+    "deployment": false,
+    "source_push": false,
+    "hardware": false,
+    "model_downloads": false
+  },
+  "release_registry": "docs/release-gates.json",
+  "work_plan": "docs/work-plan.json",
+  "last_verified": {
+    "path": "docs/evidence/retro12-offline.json",
+    "sha256": "030ffefa3a387054bf26eb1987f2e73b6a31c73777e98844b88cac03e752ead3"
+  },
+  "current_verification": {
+    "path": "docs/evidence/review-fixes-precommit.json",
+    "sha256": "dca2b937b7d77a38174de49d97fa82b222801d6e6770dd858800959f20680fee"
+  },
+  "history": [
+    {
+      "path": "docs/implementation-spec1.md",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/verification.md",
+      "record_kind": "historical"
+    }
+  ],
+  "next_steps": [
+    {
+      "gate": "G-02",
+      "action": "Select a pinned real client and verify the supported protocol against mocked upstream before claiming interoperability.",
+      "requires_authorization": true
+    },
+    {
+      "gate": "RG-02",
+      "action": "Qualify real domain/model configurations before production model use.",
+      "requires_authorization": true
+    },
+    {
+      "gate": "RG-04",
+      "action": "Verify enforceable provider bounds and complete accounting before paid execution.",
+      "requires_authorization": true
+    }
+  ]
+}

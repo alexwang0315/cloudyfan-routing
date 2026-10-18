@@ -61,8 +61,60 @@ own frozen task/repetition plan; silently picking one of multiple runs is refuse
 Unexecuted tasks remain in pass-rate denominators, and their unknown flow costs
 are not filled with zero. Calibration costs are separate from holdout. Calibration
 rows record observed calibration work only; an empty calibration list is not proof
-that no tuning cost occurred. The extractor must include all earlier tuning fees
-or explicitly add unknown calibration evidence/limitations.
+that no tuning cost occurred. Missing calibration inventories make calibration
+and overall complete totals null, while observed/verified fees remain visible.
+Holdout costs and CDR remain separately scoped holdout metrics, never a total
+experiment cost including calibration.
+
+### Calibration inventory and nonexecution
+
+An optional `calibration_accounting` object supplies a declaration **per arm**:
+
+```json
+{
+  "calibration_accounting": {
+    "fixed_high": {
+      "status": "not_run", "run_ids": [],
+      "evidence_ref": "extractor-audit-reference-for-nonexecution",
+      "binding_sha256": "calibration_binding(plan, 'fixed_high')"
+    },
+    "cloudyfan": {
+      "status": "complete", "run_ids": ["cloudyfan-calibration-1"],
+      "evidence_ref": "complete-calibration-inventory-reference",
+      "binding_sha256": "calibration_binding(plan, 'cloudyfan')"
+    }
+  }
+}
+```
+
+`calibration_binding(plan, arm)` binds the plan, arm and every frozen calibration
+task's configuration/input/contract identity. It does not impose a calibration
+task-by-arm Cartesian product. The trusted extractor must audit **all earlier
+calibration work attributed to this plan and arm** and enumerate its actual run
+IDs, including failed work. Each run still needs its own valid `report_binding`,
+events and `accounting_complete` assertion. The reference points to the audit
+supporting the inventory or confirmed nonexecution; it is not fetched, and the
+hash/reference is neither authentication nor proof the declaration is true.
+
+- Omitted arm declarations mean unknown calibration coverage, even if no rows
+  exist or all supplied rows have known prices. No cost-zero inference is made.
+- `complete` requires a nonempty unique run inventory. Missing inventory rows or
+  observed rows omitted from that inventory make the arm's complete fee unknown;
+  observed fees remain counted. Partial/incomplete run accounting or unknown
+  event fees also keep the complete total unknown.
+- `not_run` requires an empty inventory and no observed calibration runs for that
+  arm; conflicting evidence raises an error. Only this explicit bound assertion
+  permits a known zero when no work was performed. A false declaration cannot be
+  discovered from missing records alone; the extractor is a trust boundary.
+- Unknown arm names, invalid cohort bindings or missing evidence references are
+  rejected. `coverage` retains declaration status, reference and missing/unlisted
+  run IDs; `accounting_status` is complete only when all per-arm fees are known.
+  The legacy `incomplete_workflows` counter includes one coverage-unknown marker
+  per undeclared arm (or unlisted inventory), plus missing/unfinished run counts;
+  it is not an estimate of how many unrecorded calls actually occurred.
+
+Unlinked events still retain their costs and anomalies under `unattributed_cost`;
+they cannot substantiate any calibration completeness assertion.
 
 `accounting_complete=True` is a trusted extraction assertion that **all** model,
 classifier, tool, failed, retried and repaired events for that run are present.

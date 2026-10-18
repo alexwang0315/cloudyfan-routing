@@ -30,6 +30,63 @@ def report_binding(plan, arm, task_id, *, cohort='holdout'):
     return {**body, 'binding_sha256': digest(body)}
 
 
+def calibration_binding(plan, arm):
+    """Bind a trusted calibration inventory assertion to the whole frozen cohort."""
+    verify_plan_integrity(plan)
+    if arm not in plan['spec']['arms']:
+        raise ValueError('Unknown calibration arm')
+    return digest({'plan_id': plan['plan_id'], 'arm': arm, 'cohort': 'calibration',
+                   'task_bindings': [report_binding(plan, arm, task['task_id'], cohort='calibration')
+                                     ['binding_sha256'] for task in plan['spec']['calibration_tasks']]})
+
+
+def _calibration_report(plan, declarations, runs, events):
+    """Inventory coverage is distinct from per-run accounting completeness."""
+    if not isinstance(declarations, dict) or set(declarations) - set(plan['spec']['arms']):
+        raise ValueError('Calibration accounting must name only planned arms')
+    by_arm, coverage = {}, {}
+    for arm in plan['spec']['arms']:
+        rows = [r for r in runs if r['arm'] == arm]
+        observed = {r['run_id'] for r in rows}
+        declaration = declarations.get(arm)
+        missing, unlisted, evidence_ref = [], [], None
+        declared_status = 'unknown'
+        inventory_incomplete = 1
+        if declaration is not None:
+            fields = {'status', 'run_ids', 'evidence_ref', 'binding_sha256'}
+            if not isinstance(declaration, dict) or set(declaration) != fields:
+                raise ValueError('Explicit calibration inventory fields required')
+            declared_status = declaration['status']
+            expected = declaration['run_ids']
+            evidence_ref = declaration['evidence_ref']
+            if (declared_status not in ('complete', 'not_run')
+                    or not isinstance(expected, list)
+                    or any(not isinstance(rid, str) or not rid.strip() for rid in expected)
+                    or len(expected) != len(set(expected))
+                    or not isinstance(evidence_ref, str) or not evidence_ref.strip()
+                    or declaration['binding_sha256'] != calibration_binding(plan, arm)):
+                raise ValueError('Invalid calibration inventory or binding')
+            if declared_status == 'not_run':
+                if expected or observed:
+                    raise ValueError('Calibration not_run conflicts with recorded runs or inventory')
+                inventory_incomplete = 0
+            else:
+                if not expected:
+                    raise ValueError('Empty calibration inventory requires explicit not_run evidence')
+                missing = sorted(set(expected) - observed)
+                unlisted = sorted(observed - set(expected))
+                inventory_incomplete = len(missing) + bool(unlisted)
+        incomplete = inventory_incomplete + sum(r.get('accounting_complete') is not True for r in rows)
+        arm_events = [e for e in events if e['run_id'] in observed]
+        by_arm[arm] = _cost(arm_events, incomplete)
+        coverage[arm] = {'declared_status': declared_status,
+                        'accounting_status': 'complete' if by_arm[arm]['total_usd'] is not None else 'unknown',
+                        'evidence_ref': evidence_ref, 'missing_run_ids': missing, 'unlisted_run_ids': unlisted}
+    cost = _cost(events, sum(c['incomplete_workflows'] for c in by_arm.values()))
+    return {'observed_runs': len(runs), 'cost': cost, 'by_arm': by_arm, 'coverage': coverage,
+            'accounting_status': 'complete' if cost['total_usd'] is not None else 'unknown'}
+
+
 def _ratio(numerator, denominator):
     return str(Decimal(numerator) / Decimal(denominator)) if denominator else None
 
@@ -267,15 +324,16 @@ def build_report(plan, evidence):
         attribution_reasons.append('attribution_arm_plan_only')
     attribution_reasons.append('overall_workflow_difference_is_not_jev_only_gain')
     overall_incomplete = sum(groups[a]['cost']['incomplete_workflows'] for a in executable_arms)
-    overall_incomplete += sum(r.get('accounting_complete') is not True for r in calibration)
+    calibration_report = _calibration_report(plan, evidence.get('calibration_accounting', {}),
+                                             calibration, charges(calibration))
+    overall_incomplete += calibration_report['cost']['incomplete_workflows']
     return {'schema_version': 'cloudyfan-comparison-report-v1', 'plan_id': plan['plan_id'],
             'source': {k: source[k] for k in ('id', 'version', 'kind')}, 'evidence_kind': 'synthetic' if plan['synthetic'] else source['kind'],
             'analysis_context': context, 'groups': groups, 'comparisons': comparisons, 'evidence_audit': audit,
             'overall_cost': _cost(events, overall_incomplete), 'unattributed_cost': _cost(unattributed),
             'common_pairing': {'arms': executable_arms, 'tasks': common, 'cost': run_cost(common_rows)},
             'unpaired_holdout_cost': run_cost(noncommon_rows),
-            'calibration': {'observed_runs': len(calibration), 'cost': run_cost(calibration),
-                'by_arm': {a: run_cost([r for r in calibration if r['arm'] == a]) for a in spec['arms']}},
+            'calibration': calibration_report,
             'jev_attribution': {'identified': False, 'reasons': attribution_reasons,
                 'required_control': 'same first configuration, inputs, public validation and repair contract'},
             'formulas': {'aggregate_cdr_percent': '100 * (sum baseline paired full costs - sum candidate paired full costs) / sum baseline paired full costs',
@@ -322,6 +380,7 @@ def render_markdown(report):
         values = ' / '.join(shown(stats[k]) for k in ('mean_percent', 'median_percent', 'min_percent', 'max_percent'))
         lines.append(f"| {arm} | {len(comp['paired_tasks'])} | {shown(comp['aggregate_cdr_percent'])} | {values} | {shown(stats['more_expensive_fraction'])} | {comp['claim']} |")
     lines += ['', 'Positive CDR means lower candidate spending; zero baseline or unknown fees is undefined.',
+        f"Calibration accounting: {report['calibration']['accounting_status']}; known observed USD: {report['calibration']['cost']['known_usd']}; overall complete API USD: {shown(report['overall_cost']['total_usd'])}.",
         f"Calibration USD: {shown(report['calibration']['cost']['total_usd'])}; unpaired holdout USD: {shown(report['unpaired_holdout_cost']['total_usd'])}; unattributed USD: {shown(report['unattributed_cost']['total_usd'])}.",
         'Jev-only gain is not identified: ' + report['jev_attribution']['required_control'] + ' is required.',
         'A passed descriptive quality gate is not statistical equivalence or evidence of commercial profitability.',

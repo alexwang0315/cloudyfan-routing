@@ -54,3 +54,38 @@ No paid API request was made for extraction, validation, review or repository cr
 - GitHub workflow 已改成依賴準備後呼叫相同入口，**遠端 CI 未執行**。應用／測試依賴沿用 uv.lock；isolated build dependencies 使用 build-system 範圍，不宣稱位元一致建置。
 
 每次入口結果寫入 `runtime/checks/<id>/checks.json`。新 checkout、hook 保存／安裝、錯誤注入及最終內容核對證據保存在專案工作區 `.scratch/retro-improvements/`；這些私有本機證據沒有上傳。此輪無付費 API、部署、推送或 GitHub 工作單寫入。正式放行索引的所有適用真實資格仍為 pending。
+
+# Retro follow-up 3–5：正式放行、介面分工與接手狀態（2026-10-18）
+
+本輪基線為 `d8af729668a0e4a2ebe6572d7f50d26ff1db8efa`，驗證對象為其上尚未提交的工具／測試變更；程式、測試與建置輸入以 [去敏證據摘要](evidence/retro35-offline.json) 的 `source_digest` 固定，不把基線 commit 冒稱為本輪已測提交。
+
+- `./scripts/check --integration`：**660 passed**（既有 567＋新增 93）、Ruff、依賴一致性、專案紀錄檢查、Core／ScoreCore high mock demo、sdist／wheel 均通過。兩個 demo 各 4 次 mock 請求、2 次分類，真實 API 費用零。
+- 新增放行條件檢查 41 項、共享介面／分工檢查 20 項、接手狀態檢查 31 項，以及入口 fail-fast 1 項。涵蓋過期／缺漏／錯誤範圍證據、不當資格標記、循環與責任重疊、來源摘要失效、歷史誤用及授權限制。
+- 獨立唯讀審查發現 registry 頂層為陣列時會崩潰；已先檢查形狀並補陣列／null／數字／字串回歸案例，完整測試包含修正。
+- [目前接手狀態](handoff.md) 與分工完成紀錄在完整驗證後更新，再執行 `./scripts/project-state check`；本輪離線完成與正式資格分開。10 項正式 gate 仍 pending，沒有具名核定或真實接入證據。
+- 歷史 `.scratch/implement-spec-1/` 狀態／協調／merge 紀錄加註歷史用途與新入口，原有過程內容保留。此次沒有變更 `src/` 的路由行為。
+
+完整命令退出碼收據：`runtime/checks/7429bafa8c8d4ff6b637d1f348a95924/checks.json`。本輪沒有付費 API、模型下載、硬體操作、部署、推送、GitHub 寫入或新的 Git commit。下一項正式資格優先規劃 G-02 固定版本真實客戶端互通，可先以 mock 上游隔離模型品質與費用；本輪未執行該資格測試。
+
+# 全實作審查五項修正（2026-10-18）
+
+本輪修正兩項 P1 預算控制缺陷與三項 P2；細節、相容性與限制見 [review-fixes.md](review-fixes.md)。保留既有 retro 3–5 未提交變更與全部歷史證據，基線仍為 `d8af729668a0e4a2ebe6572d7f50d26ff1db8efa`；新測試對象以 [來源摘要](evidence/review-fixes-offline.json) 固定，不冒稱已提交。
+
+- `./scripts/check --integration`：**699 passed**，比審查前 660 項增加 39 項；Ruff、依賴一致性、專案紀錄、Core／ScoreCore high mock demo、sdist／wheel 全部通過。
+- 兩個 demo 各 4 次 mock 請求、2 次分類，真實 API 呼叫與費用零。完整退出碼收據：`runtime/checks/5c418db4ac2346578c10a8b57c72b313/checks.json`。
+- 兩項 P1 補強共享停止、核帳風險預留與逐次派送曝險檢查，包含舊 schema 資料庫、重啟、跨 client 與舊收據回放測試；預算聚焦驗證 26 passed。獨立唯讀複核未發現新的阻擋缺陷，另完成雙 SQLite 連線並行核帳／派送探針。
+- P2 補強本地 intent 前父目錄 fsync、候選模型版本投影、校準成本缺漏不可當零。路由版本升為 `hierarchical50-binary-v2`，原始收據保持不變；舊版凍結流程會在 POST 前拒絕續跑。
+- 完整驗證後更新工作單狀態與去敏證據，再核對 `project-state`、文件連結與 diff。十項正式放行條件仍 pending，離線通過不代表真實 provider cap、模型品質或突然斷電持久性已驗證。
+
+本輪沒有付費 API、硬體、模型下載、部署、推送、GitHub 寫入或新 Git commit。私有修正與驗證記錄位於工作區 `.scratch/review-five-fixes/`。
+
+# 本機提交前複核（2026-10-18）
+
+依使用者授權，將上述五項修正與它們依賴、前輪已審查的 retro 3–5 放行／分工／接手檢查工具一併保存至本機 Git。歷史驗證與原始私有收據保持原檔，沒有把原始 prompt、回答或 runtime 加入提交。
+
+- 重新執行 `./scripts/check --integration`：**699 passed**；Ruff、鎖定離線依賴、紀錄檢查、兩個 mock demo 與 sdist／wheel 皆通過，8 個步驟退出碼皆為 0。
+- 本次來源摘要與上輪修正後完全相同：`e64ea1909715a9ba1e99c197cf0ee0b9f18ba388fb7c383668361cb410ba0f46`。完整收據：`runtime/checks/7051d29469ba4d2aae5a9b09de8fa9e9/checks.json`；可提交的去敏摘要：[review-fixes-precommit.json](evidence/review-fixes-precommit.json)。
+- 提交前再次核對暫存差異、文件連結與 metadata；commit 由既有 secret hook 及 quick check 保護。commit 身分以本機 Git 歷史為準，不在證據內建立循環自引用。
+- 下一項正式資格仍優先 G-02：選定固定版本的真實客戶端，對接 mock 上游，驗證支援的文字協定、認證、錯誤、重連及不重送；不支援能力須明確拒絕。這項互通資格尚未執行，provider cap 與模型品質仍分別由 RG-04／RG-02 驗證。
+
+此次未執行真實 API、部署或推送；正式十項 gates 仍 pending。

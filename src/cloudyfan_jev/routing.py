@@ -11,13 +11,14 @@ import re
 from .decisions import DecisionContext, DecisionQuestion, build_payload, parse_response
 from .errors import RoutingError
 
-VERSION = "hierarchical50-binary-v1"
+VERSION = "hierarchical50-binary-v2"
 STAGES = {"low_mid": ("low", "mid"), "mid_high": ("mid", "high")}
 TASK_FIELDS = ("prompt", "public_schema", "public_sample", "public_samples", "expected_columns",
                "execution_constraints", "requirements", "constraints", "requested_output", "sources", "tools")
 STATE_FIELDS = ("task", "prompt", "requirements", "constraints", "requested_output", "sources", "tools",
                 "previous_answer", "prior_answer", "tool_results", "public_diagnostics")
-PROFILE_FIELDS = ("model", "effort", "capability_card", "external_score")
+PROFILE_FIELDS = ("model", "model_version", "effort", "capability_card", "external_score")
+OPTIONAL_IDENTITY_FIELDS = ("provider", "provider_name")
 
 
 def _reject_private(value):
@@ -69,12 +70,14 @@ def build_request(stage, public_state, profiles, model, model_version=None):
     for tier in (lower, upper):
         profile = profiles[tier]
         if any(key not in profile for key in PROFILE_FIELDS):
-            raise ValueError("Candidate requires model, effort, capability_card and external_score")
-        if not isinstance(profile["model"], str) or not profile["model"]:
-            raise ValueError("Candidate model must be explicit")
-        if not isinstance(profile["effort"], str) or not profile["effort"]:
-            raise ValueError("Candidate effort must be explicit")
-        candidates[tier] = {key: profile[key] for key in PROFILE_FIELDS}
+            raise ValueError("Candidate requires model, model_version, effort, capability_card and external_score")
+        identity_fields = ("model", "model_version", "effort") + tuple(
+            key for key in OPTIONAL_IDENTITY_FIELDS if key in profile)
+        for key in identity_fields:
+            if not isinstance(profile[key], str) or not profile[key].strip():
+                raise ValueError("Candidate " + key + " must be explicit")
+        candidates[tier] = {key: profile[key] for key in (*PROFILE_FIELDS, *OPTIONAL_IDENTITY_FIELDS)
+                            if key in profile}
     _reject_private(candidates)
     state = project_public(public_state)
     state["candidates"] = candidates

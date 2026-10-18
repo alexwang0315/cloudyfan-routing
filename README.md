@@ -12,6 +12,8 @@
 
 [統一驗證入口](docs/checks.md)提供本機與 CI 共用命令；[跨接入契約矩陣](docs/transport-contracts.md)檢查 HTTP／Ollama／Queue 的共同保證。[正式放行索引](docs/release-readiness.md)分開記錄離線實作完成與正式資格。
 
+[目前接手入口](docs/handoff.md)使用 `./scripts/project-state show` 區分歷史基線、本輪離線證據與正式資格；[共享介面分工](docs/coordination.md)提供依賴與責任檢查。
+
 ## 流程
 
 ```mermaid

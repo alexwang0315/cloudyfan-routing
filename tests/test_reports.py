@@ -275,3 +275,149 @@ def test_missing_first_pass_evidence_stays_unknown_and_provenance_kind_is_explic
     evidence['source']['kind'] = 'unverified-label'
     with pytest.raises(ValueError, match='provenance kind'):
         build_report(plan, evidence)
+
+
+def calibration_declaration(plan, arm, run_ids=(), *, status='complete'):
+    from cloudyfan_jev.reports import calibration_binding
+    return {'status': status, 'run_ids': list(run_ids), 'evidence_ref': 'fixture-calibration-ledger-v1',
+            'binding_sha256': calibration_binding(plan, arm)}
+
+
+def add_calibration_run(plan, evidence):
+    from cloudyfan_jev.reports import report_binding
+    row = deepcopy(evidence['runs'][2])
+    row.update(run_id='cal-1', task_id='calibration-1', cohort='calibration',
+               binding_sha256=report_binding(plan, 'cloudyfan', 'calibration-1', cohort='calibration')['binding_sha256'])
+    evidence['runs'].append(row)
+    evidence['events'].append({'event_id': 'cal-1:gen', 'run_id': 'cal-1', 'kind': 'generation',
+        'attempt': 0, 'retry': False, 'cost_usd': '.2', 'receipt_id': 'cal-1-receipt', 'verified': True})
+
+
+def test_missing_calibration_evidence_is_unknown_even_when_holdout_is_complete():
+    from cloudyfan_jev.reports import build_report, render_markdown
+    plan = plan_fixture()
+    report = build_report(plan, evidence_fixture(plan))
+    assert report['calibration']['cost']['total_usd'] is None
+    assert report['calibration']['cost']['known_usd'] == '0'
+    assert report['calibration']['cost']['incomplete_workflows'] == 2
+    assert report['overall_cost']['total_usd'] is None
+    assert report['overall_cost']['known_usd'] == '17'
+    assert all(c['total_usd'] is None for c in report['calibration']['by_arm'].values())
+    assert report['groups']['cloudyfan']['cost']['total_usd'] == '7'
+    assert 'Calibration accounting: unknown' in render_markdown(report)
+
+
+def test_partial_calibration_manifest_preserves_observed_cost_and_unknown_remainder():
+    from cloudyfan_jev.reports import build_report
+    plan = plan_fixture()
+    evidence = evidence_fixture(plan)
+    add_calibration_run(plan, evidence)
+    evidence['calibration_accounting'] = {
+        'fixed_high': calibration_declaration(plan, 'fixed_high', status='not_run'),
+        'cloudyfan': calibration_declaration(plan, 'cloudyfan', ['cal-1', 'cal-missing'])}
+    report = build_report(plan, evidence)
+    assert report['calibration']['cost']['known_usd'] == '0.2'
+    assert report['calibration']['cost']['total_usd'] is None
+    assert report['calibration']['by_arm']['fixed_high']['total_usd'] == '0'
+    assert report['calibration']['by_arm']['cloudyfan']['incomplete_workflows'] == 1
+    assert report['overall_cost']['known_usd'] == '17.2'
+    assert report['overall_cost']['total_usd'] is None
+
+
+def test_explicit_bound_nonexecution_evidence_permits_zero_calibration_cost():
+    from cloudyfan_jev.reports import build_report
+    plan = plan_fixture()
+    evidence = evidence_fixture(plan)
+    evidence['calibration_accounting'] = {
+        arm: calibration_declaration(plan, arm, status='not_run') for arm in plan['spec']['arms']}
+    report = build_report(plan, evidence)
+    assert report['calibration']['accounting_status'] == 'complete'
+    assert report['calibration']['cost']['total_usd'] == '0'
+    assert report['overall_cost']['total_usd'] == '17'
+
+
+def test_complete_calibration_manifest_does_not_require_every_task_in_every_arm():
+    from cloudyfan_jev.reports import build_report
+    plan = plan_fixture()
+    evidence = evidence_fixture(plan)
+    add_calibration_run(plan, evidence)
+    evidence['calibration_accounting'] = {
+        'fixed_high': calibration_declaration(plan, 'fixed_high', status='not_run'),
+        'cloudyfan': calibration_declaration(plan, 'cloudyfan', ['cal-1'])}
+    report = build_report(plan, evidence)
+    assert report['calibration']['accounting_status'] == 'complete'
+    assert report['calibration']['cost']['total_usd'] == '0.2'
+    assert report['overall_cost']['total_usd'] == '17.2'
+
+
+def test_nonexecution_declaration_conflicting_with_observed_calibration_is_rejected():
+    import pytest
+    from cloudyfan_jev.reports import build_report
+    plan = plan_fixture()
+    evidence = evidence_fixture(plan)
+    add_calibration_run(plan, evidence)
+    evidence['calibration_accounting'] = {
+        'cloudyfan': calibration_declaration(plan, 'cloudyfan', status='not_run')}
+    with pytest.raises(ValueError, match='not_run'):
+        build_report(plan, evidence)
+
+
+def test_observed_calibration_without_inventory_is_retained_but_incomplete():
+    from cloudyfan_jev.reports import build_report
+    plan = plan_fixture()
+    evidence = evidence_fixture(plan)
+    add_calibration_run(plan, evidence)
+    report = build_report(plan, evidence)
+    assert report['calibration']['cost']['known_usd'] == '0.2'
+    assert report['calibration']['cost']['total_usd'] is None
+    assert report['calibration']['by_arm']['cloudyfan']['known_usd'] == '0.2'
+    assert report['overall_cost']['known_usd'] == '17.2'
+    assert report['overall_cost']['total_usd'] is None
+
+
+def test_unlisted_calibration_run_cannot_be_silently_excluded_from_complete_inventory():
+    from cloudyfan_jev.reports import build_report
+    plan = plan_fixture()
+    evidence = evidence_fixture(plan)
+    add_calibration_run(plan, evidence)
+    evidence['calibration_accounting'] = {
+        'fixed_high': calibration_declaration(plan, 'fixed_high', status='not_run'),
+        'cloudyfan': calibration_declaration(plan, 'cloudyfan', ['other-run'])}
+    report = build_report(plan, evidence)
+    assert report['calibration']['cost']['known_usd'] == '0.2'
+    assert report['calibration']['cost']['total_usd'] is None
+    assert report['calibration']['coverage']['cloudyfan']['unlisted_run_ids'] == ['cal-1']
+
+
+def test_inventory_completeness_does_not_replace_per_run_fee_completeness():
+    from cloudyfan_jev.reports import build_report
+    plan = plan_fixture()
+    evidence = evidence_fixture(plan)
+    add_calibration_run(plan, evidence)
+    evidence['calibration_accounting'] = {
+        'fixed_high': calibration_declaration(plan, 'fixed_high', status='not_run'),
+        'cloudyfan': calibration_declaration(plan, 'cloudyfan', ['cal-1'])}
+    evidence['runs'][-1]['accounting_complete'] = False
+    report = build_report(plan, evidence)
+    assert report['calibration']['cost']['total_usd'] is None
+    assert report['overall_cost']['total_usd'] is None
+    evidence['runs'][-1]['accounting_complete'] = True
+    evidence['events'][-1]['cost_usd'] = None
+    report = build_report(plan, evidence)
+    assert report['calibration']['cost']['unknown_events'] == 1
+    assert report['calibration']['cost']['total_usd'] is None
+    assert report['overall_cost']['total_usd'] is None
+
+
+def test_calibration_declarations_require_cohort_binding_and_evidence_reference():
+    import pytest
+    from cloudyfan_jev.reports import build_report
+    plan = plan_fixture()
+    evidence = evidence_fixture(plan)
+    declaration = calibration_declaration(plan, 'cloudyfan', status='not_run')
+    for key, value in [('binding_sha256', 'wrong-plan'), ('evidence_ref', ''),
+                       ('status', 'unknown'), ('run_ids', ['invented-run']),
+                       ('binding_sha256', calibration_declaration(plan, 'fixed_high', status='not_run')['binding_sha256'])]:
+        evidence['calibration_accounting'] = {'cloudyfan': {**declaration, key: value}}
+        with pytest.raises(ValueError, match='[Cc]alibration'):
+            build_report(plan, evidence)

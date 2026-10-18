@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "integration_branch": "codex/implement-routing-spec-1",
+  "baseline_commit": "d8af729668a0e4a2ebe6572d7f50d26ff1db8efa",
+  "merger_owner": "state-integrator",
+  "shared_interfaces": [
+    {
+      "id": "core-configuration-descriptor",
+      "owner": "integration-maintainer",
+      "owned_files": [
+        "src/cloudyfan_jev/engine.py"
+      ],
+      "provided_by": null
+    },
+    {
+      "id": "receipt-store",
+      "owner": "integration-maintainer",
+      "owned_files": [
+        "src/cloudyfan_jev/receipt_store.py"
+      ],
+      "provided_by": null
+    },
+    {
+      "id": "task-result-projection",
+      "owner": "integration-maintainer",
+      "owned_files": [
+        "src/cloudyfan_jev/http_api.py"
+      ],
+      "provided_by": null
+    },
+    {
+      "id": "release-gates-validator",
+      "owner": "release-gates-worker",
+      "owned_files": [
+        "scripts/release_gates.py"
+      ],
+      "provided_by": "release-gates"
+    },
+    {
+      "id": "work-plan-validator",
+      "owner": "ownership-worker",
+      "owned_files": [
+        "scripts/work_plan.py"
+      ],
+      "provided_by": "ownership-checks"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "state-integration",
+      "owner": "state-integrator",
+      "status": "completed",
+      "owned_files": [
+        "scripts/project_state.py",
+        "scripts/project-state",
+        "scripts/__init__.py",
+        "scripts/check.py",
+        "tests/test_project_state.py",
+        "tests/test_check_entrypoint.py",
+        "docs/agent-state.json",
+        "docs/handoff.md",
+        "docs/evidence/retro12-offline.json",
+        "docs/evidence/retro35-offline.json",
+        "AGENTS.md",
+        "README.md",
+        "docs/checks.md",
+        "docs/verification.md",
+        "pyproject.toml"
+      ],
+      "depends_on": [
+        "release-gates",
+        "ownership-checks"
+      ],
+      "consumed_interfaces": [
+        "release-gates-validator",
+        "work-plan-validator"
+      ]
+    },
+    {
+      "id": "release-gates",
+      "owner": "release-gates-worker",
+      "status": "completed",
+      "owned_files": [
+        "scripts/release_gates.py",
+        "tests/test_release_gates.py",
+        "docs/release-gates.json",
+        "docs/release-readiness.md"
+      ],
+      "depends_on": [],
+      "consumed_interfaces": []
+    },
+    {
+      "id": "ownership-checks",
+      "owner": "ownership-worker",
+      "status": "completed",
+      "owned_files": [
+        "scripts/work_plan.py",
+        "tests/test_work_plan.py",
+        "docs/work-plan.json",
+        "docs/coordination.md"
+      ],
+      "depends_on": [],
+      "consumed_interfaces": []
+    }
+  ]
+}

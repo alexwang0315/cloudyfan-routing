@@ -299,7 +299,7 @@ def test_http_rejects_symlinked_task_directory_without_touching_target(tmp_path)
 
 def test_http_per_run_result_does_not_expose_shared_account_events_or_other_answers(tmp_path):
     client, service, runner, api, roots = service_client(tmp_path)
-    runner.store.import_history('historical-private-owner', cost_usd='0.02', receipt_id='private-other-receipt')
+    runner.store.import_history('historical-private-owner', cost_usd='0.02', receipt_id='private-other-receipt', verified=True)
     assert client.post('/v1/tasks', json=TASK).status_code == 200
     assert client.post('/v1/tasks', json={**TASK, 'run_id': 'task-2'}).status_code == 200
     result = client.get('/v1/tasks/task-1/result')

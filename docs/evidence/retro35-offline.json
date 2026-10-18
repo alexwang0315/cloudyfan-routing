@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "retro-3-5-offline-workflow",
+  "baseline_commit": "d8af729668a0e4a2ebe6572d7f50d26ff1db8efa",
+  "tested_tree": "uncommitted executable/test/build inputs identified by source_digest",
+  "source_digest": "3a642d79038cc3dd58a843212acd6840d90c048c5fcedc2cba4ca0b6659d4b58",
+  "tests_passed": 660,
+  "finished_at": "2026-10-18T05:56:52.912981+00:00",
+  "integration_receipt_sha256": "8a15a24e2c29b530a061829713ddc17cc69da0bbbb4f8f82002d0701239ee152",
+  "private_receipt_path": "runtime/checks/7429bafa8c8d4ff6b637d1f348a95924/checks.json",
+  "checks": [
+    "locked-offline-sync",
+    "dependency-consistency",
+    "project-records",
+    "ruff",
+    "pytest",
+    "core-high-mock",
+    "score-high-mock",
+    "sdist-wheel"
+  ],
+  "limits": [
+    "local offline verification only",
+    "metadata finalized after integration; separately rechecked",
+    "remote CI not run",
+    "10 production gates pending",
+    "not real client/model/provider qualification"
+  ]
+}

@@ -52,6 +52,7 @@ class BudgetStore:
             db.execute('CREATE TABLE IF NOT EXISTS authorization (singleton INTEGER PRIMARY KEY, reference TEXT, total TEXT, expires TEXT)')
             db.execute('CREATE TABLE IF NOT EXISTS reservations (run TEXT PRIMARY KEY, fingerprint TEXT, amount TEXT, status TEXT)')
             db.execute('CREATE TABLE IF NOT EXISTS events (id TEXT PRIMARY KEY, run TEXT, kind TEXT, bound TEXT, fingerprint TEXT, cost TEXT, verified INTEGER, receipt TEXT UNIQUE)')
+            db.execute('CREATE TABLE IF NOT EXISTS violations (event_id TEXT PRIMARY KEY, reason TEXT, observed_cost TEXT, receipt TEXT, verified INTEGER, prior_cost TEXT)')
         os.chmod(self.path, 0o600)
 
     @contextmanager
@@ -89,21 +90,43 @@ class BudgetStore:
         amount = money(amount)
         with self._transaction() as db:
             auth = self._authorization(db)
-            self._no_unknown(db)
+            self._dispatchable(db, auth)
             prior = db.execute('SELECT * FROM reservations WHERE run=?', (run_id,)).fetchone()
             if prior:
                 if prior['fingerprint'] != fingerprint or money(prior['amount']) != amount:
                     raise BudgetError('Frozen reservation changed')
                 return
             reserved = sum((money(r[0]) for r in db.execute('SELECT amount FROM reservations WHERE status="active"')), Decimal(0))
-            spent = self._settled_cost(db)
+            spent = self._settled_cost(db) + self._provisional_hold(db)
             if reserved + spent + amount > money(auth['total']):
                 raise BudgetError('Insufficient shared balance for complete workflow')
             db.execute('INSERT INTO reservations VALUES (?,?,?,"active")', (run_id, fingerprint, str(amount)))
 
     def _no_unknown(self, db):
+        if db.execute('SELECT 1 FROM violations LIMIT 1').fetchone():
+            raise BudgetError('Unresolved cap violation blocks shared dispatch')
         if db.execute('SELECT 1 FROM events WHERE cost IS NULL LIMIT 1').fetchone():
             raise BudgetError('Historical or pending unknown cost blocks new dispatch')
+        if self._unbounded_history(db):
+            raise BudgetError('Unverified historical cost has no bounded exposure; balance unavailable')
+
+    def _unbounded_history(self, db):
+        return db.execute('SELECT COUNT(*) FROM events WHERE run="__history__" AND verified=0').fetchone()[0]
+
+    def _provisional_hold(self, db):
+        # Active workflow reservations already cover their call bounds. Completed
+        # calls retain only the difference between the bound and provisional fee.
+        return sum((max(Decimal(0), money(r['bound']) - money(r['cost'])) for r in db.execute(
+            'SELECT e.bound,e.cost FROM events e LEFT JOIN reservations r ON e.run=r.run '
+            'WHERE e.cost IS NOT NULL AND e.verified=0 AND e.run!="__history__" '
+            'AND (r.status="complete" OR r.run IS NULL)')), Decimal(0))
+
+    def _dispatchable(self, db, auth):
+        self._no_unknown(db)
+        reserved = sum((money(r[0]) for r in db.execute(
+            'SELECT amount FROM reservations WHERE status="active"')), Decimal(0))
+        if reserved + self._settled_cost(db) + self._provisional_hold(db) > money(auth['total']):
+            raise BudgetError('Shared exposure exceeds authorized balance; dispatch stopped')
 
     def _settled_cost(self, db):
         return sum((money(r[0]) for r in db.execute(
@@ -115,7 +138,7 @@ class BudgetStore:
         if kind not in {'model', 'tool'} or not event_id or not fingerprint:
             raise ValueError('Explicit model/tool event identity required')
         with self._transaction() as db:
-            self._authorization(db)
+            auth = self._authorization(db)
             prior = db.execute('SELECT * FROM events WHERE id=?', (event_id,)).fetchone()
             if prior:
                 if (prior['run'], prior['kind'], money(prior['bound']), prior['fingerprint']) != (run_id, kind, bound, fingerprint):
@@ -123,7 +146,7 @@ class BudgetStore:
                 if prior['cost'] is None:
                     raise BudgetError('Existing unknown event cannot be dispatched again')
                 return False
-            self._no_unknown(db)
+            self._dispatchable(db, auth)
             reservation = db.execute('SELECT * FROM reservations WHERE run=?', (run_id,)).fetchone()
             if not reservation or reservation['status'] != 'active':
                 raise BudgetError('Active reservation required before dispatch')
@@ -136,10 +159,13 @@ class BudgetStore:
 
     def record_event(self, event_id, *, cost_usd, verified=False, receipt_id=None):
         cost = None if cost_usd is None else str(money(cost_usd))
+        breached = False
         with self._transaction() as db:
             prior = db.execute('SELECT * FROM events WHERE id=?', (event_id,)).fetchone()
             if prior is None:
                 raise BudgetError('Receipt requires a durable prior event')
+            if db.execute('SELECT 1 FROM violations WHERE event_id=?', (event_id,)).fetchone():
+                raise BudgetError('Unresolved cap violation requires explicit account review')
             if prior['verified'] and (cost != prior['cost'] or receipt_id != prior['receipt']):
                 raise BudgetError('Verified receipt is immutable')
             if prior['receipt'] and receipt_id != prior['receipt']:
@@ -147,12 +173,20 @@ class BudgetStore:
             if cost is not None and not receipt_id:
                 raise BudgetError('Known cost requires unique receipt identity')
             if cost is not None and prior['run'] != '__history__' and money(cost) > money(prior['bound']):
-                raise BudgetError('Enforced cap violated; event remains unknown and dispatch stops')
-            try:
-                db.execute('UPDATE events SET cost=?, verified=?, receipt=? WHERE id=?',
-                           (cost, int(verified or bool(prior['verified'])), receipt_id, event_id))
-            except sqlite3.IntegrityError:
-                raise BudgetError('Duplicate receipt identity; event remains unknown') from None
+                # Commit the account-wide stop BEFORE raising. Preserve both the
+                # observed charge and previous provisional fee as audit evidence.
+                db.execute('INSERT INTO violations VALUES (?,?,?,?,?,?)',
+                           (event_id, 'enforced_cap_breached', cost, receipt_id, int(verified), prior['cost']))
+                db.execute('UPDATE events SET cost=NULL,verified=0 WHERE id=?', (event_id,))
+                breached = True
+            else:
+                try:
+                    db.execute('UPDATE events SET cost=?, verified=?, receipt=? WHERE id=?',
+                               (cost, int(verified or bool(prior['verified'])), receipt_id, event_id))
+                except sqlite3.IntegrityError:
+                    raise BudgetError('Duplicate receipt identity; event remains unknown') from None
+        if breached:
+            raise BudgetError('Enforced cap violated; durable shared stop retained')
 
     def finish(self, run_id):
         with self._transaction() as db:
@@ -178,16 +212,24 @@ class BudgetStore:
             auth = db.execute('SELECT * FROM authorization').fetchone()
             reservations = [dict(r) for r in db.execute('SELECT * FROM reservations ORDER BY run')]
             events = [dict(r) for r in db.execute('SELECT * FROM events ORDER BY id')]
+            violations = [dict(r) for r in db.execute('SELECT * FROM violations ORDER BY event_id')]
             reserved = sum((money(r['amount']) for r in reservations if r['status'] == 'active'), Decimal(0))
             known = sum((money(r['cost']) for r in events if r['cost'] is not None), Decimal(0))
             verified = sum((money(r['cost']) for r in events if r['cost'] is not None and r['verified']), Decimal(0))
             unknown = sum(r['cost'] is None for r in events)
-            available = money(auth['total']) - reserved - self._settled_cost(db) if auth else None
+            provisional = self._provisional_hold(db)
+            unbounded = self._unbounded_history(db)
+            available = (money(auth['total']) - reserved - self._settled_cost(db) - provisional
+                         if auth and not unknown and not violations and not unbounded else None)
             return {'authorization': dict(auth) if auth else None,
                     'authorized_usd': auth['total'] if auth else None,
                     'reserved_usd': str(reserved), 'known_usd': str(known), 'verified_usd': str(verified),
                     'unknown_events': unknown, 'total_usd': None if unknown else str(known),
                     'available_usd': str(available) if available is not None else None,
+                    'provisional_hold_usd': str(provisional), 'unbounded_history_events': unbounded,
+                    'dispatch_blocked': bool(violations or unknown or unbounded or not auth
+                                             or (available is not None and available < 0)),
+                    'violations': violations,
                     'events': events, 'reservations': reservations}
 
 

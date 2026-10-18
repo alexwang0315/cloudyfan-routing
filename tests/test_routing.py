@@ -11,7 +11,7 @@ MODEL = "typesafe/jev-1.13"
 
 @pytest.fixture
 def profiles():
-    return {tier: {"model": "vendor/" + tier, "effort": "low",
+    return {tier: {"model": "vendor/" + tier, "model_version": "vendor/" + tier + "-v1", "effort": "low",
                    "capability_card": {"operations": ["aggregation"], "calibration_tasks": 12},
                    "external_score": score}
             for tier, score in (("low", 70), ("mid", 90), ("high", 110))}
@@ -175,3 +175,72 @@ def test_missing_cost_stays_unknown(public, profiles):
 def test_model_version_separates_context(public, profiles):
     context, _, _ = policy.build_request("low_mid", public, profiles, MODEL, "pinned-release")
     assert context.model_version == "pinned-release"
+
+
+@pytest.mark.parametrize("stage", policy.STAGES)
+def test_candidate_pinned_version_changes_classifier_payload(stage, public, profiles):
+    tier = policy.STAGES[stage][0]
+    _, _, before = policy.build_request(stage, public, profiles, MODEL)
+    profiles[tier]["model_version"] = "vendor/pinned-v2"
+    _, _, after = policy.build_request(stage, public, profiles, MODEL)
+    assert before != after
+    assert after["state"]["candidates"][tier]["model_version"] == "vendor/pinned-v2"
+    assert before["state"]["candidates"][tier]["model"] == after["state"]["candidates"][tier]["model"]
+
+
+@pytest.mark.parametrize("value", [None, "", "   ", 3, {}, []])
+def test_candidate_version_must_be_explicit(value, public, profiles):
+    profiles["low"]["model_version"] = value
+    with pytest.raises(ValueError, match="model_version"):
+        policy.build_request("low_mid", public, profiles, MODEL)
+
+
+def test_missing_candidate_version_is_not_replaced_by_family(public, profiles):
+    del profiles["low"]["model_version"]
+    with pytest.raises(ValueError, match="model_version"):
+        policy.build_request("low_mid", public, profiles, MODEL)
+
+
+def test_only_safe_explicit_candidate_identity_enters_payload(public, profiles):
+    profiles["low"].update(provider="fixture-provider", provider_name="Fixture Provider",
+                           credentials="SECRET_SENTINEL", hidden_answers="ANSWER_SENTINEL")
+    _, _, payload = policy.build_request("low_mid", public, profiles, MODEL)
+    candidate = payload["state"]["candidates"]["low"]
+    assert candidate["provider"] == "fixture-provider"
+    assert candidate["provider_name"] == "Fixture Provider"
+    assert candidate["effort"] == "low"
+    assert "SECRET_SENTINEL" not in json.dumps(payload)
+    assert "ANSWER_SENTINEL" not in json.dumps(payload)
+
+
+@pytest.mark.parametrize("field", ["provider", "provider_name"])
+@pytest.mark.parametrize("value", ["", "  ", None, {"hidden_key": "secret"}])
+def test_optional_candidate_identity_must_be_explicit_if_present(field, value, public, profiles):
+    profiles["low"][field] = value
+    with pytest.raises(ValueError, match=field):
+        policy.build_request("low_mid", public, profiles, MODEL)
+
+
+def test_new_projection_does_not_resume_old_frozen_policy(tmp_path, monkeypatch):
+    import httpx
+    from cloudyfan_jev.client import Client
+    from cloudyfan_jev.demo import ArithmeticEnvironment, example_config
+    from cloudyfan_jev.engine import Core
+
+    current_version = policy.VERSION
+    assert current_version != "hierarchical50-binary-v1"
+    calls = []
+    def serve(request):
+        calls.append(request)
+        return httpx.Response(200, json={"id": "gen-frozen-policy", "model": "example/open_source", "provider": "Example",
+            "usage": {"cost": .001}, "choices": [{"message": {"role": "assistant", "content": "2"}, "finish_reason": "stop"}]})
+    configured, decision = example_config()
+    engine = Core(Client(httpx.Client(transport=httpx.MockTransport(serve)), "fixture-only", tmp_path), configured, decision)
+    monkeypatch.setattr(policy, "VERSION", "hierarchical50-binary-v1")
+    engine.run("frozen", {"prompt": "Return 2"}, ArithmeticEnvironment, contract_version="v1")
+    before = {path: path.read_bytes() for path in tmp_path.rglob("*.json")}
+    monkeypatch.setattr(policy, "VERSION", current_version)
+    with pytest.raises(ValueError, match="Resume evidence changed"):
+        engine.run("frozen", {"prompt": "Return 2"}, ArithmeticEnvironment, contract_version="v1")
+    assert len(calls) == 1
+    assert {path: path.read_bytes() for path in tmp_path.rglob("*.json")} == before

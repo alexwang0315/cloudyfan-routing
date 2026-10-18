@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "scope": {
+    "id": "routing-core-spec1-prospective-release",
+    "description": "Prospective routing-core release checklist only; actual domain, model configurations, client and deployment environment remain unqualified. No execution authorization."
+  },
+  "gates": [
+    {
+      "id": "G-01",
+      "status": "pending",
+      "scope_id": "routing-core-spec1-prospective-release",
+      "owner": null,
+      "reviewer": null,
+      "rationale": null,
+      "evidence": []
+    },
+    {
+      "id": "G-02",
+      "status": "pending",
+      "scope_id": "routing-core-spec1-prospective-release",
+      "owner": null,
+      "reviewer": null,
+      "rationale": null,
+      "evidence": []
+    },
+    {
+      "id": "G-03",
+      "status": "pending",
+      "scope_id": "routing-core-spec1-prospective-release",
+      "owner": null,
+      "reviewer": null,
+      "rationale": null,
+      "evidence": []
+    },
+    {
+      "id": "RG-01",
+      "status": "pending",
+      "scope_id": "routing-core-spec1-prospective-release",
+      "owner": null,
+      "reviewer": null,
+      "rationale": null,
+      "evidence": []
+    },
+    {
+      "id": "RG-02",
+      "status": "pending",
+      "scope_id": "routing-core-spec1-prospective-release",
+      "owner": null,
+      "reviewer": null,
+      "rationale": null,
+      "evidence": []
+    },
+    {
+      "id": "RG-03",
+      "status": "pending",
+      "scope_id": "routing-core-spec1-prospective-release",
+      "owner": null,
+      "reviewer": null,
+      "rationale": null,
+      "evidence": []
+    },
+    {
+      "id": "RG-04",
+      "status": "pending",
+      "scope_id": "routing-core-spec1-prospective-release",
+      "owner": null,
+      "reviewer": null,
+      "rationale": null,
+      "evidence": []
+    },
+    {
+      "id": "RG-05",
+      "status": "pending",
+      "scope_id": "routing-core-spec1-prospective-release",
+      "owner": null,
+      "reviewer": null,
+      "rationale": null,
+      "evidence": []
+    },
+    {
+      "id": "RG-06",
+      "status": "pending",
+      "scope_id": "routing-core-spec1-prospective-release",
+      "owner": null,
+      "reviewer": null,
+      "rationale": null,
+      "evidence": []
+    },
+    {
+      "id": "RG-07",
+      "status": "pending",
+      "scope_id": "routing-core-spec1-prospective-release",
+      "owner": null,
+      "reviewer": null,
+      "rationale": null,
+      "evidence": []
+    }
+  ]
+}

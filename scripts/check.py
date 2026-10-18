@@ -14,7 +14,7 @@ import uuid
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     modes = parser.add_mutually_exclusive_group()
-    modes.add_argument('--quick', action='store_true', help='locked sync and Ruff only (commit hook)')
+    modes.add_argument('--quick', action='store_true', help='locked sync, dependency/record checks and Ruff (commit hook)')
     modes.add_argument('--integration', action='store_true', help='also run both mock demos and build')
     args = parser.parse_args(argv)
     root = Path(__file__).resolve().parent.parent
@@ -31,6 +31,7 @@ def main(argv=None):
         [uv, 'sync', '--project', str(root), '--locked', '--offline', '--extra', 'dev',
          '--no-python-downloads'],
         [uv, 'pip', 'check', '--python', str(python)],
+        [str(python), str(root / 'scripts/project_state.py'), 'check'],
         [str(python), '-m', 'ruff', 'check', '.'],
     ]
     if not args.quick:

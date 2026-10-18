@@ -10,7 +10,7 @@ from time import perf_counter
 from urllib.parse import urlsplit
 
 from .client import UnresolvedCallsError, _now, _strict_json
-from .receipt_store import ReceiptStore, _encoded, _immutable, _read
+from .receipt_store import ReceiptStore, _encoded, _fsync_dir, _immutable, _read
 
 
 class LocalBackend(ReceiptStore):
@@ -56,6 +56,7 @@ class LocalBackend(ReceiptStore):
                     return self._load(directory)
                 raise UnresolvedCallsError('Local request has unresolved execution; not resent')
             directory.mkdir(mode=0o700)
+            _fsync_dir(directory.parent)
             common = {'execution_kind': 'local', 'call_id': cid, 'local_call_id': cid,
                       'run_id': cid.rsplit('-a', 1)[0].removeprefix('run-'),
                       'request_sha256': fingerprint, 'configuration': self.descriptor()}

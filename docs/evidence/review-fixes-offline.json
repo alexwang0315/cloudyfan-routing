@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "review-five-fixes-offline",
+  "baseline_commit": "d8af729668a0e4a2ebe6572d7f50d26ff1db8efa",
+  "tested_tree": "uncommitted executable/test/build inputs identified by source_digest",
+  "source_digest": "e64ea1909715a9ba1e99c197cf0ee0b9f18ba388fb7c383668361cb410ba0f46",
+  "tests_passed": 699,
+  "finished_at": "2026-10-18T06:15:14.851149+00:00",
+  "integration_receipt_sha256": "86134e60a2a377c53b42ddca6c65c5b83af16f9b342ab47326928e23068f183d",
+  "private_receipt_path": "runtime/checks/5c418db4ac2346578c10a8b57c72b313/checks.json",
+  "checks": [
+    "locked-offline-sync",
+    "dependency-consistency",
+    "project-records",
+    "ruff",
+    "pytest",
+    "core-high-mock",
+    "score-high-mock",
+    "sdist-wheel"
+  ],
+  "limits": [
+    "local offline verification only",
+    "metadata finalized after integration; separately rechecked",
+    "remote CI not run",
+    "10 production gates pending",
+    "real provider caps and physical crash durability not qualified",
+    "frozen v1 workflows rejected under v2; no automatic migration or resend"
+  ]
+}

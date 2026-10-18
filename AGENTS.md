@@ -10,3 +10,4 @@
 - Run `./scripts/check`; use `--integration` for orchestration or delivery changes. Fresh checkout, hook and offline-cache instructions: [docs/checks.md](docs/checks.md).
 - Keep original experiment sources and history outside this repo unchanged. Track provenance and extraction differences in docs.
 - Creating this local repository does not authorize public publication. Do not add a public remote, upload artifacts or choose an open-source license without user direction.
+- Before continuing implementation, read [docs/handoff.md](docs/handoff.md) and run `./scripts/project-state show`. Update the current work plan before shared-interface edits; preserve historical evidence. Record consistency never grants external-action authority.

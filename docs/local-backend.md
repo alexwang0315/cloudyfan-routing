@@ -26,7 +26,11 @@ A non-null external score requires a separate approved
 quantized model. These checks do not grant real-model qualification.
 
 The local backend uses its own private receipt root. Every intent and original
-response is saved before parsing; run/call IDs, configuration and elapsed time
+response is saved before parsing. Before dispatch, creating `calls/<call-id>` is
+followed by an fsync of its parent `calls/`, then a file and directory fsync for
+the intent. A failed durability step stops before POST; an existing intent with
+no response blocks resume rather than resending. These syscall-order and injected
+failure tests do not simulate physical power loss. Run/call IDs, configuration and elapsed time
 are preserved. A completed request is reused, and interrupted or malformed
 requests are never automatically resent. Local receipts have
 `execution_kind: local`, a `local_call_id`, and **no OpenRouter generation ID or

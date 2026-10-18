@@ -83,9 +83,18 @@ def test_budgeted_core_reserves_full_workflow_and_counts_repair_classifier(tmp_p
 def test_existing_client_spending_is_imported_before_new_admission(tmp_path):
     from cloudyfan_jev.budget import BudgetedCore, EnforcedBound
     from test_engine import API, core, TASK, ArithmeticEnvironment
+    import httpx
     api = API(first='2')
-    engine = core(tmp_path / 'client', api)
+
+    def transport(request):
+        if request.method == 'GET':
+            return httpx.Response(200, json={'data': {'id': 'gen-test-1',
+                'model': 'example/open_source', 'provider_name': 'Example', 'total_cost': '.01'}})
+        return api(request)
+
+    engine = core(tmp_path / 'client', transport)
     engine.run('prior', TASK, ArithmeticEnvironment, contract_version='v1')
+    assert engine.client.reconcile('run-prior-a0-t0')['reconciliation']['verified'] is True
     store = BudgetStore(tmp_path / 'budget.sqlite', clock=lambda: NOW)
     store.authorize(Authorization('approved', Decimal('.485'), '2026-10-19T00:00:00+00:00'))
     bounds = {p['model_version']: EnforcedBound('.03', 'offline cap') for p in engine.profiles.values()}

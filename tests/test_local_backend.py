@@ -150,3 +150,79 @@ def test_local_subset_rejects_unsupported_reasoning_before_request(tmp_path):
     profiles['open_source']['effort'] = 'high'
     with pytest.raises(ValueError, match='reasoning'):
         Core(engine.client, profiles, engine.decision, local_backend=engine.local_backend)
+
+
+
+def local_payload():
+    return {"model": "fixture-model-v1", "messages": [{"role": "user", "content": "Return 2"}], "max_tokens": 4}
+
+
+def test_local_directory_and_intent_are_durable_before_post(tmp_path, monkeypatch):
+    import os
+    from pathlib import Path
+    events = []
+    backend = local_engine(tmp_path, lambda req: (events.append("POST"), response())[1]).local_backend
+    directory = backend.root / "calls" / "ordered"
+    paths = {"calls": directory.parent, "call": directory, "intent": directory / "intent.json", "response": directory / "response.json"}
+    original_fsync, original_mkdir = os.fsync, Path.mkdir
+    def fsync(fd):
+        stat = os.fstat(fd)
+        for name, path in paths.items():
+            if path.exists() and (path.stat().st_dev, path.stat().st_ino) == (stat.st_dev, stat.st_ino):
+                events.append("fsync:" + name)
+                break
+        original_fsync(fd)
+    def mkdir(path, *args, **kwargs):
+        existed = path.exists()
+        result = original_mkdir(path, *args, **kwargs)
+        if path == directory and not existed:
+            events.append("mkdir:call")
+        return result
+    monkeypatch.setattr(os, "fsync", fsync)
+    monkeypatch.setattr(Path, "mkdir", mkdir)
+    backend.call("ordered", local_payload())
+    assert events == ["mkdir:call", "fsync:calls", "fsync:intent", "fsync:call", "POST", "fsync:response", "fsync:call"]
+
+
+def test_parent_directory_sync_failure_stops_before_intent_or_post(tmp_path, monkeypatch):
+    import os
+    import pytest
+    calls = []
+    backend = local_engine(tmp_path, lambda req: (calls.append(req), response())[1]).local_backend
+    directory = backend.root / "calls" / "parent-failure"
+    original_fsync = os.fsync
+    def fail_parent(fd):
+        stat = os.fstat(fd)
+        parent_stat = directory.parent.stat()
+        if (stat.st_dev, stat.st_ino) == (parent_stat.st_dev, parent_stat.st_ino):
+            raise OSError("fixture parent sync failure")
+        original_fsync(fd)
+    monkeypatch.setattr(os, "fsync", fail_parent)
+    with pytest.raises(OSError, match="parent sync failure"):
+        backend.call("parent-failure", local_payload())
+    assert calls == []
+    assert not (directory / "intent.json").exists()
+
+
+def test_intent_sync_failure_is_not_resent_after_reopening(tmp_path, monkeypatch):
+    import os
+    import pytest
+    from cloudyfan_jev.client import UnresolvedCallsError
+    calls = []
+    backend = local_engine(tmp_path, lambda req: (calls.append(req), response())[1]).local_backend
+    directory = backend.root / "calls" / "intent-failure"
+    original_fsync = os.fsync
+    def fail_intent_directory(fd):
+        stat = os.fstat(fd)
+        if directory.exists() and (stat.st_dev, stat.st_ino) == (directory.stat().st_dev, directory.stat().st_ino):
+            raise OSError("fixture intent directory sync failure")
+        original_fsync(fd)
+    monkeypatch.setattr(os, "fsync", fail_intent_directory)
+    with pytest.raises(OSError, match="intent directory sync failure"):
+        backend.call("intent-failure", local_payload())
+    assert (directory / "intent.json").exists()
+    monkeypatch.setattr(os, "fsync", original_fsync)
+    reopened = local_engine(tmp_path, lambda req: (calls.append(req), response())[1]).local_backend
+    with pytest.raises(UnresolvedCallsError, match="not resent"):
+        reopened.call("intent-failure", local_payload())
+    assert calls == []

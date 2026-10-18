@@ -147,7 +147,7 @@ def test_completed_contract_preserves_provenance_full_cost_and_no_repeat(transpo
         {'role': 'assistant', 'content': '3'}, {'role': 'assistant', 'content': '2'}]
     t = transport(api=API(first='2', choices=('mid', 'high'), messages=messages if repair else None),
                   environment=LookupEnvironment if repair else ArithmeticEnvironment, tools=repair)
-    t.runner.store.import_history(PRIVATE, cost_usd='.08', receipt_id=PRIVATE + '-history')
+    t.runner.store.import_history(PRIVATE, cost_usd='.08', receipt_id=PRIVATE + '-history', verified=True)
     submitted = t.submit()
     assert submitted.status_code == (202 if t.queue else 200)
     if t.queue:

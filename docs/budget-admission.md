@@ -21,8 +21,13 @@ OpenRouter or any other provider has a usable cap.
 the verifier receives the profile (or tool execution policy); at dispatch it
 receives the actual request. The integration owns verifier correctness, provider
 credentials/limits, and cannot let untrusted request bodies supply a verifier or
-replace approved bounds. A bound breach stops with the event unresolved; a local
-accounting layer cannot undo an upstream overcharge.
+replace approved bounds. A bound breach commits a durable shared-account violation before raising, leaving
+the event unresolved. The violation preserves the observed charge, receipt ID,
+verification flag and prior provisional amount. A local accounting layer cannot
+undo an upstream overcharge. Reopening the store, replaying a stale lower receipt
+or using another client does not clear the stop. No automatic reset/recovery API
+is provided; explicit account review and an independently approved recovery
+procedure are required. Original client receipts remain unchanged.
 
 ## Public API
 
@@ -59,7 +64,12 @@ store.import_history("historical-request-id", cost_usd="0.024",
 `run` automatically imports existing intents/receipts in the configured cloud and
 local clients, including interrupted runs. Other client roots, older experiment
 ledgers and external tool histories require explicit `import_history` calls by
-the application. A fresh database must not be presented as a lifetime total.
+the application. Imported unverified history has no enforceable bound and blocks
+new dispatch until independently reconciled (`verified=True`); known provisional
+spending is retained, but available balance is unknown. This also applies to imported
+local zero-API-fee receipts: independently confirm and import them as verified;
+the local backend does not support cloud generation GET reconciliation. A fresh database must not
+be presented as a lifetime total.
 
 ## Reservation and execution
 
@@ -78,12 +88,19 @@ those are not added again. Unreachable profiles are not charged or reserved.
 SQLite immediate transactions prevent two processes reserving the same balance.
 A run retains its whole reservation until successful completion of orchestration;
 failed/interrupted orchestration retains the hold, even when its currently known
-charges are small. A pending/unknown event stops every new dispatch. This is
+charges are small. Completion releases unused calls, but each unverified managed
+call retains `bound - provisional cost` (minimum zero) as a separate risk hold.
+Thus settled costs plus these holds equal the call upper bounds until independent
+reconciliation fixes the final amount. The hold is computed from persistent
+events, including completed runs written by earlier versions; it is not reset by
+reopening the database. Every new dispatch also rechecks aggregate exposure, so
+legacy over-admitted reservations cannot spend further. A pending/unknown event stops every new dispatch. This is
 intentionally conservative and is not a throughput promise. Restart never
 resends an unknown event. Receipt reconciliation can replace provisional cost
 with verified total; unique event and receipt identities prevent double counting.
 Completed runs can be read again without new model calls. Their event costs remain
-spent after their reservation is released. Expiry is checked before every new
+spent after their workflow reservation is released; outstanding reconciliation
+risk still reduces the available balance. Expiry is checked before every new
 model/tool event, including repair and classification.
 
 ## Tools and local inference
@@ -113,6 +130,12 @@ no-model-fee evidence and a verified bound. It does not make host or energy free
   charges; null if any event is unknown.
 - `store.report()`: authorization, active reservation, known, independently
   verified, unknown count, available balance and safe event identifiers.
+  `provisional_hold_usd` separately reports the remaining reconciliation risk;
+  `unbounded_history_events` reports imported history lacking a final fee.
+  `dispatch_blocked` reports accounting/exposure stops (not a substitute for
+  checking authorization expiry). `violations` retains over-bound observations.
+  While a violation remains, `total_usd` and available balance stay unknown; the
+  partial known total excludes that unresolved event, not its preserved receipt.
 - `BudgetError.control_plane_error=True`: a control-plane stop, not model failure.
 
 Amounts use decimal strings/Decimal end to end. Provider JSON decimal lexemes

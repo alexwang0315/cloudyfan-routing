@@ -1,6 +1,6 @@
 # Frozen-plan comparison (synthetic)
 
-Plan: `453c4349dff7d6f8411654c234ed0de7ebbb8a747c2751b3dbcb3ea3100c62fb`. Cost basis: **recorded_api_fees**.
+Plan: `e6acaaefadb0dbe6f5e763bbe9d5417aa78111073a281257c5f999dca2bb3b1f`. Cost basis: **recorded_api_fees**.
 Posthoc: False; cache: disabled.
 
 Costs include generation, classification, retry, repair, failure and tool events.
@@ -21,7 +21,8 @@ Pass denominators include every planned task, including missing evidence.
 | cloudyfan | 2 | 30.0 | 37.50 / 37.50 / 25.00 / 50.0 | 0 | synthetic_comparison |
 
 Positive CDR means lower candidate spending; zero baseline or unknown fees is undefined.
-Calibration USD: 0; unpaired holdout USD: 0; unattributed USD: 0.
+Calibration accounting: unknown; known observed USD: 0; overall complete API USD: unknown / undefined.
+Calibration USD: unknown / undefined; unpaired holdout USD: 0; unattributed USD: 0.
 Jev-only gain is not identified: same first configuration, inputs, public validation and repair contract is required.
 A passed descriptive quality gate is not statistical equivalence or evidence of commercial profitability.
 Detailed JSON retains validation/queue timing sample counts, retries, unknowns, evidence anomalies and strata.

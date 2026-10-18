@@ -25,13 +25,20 @@ def summarize(client):
                 info = usage(record)
                 row.update({k: info[k] for k in ('generation_id', 'model', 'provider', 'cost_usd', 'cost_source')})
                 row['endpoint'] = intent['url']
-                duplicate = info['generation_id'] in seen or record.get('duplicate_generation_id')
-                row['cost_unknown'] = info['cost_unknown'] or not info['generation_id'] or bool(duplicate)
+                local = info.get('execution_kind') == 'local'
+                identity = info.get('local_call_id') if local else info['generation_id']
+                identity_key = ('local' if local else 'cloud', identity)
+                if local:
+                    row.update({k: info[k] for k in ('local_call_id', 'run_id', 'execution_kind',
+                               'quantization', 'engine', 'execution_location', 'evidence_source',
+                               'usage_unknown', 'host_usd', 'electricity_usd')})
+                duplicate = identity_key in seen or record.get('duplicate_generation_id')
+                row['cost_unknown'] = info['cost_unknown'] or not identity or bool(duplicate)
                 row['evidence_status'] = 'duplicate_identity' if duplicate else ('unknown' if row['cost_unknown'] else 'cost_recorded')
                 # A flagged later duplicate must not consume the original receipt
                 # when its call ID sorts before the original call ID.
-                if info['generation_id'] and not record.get('duplicate_generation_id'):
-                    seen.add(info['generation_id'])
+                if identity and not record.get('duplicate_generation_id'):
+                    seen.add(identity_key)
                 if info['cost_usd'] is not None and not duplicate:
                     known += Decimal(info['cost_usd'])
             except (OSError, ValueError, TypeError, KeyError):

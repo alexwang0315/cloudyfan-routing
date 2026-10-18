@@ -108,3 +108,7 @@ result = engine.run("job-001", task, make_fresh_isolated_environment,
 - 尚未驗證 AA／OpenRouter 的帳戶 API 存取、CodexRadar 遠端 API、LiveBench v2、真實候選的資格與跨來源門檻校準。沒有新增付費模型請求或節省率結論。
 - 更新命令可交給既有排程器每日執行；本輪沒有安裝背景排程，故不宣稱部署後會自動每日更新。
 - GitHub `alexwang0315/cloudyfan-routing` 於本輪開工查詢沒有任何 Issue；沒有建立／修改 Issue，沒有推送程式碼或新增 remote。
+
+## 更新營運
+
+新增離線 `update-preview`／`update`／`update-inspect`，以核定包顯示前後變動並保存可重跑操作紀錄。流程、並行衝突與排程啟用清單見 [score-update-operations.md](score-update-operations.md)。沒有安裝排程或實際發送通知。

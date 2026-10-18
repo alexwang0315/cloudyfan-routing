@@ -298,6 +298,9 @@ def test_cli_build_select_and_missing_credential(tmp_path, monkeypatch, capsys):
     args = ['build', '--store', store]
     for name in ('observations', 'registry', 'policy'):
         args += ['--' + name, str(tmp_path / (name + '.json'))]
+    from test_qualification import reviewed
+    (tmp_path / 'review.json').write_text(json.dumps(reviewed(obs, registry, policy)))
+    args += ['--review', str(tmp_path / 'review.json'), '--synthetic']
     assert cli.main(args) == 0
     assert cli.main(['select', '--store', store, '--requirements', str(tmp_path / 'requirements.json'),
                      '--output', str(tmp_path / 'profiles.json')]) == 0

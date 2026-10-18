@@ -8,9 +8,10 @@ import sys
 import httpx
 
 from . import adapters
-from .catalog import canonical, compile_snapshot, select_profiles
+from .catalog import canonical, select_profiles
 from .integration import utc_now
 from .snapshots import SnapshotStore
+from .qualification import build_qualification_pack, qualified_snapshot
 
 
 def _read(path):
@@ -41,6 +42,12 @@ def main(argv=None):
     build = commands.add_parser('build', help='Compile and atomically publish all three source-native pools')
     for name in ('observations', 'registry', 'policy', 'store'):
         build.add_argument('--' + name, required=True)
+    build.add_argument('--review', help='Reviewed input-bound qualification attestations; required for publication')
+    build.add_argument('--synthetic', action='store_true', help='Explicit offline fixture store, never production')
+    qualify = commands.add_parser('qualify', help='Offline qualification review; never publishes preview')
+    for name in ('observations', 'registry', 'policy', 'review', 'output'):
+        qualify.add_argument('--' + name, required=True)
+    qualify.add_argument('--synthetic', action='store_true')
     select = commands.add_parser('select', help='Prepare per-task profiles without paid classification')
     for name in ('store', 'requirements', 'output'):
         select.add_argument('--' + name, required=True)
@@ -76,8 +83,17 @@ def main(argv=None):
             rows = adapters.import_codexradar(Path(args.input).read_bytes(), retrieved_at=now)
             _output(args.output, rows)
             print(json.dumps({'observations': len(rows), 'channel': 'reviewed_import', 'generation_calls': 0}))
+        elif args.command == 'qualify':
+            pack = build_qualification_pack(_read(args.observations), _read(args.registry), _read(args.policy),
+                                             review=_read(args.review), now=now, synthetic=args.synthetic)
+            _output(args.output, pack)
+            print(json.dumps({k: pack[k] for k in ('pack_id', 'status', 'production_ready', 'blockers')}))
         elif args.command == 'build':
-            snapshot = compile_snapshot(_read(args.observations), _read(args.registry), _read(args.policy), now=now)
+            if not args.review:
+                raise ValueError('Qualification review required before publication')
+            pack = build_qualification_pack(_read(args.observations), _read(args.registry), _read(args.policy),
+                                             review=_read(args.review), now=now, synthetic=args.synthetic)
+            snapshot = qualified_snapshot(pack, now=now, allow_synthetic=args.synthetic)
             SnapshotStore(args.store).publish(snapshot, now=now)
             print(json.dumps({'snapshot_id': snapshot['snapshot_id'],
                               'pools': {k: len(v) for k, v in snapshot['pools'].items()},

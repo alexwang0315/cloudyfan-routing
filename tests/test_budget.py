@@ -254,3 +254,26 @@ def test_budgeted_core_reconciliation_uses_verified_total_once(tmp_path):
     assert result['budget']['run_total_usd'] == '0.01234567890123456789'
     assert result['budget']['shared']['verified_usd'] == '0.01234567890123456789'
     assert calls == ['POST', 'GET']
+
+
+def test_local_zero_fee_receipt_combines_without_inventing_cloud_generation(tmp_path):
+    from cloudyfan_jev.budget import BudgetedCore, EnforcedBound
+    from test_local_backend import local_engine, response, TextContract
+    requests = []
+    def local(request):
+        requests.append(request)
+        return response()
+    engine = local_engine(tmp_path / 'clients', local)
+    store = BudgetStore(tmp_path / 'budget.sqlite', clock=lambda: NOW)
+    store.authorize(Authorization('approved', Decimal('1'), '2026-10-19T00:00:00+00:00'))
+    bounds = {p['model_version']: EnforcedBound('.03', 'mock provider cap') for p in engine.profiles.values()}
+    bounds[engine.profiles['open_source']['model_version']] = EnforcedBound('0', 'mock operator no-fee')
+    bounds[engine.decision['version']] = EnforcedBound('.001', 'mock classifier cap')
+    app = BudgetedCore(engine, store, model_bounds=bounds, tool_bounds={}, verify_bound=lambda *a: True)
+    result = app.run('local', {'prompt': 'Return 1+1'}, TextContract, contract_version='v1')
+    assert result['budget']['run_total_usd'] == '0'
+    assert result['budget']['shared']['events'][0]['receipt'].startswith('local:')
+    assert result['attempts'][0]['calls'][0]['generation_id'] is None
+    assert result['costs']['host_and_human_usd'] is None
+    app.run('local', {'prompt': 'Return 1+1'}, TextContract, contract_version='v1')
+    assert len(requests) == 1

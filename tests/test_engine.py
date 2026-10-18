@@ -120,6 +120,8 @@ def test_crash_after_paid_response_resumes_fresh_tools_without_resend(tmp_path):
     api = API(messages=messages)
     instances = []
     class Env:
+        replayable_tools = frozenset({"write"})
+
         def __init__(self):
             self.value = None
             instances.append(self)

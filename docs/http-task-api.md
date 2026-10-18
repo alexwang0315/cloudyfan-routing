@@ -46,7 +46,8 @@ tracebacks are not logged by this adapter.
   Creates the frozen task, then executes synchronously.
 - `GET /v1/tasks/{run_id}`: current execution status and that run's cost snapshot.
 - `GET /v1/tasks/{run_id}/result`: the owned answer, public pass flags, latency and
-  complete model/classifier/tool API cost. A read-only Core result check verifies
+  complete model/classifier/tool API cost and safe per-call `provenance`.
+  A read-only Core result check verifies
   saved identity; local receipt synchronization refreshes reconciliation without
   a model POST or reconciliation GET. Shared-account events are never returned.
 - `POST /v1/tasks/{run_id}/resume`: exactly `{}`. Explicitly continues an unfinished
@@ -102,3 +103,35 @@ response reuse, fresh-workspace resume, public failures, unknown costs,
 configuration changes, authorization, allowlisted tools and sanitized errors.
 They are not evidence of real clients, provider caps, network deployment,
 production identity integration or approved data-retention operations.
+
+## Result provenance
+
+The result `provenance` contains the Core configuration hash, engine/routing and
+public-contract versions, generation `attempts` with their tier and call list,
+and a separate `classifier_calls` list. Each call includes actual model/provider
+and generation ID (or local call ID), the frozen requested model/version/effort,
+provider/backend/quantization/engine/execution location, and available score
+source/version/metric plus snapshot/policy/configuration IDs. These are explicit
+field projections, not the whole configuration descriptor. Missing fields remain
+null; classifier effort is not inferred, and local execution never gets an
+invented cloud provider or generation ID.
+
+Observed model/provider identities come from the same validated receipt used for
+accounting, including an already-persisted reconciliation. Reading results neither
+sends another POST nor performs a reconciliation GET. A valid reconciliation may
+replace a response alias with the admitted pinned model; a mismatched identity
+still blocks the result. Unknown score metadata is not evidence of qualification.
+Capability-card prose, task requirements, prompts, raw receipts, workspace paths,
+credentials, and shared budget data are excluded from this projection. The owned
+answer remains the existing explicit result field.
+
+`QueueHTTPApp` forwards this task-owned projection. `OllamaApp` returns it under
+`cloudyfan.provenance`; its model alias remains distinct from actual dispatched
+model identities. Neither view authorizes cross-principal reads.
+
+All layers freeze their relevant extensions around
+`Core.configuration_descriptor()`. Core manifests retain their existing shape;
+HTTP registration, budget admission and benchmark descriptors now also bind the
+shared engine/routing configuration. Pre-release outer-layer manifests with older
+fingerprints are not silently migrated: preserve their records and use their
+original executable for any authorized recovery, rather than resend requests.

@@ -5,15 +5,15 @@ model quality, physical location or hardware cost. The endpoint cannot redirect.
 """
 from copy import deepcopy
 import hashlib
-from pathlib import Path
 import re
 from time import perf_counter
 from urllib.parse import urlsplit
 
-from .client import Client, UnresolvedCallsError, _encoded, _immutable, _now, _read, _strict_json
+from .client import UnresolvedCallsError, _now, _strict_json
+from .receipt_store import ReceiptStore, _encoded, _immutable, _read
 
 
-class LocalBackend(Client):
+class LocalBackend(ReceiptStore):
     def __init__(self, http, root, *, endpoint, model_version, quantization, engine,
                  execution_location, no_model_fee_evidence):
         parsed = urlsplit(endpoint)
@@ -28,10 +28,8 @@ class LocalBackend(Client):
             raise ValueError('Local backend configuration and no-fee evidence must be explicit')
         if not re.fullmatch(r'(home|company):[A-Za-z0-9_.-]+', execution_location):
             raise ValueError('Local execution location requires an explicit home or company site')
-        # Reuse only the filesystem locking/loading primitives, never cloud calls.
-        self.http, self.root, self.config = http, Path(root), config
-        self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
-        (self.root / 'calls').mkdir(exist_ok=True, mode=0o700)
+        super().__init__(root)
+        self.http, self.config = http, config
 
     def descriptor(self):
         return deepcopy(self.config)

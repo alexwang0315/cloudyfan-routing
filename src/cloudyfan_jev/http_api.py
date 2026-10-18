@@ -85,16 +85,45 @@ class RegisteredContract:
                 or not isinstance(self.runner.core.diagnostic_contract, DiagnosticContract)):
             raise ValueError('Registered contract requires controlled runner, explicit privacy and validator')
         core = self.runner.core
-        return {'version': self.version, 'mode': self.mode, 'tool_names': list(self.tool_names),
-                'profiles': core.profiles, 'decision': core.decision,
-                'limits': asdict(core.limits), 'system': core.system,
-                'execution_policy': core.execution_policy.to_dict(),
-                'diagnostic_contract': core.diagnostic_contract.manifest(),
-                'local_backend': core.local_backend.descriptor() if core.local_backend else None,
+        return {**core.configuration_descriptor(),
+                'version': self.version, 'mode': self.mode, 'tool_names': list(self.tool_names),
                 'model_bounds': {key: asdict(bound) for key, bound in self.runner.model_bounds.items()},
                 'tool_bounds': {key: asdict(bound) for key, bound in self.runner.tool_bounds.items()},
                 'receipt_root': str(core.client.root.resolve()),
                 'budget_store': str(self.runner.store.path.resolve())}
+
+
+def _provenance(result, frozen):
+    """Project task-owned identity references only; never expose capability prose."""
+    def text_field(obj, key):
+        value = obj.get(key) if isinstance(obj, dict) else None
+        return value if isinstance(value, str) else None
+
+    def call_metadata(call):
+        classifier = call['tier'] == 'classifier'
+        profile = frozen['decision'] if classifier else frozen['profiles'][call['tier']]
+        card = profile.get('capability_card', {})
+        selection = card.get('score_selection', {})
+        evidence = card.get('benchmark_evidence', {})
+        configuration = {key: text_field(profile, key) for key in (
+            'model', 'model_version', 'effort', 'provider', 'backend',
+            'quantization', 'engine', 'execution_location')}
+        if classifier:
+            configuration['model_version'] = text_field(profile, 'version')
+        return {'call_id': call['call_id'], 'actual_model': text_field(call, 'model'),
+                'actual_provider': text_field(call, 'provider'),
+                'generation_id': text_field(call, 'generation_id'),
+                'local_call_id': text_field(call, 'local_call_id'),
+                'configuration': configuration,
+                'score': {**{key: text_field(selection, key) for key in ('snapshot_id', 'policy_id', 'config_id')},
+                          **{key: text_field(evidence, key) for key in ('source', 'source_version', 'metric')}}}
+
+    return {'config_sha256': result['config_sha256'], 'contract_version': frozen['version'],
+            'engine_version': frozen['engine_version'], 'routing_version': frozen['routing_version'],
+            'attempts': [{'attempt': attempt['attempt'], 'tier': attempt['tier'],
+                          'calls': [call_metadata(call) for call in attempt['calls']]}
+                         for attempt in result['attempts']],
+            'classifier_calls': [call_metadata(call) for call in (result.get('selection') or {}).get('calls', [])]}
 
 
 class _RegisteredEnvironment:
@@ -214,10 +243,11 @@ class TaskService:
         if contract is None or _encode(contract.descriptor()) != _encode(job['registered']):
             raise ServiceError('frozen_configuration_changed', 409)
         try:
-            contract.runner.core.read_completed(self.internal_id(principal, run_id))
+            result = contract.runner.core.read_completed(self.internal_id(principal, run_id))
         except Exception:
             raise ServiceError('result_evidence_unavailable', 503) from None
         return {**_read(directory / 'outcome.json'),
+                'provenance': _provenance(result, job['registered']),
                 'costs': self._costs(principal, run_id, job, refresh=True)}
 
     def execute(self, principal, run_id):

@@ -95,6 +95,7 @@ class OllamaApp:
                 if state['status'] in ('passed', 'failed', 'unverifiable'):
                     result = self.service.result(principal, run_id)
                     metadata['costs'] = result['costs']
+                    metadata['provenance'] = result['provenance']
                     if result['status'] == 'passed' and result['final_public_pass'] is True:
                         body = {'model': alias, 'created_at': self.clock(), 'response': result['answer'],
                                 'done': True, 'cloudyfan': metadata}

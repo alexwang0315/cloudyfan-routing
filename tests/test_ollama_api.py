@@ -186,3 +186,16 @@ def test_native_audit_and_errors_are_redacted(tmp_path):
     assert response.status_code == 500 and response.json() == {'error': 'service_interrupted'}
     assert events == [{'event': 'ollama_protocol_request', 'http_status': 500}]
     assert api.requests == []
+
+
+@pytest.mark.parametrize('first,tiers,count', [('2', ['open_source'], 1),
+                                             ('3', ['open_source', 'high'], 4)])
+def test_native_result_preserves_task_provenance_without_extra_generation(tmp_path, first, tiers, count):
+    from test_engine import API
+    client, _, _, api, _ = consumer(tmp_path, api=API(first=first, choices=('mid', 'high')))
+    response = client.post('/api/generate', json=BODY)
+    provenance = response.json()['cloudyfan']['provenance']
+    assert [attempt['tier'] for attempt in provenance['attempts']] == tiers
+    assert client.get('/v1/tasks/ollama-1/result').json()['provenance'] == provenance
+    assert client.post('/api/generate', json=BODY).json()['cloudyfan']['provenance'] == provenance
+    assert len(api.requests) == count

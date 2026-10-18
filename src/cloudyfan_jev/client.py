@@ -3,21 +3,22 @@
 The caller owns authorization, profile admission and budget reservation. This
 client additionally stops NEW paid requests while any local call is unresolved.
 """
-from contextlib import contextmanager
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
-import fcntl
 import hashlib
 import json
-import os
 from pathlib import Path
 import re
 from time import perf_counter
 
+from .receipt_store import ReceiptStore
+# Keep the existing storage helper imports available to current package callers.
+from .receipt_store import _encoded as _encoded, _read as _read
+from .receipt_store import _fsync_dir as _fsync_dir, _immutable as _immutable
+
 CHAT = "https://openrouter.ai/api/v1/chat/completions"
 DECISIONS = "https://openrouter.ai/api/alpha/decisions"
 GENERATION = "https://openrouter.ai/api/v1/generation"
-_CID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,159}\Z")
 _GID = re.compile(r"gen-[A-Za-z0-9_-]{1,160}\Z")
 
 
@@ -27,33 +28,6 @@ class UnresolvedCallsError(RuntimeError):
 
 def _now():
     return datetime.now(timezone.utc).isoformat()
-
-
-def _encoded(obj):
-    return json.dumps(obj, ensure_ascii=False, sort_keys=True, allow_nan=False).encode()
-
-
-def _read(path):
-    return json.loads(Path(path).read_text())
-
-
-def _fsync_dir(path):
-    fd = os.open(path, os.O_RDONLY)
-    try:
-        os.fsync(fd)
-    finally:
-        os.close(fd)
-
-
-def _immutable(path, obj):
-    """Exclusive create plus data/directory fsync; torn files fail closed."""
-    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    with path.open("xb") as stream:
-        os.fchmod(stream.fileno(), 0o600)
-        stream.write(_encoded(obj))
-        stream.flush()
-        os.fsync(stream.fileno())
-    _fsync_dir(path.parent)
 
 
 def _money(value):
@@ -114,34 +88,15 @@ def usage(record):
     return result
 
 
-class Client:
+class Client(ReceiptStore):
     def __init__(self, http, key, root: Path):
         if not isinstance(key, str) or not key:
             raise ValueError("A nonempty credential must be supplied without logging it")
-        self.http, self.key, self.root = http, key, Path(root)
-        self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
-        (self.root / "calls").mkdir(exist_ok=True, mode=0o700)
-
-    @contextmanager
-    def _lock(self):
-        with (self.root / ".client.lock").open("a") as stream:
-            os.fchmod(stream.fileno(), 0o600)
-            fcntl.flock(stream, fcntl.LOCK_EX)
-            try:
-                yield
-            finally:
-                fcntl.flock(stream, fcntl.LOCK_UN)
-
-    def _directory(self, cid):
-        if not isinstance(cid, str) or not _CID.fullmatch(cid) or cid in {".", ".."}:
-            raise ValueError("Invalid call ID")
-        directory = self.root / "calls" / cid
-        if directory.is_symlink():
-            raise ValueError("Call directory cannot be a symlink")
-        return directory
+        super().__init__(root)
+        self.http, self.key = http, key
 
     def _load(self, directory):
-        record = _read(directory / "response.json")
+        record = super()._load(directory)
         # Successfully verified reconciliation is immutable. Failed GET attempts
         # remain separate receipts and cannot resolve unknown paid costs.
         receipt = directory / "reconciled.json"

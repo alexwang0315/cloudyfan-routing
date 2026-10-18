@@ -385,9 +385,9 @@ class BudgetedCore:
     def run(self, run_id, task, environment_factory, *, contract_version, mode='cloudyfan', **kwargs):
         from copy import copy
         from dataclasses import asdict
-        frozen = {'root': str(self.core.client.root.resolve()), 'task': task, 'contract': contract_version,
-                  'mode': mode, 'profiles': self.core.profiles, 'decision': self.core.decision,
-                  'limits': asdict(self.core.limits), 'system': self.core.system, 'options': kwargs,
+        frozen = {**self.core.configuration_descriptor(),
+                  'root': str(self.core.client.root.resolve()), 'task': task, 'contract': contract_version,
+                  'mode': mode, 'options': kwargs,
                   'model_bounds': {k: asdict(v) for k, v in self.model_bounds.items()},
                   'tool_bounds': {k: asdict(v) for k, v in self.tool_bounds.items()}}
         self.sync_client(self.core.client)

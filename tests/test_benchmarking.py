@@ -189,3 +189,13 @@ def test_similar_case_ids_do_not_mix_billed_calls(tmp_path):
         row = harness.run(case, {'prompt': 'Return 1+1'}, Contract, contract_version='sum-public-v1', configuration=config, mode='fixed_high')
         assert row['ledger']['calls'] == 1
         assert row['costs']['api_usd'] == '0.03'
+
+
+def test_oom_event_stops_before_model_even_when_probe_does_not_raise(tmp_path):
+    core = make_core(tmp_path, lambda req: httpx.Response(200, json={'model': 'fixture-v1',
+        'choices': [{'message': {'role': 'assistant', 'content': '2'}}]}))
+    report = BenchmarkHarness(core, tmp_path / 'reports', clock=Clock()).run('oom-event', {'prompt': 'Return 1+1'}, Contract,
+        contract_version='sum-public-v1', configuration=setup(), prepare=lambda emit: emit('oom'))
+    assert report['status'] == 'engineering_interruption'
+    assert report['failure'] == 'out_of_memory'
+    assert report['ledger']['calls'] == 0

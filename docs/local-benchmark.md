@@ -23,6 +23,7 @@ fake clock. A probe can emit `load_start/end`, `queue_start/end`,
 `prompt_start/end`, `generation_start/end`, `switch_start/end`, `first_token`,
 `oom`, and `interrupted`. Every event records the injected monotonic clock value.
 Unknown event names, nonfinite clocks and backward event clocks are rejected.
+OOM and interruption events immediately stop execution and retain the event.
 
 The report preserves the event sequence and lists load, queue, prompt processing,
 generation and switch durations separately. TTFT is queue entry to first token;

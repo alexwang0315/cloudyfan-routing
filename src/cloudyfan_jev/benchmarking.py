@@ -46,6 +46,8 @@ class _Events:
         if self.rows and now < self.rows[-1]['at_seconds']:
             raise ValueError('Engine clock moved backward')
         self.rows.append({'event': event, 'at_seconds': now})
+        if event == 'oom': raise MemoryError('Engine reported out of memory')
+        if event == 'interrupted': raise RuntimeError('Engine reported interruption')
 
     def metrics(self):
         result = {}

@@ -1,95 +1,57 @@
 {
   "schema_version": 1,
   "integration_branch": "codex/implement-routing-spec-1",
-  "baseline_commit": "651571216fc80a64e3f13e84632a356dfcb76773",
+  "baseline_commit": "6c8fdcc85d55ad8fc6b0c1a03d47a10903defa68",
   "merger_owner": "root",
   "shared_interfaces": [
     {
-      "id": "core-configuration-descriptor",
+      "id": "ollama-protocol",
       "owner": "root",
       "owned_files": [
-        "src/cloudyfan_jev/engine.py"
+        "src/cloudyfan_jev/ollama_api.py"
       ],
-      "provided_by": "budget-and-integration"
-    },
-    {
-      "id": "receipt-store",
-      "owner": "integration-maintainer",
-      "owned_files": [
-        "src/cloudyfan_jev/receipt_store.py"
-      ],
-      "provided_by": null
+      "provided_by": "pinned-sdk-interop"
     },
     {
       "id": "task-lifecycle",
-      "owner": "retention-worker",
+      "owner": "integration-maintainer",
       "owned_files": [
         "src/cloudyfan_jev/http_api.py"
       ],
-      "provided_by": "retention"
+      "provided_by": null
     }
   ],
   "tasks": [
     {
-      "id": "budget-and-integration",
+      "id": "pinned-sdk-interop",
       "owner": "root",
       "status": "completed",
       "owned_files": [
-        "src/cloudyfan_jev/provider_bounds.py",
-        "tests/test_provider_bounds.py",
-        "tests/test_rg45_integration.py",
-        "src/cloudyfan_jev/budget.py",
-        "src/cloudyfan_jev/client.py",
-        "src/cloudyfan_jev/scheduler.py",
-        "docs/provider-bounds.md",
-        "docs/budget-admission.md",
+        "pyproject.toml",
+        "uv.lock",
+        "src/cloudyfan_jev/ollama_api.py",
+        "tests/test_ollama_sdk.py",
+        "docs/ollama-sdk.md",
+        "docs/ollama-text-protocol.md",
+        "docs/transport-contracts.md",
         "docs/release-readiness.md",
+        "docs/handoff.md",
         "docs/verification.md",
-        "docs/coordination.md",
         "docs/agent-state.json",
         "docs/work-plan.json",
-        "docs/rg04-rg05.md",
-        "docs/evidence/rg45-baseline.json",
-        "docs/evidence/review-five-work-plan.json",
-        "docs/evidence/rg45-offline.json",
-        "src/cloudyfan_jev/engine.py",
-        "docs/retention.md",
-        "tests/test_project_state.py",
-        "docs/evidence/rg45-precommit.json"
+        "docs/coordination.md",
+        "docs/evidence/g02-baseline.json",
+        "docs/evidence/rg45-work-plan.json",
+        "docs/evidence/g02-offline.json",
+        "docs/evidence/g02-sdk-manifest.json",
+        "tests/test_ollama_api.py",
+        "README.md",
+        "docs/evidence/g02-precommit.json",
+        "docs/evidence/g02-precommit-final.json"
       ],
-      "depends_on": [
-        "identity",
-        "retention"
-      ],
+      "depends_on": [],
       "consumed_interfaces": [
         "task-lifecycle"
-      ]
-    },
-    {
-      "id": "identity",
-      "owner": "identity-worker",
-      "status": "completed",
-      "owned_files": [
-        "src/cloudyfan_jev/identity.py",
-        "tests/test_identity.py",
-        "docs/identity.md"
-      ],
-      "depends_on": [],
-      "consumed_interfaces": []
-    },
-    {
-      "id": "retention",
-      "owner": "retention-worker",
-      "status": "completed",
-      "owned_files": [
-        "src/cloudyfan_jev/retention.py",
-        "tests/test_retention.py",
-        "src/cloudyfan_jev/http_api.py",
-        "docs/http-task-api.md"
-      ],
-      "depends_on": [],
-      "consumed_interfaces": [
-        "receipt-store"
       ]
     }
   ]

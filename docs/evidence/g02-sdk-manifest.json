@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "kind": "client-provenance",
+  "client": "official ollama Python synchronous Client",
+  "version": "0.6.3",
+  "protocol": "cloudyfan-ollama-text-v2",
+  "sources": [
+    "https://pypi.org/project/ollama/0.6.3/",
+    "https://github.com/ollama/ollama-python"
+  ],
+  "wheel": {
+    "filename": "ollama-0.6.3-py3-none-any.whl",
+    "sha256": "6a20bc42c1a5f889295d7ec490d35e5132fc31f339561530f43a8abd4dbfe508",
+    "url": "https://files.pythonhosted.org/packages/4d/64/87505d9e006461233c21c8e66dc1ecee49c996090584b216abd0dd4a8322/ollama-0.6.3-py3-none-any.whl"
+  },
+  "installed_sdk_source_sha256": {
+    "ollama/__init__.py": "e0d91852cb2a18279e63a42c7b3d90eedb238aa1a16a658b8a758c45e5bc9279",
+    "ollama/_client.py": "0fc253f255e2ffb9f6e7135848abef48593d53318d84fae4b65d9da2237f7065",
+    "ollama/_types.py": "d6bfdbf5c2185e7523f97d820d6e96695b25b69e1d54ffe30069f0ceaa4d90d9",
+    "ollama/_utils.py": "be695805d63d32634d188741f087bbf29dd291e8aa7ff09855e0c6037ff6702a"
+  },
+  "observed_dependencies": {
+    "httpx": "0.28.1",
+    "pydantic": "2.14.1",
+    "pydantic-core": "2.50.1",
+    "anyio": "4.15.1"
+  },
+  "observed_python": "3.13.13",
+  "observed_platform": "Darwin x86_64",
+  "verification_topology": [
+    "official SDK",
+    "httpx.WSGITransport",
+    "OllamaApp/HTTPApp",
+    "TaskService",
+    "Core/BudgetedCore",
+    "httpx.MockTransport"
+  ],
+  "network_sockets": false,
+  "real_model_api": false,
+  "sdk_methods_replaced": false,
+  "limits": [
+    "synchronous Client only",
+    "no actual TCP/TLS/proxy/reverse proxy",
+    "no deployed service",
+    "no Ollama runtime or weights",
+    "metadata via companion task HTTP API; SDK response models omit CloudyFan extensions",
+    "no async, JavaScript SDK or product client qualification"
+  ]
+}

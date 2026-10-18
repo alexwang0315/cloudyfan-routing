@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "g02-verified-start",
+  "baseline_commit": "6c8fdcc85d55ad8fc6b0c1a03d47a10903defa68",
+  "tested_tree": "committed executable/test/build inputs from 6c8fdcc; same digest as RG-04/RG-05 precommit receipt",
+  "source_digest": "ca24f2b9f1753addca7202b33b070559594321e02b8b74fbd3745d1a7a8b858c",
+  "tests_passed": 798,
+  "finished_at": "2026-10-18T08:30:32.525660+00:00",
+  "integration_receipt_sha256": "f106e3b46f6e0a7903208e630bc297ce310424ed3d98bf4f953efa79b9ac3ab8",
+  "private_receipt_path": "runtime/checks/33c15264e1ea4f01a57ed08c0e42df25/checks.json",
+  "checks": [
+    "locked-offline-sync",
+    "dependency-consistency",
+    "project-records",
+    "ruff",
+    "pytest",
+    "core-high-mock",
+    "score-high-mock",
+    "sdist-wheel"
+  ],
+  "limits": [
+    "offline synthetic provider contract and MockTransport evidence only",
+    "no actual supplier ceiling contract/control-plane probe qualified",
+    "local API-token identity, not OIDC/SSO qualification",
+    "real deployment TLS/identity/retention/backup coverage and maintenance fence pending",
+    "fixture-only approved purge; no actual user-data deletion",
+    "metadata finalized after integration and separately validated",
+    "10 production gates pending; remote CI not run"
+  ],
+  "purpose": "verified starting point for pinned official SDK interoperability against mocked upstream",
+  "review": {
+    "new_blocking_findings": 0,
+    "prior_review_corrections_verified": [
+      "provider expiry immediately before POST",
+      "queue and retention lock order",
+      "retired duplicate returns 410",
+      "never-dispatched terminal retention",
+      "protected queue database overlap"
+    ]
+  },
+  "tested_commit": "6c8fdcc85d55ad8fc6b0c1a03d47a10903defa68"
+}

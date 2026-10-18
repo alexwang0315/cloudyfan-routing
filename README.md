@@ -12,6 +12,8 @@
 
 [統一驗證入口](docs/checks.md)提供本機與 CI 共用命令；[跨接入契約矩陣](docs/transport-contracts.md)檢查 HTTP／Ollama／Queue 的共同保證。[正式放行索引](docs/release-readiness.md)分開記錄離線實作完成與正式資格。
 
+[官方 SDK 互通證據](docs/ollama-sdk.md)固定 `ollama==0.6.3` 同步 Client，驗證純文字子集、身份、錯誤與重連不重送；模型上游保持模擬，不宣稱完整 Ollama 或部署相容。
+
 [目前接手入口](docs/handoff.md)使用 `./scripts/project-state show` 區分歷史基線、本輪離線證據與正式資格；[共享介面分工](docs/coordination.md)提供依賴與責任檢查。
 
 ## 流程

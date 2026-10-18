@@ -1,6 +1,6 @@
 # Ollama 文字協定子集與互通證據（T08）
 
-本版固定 CloudyFan 子集 **`cloudyfan-ollama-text-v1`**；離線協定消費端 **`cloudyfan-ollama-protocol-consumer-v1`** 位於 `tests/test_ollama_api.py`，透過 httpx WSGITransport 操作公開 HTTP seam，模型上游為 MockTransport。官方文件核對日期 **2026-10-18**。沒有安裝／執行 Ollama runtime、官方 SDK 或產品 client。
+本版固定 CloudyFan 子集 **`cloudyfan-ollama-text-v2`**；離線協定消費端 **`cloudyfan-ollama-protocol-consumer-v2`** 位於 `tests/test_ollama_api.py`。另以實際安裝的官方 **`ollama==0.6.3` 同步 Client** 驗證互通，見 [G-02 證據](ollama-sdk.md)。兩者都透過 httpx WSGITransport 操作公開 HTTP seam，模型上游為 MockTransport。官方文件核對日期 **2026-10-18**。沒有啟動 Ollama runtime、模型權重或網路服務。
 
 Ollama 官方說明其 API 未嚴格版本化，因此本文件的版本是本地凍結的子集與消費端版本，不能解讀成已通過某個 Ollama runtime 版本。[官方版本說明](https://docs.ollama.com/api/introduction)
 
@@ -10,15 +10,15 @@ Ollama 官方說明其 API 未嚴格版本化，因此本文件的版本是本�
 |---|---|
 |`GET /api/tags`|回傳 `models`，每筆只有 name/model 路由別名；cloudyfan.protocol_version 明示子集。沒有宣稱本機已安裝權重，不編造 size/digest/量化資料。|
 |`POST /api/generate`|僅接受 model、prompt、stream 三欄，stream 必須明確為 false。公開驗收通過後回傳 model、created_at、response、done=true 與 cloudyfan metadata。|
-|`POST /api/chat`|僅接受 model、messages、stream。messages 必須恰好一個 `{role:"user",content:"純文字"}`。結果以 message.role/content 回傳。|
+|`POST /api/chat`|接受 model、messages、stream，另容許 SDK 預設送出的 `tools: []` 無操作欄位。messages 必須恰好一個 `{role:"user",content:"純文字"}`。結果以 message.role/content 回傳。|
 |`/v1/tasks/{run_id}` 與 `/result`|沿用 T07 狀態／結果查詢，GET 不重新生成或核帳網路呼叫。|
 |`POST /v1/tasks/{run_id}/resume`|T07 明確續跑入口，本文必須 `{}`；維持原契約、候選、工具、預算與未核帳停止規則。|
 
 原生模型查詢與文字欄位參照 [tags](https://docs.ollama.com/api/tags)、[generate](https://docs.ollama.com/api/generate)、[chat](https://docs.ollama.com/api/chat)。官方串流預設開啟；此子集會拒絕省略 stream、true 或非布林 false，避免默默改變請求語意。[串流說明](https://docs.ollama.com/api/streaming)
 
-以下都明確不支援，未知欄位亦拒絕：多輪 history、tools/tool calls、圖片／音訊／影片、streaming、context、system/template/raw、format、options、think、keep_alive，以及建立／下載／刪除／推送模型、embeddings、`/api/ps`、`/api/version` 等其他 endpoint。錯誤使用 HTTP 狀態與原生頂層字串 `error`；不回傳任意例外文字。[官方錯誤格式](https://docs.ollama.com/api/errors)
+以下都明確不支援，未知欄位亦拒絕：多輪 history、非空 tools/tool calls、圖片／音訊／影片、streaming、context、system/template/raw、format、options、think、keep_alive，以及建立／下載／刪除／推送模型、embeddings、`/api/ps`、`/api/version` 等其他 endpoint。只有 chat 可送空 list 的 tools；null／false／物件／字串等值均拒絕，generate 仍拒絕 tools 欄位。錯誤使用 HTTP 狀態與原生頂層字串 `error`；不回傳任意例外文字。[官方錯誤格式](https://docs.ollama.com/api/errors)
 
-沒有偽造 token 數、載入／生成時間或實際下游模型身分。外層 `model` 是使用者指定且伺服端註冊的 **路由別名**，不是證明某一物理權重在執行。完整流程 API 費用來自同一 TaskService 帳務，包含分類、修正與失敗；無法核帳維持 null。一般 Ollama client 未必理解 CloudyFan metadata，必須另驗證。
+沒有偽造 token 數、載入／生成時間或實際下游模型身分。外層 `model` 是使用者指定且伺服端註冊的 **路由別名**，不是證明某一物理權重在執行。完整流程 API 費用來自同一 TaskService 帳務，包含分類、修正與失敗；無法核帳維持 null。已確認官方 Python SDK 0.6.3 的型別化回應會忽略 CloudyFan metadata；以同 run 的 HTTP GET 讀取帳務、狀態及 provenance，不把欄位遺失當成成本零。
 
 ## 必要的應用層擴充
 
@@ -54,14 +54,18 @@ app = OllamaApp(
 
 |項目|協定 fixture|指定實際 client|狀態／限制|
 |---|---|---|---|
-|模型別名查詢→generate 單輪純文字→公開驗收／完整帳務|已測|未測|HTTP WSGI consumer v1；不宣稱權重已安裝|
-|單一 user message 的非串流 chat|已測|未測|不是多輪 client 互通|
-|驗證、未知契約、重複 key、非法／過大輸入|已測|未測|拒絕發生在模型呼叫之前|
-|公開驗收失敗／未知|已測|未測|不把非空回答當成功|
-|模擬回應遺失後查詢／同 run 重用|已測|未測|非真實網路斷線測試|
-|上游 timeout 未核帳停止、明確驗收續跑|已測|未測|MockTransport；沒有付費請求|
-|多輪、工具、多模態、串流與其他 API|明確拒絕|未測|不在本子集內|
-|官方 Python／JS SDK、Open WebUI 或其他產品 client|未作為消費端|未測|待選定版本、header／alias mapping 與實際測試|
+|模型別名查詢→generate 單輪純文字→公開驗收／完整帳務|已測|Python 0.6.3 已測|費用由獨立 GET 讀取；不宣稱權重已安裝|
+|單一 user message 的非串流 chat|已測|Python 0.6.3 已測|接受 SDK 的 tools=[] 預設；不是多輪互通|
+|認證、scope、撤銷／過期、未知別名與 run ID|已測|Python 0.6.3 已測|拒絕發生在模型呼叫之前|
+|重複 key、原始非法／過大 JSON 輸入|已測|未以 SDK 重造|SDK 不能直接送任意原始 JSON，不冒稱同項皆測|
+|公開驗收失敗／未知與預算不足|已測|Python 0.6.3 已測|SDK 收到錯誤，不把非空回答當成功|
+|模擬回應遺失後查詢／同 run 重用|已測|Python 0.6.3 已測|SDK 沒有隱含 POST 重試；非真實 TCP 掉線測試|
+|上游 timeout 未核帳停止、明確驗收續跑|已測|Python 0.6.3 已測|SDK＋HTTP 擴充；沒有付費請求|
+|多輪、非空工具、圖片、串流與其他參數|明確拒絕|Python 0.6.3 已測|422 具體錯誤；拒絕後零上游請求|
+|show／embed／pull 等其他原生 API|404（fixture auth）|401（正式 Bearer scope）|正式身份不映射未知 endpoint；不宣稱 endpoint-specific 錯誤|
+|AsyncClient、JS SDK、Open WebUI 或其他產品 client|未作為消費端|未測|不沿用 Python 同步 Client 的資格|
 |真實模型 runtime／Mac 硬體／部署|未測|未測|本票不授權下載、啟動或部署|
 
-**G-02 實際 client 整合仍未完成。** 本票交付的是可測的明確文字子集與缺口報告；不以 fixture 通過取代產品 client 的整合放行，也不宣稱完整 Ollama 相容。
+**G-02 指定同步 SDK／模擬上游的互通證據已補齊**，版本、測試、應用擴充及限制見 [ollama-sdk.md](ollama-sdk.md)。正式 registry 仍需責任人依精確範圍審閱核定，不由測試自動變更；不宣稱完整 Ollama 相容。
+
+v1 是原 T08 fixture 交付；v2 明確記錄 SDK chat 空 tools 的相容性修正。歷史驗證與原始 v1 證據保留，不把新 client 測試倒算為當時已完成。

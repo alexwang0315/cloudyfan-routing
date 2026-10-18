@@ -113,3 +113,39 @@ No paid API request was made for extraction, validation, review or repository cr
 - 下一項正式放行優先 G-02：固定版本的真實客戶端對接 mock 上游，確認文字協定、認證、alias／run ID、錯誤、重連與不重送，以及不支援能力的明確拒絕。這項互通資格尚未執行。
 
 RG-04 真實供應商完整費用上限與 RG-05 真實部署身份／TLS／資料保留仍待資格驗證，十項正式 gates 仍 pending。本次沒有真實 API 呼叫、部署、推送、硬體操作、模型下載、GitHub 寫入或清除既有使用者資料。
+
+# G-02：官方 SDK 固定版本互通（2026-10-18）
+
+本輪基線為本機 `6c8fdcc85d55ad8fc6b0c1a03d47a10903defa68`，變更尚未提交。沿用已確認的官方 SDK→公開 HTTP→Core／BudgetedCore→MockTransport 邊界，使用 [client manifest](evidence/g02-sdk-manifest.json) 的官方 Python 同步 `ollama==0.6.3`，沒有替換 SDK 的生成、聊天、序列化、錯誤或 response model 方法。完整證據：[g02-offline.json](evidence/g02-offline.json)；接入與限制：[ollama-sdk.md](ollama-sdk.md)。
+
+- `./scripts/check --integration`：**844 passed**（既有 798＋新增 46）、Ruff、鎖定離線依賴、依賴一致性、專案紀錄、Core／ScoreCore high mock demo、sdist／wheel 全部通過；8 個步驟退出碼皆為 0。完整收據：`runtime/checks/f4391251c6e74ab29ce5972cac355b51/checks.json`。兩個 demo 各 4 次 mock 請求、2 次分類，真實模型 API 呼叫與費用零。
+- 聚焦 SDK／協定測試 **83 passed**：40 項官方 SDK、43 項原生協定，其中本輪新增 40＋6 項。涵蓋角色 scope、過期／撤銷／停用、run ID、別名、typed response、驗收 false／unknown、預算拒絕、驗收工程中斷與明確續跑、回應遺失、連線失敗、費用未知停止，以及串流／多輪／工具／圖片／參數拒絕。
+- 正常 SDK chat 先重現 422：即使未指定工具，SDK 仍送 `tools: []`。以最小修正只接納 chat 的精確空 list，協定版本升為 `cloudyfan-ollama-text-v2`；非空工具與其他型別仍拒絕，generate 規則不放寬。原 v1 歷史證據保留。
+- SDK typed response 會忽略 CloudyFan 擴充 metadata，這點先由失敗檢查揭露。實際工作流程以同 run 的標準 HTTP GET 讀取完整帳務／狀態／provenance，沒有修改 SDK 或假造原生費用欄位。中途另修正新測試的 provenance 欄位路徑誤寫；SDK metadata 產生曾誤用全域 Python，改採鎖定專案環境後成功，沒有做全域套件安裝或 fallback。所有中間失敗紀錄保留。
+- 正式 BearerAuthenticator 對 show／embed／pull 等未映射 endpoint 回 401；不將寬鬆 fixture 的 404 當成正式身份下的觀察。這些呼叫均未觸發模型、下載或其他動作。
+- SDK 套件只加入 dev extra，普通 runtime 依賴仍是 httpx。準備階段下載一般開發依賴；驗證入口全程 locked／offline，測試保留禁止 socket guard。SDK wheel SHA256 與 uv.lock／官方套件記錄一致。
+- 完整驗證後，metadata／工作單完成狀態、source digest、文件連結、歷史證據雜湊及 diff 另外核對；不把基線 commit 冒稱為本輪已測來源。
+
+指定同步 SDK／文字子集／模擬上游的互通證據已補齊，但正式 registry 的十項 gates 仍 pending，需責任人依精確範圍審閱核定。AsyncClient、JS／產品 client、真實 TCP／TLS／代理重試、Ollama runtime／權重與部署未驗證；模型品質、供應商費用上限與實際身份／保留部署亦未由本輪取得資格。沒有付費模型 API、硬體操作、模型下載、部署、推送、GitHub 寫入、新 Git commit 或既有使用者資料清除。私有收據與 red／green 紀錄位於工作區 `.scratch/g02-sdk/`。
+
+# G-02 本機提交前複核（2026-10-18）
+
+依使用者授權檢查 G-02 變更並保存至本機 Git。原始 SDK、協定及完整驗證證據保持原檔；本次未發現需追加修正的阻擋問題，沒有修改已測程式。
+
+- 重新執行 `./scripts/check --integration`：**844 passed**；Ruff、鎖定離線依賴、依賴一致性、專案紀錄、Core／ScoreCore high mock demo、sdist／wheel 均通過，8 個步驟退出碼皆為 0。
+- 來源摘要仍為 `32b6113658b3413c70f7cce678efc89c765333bc270eeee270409c22c0a02005`，與上輪完整驗證一致；19 個原變更檔案與私有最終清單雜湊吻合。官方 SDK 的 4 份原始碼與 manifest 相符，既有 15 個依賴版本未變，SDK 僅加入 dev extra。
+- 新收據：`runtime/checks/21af1d62e2474b2580c59b4524841723/checks.json`；去敏摘要：[g02-precommit.json](evidence/g02-precommit.json)。SDK typed response 忽略擴充欄位、須同 run GET 取回完整帳務的限制仍保留。
+- 提交前核對精確路徑、暫存差異、文件連結、歷史證據與 project-state；既有 hook 鏈保持啟用，quick hook 不冒稱再次執行完整測試。實際 commit 以本機 Git 歷史及工作區 `.scratch/g02-sdk/local-commit-verification.json` 為準，不建立循環自引用。
+- G-02 的指定同步 SDK／text-v2／HTTP 擴充範圍證據可供正式審閱；下一個技術驗證優先 **RG-04：真實供應商完整費用上限及核帳**。須確認精確模型／credential／請求設定下的有效限制覆蓋分類、生成、修正與失敗，且失效／到期會停止派送。一般 OpenRouter key 額度或 token 估價不足以建立此資格；缺乏合格供應商合約／probe 時，正式付費派送仍拒絕。
+
+本輪沒有真實模型 API、部署、推送、硬體、模型下載、GitHub 寫入或既有使用者資料清除。G-02 的真實 TCP／TLS／代理與其他 client，及其他正式資格仍未因此取得核定；十項正式 gates 保持 pending。
+
+# G-02 提交掃描修正與最終複核（2026-10-18）
+
+第一次 commit 被既有 ECC 秘密掃描攔下，命中新測試的無效 credential 直接字串指派，未建立 commit。已改由每次測試新產生的臨時 credential 截短一字元，形成無效格式；相同認證拒絕案例保留，不儲存秘密常值、不略過掃描、不修改掃描器或應用程式。首次攔截輸出保存在 `.scratch/g02-sdk/local-commit.log`。
+
+- fixture 調整後重新執行 `./scripts/check --integration`：**844 passed**；Ruff、鎖定離線依賴、依賴一致性、專案紀錄、兩個 high mock demo、sdist／wheel 八個步驟全部成功。
+- 最終 executable／test／build 來源摘要：`564a13e3c59e7d2f9f3945ec003f1d574d24c00b199a0cb3fa00e7dcade98239`。前一筆摘要及收據保留為調整前的歷史結果；實際 App、SDK pin、wire 協定與測試預期沒有變更。
+- 最終完整收據：`runtime/checks/230f2c59fd2643269eff3f0414b82089/checks.json`；去敏摘要：[g02-precommit-final.json](evidence/g02-precommit-final.json)。最終提交內容與結果由本機 Git 歷史及私有 `local-commit-verification.json` 核對。
+
+本次仍無付費模型 API、部署或推送；正式資格狀態不變，下一個技術驗證仍優先 RG-04 真實供應商費用上限與核帳。

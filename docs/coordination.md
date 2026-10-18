@@ -27,10 +27,10 @@ Existing interfaces retained unchanged in this round:
 | Safe task result projection | `src/cloudyfan_jev/http_api.py` | integration-maintainer |
 
 The retro 3–5 and five-review-fix plans are retained as historical evidence.
-The current RG-04/RG-05 plan separates supplier/budget/Queue/Core integration,
-identity, and task retention/lifecycle ownership. The root integrator consumes
-the retention-owned TaskService interface; workers own disjoint paths. Root also
-owns the unchanged-signature Core descriptor file for retirement-sentinel checks.
+The RG-04/RG-05 plan is also preserved as historical evidence. The current G-02
+plan has one integrator owning SDK dependency pinning, protocol adaptation,
+public-boundary tests and documentation. It consumes the unchanged TaskService
+interface; no independent workers are changing shared files in this scope.
 The current plan, not the older ownership table alone, identifies active owners.
 
 ## Before dispatch and merge

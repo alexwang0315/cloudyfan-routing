@@ -1,4 +1,4 @@
-"""CloudyFan Ollama protocol consumer v1; not an actual Ollama SDK test."""
+"""CloudyFan Ollama protocol consumer v2; official SDK tests are separate."""
 import httpx
 import pytest
 
@@ -24,7 +24,7 @@ def test_protocol_consumer_lists_alias_then_generates_validated_text(tmp_path):
     client, _, _, api, _ = consumer(tmp_path)
     listed = client.get('/api/tags').json()
     assert listed['models'] == [{'name': BODY['model'], 'model': BODY['model']}]
-    assert listed['cloudyfan']['protocol_version'] == 'cloudyfan-ollama-text-v1'
+    assert listed['cloudyfan']['protocol_version'] == 'cloudyfan-ollama-text-v2'
     response = client.post('/api/generate', json=BODY)
     assert response.status_code == 200
     data = response.json()
@@ -60,6 +60,15 @@ def test_single_user_chat_returns_native_message_shape(tmp_path):
     assert response.json()['message'] == {'role': 'assistant', 'content': '2'}
     assert 'response' not in response.json()
     assert len(api.requests) == 1
+
+
+@pytest.mark.parametrize('tools', [None, False, 0, {}, '[]', [{'type': 'function'}]])
+def test_sdk_empty_chat_tools_allowance_does_not_enable_other_tool_values(tmp_path, tools):
+    client, _, _, api, _ = consumer(tmp_path)
+    response = client.post('/api/chat', json={'model': BODY['model'], 'stream': False,
+        'messages': [{'role': 'user', 'content': BODY['prompt']}], 'tools': tools})
+    assert response.status_code == 422 and response.json()['error'] == 'unsupported_request_fields'
+    assert api.requests == []
 
 
 @pytest.mark.parametrize('messages', [[], [{'role': 'system', 'content': 'private'}],

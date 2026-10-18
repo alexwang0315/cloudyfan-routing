@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "g02-pinned-sdk-offline",
+  "baseline_commit": "6c8fdcc85d55ad8fc6b0c1a03d47a10903defa68",
+  "tested_tree": "executable/test/build inputs identified by source_digest; saved commit is recorded in local Git history",
+  "source_digest": "32b6113658b3413c70f7cce678efc89c765333bc270eeee270409c22c0a02005",
+  "tests_passed": 844,
+  "added_cases": 46,
+  "official_sdk_cases": 40,
+  "native_protocol_cases": 43,
+  "sdk_and_protocol_focused_cases": 83,
+  "finished_at": "2026-10-18T08:56:12.930323+00:00",
+  "integration_receipt_sha256": "d5439cd54769d00947822a377ecabdb32a32ff7e001a4d6e9c69189c7723b302",
+  "private_receipt_path": "runtime/checks/21af1d62e2474b2580c59b4524841723/checks.json",
+  "client_manifest": {
+    "path": "docs/evidence/g02-sdk-manifest.json",
+    "sha256": "bc289fb42b72cb3119a58d6c54ef22888bda4deaae68ee1b01f728ecc5b64ad7"
+  },
+  "checks": [
+    "locked-offline-sync",
+    "dependency-consistency",
+    "project-records",
+    "ruff",
+    "pytest",
+    "core-high-mock",
+    "score-high-mock",
+    "sdist-wheel"
+  ],
+  "confirmed": [
+    "official synchronous ollama==0.6.3 executes without method replacement",
+    "scoped real API-token identity",
+    "native typed generate and chat responses",
+    "safe errors and public validation gates",
+    "no implicit POST retry after simulated response loss",
+    "same-run query/replay does not regenerate",
+    "unknown upstream charge blocks replay and explicit resume",
+    "unsupported features rejected without upstream dispatch"
+  ],
+  "compatibility_fix": "cloudyfan-ollama-text-v2 accepts only exact empty-list chat tools emitted by SDK; no tool capability added",
+  "sdk_preserves_cloudyfan_metadata": false,
+  "companion_task_get_required": true,
+  "limits": [
+    "actual SDK and WSGI/MockTransport, not TCP/TLS/proxy qualification",
+    "synchronous Client only; Async/JS/product clients untested",
+    "unsupported native endpoints fail at Bearer scope with 401, not endpoint-specific 404",
+    "mock model/billing only; no real quality or price enforcement evidence",
+    "SDK dependency preparation accessed the public package index; all runtime verification offline",
+    "metadata finalized after integration and separately validated",
+    "10 formal production gates pending; remote CI not run"
+  ],
+  "purpose": "G-02 local Git commit review and fresh complete offline verification",
+  "review": {
+    "new_blocking_findings": 0,
+    "sdk_source_files_match": 4,
+    "existing_dependency_versions_unchanged": 15,
+    "next_technical_qualification": "RG-04 actual supplier all-charge enforcement and billing evidence"
+  }
+}

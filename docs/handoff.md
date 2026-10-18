@@ -61,8 +61,11 @@ This offline scope keeps paid API, deployment, source push, hardware and model
 download authorization false. A JSON edit cannot grant permission; future work
 must use actual user authorization and an appropriate reviewed workflow.
 
-The first release qualification to plan is **G-02: a pinned real client**, using
-mocked upstream to verify supported HTTP/Ollama protocol behavior and explicitly
-rejected unsupported features. This can isolate interoperability from model
-quality and cost. It has not been executed by this handoff work. Model/domain
-qualification and enforceable provider cost bounds remain separate later gates.
+The [G-02 SDK evidence](ollama-sdk.md) now pins official synchronous Python
+`ollama==0.6.3` to `cloudyfan-ollama-text-v2`, with mocked upstream, actual scoped
+identity, error handling, response-loss recovery and unsupported-feature rejection.
+Review that exact scope before formal qualification. Async/JS/product clients and
+real TCP/TLS/proxy behavior remain untested. SDK response models omit CloudyFan
+metadata; the accompanying task GET API is part of the qualified client workflow.
+Model/domain qualification and enforceable provider cost bounds remain separate
+gates; no live API or deployed-client qualification follows from these tests.

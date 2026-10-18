@@ -1,7 +1,7 @@
 """Explicit Ollama text-protocol subset over registered CloudyFan tasks.
 
-No Ollama runtime or SDK is started. This is a protocol-fixture target, not a
-claim of compatibility with a named product client or a full Ollama server.
+No Ollama runtime or network listener is started. Named-client qualification is
+recorded separately; this app never claims the full Ollama protocol.
 """
 from datetime import datetime, timezone
 from http import HTTPStatus
@@ -9,7 +9,7 @@ import json
 
 from .http_api import HTTPApp, ServiceError
 
-PROTOCOL_VERSION = 'cloudyfan-ollama-text-v1'
+PROTOCOL_VERSION = 'cloudyfan-ollama-text-v2'
 DOCS_AS_OF = '2026-10-18'
 
 
@@ -33,6 +33,11 @@ def _payload(environ, *, chat=False):
                              parse_constant=lambda _: (_ for _ in ()).throw(ValueError('Invalid constant')))
     except (ValueError, UnicodeError):
         raise ServiceError('invalid_json') from None
+    # ollama==0.6.3 always serializes tools=[] for chat, even when the caller
+    # requests no tools. Accept that exact no-op; no other tool value is allowed.
+    if (chat and isinstance(payload, dict) and type(payload.get('tools')) is list
+            and not payload['tools']):
+        payload.pop('tools')
     fields = {'model', 'messages' if chat else 'prompt', 'stream'}
     if not isinstance(payload, dict) or set(payload) != fields:
         raise ServiceError('unsupported_request_fields')

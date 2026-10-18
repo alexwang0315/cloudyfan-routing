@@ -63,7 +63,13 @@ focused suite was rerun successfully afterward. Probe logs live in the workspace
 
 ## Limits
 
-These checks establish offline adapter contracts, not actual Ollama SDK compatibility,
+This shared matrix itself uses protocol fixtures. The separate
+[pinned official SDK suite](ollama-sdk.md) now verifies synchronous Python
+`ollama==0.6.3` against the same application and mocked upstream, including its
+chat empty-tools serialization and typed metadata limitations. It does not turn
+every fixture row or other client into SDK-qualified evidence.
+
+These checks establish offline adapter contracts, not general Ollama compatibility,
 network deployment behavior, throughput, production authorization/retention, real
 provider price enforcement or model quality. QueueHTTPApp is the bounded queued
 entry; HTTPApp and OllamaApp remain synchronous. The queue's unsupported resume

@@ -76,7 +76,7 @@ def _strict_json(raw):
                 raise ValueError("Duplicate JSON key")
             result[key] = value
         return result
-    return json.loads(raw, object_pairs_hook=pairs)
+    return json.loads(raw, object_pairs_hook=pairs, parse_float=str)
 
 
 def usage(record):

@@ -10,6 +10,8 @@
 
 [主規格 #1 實作索引](docs/implementation-spec1.md)列出 T01～T12 的功能、使用文件、離線驗收與正式接入缺口。[完整驗證紀錄](docs/verification.md)保留各輪檢查。
 
+[統一驗證入口](docs/checks.md)提供本機與 CI 共用命令；[跨接入契約矩陣](docs/transport-contracts.md)檢查 HTTP／Ollama／Queue 的共同保證。[正式放行索引](docs/release-readiness.md)分開記錄離線實作完成與正式資格。
+
 ## 流程
 
 ```mermaid
@@ -35,9 +37,7 @@ flowchart TD
 Python 3.12+，macOS／Linux（檔案鎖使用 POSIX `fcntl`）。
 
 ```bash
-uv sync --extra dev
-uv run pytest -q
-uv run ruff check .
+./scripts/check --integration
 uv run cloudyfan-jev-demo --route pass
 uv run cloudyfan-jev-demo --route low
 uv run cloudyfan-jev-demo --route mid
@@ -46,7 +46,7 @@ uv run cloudyfan-jev-demo --route high
 
 示範使用 `httpx.MockTransport`，**不讀 API key、不連 API、不產生真實費用**。輸出的 `simulated_costs` 是測試資料，`real_api_cost_usd` 為零。證據寫入被 Git 忽略的 `runtime/`。
 
-也可用 `python -m pip install -e '.[dev]'` 安裝；`uv.lock` 提供本輪的相依版本鎖定。
+驗證入口使用 `uv.lock` 與專案 `.venv`。初次缺少依賴快取時會停止；需連網的依賴準備與純離線驗證分開，詳見[驗證說明](docs/checks.md)。應用安裝仍可使用 `python -m pip install -e '.[dev]'`，但驗證統一使用上述入口。
 
 ## 整合介面
 

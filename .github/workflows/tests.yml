@@ -14,8 +14,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
-      - run: python -m pip install '.[dev]'
-      - run: python -m pip check
-      - run: python -m pytest -q
-      - run: python -m ruff check .
-      - run: cloudyfan-jev-demo --route high
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.11.7'
+      # Dependency preparation may access package indexes. Model APIs are never
+      # used. Warm the separate isolated-build cache before the offline gate.
+      - name: Prepare locked test and declared build dependencies
+        run: |
+          uv sync --locked --extra dev
+          uv build --out-dir runtime/ci-build-preparation
+      - name: Shared offline integration gate
+        run: ./scripts/check --integration

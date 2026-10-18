@@ -21,7 +21,7 @@ cloudyfan-score-demo = "cloudyfan_jev.scores.demo:main"
 packages = ["src/cloudyfan_jev"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src", "tests", "examples", "docs", "README.md", "AGENTS.md", "pyproject.toml", "uv.lock", ".env.example", ".gitignore", ".github"]
+include = ["src", "tests", "examples", "docs", "README.md", "AGENTS.md", "pyproject.toml", "uv.lock", ".env.example", ".gitignore", ".github", "scripts", ".githooks"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

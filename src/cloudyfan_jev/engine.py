@@ -19,6 +19,7 @@ from typing import Protocol
 
 from . import client as transport
 from . import routing
+from .privacy import PolicyDenied
 
 INITIAL = {"fixed_high": "high", "low_first": "low", "open_source_first": "open_source",
            "cloudyfan": "open_source"}
@@ -105,7 +106,8 @@ class Core:
     No hidden grading interface exists here. User applications own authorization,
     enforceable spending limits, validation correctness and tool sandboxing.
     """
-    def __init__(self, client, profiles, decision_profile, *, limits=None, system=SYSTEM, local_backend=None):
+    def __init__(self, client, profiles, decision_profile, *, limits=None, system=SYSTEM,
+                 local_backend=None, execution_policy=None):
         self.client = client
         self.profiles = deepcopy(profiles)
         self.decision = deepcopy(decision_profile)
@@ -126,6 +128,7 @@ class Core:
                         or any(qualification.get(k) != profile[k] for k in
                                ('model_version', 'quantization', 'engine'))):
                     raise ValueError('Quantized score requires explicit configuration qualification')
+        self.execution_policy = deepcopy(execution_policy)
 
     def _checked(self, cid, url, payload, accepted, provider):
         record = self.client.call(cid, url, payload)
@@ -141,6 +144,12 @@ class Core:
         return record, {"call_id": cid, **info}
 
     def _select(self, prefix, task, first, actions):
+        if self.execution_policy:
+            location = self.execution_policy.classifier
+            self.execution_policy.require('classifier', location)
+            # The current Decisions adapter always uses a cloud endpoint.
+            if not location.startswith('cloud:'):
+                raise PolicyDenied('classifier', 'backend_location_mismatch')
         calls = []
         state = {"task": task['prompt'], "previous_answer": first['final'],
                  "tool_results": [{k: a[k] for k in ('name', 'arguments', 'result')} for a in actions],
@@ -160,6 +169,15 @@ class Core:
 
     def _attempt(self, env, messages, tier, prefix, index, actions, directory):
         profile = self.profiles[tier]
+        if self.execution_policy:
+            location = profile.get('execution_location')
+            self.execution_policy.require('generation', location)
+            if profile.get('backend') == 'local':
+                backend = getattr(self, 'local_backend', None)
+                if backend is None or backend.descriptor().get('execution_location') != location:
+                    raise PolicyDenied('generation', 'backend_location_mismatch')
+            elif not location.startswith('cloud:'):
+                raise PolicyDenied('generation', 'backend_location_mismatch')
         calls, final, stop = [], '', 'turn_limit'
         for turn in range(self.limits.max_turns):
             if len(_encoded(messages)) > self.limits.max_context_bytes:
@@ -213,6 +231,8 @@ class Core:
                     saved = _read(checkpoint)
                     if any(saved[k] != v for k, v in action.items()):
                         raise ValueError("Tool replay intent changed")
+                if self.execution_policy:
+                    self.execution_policy.require('tool', self.execution_policy.tools.get(name))
                 started = perf_counter()
                 result = (env.call(name, arguments) if isinstance(arguments, dict) else
                           {'ok': False, 'error': {'code': 'invalid_arguments',
@@ -293,6 +313,8 @@ class Core:
                       'limits': asdict(self.limits), 'system': self.system}
             if self.local_backend is not None:
                 frozen['local_backend'] = self.local_backend.descriptor()
+            if self.execution_policy is not None:
+                frozen['execution_policy'] = self.execution_policy.to_dict()
             _save(directory / 'manifest.json', frozen)
             completed = directory / 'result.json'
             if completed.exists():

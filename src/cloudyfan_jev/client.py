@@ -81,6 +81,9 @@ def _strict_json(raw):
 
 def usage(record):
     """Use API aggregate cost once; generation receipts supersede, never add."""
+    if record.get('execution_kind') == 'local':
+        from .local import local_usage
+        return local_usage(record)
     result = {"generation_id": None, "model": None, "provider": None, "usage": {},
               "cost_usd": None, "cost_source": "unknown", "elapsed_ms": record.get("elapsed_ms")}
     try:

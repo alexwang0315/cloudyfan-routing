@@ -9,6 +9,8 @@ import uuid
 
 from .catalog import canonical, timestamp, verify_snapshot
 
+_UNCHECKED = object()
+
 
 @contextmanager
 def _locked(root):
@@ -58,14 +60,17 @@ class SnapshotStore:
             raise ValueError('Snapshot filename identity mismatch')
         return snapshot
 
-    def publish(self, snapshot, *, now):
+    def publish(self, snapshot, *, now, expected_current_id=_UNCHECKED):
         verify_snapshot(snapshot, now=now)
         if any(not snapshot['pools'][tier] for tier in ('low', 'mid', 'high')):
             raise ValueError('All three pools must contain qualified candidates before publication')
         with _locked(self.root):
             current_path = self.root / 'current.json'
-            if current_path.exists():
-                current = self.load()
+            current = self.load() if current_path.exists() else None
+            if expected_current_id is not _UNCHECKED and expected_current_id != (
+                    current['snapshot_id'] if current else None):
+                raise ValueError('Current snapshot changed; review a fresh update')
+            if current is not None:
                 if current['policy']['domain'] != snapshot['policy']['domain']:
                     raise ValueError('One store must serve only one domain')
                 if timestamp(current['created_at']) > timestamp(snapshot['created_at']):

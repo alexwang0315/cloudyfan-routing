@@ -6,7 +6,9 @@ embedding operator explicitly calls `dispatch_next()` from controlled workers.
 The original synchronous `HTTPApp` is a separate entry point and **does not pass
 through this queue**. A deployment claiming bounded admission must expose only
 `QueueHTTPApp` for these jobs; do not concurrently expose direct TaskService
-execution or the synchronous submit endpoint as an alternate bypass.
+execution or the synchronous submit endpoint as an alternate bypass. The separate
+`OllamaApp` also remains synchronous and unqueued; this delivery does not qualify
+its multi-caller admission or capacity as bounded by QueueScheduler.
 
 `TaskService(..., allowed_principals={'alice', 'bob'}, ...)` accepts a trusted
 server-side principal allowlist. Its existing `allowed_principal='admin'` form

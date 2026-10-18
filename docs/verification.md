@@ -149,3 +149,23 @@ RG-04 真實供應商完整費用上限與 RG-05 真實部署身份／TLS／資�
 - 最終完整收據：`runtime/checks/230f2c59fd2643269eff3f0414b82089/checks.json`；去敏摘要：[g02-precommit-final.json](evidence/g02-precommit-final.json)。最終提交內容與結果由本機 Git 歷史及私有 `local-commit-verification.json` 核對。
 
 本次仍無付費模型 API、部署或推送；正式資格狀態不變，下一個技術驗證仍優先 RG-04 真實供應商費用上限與核帳。
+
+## 2026-10-18 — RG-04 qualified component bounds (offline)
+
+- Baseline HEAD: `b11a2efb4c50d7e8a6ad5b6165a5ce131391808a`; its Git blob source digest was matched to prior G-02 evidence. No new baseline suite was invented. Prior state/work plan retained in `docs/evidence/rg04-components-prior-*.json`.
+- Added `ComponentBoundVerifier`: eight explicit fee dimensions, independent hash-pinned review, exact model/provider/text scope, separate Decisions cap, no bundled real qualification or supplier-specific invented HMAC service.
+- Full flow reserves initial generation, at most two classifiers and sole repair; HTTP failures retain paid costs, unknown outcomes stop, generation GET replaces provisional fees once. Selection policy unchanged. Classifier POST now uses pinned version rather than alias.
+- Fixed exact budget arithmetic through reservation, event commitment, provisional holds and available balance. Added persistent shared review withdrawal with reviewed path/incarnation binding; empty directory recreation cannot revive approval.
+- Red/green regressions reproduced unsupported decision media, low-precision workflow rounding, in-memory withdrawal revival, implicit model variants, classifier alias/version mismatch, registry-read expiry and completed concurrent withdrawal during registry read.
+- First integration passed **893 tests**; retained [initial evidence](evidence/rg04-components-initial-pass.json). Final review found an additional withdrawal-during-read race; regression failed before the fix and passed after the final withdrawal recheck.
+- Final `./scripts/check --integration`: **894 passed in 29.84s** (**50 new cases**); locked offline sync, dependency consistency, project records, Ruff, both high-route MockTransport demos and sdist/wheel build passed.
+- Source digest: `d276cff46322d56170e2ffdd472ad0cd8f60e919e0673bd784f683b1cfad1492`. Private receipt: `runtime/checks/09c63c1c5bc744259cf37a258497b201/checks.json`; SHA256 `a3a6c1015d3b82989e00a26001932854c5a1ebfb26f45116463fc876818550b3`. [Sanitized evidence](evidence/rg04-components-offline.json).
+- Independent read-only review has no remaining blocking findings; it is not human production approval. Current metadata/links are checked separately after finalization.
+- **No real API calls, API fee, deployment, source push or new commit. RG-04 and the other production gates remain pending.** Real billed-quantity, effective-rate, inventory, failure and in-flight guarantees still require actual supplier evidence and independent qualification. See [contract and limitations](component-bounds.md).
+
+### RG-04 local commit review
+
+- Standards and Spec read-only reviews found **0 findings / 0 blockers**. No implementation changes were needed; no source/test/build inputs changed after the recorded 894-test integration pass.
+- Rechecked current source digest, all eight successful integration steps and actual receipt SHA256; preserved original [offline evidence](evidence/rg04-components-offline.json) and [commit preflight](evidence/rg04-components-precommit.json). The full suite was not redundantly rerun; normal commit hooks still run offline checks.
+- Supplier qualification priority: pinned Jev Decisions complete billed quantity ceilings, including rejected input/serialization, output/reasoning, internal retry/failure/cancellation and in-flight guarantees. Effective binding rate inventory and subsequent authorized billing observations follow; Chat token parameters do not prove the classifier cap.
+- The repository-local commit excludes runtime receipts, credentials, original experiments and workspace-root documents outside this Git repository; those workspace documents remain in place and their hashes are retained in the preflight. Actual saved commit and post-commit status are recorded by local Git and ignored `runtime/rg04-components/local-commit-verification.json`. No API, deployment or push is authorized by this review.

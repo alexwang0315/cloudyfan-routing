@@ -1,57 +1,64 @@
 {
   "schema_version": 1,
   "integration_branch": "codex/implement-routing-spec-1",
-  "baseline_commit": "6c8fdcc85d55ad8fc6b0c1a03d47a10903defa68",
+  "baseline_commit": "b11a2efb4c50d7e8a6ad5b6165a5ce131391808a",
   "merger_owner": "root",
   "shared_interfaces": [
     {
-      "id": "ollama-protocol",
+      "id": "budget-verifier-hooks",
       "owner": "root",
       "owned_files": [
-        "src/cloudyfan_jev/ollama_api.py"
+        "src/cloudyfan_jev/budget.py"
       ],
-      "provided_by": "pinned-sdk-interop"
+      "provided_by": "rg04-components"
     },
     {
-      "id": "task-lifecycle",
+      "id": "durable-transport-lease",
       "owner": "integration-maintainer",
       "owned_files": [
-        "src/cloudyfan_jev/http_api.py"
+        "src/cloudyfan_jev/client.py"
       ],
       "provided_by": null
+    },
+    {
+      "id": "pinned-classifier-dispatch",
+      "owner": "root",
+      "owned_files": [
+        "src/cloudyfan_jev/engine.py"
+      ],
+      "provided_by": "rg04-components"
     }
   ],
   "tasks": [
     {
-      "id": "pinned-sdk-interop",
+      "id": "rg04-components",
       "owner": "root",
       "status": "completed",
       "owned_files": [
-        "pyproject.toml",
-        "uv.lock",
-        "src/cloudyfan_jev/ollama_api.py",
-        "tests/test_ollama_sdk.py",
-        "docs/ollama-sdk.md",
-        "docs/ollama-text-protocol.md",
-        "docs/transport-contracts.md",
+        "src/cloudyfan_jev/component_bounds.py",
+        "tests/test_component_bounds.py",
+        "docs/component-bounds.md",
+        "docs/provider-bounds.md",
+        "docs/budget-admission.md",
         "docs/release-readiness.md",
         "docs/handoff.md",
         "docs/verification.md",
         "docs/agent-state.json",
         "docs/work-plan.json",
         "docs/coordination.md",
-        "docs/evidence/g02-baseline.json",
-        "docs/evidence/rg45-work-plan.json",
-        "docs/evidence/g02-offline.json",
-        "docs/evidence/g02-sdk-manifest.json",
-        "tests/test_ollama_api.py",
+        "docs/evidence/rg04-components-baseline.json",
+        "docs/evidence/rg04-components-prior-state.json",
+        "docs/evidence/rg04-components-prior-work-plan.json",
+        "docs/evidence/rg04-components-offline.json",
         "README.md",
-        "docs/evidence/g02-precommit.json",
-        "docs/evidence/g02-precommit-final.json"
+        "src/cloudyfan_jev/budget.py",
+        "src/cloudyfan_jev/engine.py",
+        "docs/evidence/rg04-components-initial-pass.json",
+        "docs/evidence/rg04-components-precommit.json"
       ],
       "depends_on": [],
       "consumed_interfaces": [
-        "task-lifecycle"
+        "durable-transport-lease"
       ]
     }
   ]

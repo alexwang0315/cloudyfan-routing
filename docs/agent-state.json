@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "scope": "g02-pinned-sdk-offline",
+  "scope": "rg04-components-offline",
   "phase": "offline_verified",
-  "baseline_commit": "6c8fdcc85d55ad8fc6b0c1a03d47a10903defa68",
+  "baseline_commit": "b11a2efb4c50d7e8a6ad5b6165a5ce131391808a",
   "integration_branch": "codex/implement-routing-spec-1",
   "constraints": {
     "paid_api": false,
@@ -14,12 +14,12 @@
   "release_registry": "docs/release-gates.json",
   "work_plan": "docs/work-plan.json",
   "last_verified": {
-    "path": "docs/evidence/g02-baseline.json",
-    "sha256": "72a94c2f26e0a9843ca4686162897fe4c1ce346f4bf41a6b7072b571111dd60a"
+    "path": "docs/evidence/rg04-components-baseline.json",
+    "sha256": "3345a809f6effb3397b95c4d1de652ce38e06f3d0fd8d6caa8fa81034069f7cf"
   },
   "current_verification": {
-    "path": "docs/evidence/g02-precommit-final.json",
-    "sha256": "2874c95623802f19f3f8fc97ae1133bbbc66dffe4e38baef33db236d908184db"
+    "path": "docs/evidence/rg04-components-precommit.json",
+    "sha256": "cdd0df66b1a946a41893f3859e8b1f84c3ba15aa6b0bb2e45c17b7e69de5033a"
   },
   "history": [
     {
@@ -28,6 +28,14 @@
     },
     {
       "path": "docs/verification.md",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg04-components-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg04-components-initial-pass.json",
       "record_kind": "historical"
     }
   ],
@@ -39,7 +47,7 @@
     },
     {
       "gate": "RG-04",
-      "action": "Qualify a real supplier all-charge per-request ceiling contract and authenticated enforcement probe; ordinary OpenRouter key budgets remain insufficient.",
+      "action": "First qualify pinned Jev Decisions billed quantity ceilings (including output/reasoning, rejected input, retries/failures and in-flight guarantees); then bind complete effective rates. No Chat cap inheritance. Paid validation requires a separate approved plan.",
       "requires_authorization": true
     },
     {

@@ -69,3 +69,11 @@ real TCP/TLS/proxy behavior remain untested. SDK response models omit CloudyFan
 metadata; the accompanying task GET API is part of the qualified client workflow.
 Model/domain qualification and enforceable provider cost bounds remain separate
 gates; no live API or deployed-client qualification follows from these tests.
+
+The current RG-04 [component-bound scope](component-bounds.md) adds an independent
+qualified-resource/rate mechanism, exact shared-budget arithmetic and pinned
+classifier-version dispatch. Reviews bind the complete artifact and a shared,
+durable withdrawal registry incarnation; no supplier HMAC endpoint is fabricated.
+Real quantity/rate/inventory/failure evidence is not bundled. The original
+supplier-ceiling verifier remains available and RG-04 stays pending. Do not
+reinterpret historical price snapshots or ordinary key limits as qualifications.

@@ -189,7 +189,7 @@ class Core:
             calls.append({"tier": "classifier", **info})
             return record['raw']
 
-        selected = routing.route(False, state, self.profiles, self.decision['model'], decide,
+        selected = routing.route(False, state, self.profiles, self.decision['version'], decide,
                                  model_version=self.decision['version'],
                                  allowed_response_models=(self.decision['version'],))
         return {**selected, "calls": calls}

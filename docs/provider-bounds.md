@@ -6,6 +6,12 @@ state, exact client/credential/endpoint and request policy. No supplier contract
 issuer key, qualified control-plane probe or production credential is bundled.
 **Ordinary paid OpenRouter execution remains denied by default.**
 
+An independent [qualified component verifier](component-bounds.md) is also
+available for fixed tool-free text endpoints. It derives a complete bound from
+independently reviewed quantity/rate guarantees without inventing this HMAC
+protocol upstream. It has no bundled real approvals and does not weaken default
+denial or automatically switch between evidence mechanisms.
+
 ## Why key budgets are insufficient
 
 OpenRouter's [official limits documentation](https://openrouter.ai/docs/api_reference/limits)

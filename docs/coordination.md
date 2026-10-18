@@ -31,7 +31,12 @@ The RG-04/RG-05 plan is also preserved as historical evidence. The current G-02
 plan has one integrator owning SDK dependency pinning, protocol adaptation,
 public-boundary tests and documentation. It consumes the unchanged TaskService
 interface; no independent workers are changing shared files in this scope.
-The current plan, not the older ownership table alone, identifies active owners.
+The current RG-04 component-bound plan supersedes that G-02 plan, retaining its
+records in `docs/evidence/rg04-components-prior-work-plan.json`. One integrator
+owns the alternative verifier, exact shared-budget arithmetic, pinned classifier
+dispatch, tests and handoff. The existing durable Client lease hook is consumed
+unchanged. An independent agent performed read-only review, with no file ownership
+or edits. The current plan, not older ownership tables, identifies active owners.
 
 ## Before dispatch and merge
 

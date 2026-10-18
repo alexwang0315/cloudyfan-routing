@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "integration_branch": "codex/implement-routing-spec-1",
+  "baseline_commit": "6c8fdcc85d55ad8fc6b0c1a03d47a10903defa68",
+  "merger_owner": "root",
+  "shared_interfaces": [
+    {
+      "id": "ollama-protocol",
+      "owner": "root",
+      "owned_files": [
+        "src/cloudyfan_jev/ollama_api.py"
+      ],
+      "provided_by": "pinned-sdk-interop"
+    },
+    {
+      "id": "task-lifecycle",
+      "owner": "integration-maintainer",
+      "owned_files": [
+        "src/cloudyfan_jev/http_api.py"
+      ],
+      "provided_by": null
+    }
+  ],
+  "tasks": [
+    {
+      "id": "pinned-sdk-interop",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "pyproject.toml",
+        "uv.lock",
+        "src/cloudyfan_jev/ollama_api.py",
+        "tests/test_ollama_sdk.py",
+        "docs/ollama-sdk.md",
+        "docs/ollama-text-protocol.md",
+        "docs/transport-contracts.md",
+        "docs/release-readiness.md",
+        "docs/handoff.md",
+        "docs/verification.md",
+        "docs/agent-state.json",
+        "docs/work-plan.json",
+        "docs/coordination.md",
+        "docs/evidence/g02-baseline.json",
+        "docs/evidence/rg45-work-plan.json",
+        "docs/evidence/g02-offline.json",
+        "docs/evidence/g02-sdk-manifest.json",
+        "tests/test_ollama_api.py",
+        "README.md",
+        "docs/evidence/g02-precommit.json",
+        "docs/evidence/g02-precommit-final.json"
+      ],
+      "depends_on": [],
+      "consumed_interfaces": [
+        "task-lifecycle"
+      ]
+    }
+  ]
+}

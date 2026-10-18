@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "rg04-components-offline",
+  "baseline_commit": "b11a2efb4c50d7e8a6ad5b6165a5ce131391808a",
+  "tested_tree": "uncommitted executable/test/build inputs identified by source_digest",
+  "source_digest": "3b1538d2b30365a6c8e691aa676102b51b9fa60919bb4e663e36fa9415c5bb23",
+  "tests_passed": 893,
+  "added_component_cases": 49,
+  "finished_at": "2026-10-18T13:27:44.515775+00:00",
+  "integration_receipt_sha256": "dede2c7e19e142e99111cee52090572a643bfa8229a23021ccc5d20f51d51cb1",
+  "private_receipt_path": "runtime/checks/09785ecf55fa431aa2681ccf2eb8387d/checks.json",
+  "checks": [
+    "locked-offline-sync",
+    "dependency-consistency",
+    "project-records",
+    "ruff",
+    "pytest",
+    "core-high-mock",
+    "score-high-mock",
+    "sdist-wheel"
+  ],
+  "real_api_calls": 0,
+  "real_api_cost_usd": "0",
+  "deployment": false,
+  "source_push": false,
+  "production_qualified": false,
+  "confirmed": [
+    "complete two-classifier/initial/sole-repair reservation and cost retention",
+    "complete eight-dimensional component schema and trusted exact-artifact review",
+    "exact monetary sums/products through shared budget independent of ambient precision",
+    "fixed classifier version used in actual request",
+    "strict text/provider/variant scope",
+    "persistent review withdrawal bound to shared registry path and incarnation",
+    "one-use request lease, post-intent and post-registry-read expiry checks",
+    "failed paid response retained; unknown outcome stops without retransmission",
+    "provider reconciliation replaces provisional charges once; breach preserves durable stop"
+  ],
+  "limits": [
+    "all approvals and quantity/rate/inventory/failure sources in tests are synthetic",
+    "no real supplier component guarantee or account-default control is qualified",
+    "no live API or deployment; ten formal release gates pending",
+    "reviewer labels and source hashes do not authenticate humans or establish supplier truth",
+    "registry history must be shared and preserved; malicious complete rollback is not detected",
+    "shared-budget exact monetary reporting is verified; no claim that every unrelated reporting arithmetic module changed"
+  ]
+}

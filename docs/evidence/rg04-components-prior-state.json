@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "scope": "g02-pinned-sdk-offline",
+  "phase": "offline_verified",
+  "baseline_commit": "6c8fdcc85d55ad8fc6b0c1a03d47a10903defa68",
+  "integration_branch": "codex/implement-routing-spec-1",
+  "constraints": {
+    "paid_api": false,
+    "deployment": false,
+    "source_push": false,
+    "hardware": false,
+    "model_downloads": false
+  },
+  "release_registry": "docs/release-gates.json",
+  "work_plan": "docs/work-plan.json",
+  "last_verified": {
+    "path": "docs/evidence/g02-baseline.json",
+    "sha256": "72a94c2f26e0a9843ca4686162897fe4c1ce346f4bf41a6b7072b571111dd60a"
+  },
+  "current_verification": {
+    "path": "docs/evidence/g02-precommit-final.json",
+    "sha256": "2874c95623802f19f3f8fc97ae1133bbbc66dffe4e38baef33db236d908184db"
+  },
+  "history": [
+    {
+      "path": "docs/implementation-spec1.md",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/verification.md",
+      "record_kind": "historical"
+    }
+  ],
+  "next_steps": [
+    {
+      "gate": "G-02",
+      "action": "Review exact synchronous ollama==0.6.3 / text-v2 / companion task GET evidence before formal G-02 qualification; no Async, product-client, TCP/TLS/proxy claim.",
+      "requires_authorization": true
+    },
+    {
+      "gate": "RG-04",
+      "action": "Qualify a real supplier all-charge per-request ceiling contract and authenticated enforcement probe; ordinary OpenRouter key budgets remain insufficient.",
+      "requires_authorization": true
+    },
+    {
+      "gate": "RG-05",
+      "action": "Qualify deployed identity/TLS/secret ownership, actual retention policy and storage/backup coverage, and exclusive maintenance-writer fence.",
+      "requires_authorization": true
+    },
+    {
+      "gate": "RG-02",
+      "action": "Qualify real domain/model configurations before production model use.",
+      "requires_authorization": true
+    }
+  ]
+}

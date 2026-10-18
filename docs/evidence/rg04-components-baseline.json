@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "rg04-components-verified-start",
+  "tested_commit": "b11a2efb4c50d7e8a6ad5b6165a5ce131391808a",
+  "source_digest": "564a13e3c59e7d2f9f3945ec003f1d574d24c00b199a0cb3fa00e7dcade98239",
+  "tests_passed": 844,
+  "integration_receipt_sha256": "a6192d105c0b21c46909a51457c3ae4a1e3d04d13cdfa52d5fd1a6a84363b465",
+  "private_receipt_path": "runtime/checks/230f2c59fd2643269eff3f0414b82089/checks.json",
+  "historical_evidence": {
+    "path": "docs/evidence/g02-precommit-final.json",
+    "sha256": "2874c95623802f19f3f8fc97ae1133bbbc66dffe4e38baef33db236d908184db"
+  },
+  "association": "HEAD Git blob source digest matches the previously tested source digest; no new baseline suite was run."
+}

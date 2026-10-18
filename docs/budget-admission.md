@@ -7,8 +7,9 @@ budget wrapper, not bypass it.
 
 ## Trust boundary and safe default
 
-An optional [supplier-bound verifier](provider-bounds.md) is implemented. No
-qualified supplier ceiling contract/control-plane integration is bundled; ordinary
+An optional [supplier-bound verifier](provider-bounds.md) and an alternative
+[qualified component verifier](component-bounds.md) are implemented. No real
+supplier ceiling or component qualification is bundled; ordinary
 OpenRouter key budgets are insufficient. `verify_bound=None` rejects execution
 before a paid POST. A verifier is an application-controlled function
 `verify_bound(kind, identity, payload, bound) -> bool`. It must check an **effective,
@@ -143,6 +144,8 @@ no-model-fee evidence and a verified bound. It does not make host or energy free
   partial known total excludes that unresolved event, not its preserved receipt.
 - `BudgetError.control_plane_error=True`: a control-plane stop, not model failure.
 
-Amounts use decimal strings/Decimal end to end. Provider JSON decimal lexemes
+Budget sums, differences, integer products, exposure and available balances use
+exact arithmetic independent of ambient Decimal precision. Impractical precision
+is rejected rather than silently under-reserved. Amounts use decimal strings/Decimal end to end. Provider JSON decimal lexemes
 are preserved before conversion. No subscriptions, customer charging, tax logic,
 paid retry, live API availability test or deployment is included.

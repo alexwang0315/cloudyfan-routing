@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "rg04-components-offline",
+  "baseline_commit": "b11a2efb4c50d7e8a6ad5b6165a5ce131391808a",
+  "tested_tree": "uncommitted executable/test/build inputs identified by source_digest",
+  "source_digest": "d276cff46322d56170e2ffdd472ad0cd8f60e919e0673bd784f683b1cfad1492",
+  "tests_passed": 894,
+  "added_component_cases": 50,
+  "finished_at": "2026-10-18T13:29:51.777134+00:00",
+  "integration_receipt_sha256": "a3a6c1015d3b82989e00a26001932854c5a1ebfb26f45116463fc876818550b3",
+  "private_receipt_path": "runtime/checks/09c63c1c5bc744259cf37a258497b201/checks.json",
+  "checks": [
+    "locked-offline-sync",
+    "dependency-consistency",
+    "project-records",
+    "ruff",
+    "pytest",
+    "core-high-mock",
+    "score-high-mock",
+    "sdist-wheel"
+  ],
+  "real_api_calls": 0,
+  "real_api_cost_usd": "0",
+  "deployment": false,
+  "source_push": false,
+  "production_qualified": false,
+  "confirmed": [
+    "complete two-classifier/initial/sole-repair reservation and cost retention",
+    "complete eight-dimensional component schema and trusted exact-artifact review",
+    "exact monetary sums/products through shared budget independent of ambient precision",
+    "fixed classifier version used in actual request",
+    "strict text/provider/variant scope",
+    "persistent review withdrawal bound to shared registry path and incarnation",
+    "one-use request lease, post-intent and post-registry-read expiry checks",
+    "failed paid response retained; unknown outcome stops without retransmission",
+    "provider reconciliation replaces provisional charges once; breach preserves durable stop"
+  ],
+  "limits": [
+    "all approvals and quantity/rate/inventory/failure sources in tests are synthetic",
+    "no real supplier component guarantee or account-default control is qualified",
+    "no live API or deployment; ten formal release gates pending",
+    "reviewer labels and source hashes do not authenticate humans or establish supplier truth",
+    "registry history must be shared and preserved; malicious complete rollback is not detected",
+    "shared-budget exact monetary reporting is verified; no claim that every unrelated reporting arithmetic module changed"
+  ],
+  "initial_pass": {
+    "path": "docs/evidence/rg04-components-initial-pass.json",
+    "sha256": "c912db0470b53c189e2f89e0183b03c5849d14c1e95e05d64740f123f4a32024",
+    "tests_passed": 893
+  },
+  "review": {
+    "method": "independent agent read-only source/test inspection; no independent test execution or human production qualification",
+    "blocking_findings_remaining": 0,
+    "fixed": [
+      "budget Decimal context rounding",
+      "implicit paid model variants",
+      "withdrawal persistence and registry path/incarnation reuse",
+      "pinned classifier dispatch",
+      "expiry and completed concurrent withdrawal during registry read"
+    ]
+  }
+}

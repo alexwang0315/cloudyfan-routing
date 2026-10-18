@@ -6,7 +6,7 @@ and verify enforceable provider/tool bounds; unknown bounds fail closed.
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from decimal import Decimal
+from decimal import Decimal, localcontext
 from pathlib import Path
 import os
 import sqlite3
@@ -23,6 +23,31 @@ def money(value):
     if not result.is_finite() or result < 0:
         raise ValueError('Money must be finite and nonnegative')
     return result
+
+
+def _exact(values, multiplier=1):
+    """Exact finite monetary sum/product, independent of ambient Decimal context.
+
+    Internal subtraction uses copy_negate(), which also avoids contextual rounding.
+    Refuse impractical precision rather than silently reducing a reservation.
+    """
+    values = list(values)
+    if not values:
+        return Decimal(0)
+    if type(multiplier) is not int or multiplier < 0 or any(not v.is_finite() for v in values):
+        raise ValueError('Finite monetary operands and integer multiplier required')
+    nonzero = [v for v in values if v]
+    low = min(v.as_tuple().exponent for v in values)
+    high = max((v.adjusted() for v in nonzero), default=0)
+    padding = len(str(len(values))) + len(str(multiplier)) + 2
+    precision = max(28, high - low + padding)
+    if precision > 100000:
+        raise ValueError('Monetary precision exceeds safe resource limit')
+    with localcontext() as context:
+        context.prec = precision
+        context.Emin = min(context.Emin, low)
+        context.Emax = max(context.Emax, high + padding)
+        return sum(values, Decimal(0)) * multiplier
 
 
 def timestamp(value):
@@ -96,9 +121,9 @@ class BudgetStore:
                 if prior['fingerprint'] != fingerprint or money(prior['amount']) != amount:
                     raise BudgetError('Frozen reservation changed')
                 return
-            reserved = sum((money(r[0]) for r in db.execute('SELECT amount FROM reservations WHERE status="active"')), Decimal(0))
-            spent = self._settled_cost(db) + self._provisional_hold(db)
-            if reserved + spent + amount > money(auth['total']):
+            reserved = _exact(money(r[0]) for r in db.execute('SELECT amount FROM reservations WHERE status="active"'))
+            spent = _exact((self._settled_cost(db), self._provisional_hold(db)))
+            if _exact((reserved, spent, amount)) > money(auth['total']):
                 raise BudgetError('Insufficient shared balance for complete workflow')
             db.execute('INSERT INTO reservations VALUES (?,?,?,"active")', (run_id, fingerprint, str(amount)))
 
@@ -116,22 +141,22 @@ class BudgetStore:
     def _provisional_hold(self, db):
         # Active workflow reservations already cover their call bounds. Completed
         # calls retain only the difference between the bound and provisional fee.
-        return sum((max(Decimal(0), money(r['bound']) - money(r['cost'])) for r in db.execute(
+        return _exact(max(Decimal(0), _exact((money(r['bound']), money(r['cost']).copy_negate()))) for r in db.execute(
             'SELECT e.bound,e.cost FROM events e LEFT JOIN reservations r ON e.run=r.run '
             'WHERE e.cost IS NOT NULL AND e.verified=0 AND e.run!="__history__" '
-            'AND (r.status="complete" OR r.run IS NULL)')), Decimal(0))
+            'AND (r.status="complete" OR r.run IS NULL)'))
 
     def _dispatchable(self, db, auth):
         self._no_unknown(db)
-        reserved = sum((money(r[0]) for r in db.execute(
-            'SELECT amount FROM reservations WHERE status="active"')), Decimal(0))
-        if reserved + self._settled_cost(db) + self._provisional_hold(db) > money(auth['total']):
+        reserved = _exact(money(r[0]) for r in db.execute(
+            'SELECT amount FROM reservations WHERE status="active"'))
+        if _exact((reserved, self._settled_cost(db), self._provisional_hold(db))) > money(auth['total']):
             raise BudgetError('Shared exposure exceeds authorized balance; dispatch stopped')
 
     def _settled_cost(self, db):
-        return sum((money(r[0]) for r in db.execute(
+        return _exact(money(r[0]) for r in db.execute(
             'SELECT e.cost FROM events e LEFT JOIN reservations r ON e.run=r.run '
-            'WHERE e.cost IS NOT NULL AND (r.status="complete" OR r.run IS NULL)')), Decimal(0))
+            'WHERE e.cost IS NOT NULL AND (r.status="complete" OR r.run IS NULL)'))
 
     def begin_event(self, run_id, event_id, kind, bound, fingerprint):
         bound = money(bound)
@@ -150,8 +175,8 @@ class BudgetStore:
             reservation = db.execute('SELECT * FROM reservations WHERE run=?', (run_id,)).fetchone()
             if not reservation or reservation['status'] != 'active':
                 raise BudgetError('Active reservation required before dispatch')
-            committed = sum((money(r[0]) for r in db.execute('SELECT bound FROM events WHERE run=?', (run_id,))), Decimal(0))
-            if committed + bound > money(reservation['amount']):
+            committed = _exact(money(r[0]) for r in db.execute('SELECT bound FROM events WHERE run=?', (run_id,)))
+            if _exact((committed, bound)) > money(reservation['amount']):
                 raise BudgetError('Dispatch exceeds complete workflow reservation')
             db.execute('INSERT INTO events VALUES (?,?,?,?,?,NULL,0,NULL)',
                        (event_id, run_id, kind, str(bound), fingerprint))
@@ -213,13 +238,14 @@ class BudgetStore:
             reservations = [dict(r) for r in db.execute('SELECT * FROM reservations ORDER BY run')]
             events = [dict(r) for r in db.execute('SELECT * FROM events ORDER BY id')]
             violations = [dict(r) for r in db.execute('SELECT * FROM violations ORDER BY event_id')]
-            reserved = sum((money(r['amount']) for r in reservations if r['status'] == 'active'), Decimal(0))
-            known = sum((money(r['cost']) for r in events if r['cost'] is not None), Decimal(0))
-            verified = sum((money(r['cost']) for r in events if r['cost'] is not None and r['verified']), Decimal(0))
+            reserved = _exact(money(r['amount']) for r in reservations if r['status'] == 'active')
+            known = _exact(money(r['cost']) for r in events if r['cost'] is not None)
+            verified = _exact(money(r['cost']) for r in events if r['cost'] is not None and r['verified'])
             unknown = sum(r['cost'] is None for r in events)
             provisional = self._provisional_hold(db)
             unbounded = self._unbounded_history(db)
-            available = (money(auth['total']) - reserved - self._settled_cost(db) - provisional
+            available = (_exact((money(auth['total']), reserved.copy_negate(),
+                                 self._settled_cost(db).copy_negate(), provisional.copy_negate()))
                          if auth and not unknown and not violations and not unbounded else None)
             return {'authorization': dict(auth) if auth else None,
                     'authorized_usd': auth['total'] if auth else None,
@@ -405,9 +431,10 @@ class BudgetedCore:
                 raise BudgetError('No confirmed model upper bound')
             self._verify('model', model, profile, bound)
             return money(bound.usd)
-        amount = self.core.limits.max_turns * (model_cap(first, 'model_version') + max(model_cap(p, 'model_version') for p in remaining))
+        amount = _exact((model_cap(first, 'model_version'), max(model_cap(p, 'model_version') for p in remaining)),
+                        self.core.limits.max_turns)
         if mode == 'cloudyfan':
-            amount += 2 * model_cap(self.core.decision, 'version')
+            amount = _exact((amount, _exact((model_cap(self.core.decision, 'version'),), 2)))
         tool_max = Decimal(0)
         for name, policy in self.tool_bounds.items():
             self._verify('tool', name, {'external': policy.external}, policy.bound)
@@ -415,7 +442,8 @@ class BudgetedCore:
                 raise BudgetError('Local deterministic tools need confirmed zero API fee')
             tool_max = max(tool_max, money(policy.bound.usd))
         # max_tool_calls is a per-turn bound, not a per-workflow bound.
-        amount += 2 * self.core.limits.max_turns * self.core.limits.max_tool_calls * tool_max
+        amount = _exact((amount, _exact((tool_max,),
+                        2 * self.core.limits.max_turns * self.core.limits.max_tool_calls)))
         return amount
 
     def sync_client(self, client):
@@ -470,7 +498,7 @@ class BudgetedCore:
         self.store.finish(run_id)
         report = self.store.report()
         events = [r for r in report['events'] if r['run'] == run_id]
-        known = sum((money(r['cost']) for r in events if r['cost'] is not None), Decimal(0))
+        known = _exact(money(r['cost']) for r in events if r['cost'] is not None)
         unknown = sum(r['cost'] is None for r in events)
         return {**result, 'budget': {'run_known_usd': str(known), 'run_unknown_events': unknown,
                                    'run_total_usd': None if unknown else str(known),

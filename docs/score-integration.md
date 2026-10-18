@@ -43,7 +43,8 @@ uv run cloudyfan-scores import-codexradar --input runtime/radar-reviewed.json \
 
 # 每個來源／領域使用事先決定的 policy；不要把所有來源塞進單一平均
 uv run cloudyfan-scores build --observations runtime/radar-observations.json \
-  --registry runtime/registry.json --policy runtime/policy.json --store runtime/scores-coding
+  --registry runtime/registry.json --policy runtime/policy.json --review runtime/qualification-review.json \
+  --store runtime/scores-coding
 uv run cloudyfan-scores inspect --store runtime/scores-coding
 uv run cloudyfan-scores select --store runtime/scores-coding \
   --requirements runtime/requirements.json --output runtime/selected-profiles.json
@@ -94,7 +95,7 @@ result = engine.run("job-001", task, make_fresh_isolated_environment,
 
 每層先依任務需求及供應商限制準備一個候選，不額外支付分類費；Jev 接到明確模型／強度、公開能力卡與評分證據。任何一池或開源設定不符合需求，整個新任務在呼叫前拒絕，不暗中放寬。`ScoreCore` 在綁定與真正開始前檢查時效，且只允許同一 run ID。已建立 manifest 的續跑可以使用過期的原快照，仍必須維持原任務、公開契約、候選、分類設定與限制；已付費回答依既有機制重用。
 
-**生產整合須使用 `ScoreCore`。** CLI `select` 是檢視／整合輸出；將其結果交給普通 `Core` 不會額外執行評分快照時效檢查。
+**生產整合先使用 `qualified_snapshot(pack, now=...)` 通過[資格審查](qualification.md)，再使用 `ScoreCore`。** 低階 `compile_snapshot`／`SnapshotStore` 是可信程式注入介面，不會代替人員審批；CLI `build` 現在要求 `--review`。 CLI `select` 是檢視／整合輸出；將其結果交給普通 `Core` 不會額外執行評分快照時效檢查。
 
 `ScoreCore` 僅提供 CloudyFan 路由模式；實驗基準使用原有 `Core` 明確綁定。高分池中最便宜的候選不一定是全榜最高分，不能稱它為「全最高分數模型」對照。
 

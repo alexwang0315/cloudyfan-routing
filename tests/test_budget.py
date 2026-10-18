@@ -277,3 +277,16 @@ def test_local_zero_fee_receipt_combines_without_inventing_cloud_generation(tmp_
     assert result['costs']['host_and_human_usd'] is None
     app.run('local', {'prompt': 'Return 1+1'}, TextContract, contract_version='v1')
     assert len(requests) == 1
+
+
+def test_changed_enforcement_evidence_cannot_reuse_frozen_completed_run(tmp_path):
+    from cloudyfan_jev.budget import EnforcedBound
+    from test_engine import API, TASK, ArithmeticEnvironment
+    api = API(first='2')
+    app = controlled(tmp_path, api)
+    app.run('frozen', TASK, ArithmeticEnvironment, contract_version='v1')
+    model = app.core.profiles['high']['model_version']
+    app.model_bounds[model] = EnforcedBound('.03', 'different cap evidence at same price')
+    with pytest.raises(BudgetError, match='Frozen reservation changed'):
+        app.run('frozen', TASK, ArithmeticEnvironment, contract_version='v1')
+    assert len(api.requests) == 1

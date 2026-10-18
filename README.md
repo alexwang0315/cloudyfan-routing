@@ -4,6 +4,8 @@
 
 此 repo 從 2026-10-18 的 CloudyFan 新階層實驗抽出，不依賴原工作區、舊 `cloudyfan` 套件或實驗答案。舊 Jev A/B、alpha/beta 保留在原專案，沒有被覆寫。
 
+新增的[評分資料層](docs/score-integration.md)可接入 LiveBench、AA／OpenRouter benchmark API 與經審閱的 CodexRadar 匯入，建立高／中／低模型池，再以 `ScoreCore` 將候選與快照固定到單一任務。快速離線驗證：`uv run cloudyfan-score-demo --route high`。來源接入不代表候選已完成生產資格確認。
+
 ## 流程
 
 ```mermaid
@@ -87,6 +89,7 @@ with httpx.Client() as http:
 |`client.py`|OpenRouter Chat／Decisions、intent 與回答保存、禁止自動重送、GET 核帳|
 |`ledger.py`|全部 durable 呼叫的成本摘要，保留中斷與未知|
 |`demo.py`|完全離線的 pass／low／mid／high 路徑示範|
+|`scores/`|評分來源 adapters、原生尺度分群、快照、資格檢查與單任務 `ScoreCore` 綁定|
 
 `Core.run(mode=...)` 支援 `cloudyfan`、`fixed_high`、`low_first`、`open_source_first`。後三者保留實驗基準：失敗直接最高配置補救；`fixed_high` 使用同最高配置修正。這些是可選工作流程，並非自動重新跑比較實驗。
 

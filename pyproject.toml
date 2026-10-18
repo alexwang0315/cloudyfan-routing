@@ -14,6 +14,8 @@ dev = ["pytest>=8,<10", "ruff>=0.11,<1"]
 
 [project.scripts]
 cloudyfan-jev-demo = "cloudyfan_jev.demo:main"
+cloudyfan-scores = "cloudyfan_jev.scores.cli:main"
+cloudyfan-score-demo = "cloudyfan_jev.scores.demo:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cloudyfan_jev"]

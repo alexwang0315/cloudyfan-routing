@@ -80,7 +80,8 @@ def _lock(path):
 def _profiles_valid(profiles, decision):
     for tier in ("high", "mid", "low", "open_source"):
         p = profiles[tier]
-        for field in ("model", "model_version", "effort", "provider", "provider_name"):
+        fields = ('model', 'model_version', 'effort') if p.get('backend') == 'local' else ("model", "model_version", "effort", "provider", "provider_name")
+        for field in fields:
             if not isinstance(p.get(field), str) or not p[field].strip():
                 raise ValueError("Profile requires explicit " + field)
         accepted = p.get("accepted_models")
@@ -105,13 +106,28 @@ class Core:
     No hidden grading interface exists here. User applications own authorization,
     enforceable spending limits, validation correctness and tool sandboxing.
     """
-    def __init__(self, client, profiles, decision_profile, *, limits=None, system=SYSTEM, execution_policy=None):
+    def __init__(self, client, profiles, decision_profile, *, limits=None, system=SYSTEM,
+                 local_backend=None, execution_policy=None):
         self.client = client
         self.profiles = deepcopy(profiles)
         self.decision = deepcopy(decision_profile)
         _profiles_valid(self.profiles, self.decision)
         self.limits = limits or Limits()
         self.system = system
+        self.local_backend = local_backend
+        for tier, profile in self.profiles.items():
+            if profile.get('backend') == 'local':
+                if profile['effort'] != 'none':
+                    raise ValueError('Local text subset does not support configured reasoning effort')
+                if tier != 'open_source' or local_backend is None or not local_backend.matches_profile(profile):
+                    raise ValueError('Local profile requires a matching registered open-source backend')
+                qualification = profile.get('quantization_qualification', {})
+                if profile.get('external_score') is not None and (
+                        not isinstance(qualification, dict) or qualification.get('approved') is not True
+                        or not qualification.get('evidence')
+                        or any(qualification.get(k) != profile[k] for k in
+                               ('model_version', 'quantization', 'engine'))):
+                    raise ValueError('Quantized score requires explicit configuration qualification')
         self.execution_policy = deepcopy(execution_policy)
 
     def _checked(self, cid, url, payload, accepted, provider):
@@ -169,13 +185,19 @@ class Core:
             tools = env.tools_schema()
             payload = {"model": profile['model_version'], "messages": messages,
                        "max_tokens": self.limits.max_tokens, "reasoning": {"effort": profile['effort']},
-                       "provider": {"only": [profile['provider']], "allow_fallbacks": False,
-                                    "require_parameters": True}, "session_id": prefix}
+                       "session_id": prefix}
+            if profile.get('backend') != 'local':
+                payload['provider'] = {"only": [profile['provider']], "allow_fallbacks": False,
+                                       "require_parameters": True}
             if tools:
                 payload.update(tools=tools, tool_choice='auto')
             cid = f'{prefix}-a{index}-t{turn}'
-            record, info = self._checked(cid, transport.CHAT, payload, profile['accepted_models'],
-                                         profile['provider_name'])
+            if profile.get('backend') == 'local':
+                record = self.local_backend.call(cid, payload)
+                info = {'call_id': cid, **self.local_backend.checked(record)}
+            else:
+                record, info = self._checked(cid, transport.CHAT, payload, profile['accepted_models'],
+                                             profile['provider_name'])
             calls.append({"tier": tier, **info})
             choice = json.loads(record['raw'])['choices'][0]
             msg = choice['message']
@@ -243,6 +265,12 @@ class Core:
         cost, scenario, classifier = Decimal(0), Decimal(0), Decimal(0)
         unknown = 0
         for call in refs:
+            if call.get('execution_kind') == 'local':
+                record = self.local_backend._load(self.local_backend._directory(call['call_id']))
+                info = self.local_backend.checked(record)
+                if info['cost_unknown']: unknown += 1
+                else: cost += Decimal(info['cost_usd'])
+                continue
             record = self.client._load(self.client._directory(call['call_id']))
             info = transport.usage(record)
             profile = self.decision if call['tier'] == 'classifier' else self.profiles[call['tier']]
@@ -283,6 +311,8 @@ class Core:
             frozen = {'engine_version': '0.1.0', 'routing_version': routing.VERSION, 'task': task, 'mode': mode,
                       'contract_version': contract_version, 'profiles': self.profiles, 'decision': self.decision,
                       'limits': asdict(self.limits), 'system': self.system}
+            if self.local_backend is not None:
+                frozen['local_backend'] = self.local_backend.descriptor()
             if self.execution_policy is not None:
                 frozen['execution_policy'] = self.execution_policy.to_dict()
             _save(directory / 'manifest.json', frozen)
@@ -291,6 +321,8 @@ class Core:
                 return self._with_costs(_read(completed))
             prefix = 'run-' + run_id
             resumed = any((Path(self.client.root) / 'calls').glob(prefix + '-*'))
+            if self.local_backend is not None:
+                resumed = resumed or any((self.local_backend.root / 'calls').glob(prefix + '-*'))
             began = perf_counter()
             env = environment_factory()
             # Fresh sandbox is supplied by the caller. Prior tool actions replay into it.

@@ -7,11 +7,16 @@ budget wrapper, not bypass it.
 
 ## Trust boundary and safe default
 
-No production provider hard-cap verifier is bundled. `verify_bound=None` rejects
-execution before a paid POST. A verifier is an application-controlled function
+An optional [supplier-bound verifier](provider-bounds.md) is implemented. No
+qualified supplier ceiling contract/control-plane integration is bundled; ordinary
+OpenRouter key budgets are insufficient. `verify_bound=None` rejects execution
+before a paid POST. A verifier is an application-controlled function
 `verify_bound(kind, identity, payload, bound) -> bool`. It must check an **effective,
 enforceable** bound for the exact request, model, provider, configuration and tool.
 It runs at whole-workflow admission and again before each model/tool dispatch.
+The supplied provider adapter also consumes a fresh exact-request lease after
+durable intent, immediately before POST; an unissued request is recorded as a
+verified internal zero-fee event without inventing a provider generation ID.
 Only literal `True` admits work. An evidence reference, model price, maximum token
 count, average cost, `cost_tier`, provider marketing statement or caller estimate
 alone is insufficient. Tests use an explicitly synthetic verifier and do not prove

@@ -89,3 +89,27 @@ No paid API request was made for extraction, validation, review or repository cr
 - 下一項正式資格仍優先 G-02：選定固定版本的真實客戶端，對接 mock 上游，驗證支援的文字協定、認證、錯誤、重連及不重送；不支援能力須明確拒絕。這項互通資格尚未執行，provider cap 與模型品質仍分別由 RG-04／RG-02 驗證。
 
 此次未執行真實 API、部署或推送；正式十項 gates 仍 pending。
+
+# RG-04／RG-05 程式整合與離線驗證（2026-10-18）
+
+本輪基線為本機 `651571216fc80a64e3f13e84632a356dfcb76773`，變更尚未提交。實作、審查修正與待驗證邊界見 [rg04-rg05.md](rg04-rg05.md)；[去敏驗證摘要](evidence/rg45-offline.json) 固定完整 executable／test／build 輸入。原有 699 項與所有歷史證據保留。
+
+- `./scripts/check --integration` 最終 **798 passed**（新增 99 項）、Ruff、鎖定離線依賴、紀錄檢查、Core／ScoreCore high mock demo、sdist／wheel 全部通過。8 個步驟退出碼皆為 0；兩個 demo 各 4 次 mock 請求、2 次分類，真實 API 呼叫與費用零。
+- 完整收據：`runtime/checks/c29853c7ce3244e29c8ba01a36bf468f/checks.json`。完整輸出、red／green、獨立審查與併發探針保存在工作區 `.scratch/rg04-rg05/`，沒有上傳。
+- 新增驗證涵蓋供應商合約／狀態／credential／endpoint／payload 綁定、GET 與 intent 延遲到期、無派送零費用、完整 Jev 兩層修正；身份 scope／expiry／撤銷／輪替／停用／時鐘回退；TTL／精確批准／未知費用／unsafe 與開檔停止／保留鎖／Queue 副本／零派送清除／退休 ID 不重用。
+- 實際以本機 lsof 檢查合成檔案，確認開檔阻擋及持有保留鎖時的清除行為。實體清除僅限每次測試新建的合成 fixture，明確批准精確清單；沒有清除既有使用者資料。
+- 獨立審查修正資格到 POST 前過期的 P1，與 Queue／retention 鎖順序反轉；各自重現及複核通過。中途完整檢查有 5 個舊 fixture 因固定引用上一輪基線證據失敗，已改為依實際基線載入。一次直接 console pytest 聚焦命令因 scripts namespace 不在匯入路徑而 collection 失敗；採專案統一入口的 `python -m pytest` 最終全套通過。這些失敗收據保留，不算成成功測試。
+- 最終 metadata 更新後另核對 project-state、文件連結、歷史證據 hash 與 diff；不將本輪未提交來源冒稱為基線 commit 的內容。
+
+實際付費 OpenRouter 尚無經核定的完整費用 ceiling 合約／control-plane probe，預設仍拒絕；合成簽署內容只驗證 adapter 邏輯。RG-05 的正式 TLS、身份與密鑰營運、保留政策、備份／log 範圍與維護 fence 尚待部署資格。十項正式 gate 保持 pending。本輪沒有真實 API、部署、推送、硬體、模型下載、GitHub 寫入或新增 Git commit。
+
+# RG-04／RG-05 本機提交前複核（2026-10-18）
+
+依使用者授權檢查既有 RG-04／RG-05 變更並保存至本機 Git；原始離線證據與私有審查、失敗／修正收據保持原檔。本次檢查未發現需追加修正的阻擋問題，沒有變更已測程式。
+
+- 重新執行 `./scripts/check --integration`：**798 passed**；Ruff、鎖定離線依賴、專案紀錄、Core／ScoreCore high mock demo、sdist／wheel 均通過，8 個步驟退出碼皆為 0。
+- 程式、測試與建置來源摘要仍為 `ca24f2b9f1753addca7202b33b070559594321e02b8b74fbd3745d1a7a8b858c`，與前輪完整驗證及審查修正後一致。完整收據：`runtime/checks/33c15264e1ea4f01a57ed08c0e42df25/checks.json`；可提交的去敏摘要：[rg45-precommit.json](evidence/rg45-precommit.json)。
+- 提交前核對來源清單、暫存差異、文件連結、歷史證據與 project-state；既有秘密掃描及 quick-check hook 保持啟用。實際 commit 身分以本機 Git 歷史及工作區 `.scratch/rg04-rg05/` 的提交後核對紀錄為準，證據不建立循環自引用。
+- 下一項正式放行優先 G-02：固定版本的真實客戶端對接 mock 上游，確認文字協定、認證、alias／run ID、錯誤、重連與不重送，以及不支援能力的明確拒絕。這項互通資格尚未執行。
+
+RG-04 真實供應商完整費用上限與 RG-05 真實部署身份／TLS／資料保留仍待資格驗證，十項正式 gates 仍 pending。本次沒有真實 API 呼叫、部署、推送、硬體操作、模型下載、GitHub 寫入或清除既有使用者資料。

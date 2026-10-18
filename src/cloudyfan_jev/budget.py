@@ -281,16 +281,19 @@ class _BudgetClient:
         return 'model:' + _fingerprint(str(self.wrapped.root.resolve())) + ':' + cid
 
     def _record(self, cid, record):
-        from .client import usage
+        from .client import usage, not_dispatched
         info = usage(record)
+        denied = not_dispatched(record)
         receipt = info.get('local_call_id') or info.get('generation_id')
+        if denied:
+            receipt = 'not-dispatched:' + _fingerprint(str(self.wrapped.root.resolve()) + ':' + cid)
         if info.get('local_call_id'):
             receipt = 'local:' + _fingerprint(str(self.wrapped.root.resolve())) + ':' + receipt
         if record.get('duplicate_generation_id'):
             receipt = None
         self.owner.store.record_event(self._event_id(cid),
             cost_usd=info['cost_usd'] if receipt else None,
-            verified=info['cost_source'] == 'generation_total_cost', receipt_id=receipt)
+            verified=denied or info['cost_source'] == 'generation_total_cost', receipt_id=receipt)
         return record
 
     def call(self, cid, *args):
@@ -299,9 +302,19 @@ class _BudgetClient:
         bound = self.owner.model_bounds.get(model)
         if bound is None:
             raise BudgetError('No confirmed model upper bound')
-        self.owner._verify('model', model, payload, bound)
+        endpoint = args[0] if len(args) > 1 else None
+        dispatch_verifier = getattr(self.owner.verify_bound, 'verify_dispatch', None)
+        if callable(dispatch_verifier):
+            if dispatch_verifier(self.wrapped, endpoint, payload, bound) is not True:
+                raise BudgetError('Enforceable dispatch upper bound unconfirmed')
+        else:
+            self.owner._verify('model', model, payload, bound)
         self.owner.store.begin_event(self.run_id, self._event_id(cid), 'model', money(bound.usd),
                                      _fingerprint(args))
+        post_verifier = getattr(self.owner.verify_bound, 'verify_post', None)
+        if callable(post_verifier):
+            guard = lambda: post_verifier(self.wrapped, endpoint, payload, bound)
+            return self._record(cid, self.wrapped.call(cid, *args, before_post=guard))
         return self._record(cid, self.wrapped.call(cid, *args))
 
     def reconcile(self, cid):
@@ -360,7 +373,8 @@ class BudgetedCore:
     verify_bound(kind, identity, payload, EnforcedBound) returns exactly True only
     when a hard bound is effective. At preflight payload is a frozen profile (or
     tool policy); at dispatch it is the actual request. Returning estimates or
-    truthy objects fails closed. No production provider verifier is included.
+    truthy objects fails closed. The optional supplier verifier requires independently
+    qualified contracts/control-plane state; none are bundled.
     """
     def __init__(self, core, store, *, model_bounds, tool_bounds, verify_bound=None):
         self.core, self.store = core, store
@@ -369,6 +383,10 @@ class BudgetedCore:
 
     def __getattr__(self, name):
         return getattr(self.core, name)
+
+    def enforcement_descriptor(self):
+        descriptor = getattr(self.verify_bound, 'descriptor', None)
+        return descriptor() if callable(descriptor) else None
 
     def _verify(self, kind, identity, payload, bound):
         if self.verify_bound is None or self.verify_bound(kind, identity, payload, bound) is not True:
@@ -402,7 +420,7 @@ class BudgetedCore:
 
     def sync_client(self, client):
         """Read existing client receipts, including incomplete intents, without HTTP."""
-        from .client import usage
+        from .client import usage, not_dispatched
         with client._lock():
             for directory in sorted((client.root / 'calls').iterdir()):
                 if not directory.is_dir():
@@ -412,11 +430,13 @@ class BudgetedCore:
                     record = client._load(directory)
                     info = usage(record)
                     receipt = info.get('local_call_id') or info.get('generation_id')
+                    if not_dispatched(record):
+                        receipt = 'not-dispatched:' + _fingerprint(str(client.root.resolve()) + ':' + directory.name)
                     if info.get('local_call_id'):
                         receipt = 'local:' + _fingerprint(str(client.root.resolve())) + ':' + receipt
                     if not record.get('duplicate_generation_id') and (directory / 'intent.json').exists():
                         cost = info['cost_usd'] if receipt else None
-                        verified = info['cost_source'] == 'generation_total_cost'
+                        verified = not_dispatched(record) or info['cost_source'] == 'generation_total_cost'
                     else:
                         receipt = None
                 except (OSError, ValueError, TypeError):
@@ -432,6 +452,9 @@ class BudgetedCore:
                   'mode': mode, 'options': kwargs,
                   'model_bounds': {k: asdict(v) for k, v in self.model_bounds.items()},
                   'tool_bounds': {k: asdict(v) for k, v in self.tool_bounds.items()}}
+        descriptor = self.enforcement_descriptor()
+        if descriptor is not None:
+            frozen['enforcement'] = descriptor
         self.sync_client(self.core.client)
         if getattr(self.core, 'local_backend', None) is not None:
             self.sync_client(self.core.local_backend)

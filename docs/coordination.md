@@ -26,12 +26,12 @@ Existing interfaces retained unchanged in this round:
 | Filesystem receipt store | `src/cloudyfan_jev/receipt_store.py` | integration-maintainer |
 | Safe task result projection | `src/cloudyfan_jev/http_api.py` | integration-maintainer |
 
-The retro 3–5 plan is preserved in [evidence/retro35-work-plan.json](evidence/retro35-work-plan.json).
-The current review-fix plan separates budget/integration, local durability/routing
-identity, and calibration reporting into disjoint file ownership. The integrator
-consumes both completed repair packages before final offline verification.
-Routing now pins candidate model versions and uses policy version
-`hierarchical50-binary-v2`; the shared baseline interfaces above remain unchanged.
+The retro 3–5 and five-review-fix plans are retained as historical evidence.
+The current RG-04/RG-05 plan separates supplier/budget/Queue/Core integration,
+identity, and task retention/lifecycle ownership. The root integrator consumes
+the retention-owned TaskService interface; workers own disjoint paths. Root also
+owns the unchanged-signature Core descriptor file for retirement-sentinel checks.
+The current plan, not the older ownership table alone, identifies active owners.
 
 ## Before dispatch and merge
 

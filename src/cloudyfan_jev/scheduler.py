@@ -3,14 +3,18 @@ from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from http import HTTPStatus
 import math
+import hashlib
+import json
 import os
 from pathlib import Path
 import re
 import sqlite3
+import uuid
 from time import time
 
 from .client import _strict_json
 from .http_api import ServiceError, _encode
+from .retention import RetentionError
 
 
 @dataclass(frozen=True)
@@ -43,16 +47,28 @@ class QueueScheduler:
             if old and old[0] != config: raise ValueError('Frozen queue configuration changed')
             db.execute('INSERT OR IGNORE INTO configuration VALUES (1,?)', (config,))
             db.execute('CREATE TABLE IF NOT EXISTS queue_clock (singleton INTEGER PRIMARY KEY, value REAL)')
+            db.execute('CREATE TABLE IF NOT EXISTS maintenance (singleton INTEGER PRIMARY KEY, token TEXT, active INTEGER)')
             db.execute('CREATE TABLE IF NOT EXISTS rejections (principal TEXT, run_id TEXT, reason TEXT, at REAL)')
             db.execute('CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, principal TEXT, run_id TEXT, request TEXT, '
                        'created REAL, deadline REAL, state TEXT, reason TEXT, started REAL, finished REAL, cancel_requested INTEGER DEFAULT 0)')
         os.chmod(self.path, 0o600)
+        if getattr(service, 'retention_policy', None) is not None:
+            existing = getattr(service, 'retention_guard', None)
+            if existing is not None and getattr(getattr(existing, '__self__', None), 'path', None) != self.path:
+                raise ValueError('Retention cannot span independent queue stores')
+            if self.path.absolute() not in service.retention_protected_paths:
+                service.retention_protected_paths += (self.path.absolute(),)
+            service.retention_guard = self.retention_snapshot
+            service.retention_erase_queue = self.retention_erase
+            if service.retention_maintenance is None:
+                service.retention_maintenance = self.retention_maintenance
 
     @contextmanager
     def _transaction(self):
         db = sqlite3.connect(self.path, timeout=30, isolation_level=None)
         db.row_factory = sqlite3.Row
         try:
+            db.execute('PRAGMA secure_delete=ON')
             db.execute('BEGIN IMMEDIATE')
             yield db
             db.execute('COMMIT')
@@ -62,13 +78,28 @@ class QueueScheduler:
         finally:
             db.close()
 
+    @contextmanager
+    def _task_guard(self, internal_id):
+        retention = getattr(self.service, 'retention', None)
+        if retention is None:
+            yield
+            return
+        try:
+            with retention.guard(internal_id):
+                retention.access(internal_id, legacy_exists=(self.service.root / internal_id / 'job.json').exists())
+                yield
+        except RetentionError as error:
+            raise ServiceError(error.code, error.status) from None
+
     def submit(self, principal, payload):
         self.service.authorize(principal)
         if not isinstance(payload, dict): raise ServiceError('unsupported_task_fields')
         identity = self.service.internal_id(principal, payload.get('run_id'))
         encoded = _encode(payload).decode()
         rejection = None
-        with self._transaction() as db:
+        with self._task_guard(identity), self._transaction() as db:
+            if db.execute('SELECT 1 FROM maintenance WHERE active=1').fetchone():
+                raise ServiceError('queue_maintenance', 503)
             self._expire(db)
             prior = db.execute('SELECT * FROM jobs WHERE id=?', (identity,)).fetchone()
             if prior:
@@ -82,11 +113,65 @@ class QueueScheduler:
                     db.execute('INSERT INTO rejections VALUES (?,?,?,?)', (principal, payload['run_id'], rejection, self._now(db)))
                 else:
                     self.service.create(principal, payload)
+                    if getattr(self.service, 'retention_policy', None) is not None:
+                        self.service.mark_queued(principal, payload['run_id'])
                     now = self._now(db)
                     db.execute('INSERT INTO jobs (id,principal,run_id,request,created,deadline,state) VALUES (?,?,?,?,?,?,?)',
                                (identity, principal, payload['run_id'], encoded, now, now + self.limits.max_wait_seconds, 'queued'))
         if rejection: raise ServiceError(rejection, 429)
         return self.status(principal, payload['run_id'])
+
+    @contextmanager
+    def retention_maintenance(self, internal_id):
+        """Persistently pause queue admission/dispatch after all workers stop.
+
+        A crashed owner leaves the queue paused for explicit operator review.
+        Direct out-of-band writers remain the application's responsibility.
+        """
+        token = uuid.uuid4().hex
+        with self._transaction() as db:
+            if db.execute('SELECT 1 FROM maintenance WHERE active=1').fetchone():
+                raise ServiceError('queue_maintenance', 409)
+            if db.execute('SELECT 1 FROM jobs WHERE state IN ("running","interrupted_pending")').fetchone():
+                raise ServiceError('queue_workers_not_stopped', 409)
+            db.execute('INSERT OR REPLACE INTO maintenance VALUES (1,?,1)', (token,))
+        try:
+            yield {'workers_stopped': True, 'evidence_ref': 'queue-maintenance:' + token}
+        finally:
+            with self._transaction() as db:
+                changed = db.execute('UPDATE maintenance SET active=0 WHERE singleton=1 AND token=? AND active=1',
+                                     (token,))
+                if changed.rowcount != 1:
+                    raise ServiceError('queue_maintenance_changed', 503)
+
+    def retention_snapshot(self, internal_id):
+        """Operator-side queue inventory, containing no task prompt."""
+        with self._transaction() as db:
+            row = db.execute('SELECT request,state FROM jobs WHERE id=?', (internal_id,)).fetchone()
+            if row is None:
+                return {'terminal': False, 'request_erased': False, 'request_sha256': None,
+                        'bytes': 0, 'evidence_ref': 'queue-job-missing'}
+            raw = row['request'].encode()
+            parsed = json.loads(row['request'])
+            return {'terminal': row['state'] in {'completed', 'cancelled', 'expired'},
+                    'request_erased': parsed.get('retired') is True,
+                    'request_sha256': (parsed.get('request_sha256') if parsed.get('retired') is True
+                                       else hashlib.sha256(raw).hexdigest()),
+                    'bytes': 0 if parsed.get('retired') is True else len(raw),
+                    'evidence_ref': 'queue-job:' + internal_id}
+
+    def retention_erase(self, internal_id, expected_request_sha256, approval_reference):
+        """Called only after exact-plan approval under the maintenance fence."""
+        if not isinstance(approval_reference, str) or not approval_reference.strip():
+            raise ServiceError('retention_approval_required', 403)
+        with self._transaction() as db:
+            row = db.execute('SELECT request,state FROM jobs WHERE id=?', (internal_id,)).fetchone()
+            if row is None or row['state'] not in {'completed', 'cancelled', 'expired'}:
+                raise ServiceError('retention_queue_not_terminal', 409)
+            if hashlib.sha256(row['request'].encode()).hexdigest() != expected_request_sha256:
+                raise ServiceError('retention_queue_changed', 409)
+            db.execute('UPDATE jobs SET request=? WHERE id=?',
+                       (_encode({'retired': True, 'request_sha256': expected_request_sha256}).decode(), internal_id))
 
     def _now(self, db):
         now = self.clock()
@@ -148,6 +233,8 @@ class QueueScheduler:
 
     def dispatch_next(self):
         with self._transaction() as db:
+            if db.execute('SELECT 1 FROM maintenance WHERE active=1').fetchone():
+                return None
             self._expire(db)
             active = db.execute('SELECT COUNT(*) FROM jobs WHERE state IN ("running","interrupted_pending")').fetchone()[0]
             if active >= self.limits.concurrency: return None

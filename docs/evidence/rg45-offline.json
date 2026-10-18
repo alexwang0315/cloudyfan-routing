@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "rg04-rg05-offline",
+  "baseline_commit": "651571216fc80a64e3f13e84632a356dfcb76773",
+  "tested_tree": "uncommitted executable/test/build inputs identified by source_digest",
+  "source_digest": "ca24f2b9f1753addca7202b33b070559594321e02b8b74fbd3745d1a7a8b858c",
+  "tests_passed": 798,
+  "finished_at": "2026-10-18T08:08:16.883329+00:00",
+  "integration_receipt_sha256": "153a429cfa734cd6123efa585996dc5563c6c8f25da83ae99c95238a648721ef",
+  "private_receipt_path": "runtime/checks/c29853c7ce3244e29c8ba01a36bf468f/checks.json",
+  "checks": [
+    "locked-offline-sync",
+    "dependency-consistency",
+    "project-records",
+    "ruff",
+    "pytest",
+    "core-high-mock",
+    "score-high-mock",
+    "sdist-wheel"
+  ],
+  "limits": [
+    "offline synthetic provider contract and MockTransport evidence only",
+    "no actual supplier ceiling contract/control-plane probe qualified",
+    "local API-token identity, not OIDC/SSO qualification",
+    "real deployment TLS/identity/retention/backup coverage and maintenance fence pending",
+    "fixture-only approved purge; no actual user-data deletion",
+    "metadata finalized after integration and separately validated",
+    "10 production gates pending; remote CI not run"
+  ]
+}

@@ -2,8 +2,8 @@
 
 `HTTPApp` is a WSGI callable. Importing or constructing it does not start a server.
 The delivered interface is a registered single-task text workflow, not OpenAI or
-Ollama chat compatibility. Formal authentication, tenant operations, retention
-approval and deployment remain separate release gates.
+Ollama chat compatibility. Versioned identity and retention adapters can be composed explicitly; their
+production configuration, operator approval and deployment remain release gates.
 
 ## Server composition
 
@@ -22,7 +22,9 @@ service = TaskService(
         ),
     },
     allowed_principal='operator',
-    retention_policy=None,
+    retention_policy=None,  # Or an explicit RetentionPolicy; see docs/retention.md.
+    principal_active=None,  # Or identity_store.is_active.
+    retention_protected_paths=(),  # Register the identity/auth database paths.
 )
 app = HTTPApp(service, authenticate=trusted_authenticator, audit=redacted_event_sink)
 ```
@@ -32,7 +34,9 @@ app = HTTPApp(service, authenticate=trusted_authenticator, audit=redacted_event_
 and verifier must be configured by the administrator. `retention_policy=None`
 means retention is not approved, not that data is deleted or production is ready.
 This module intentionally includes no bearer-token database, real authenticator,
-network listener, automatic cleanup, or deployment command.
+network listener, automatic cleanup, or deployment command. Optional identity
+and retention integration is described in [identity.md](identity.md) and
+[retention.md](retention.md).
 
 The authenticator receives WSGI environ and returns the trusted principal or
 `None`; only the registered principal is admitted. Never derive that principal
@@ -58,6 +62,12 @@ Statuses distinguish `ready`, `running`, `passed`, `failed`, `unverifiable`,
 `failed`/`unverifiable` may have HTTP 200 because HTTP completion is not task
 correctness. Policy denial is 403, unresolved accounting is 409, engineering
 interruption is 503. Missing results are 409; authentication failure is 401.
+With a versioned retention policy, expired or retired tasks return 410 for status,
+result, duplicate create and resume, preserving a durable tombstone against rebilling.
+Inactive principals return 401 before any task read/dispatch. Missing legacy
+retention metadata, changed policy and clock rollback fail closed. Expiry hides
+access while retaining interrupted/unknown billing evidence; it does not cancel an
+in-flight provider request or automatically delete storage.
 Errors expose stable codes, not exception text. There is no automatic retry.
 A process killed mid-request can leave `running`; only explicit resume performs
 recovery, with the core and budget unknown-intent gates still in force.
@@ -102,7 +112,10 @@ real socket attempts are blocked. They exercise submission, status, result,
 response reuse, fresh-workspace resume, public failures, unknown costs,
 configuration changes, authorization, allowlisted tools and sanitized errors.
 They are not evidence of real clients, provider caps, network deployment,
-production identity integration or approved data-retention operations.
+deployed identity integration or approved data-retention operations. The optional
+retention adapter now implements durable expiry and an operator-only exact-preview,
+approval, maintenance-fence and tombstone cleanup path; its destructive tests use
+only disposable fixture files. No HTTP deletion endpoint exists.
 
 ## Result provenance
 

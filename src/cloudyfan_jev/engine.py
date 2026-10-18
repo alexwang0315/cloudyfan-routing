@@ -343,6 +343,8 @@ class Core:
                 or not (directory / 'result.json').is_file()):
             raise ValueError('Safe completed result required')
         with _lock(directory / '.lock'):
+            if (directory / '.retired.json').exists() or (directory / '.retired.json').is_symlink():
+                raise ValueError('Retired run cannot be read or dispatched again')
             frozen = _read(directory / 'manifest.json')
             expected = {'local_backend': None, 'execution_policy': None,
                         **self.configuration_descriptor()}
@@ -367,6 +369,8 @@ class Core:
             raise ValueError("Run directory cannot be a symlink")
         directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         with _lock(directory / '.lock'):
+            if (directory / '.retired.json').exists() or (directory / '.retired.json').is_symlink():
+                raise ValueError('Retired run cannot be read or dispatched again')
             frozen = {**self.configuration_descriptor(), 'task': task, 'mode': mode,
                       'contract_version': contract_version}
             _save(directory / 'manifest.json', frozen)

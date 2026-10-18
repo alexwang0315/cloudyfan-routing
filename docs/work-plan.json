@@ -1,16 +1,16 @@
 {
   "schema_version": 1,
   "integration_branch": "codex/implement-routing-spec-1",
-  "baseline_commit": "d8af729668a0e4a2ebe6572d7f50d26ff1db8efa",
+  "baseline_commit": "651571216fc80a64e3f13e84632a356dfcb76773",
   "merger_owner": "root",
   "shared_interfaces": [
     {
       "id": "core-configuration-descriptor",
-      "owner": "integration-maintainer",
+      "owner": "root",
       "owned_files": [
         "src/cloudyfan_jev/engine.py"
       ],
-      "provided_by": null
+      "provided_by": "budget-and-integration"
     },
     {
       "id": "receipt-store",
@@ -21,12 +21,12 @@
       "provided_by": null
     },
     {
-      "id": "task-result-projection",
-      "owner": "integration-maintainer",
+      "id": "task-lifecycle",
+      "owner": "retention-worker",
       "owned_files": [
         "src/cloudyfan_jev/http_api.py"
       ],
-      "provided_by": null
+      "provided_by": "retention"
     }
   ],
   "tasks": [
@@ -35,57 +35,62 @@
       "owner": "root",
       "status": "completed",
       "owned_files": [
+        "src/cloudyfan_jev/provider_bounds.py",
+        "tests/test_provider_bounds.py",
+        "tests/test_rg45_integration.py",
         "src/cloudyfan_jev/budget.py",
-        "tests/test_budget.py",
-        "tests/test_budget_reconciliation.py",
+        "src/cloudyfan_jev/client.py",
+        "src/cloudyfan_jev/scheduler.py",
+        "docs/provider-bounds.md",
         "docs/budget-admission.md",
+        "docs/release-readiness.md",
         "docs/verification.md",
-        "docs/review-fixes.md",
+        "docs/coordination.md",
         "docs/agent-state.json",
         "docs/work-plan.json",
-        "docs/coordination.md",
-        "docs/evidence/review-fixes-offline.json",
-        "docs/evidence/retro35-work-plan.json",
-        "tests/test_http_api.py",
-        "tests/test_transport_contracts.py",
-        "docs/evidence/review-fixes-precommit.json"
+        "docs/rg04-rg05.md",
+        "docs/evidence/rg45-baseline.json",
+        "docs/evidence/review-five-work-plan.json",
+        "docs/evidence/rg45-offline.json",
+        "src/cloudyfan_jev/engine.py",
+        "docs/retention.md",
+        "tests/test_project_state.py",
+        "docs/evidence/rg45-precommit.json"
       ],
       "depends_on": [
-        "local-and-routing",
-        "report-calibration"
+        "identity",
+        "retention"
       ],
+      "consumed_interfaces": [
+        "task-lifecycle"
+      ]
+    },
+    {
+      "id": "identity",
+      "owner": "identity-worker",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/identity.py",
+        "tests/test_identity.py",
+        "docs/identity.md"
+      ],
+      "depends_on": [],
       "consumed_interfaces": []
     },
     {
-      "id": "local-and-routing",
-      "owner": "routing-worker",
+      "id": "retention",
+      "owner": "retention-worker",
       "status": "completed",
       "owned_files": [
-        "src/cloudyfan_jev/local.py",
-        "src/cloudyfan_jev/routing.py",
-        "tests/test_local_backend.py",
-        "tests/test_routing.py",
-        "docs/local-backend.md",
-        "docs/score-integration.md"
+        "src/cloudyfan_jev/retention.py",
+        "tests/test_retention.py",
+        "src/cloudyfan_jev/http_api.py",
+        "docs/http-task-api.md"
       ],
       "depends_on": [],
       "consumed_interfaces": [
         "receipt-store"
       ]
-    },
-    {
-      "id": "report-calibration",
-      "owner": "report-worker",
-      "status": "completed",
-      "owned_files": [
-        "src/cloudyfan_jev/reports.py",
-        "tests/test_reports.py",
-        "docs/comparison-reports.md",
-        "examples/synthetic-comparison-report.json",
-        "examples/synthetic-comparison-report.md"
-      ],
-      "depends_on": [],
-      "consumed_interfaces": []
     }
   ]
 }

@@ -23,8 +23,9 @@ def read(root, name='docs/agent-state.json'):
 
 @pytest.fixture
 def checkout(tmp_path):
+    baseline_evidence = read(ROOT)['last_verified']['path']
     for name in ['docs/agent-state.json', 'docs/release-gates.json', 'docs/work-plan.json',
-                 'docs/evidence/retro12-offline.json']:
+                 baseline_evidence]:
         path = tmp_path / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes((ROOT / name).read_bytes())

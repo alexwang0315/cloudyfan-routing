@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "rg45-verified-start",
+  "baseline_commit": "651571216fc80a64e3f13e84632a356dfcb76773",
+  "tested_tree": "committed executable/test/build inputs from 6515712; same digest as original 699-test receipt",
+  "source_digest": "e64ea1909715a9ba1e99c197cf0ee0b9f18ba388fb7c383668361cb410ba0f46",
+  "tests_passed": 699,
+  "finished_at": "2026-10-18T07:27:42.491076+00:00",
+  "integration_receipt_sha256": "8a294bbdc599222ce570a5dea6eb78bf90b42f2f5ffbaebeaa5744b274ab2a03",
+  "private_receipt_path": "runtime/checks/7051d29469ba4d2aae5a9b09de8fa9e9/checks.json",
+  "checks": [
+    "locked-offline-sync",
+    "dependency-consistency",
+    "project-records",
+    "ruff",
+    "pytest",
+    "core-high-mock",
+    "score-high-mock",
+    "sdist-wheel"
+  ],
+  "limits": [
+    "local offline verification only",
+    "metadata finalized after integration; separately rechecked",
+    "remote CI not run",
+    "10 production gates pending",
+    "real provider caps and physical crash durability not qualified",
+    "frozen v1 workflows rejected under v2; no automatic migration or resend"
+  ],
+  "purpose": "verified baseline for RG-04 and RG-05 implementation; historical receipt retained",
+  "tested_commit": "651571216fc80a64e3f13e84632a356dfcb76773"
+}

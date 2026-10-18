@@ -53,6 +53,12 @@ def _strict_json(raw):
     return json.loads(raw, object_pairs_hook=pairs, parse_float=str)
 
 
+def not_dispatched(record):
+    """Trusted transport evidence that the durable intent never reached POST."""
+    return (record.get('not_dispatched') is True and record.get('http_status') is None
+            and record.get('raw') is None and record.get('error') == 'enforcement_denied_before_post')
+
+
 def usage(record):
     """Use API aggregate cost once; generation receipts supersede, never add."""
     if record.get('execution_kind') == 'local':
@@ -84,6 +90,8 @@ def usage(record):
             result.update(cost_usd=cost, cost_source="generation_total_cost")
             result["model"] = reconciliation.get("model") or result["model"]
             result["provider"] = reconciliation.get("provider_name") or result["provider"]
+    if not_dispatched(record):
+        result.update(cost_usd="0", cost_source="not_dispatched")
     result["cost_unknown"] = result["cost_usd"] is None
     return result
 
@@ -119,6 +127,8 @@ class Client(ReceiptStore):
                 info = usage(record)
             except (ValueError, TypeError, OSError):
                 raise UnresolvedCallsError("Unreadable call evidence blocks a new paid request") from None
+            if not_dispatched(record):
+                continue
             gid = info["generation_id"]
             if info["cost_unknown"] or not gid:
                 raise UnresolvedCallsError("Unknown cost or generation identity blocks a new paid request: " + directory.name)
@@ -126,7 +136,7 @@ class Client(ReceiptStore):
                 raise UnresolvedCallsError("Duplicate generation identity blocks a new paid request")
             seen.add(gid)
 
-    def call(self, cid, url, payload):
+    def call(self, cid, url, payload, *, before_post=None):
         if url not in (CHAT, DECISIONS):
             raise ValueError("Unexpected paid endpoint")
         directory = self._directory(cid)
@@ -145,6 +155,17 @@ class Client(ReceiptStore):
             _immutable(intent, {"call_id": cid, "url": url, "payload": payload,
                                 "request_sha256": request_hash, "started_at": _now()})
             started = perf_counter()
+            if before_post is not None:
+                try:
+                    admitted = before_post() is True
+                except Exception:
+                    admitted = False
+                if not admitted:
+                    record = {"call_id": cid, "request_sha256": request_hash, "http_status": None,
+                              "raw": None, "not_dispatched": True, "error": "enforcement_denied_before_post",
+                              "elapsed_ms": (perf_counter() - started) * 1000, "finished_at": _now()}
+                    _immutable(directory / "response.json", record)
+                    return record
             try:
                 response = self.http.post(url, json=payload,
                     headers={"Authorization": "Bearer " + self.key, "X-OpenRouter-Metadata": "enabled"},

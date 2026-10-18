@@ -12,6 +12,7 @@ from .catalog import canonical, select_profiles
 from .integration import utc_now
 from .snapshots import SnapshotStore
 from .qualification import build_qualification_pack, qualified_snapshot
+from .updates import ScoreUpdater, preview_update
 
 
 def _read(path):
@@ -55,10 +56,37 @@ def main(argv=None):
     inspect = commands.add_parser('inspect', help='Inspect integrity, expiry, pool sizes and exclusions')
     inspect.add_argument('--store', required=True)
     inspect.add_argument('--snapshot')
+    for name in ('update-preview', 'update'):
+        command = commands.add_parser(name, help='Review and apply an input-bound offline update')
+        command.add_argument('--previous', help='Original qualification pack; omit only for initial publication')
+        command.add_argument('--proposed', required=True)
+        command.add_argument('--synthetic', action='store_true')
+        if name == 'update-preview':
+            command.add_argument('--output', required=True)
+        else:
+            command.add_argument('--store', required=True)
+            command.add_argument('--operation', required=True)
+    audit = commands.add_parser('update-inspect', help='Read the durable update operation result')
+    audit.add_argument('--store', required=True)
+    audit.add_argument('--operation', required=True)
     args = parser.parse_args(argv)
     now = utc_now()
     try:
-        if args.command == 'fetch':
+        if args.command in ('update-preview', 'update'):
+            previous = _read(args.previous) if args.previous else None
+            proposed = _read(args.proposed)
+            if args.command == 'update-preview':
+                report = preview_update(previous, proposed, now=now, allow_synthetic=args.synthetic)
+                _output(args.output, report)
+            else:
+                report = ScoreUpdater(SnapshotStore(args.store)).apply(
+                    args.operation, previous, proposed, now=now, allow_synthetic=args.synthetic)
+            print(json.dumps(report))
+            if args.command == 'update' and report['status'] != 'published':
+                return 1
+        elif args.command == 'update-inspect':
+            print(json.dumps(ScoreUpdater(SnapshotStore(args.store)).inspect(args.operation)))
+        elif args.command == 'fetch':
             # Reject an existing archive before performing any network request.
             if Path(args.output).exists():
                 raise FileExistsError('Observation archive exists')

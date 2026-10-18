@@ -25,4 +25,3 @@ Calibration USD: 0; unpaired holdout USD: 0; unattributed USD: 0.
 Jev-only gain is not identified: same first configuration, inputs, public validation and repair contract is required.
 A passed descriptive quality gate is not statistical equivalence or evidence of commercial profitability.
 Detailed JSON retains validation/queue timing sample counts, retries, unknowns, evidence anomalies and strata.
-

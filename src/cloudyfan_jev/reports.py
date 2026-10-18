@@ -112,6 +112,8 @@ def _events(raw_events):
 def _validate_runs(plan, runs, events, audit):
     ids, slots = set(), set()
     for run in runs:
+        run.setdefault('first_pass', None)
+        run.setdefault('final_pass', None)
         rid = run.get('run_id')
         if not isinstance(rid, str) or not rid or rid in ids:
             raise ValueError('Run IDs must be unique nonempty strings')
@@ -154,6 +156,9 @@ def _group(runs, events, expected):
     repairs = {e['run_id'] for e in events if e['kind'] == 'generation' and e.get('attempt') == 1}
     return {'planned_tasks': expected, 'observed_runs': len(runs), 'missing': missing,
         'first_pass': first, 'final_pass': final,
+        'first_failed': sum(r['first_pass'] is False for r in runs),
+        'first_unknown': expected - first - sum(r['first_pass'] is False for r in runs),
+        'final_unknown': expected - final - sum(r['final_pass'] is False for r in runs),
         **{status: sum(r['status'] == status for r in runs)
            for status in ('failed', 'unverifiable', 'engineering_interrupted', 'unknown')},
         'first_pass_rate': _ratio(first, expected), 'final_pass_rate': _ratio(final, expected),
@@ -176,6 +181,8 @@ def build_report(plan, evidence):
     source = evidence['source']
     if any(not isinstance(source.get(k), str) or not source[k] for k in ('id', 'version', 'kind')):
         raise ValueError('Versioned evidence provenance required')
+    if source['kind'] not in {'synthetic', 'observed', 'historical'}:
+        raise ValueError('Explicit provenance kind must be synthetic, observed or historical')
     annotations = evidence.get('annotations', {})
     if (type(annotations.get('posthoc')) is not bool
             or type(annotations.get('zero_model_fee_scenario')) is not bool
@@ -320,4 +327,4 @@ def render_markdown(report):
         'A passed descriptive quality gate is not statistical equivalence or evidence of commercial profitability.',
         'Detailed JSON retains validation/queue timing sample counts, retries, unknowns, evidence anomalies and strata.']
     lines += [''] + ['- ' + str(limit).replace('\n', ' ') for limit in context['limitations']]
-    return '\n'.join(lines) + '\n'
+    return '\n'.join(lines).rstrip() + '\n'

@@ -261,3 +261,17 @@ def test_report_provenance_does_not_copy_unrelated_private_source_fields():
     evidence['source']['private_prompt'] = 'private-source-value'
     report = build_report(plan, evidence)
     assert 'private-source-value' not in str(report)
+
+
+def test_missing_first_pass_evidence_stays_unknown_and_provenance_kind_is_explicit():
+    import pytest
+    from cloudyfan_jev.reports import build_report
+    plan = plan_fixture()
+    evidence = evidence_fixture(plan)
+    del evidence['runs'][2]['first_pass']
+    report = build_report(plan, evidence)
+    assert report['groups']['cloudyfan']['first_pass_rate'] == '0.5'
+    assert report['groups']['cloudyfan']['first_unknown'] == 1
+    evidence['source']['kind'] = 'unverified-label'
+    with pytest.raises(ValueError, match='provenance kind'):
+        build_report(plan, evidence)

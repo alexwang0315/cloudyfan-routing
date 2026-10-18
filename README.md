@@ -6,6 +6,10 @@
 
 新增的[評分資料層](docs/score-integration.md)可接入 LiveBench、AA／OpenRouter benchmark API 與經審閱的 CodexRadar 匯入，建立高／中／低模型池，再以 `ScoreCore` 將候選與快照固定到單一任務。快速離線驗證：`uv run cloudyfan-score-demo --route high`。來源接入不代表候選已完成生產資格確認。
 
+## 實作與文件入口
+
+[主規格 #1 實作索引](docs/implementation-spec1.md)列出 T01～T12 的功能、使用文件、離線驗收與正式接入缺口。[完整驗證紀錄](docs/verification.md)保留各輪檢查。
+
 ## 流程
 
 ```mermaid
@@ -101,8 +105,8 @@ with httpx.Client() as http:
 - 修正保留公開對話與工具結果；跨生成階段移除 reasoning／reasoning_details，同一階段工具往返則保留。
 - 已完成 workflow 不重播工具；中斷流程用新 sandbox 重播已記錄的 deterministic local actions。不可用此方式重播寄信、付款、部署等外部副作用。
 - `result["costs"]` 是單流程摘要；發生例外時要用 `summarize(client)` 讀全帳，不能只加總成功結果。未知總費用回傳 `None`。
-- `hypothetical_open_source_zero_usd` 只是歸零開源生成 API 費的情境；真實 API 費仍保留。本 repo 沒有 Mac Studio 推理後端與本機延遲實測。
-- Core 不提供可強制的美元硬上限，也不代表付費授權；應用需在呼叫前落實自己的授權與供應商費用限制。token 上限不是美元上限。
+- `hypothetical_open_source_zero_usd` 只是歸零開源生成 API 費的情境；真實 API 費仍保留。本 repo 已有本地 loopback 文字協定 adapter 與量測流程；Mac Studio 真實模型、容量與本機延遲仍未實測。
+- 裸 `Core` 不代表付費授權；[BudgetedCore](docs/budget-admission.md)提供有效授權、完整流程預留與帳務控制，但正式供應商上限驗證器仍需應用提供，缺少時停止。token 上限不是美元上限。
 - 格式壞掉的工具呼叫、傳輸或身份異常是工程中斷，保存收據後停止；不是假裝模型答錯再無限重試。空回答／token 耗盡則由相同公開驗收決定唯一修正機會。
 
 ## 驗證程度與資料邊界

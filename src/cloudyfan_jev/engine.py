@@ -140,6 +140,23 @@ class Core:
         self.diagnostic_contract = diagnostic_contract or DiagnosticContract()
         self.execution_policy = deepcopy(execution_policy)
 
+    def configuration_descriptor(self):
+        """Snapshot all behavior-defining Core configuration, without runtime state.
+
+        Layers add their own task, admission or measurement settings. Returning
+        a deep copy prevents a consumer from mutating the running configuration.
+        Absent optional components stay omitted for existing manifest compatibility.
+        """
+        descriptor = {'engine_version': '0.1.0', 'routing_version': routing.VERSION,
+                      'profiles': self.profiles, 'decision': self.decision,
+                      'limits': asdict(self.limits), 'system': self.system,
+                      'diagnostic_contract': self.diagnostic_contract.manifest()}
+        if self.local_backend is not None:
+            descriptor['local_backend'] = self.local_backend.descriptor()
+        if self.execution_policy is not None:
+            descriptor['execution_policy'] = self.execution_policy.to_dict()
+        return deepcopy(descriptor)
+
     def _checked(self, cid, url, payload, accepted, provider):
         record = self.client.call(cid, url, payload)
         info = transport.usage(record)
@@ -287,6 +304,7 @@ class Core:
             if call.get('execution_kind') == 'local':
                 record = self.local_backend._load(self.local_backend._directory(call['call_id']))
                 info = self.local_backend.checked(record)
+                call.update(info)
                 if info['cost_unknown']: unknown += 1
                 else: cost += Decimal(info['cost_usd'])
                 continue
@@ -298,6 +316,8 @@ class Core:
             if (record.get('duplicate_generation_id') or not info['generation_id']
                     or info['model'] not in accepted or info['provider'] != profile['provider_name']):
                 raise RuntimeError('Reconciled identity mismatch; evidence retained: ' + call['call_id'])
+            # Returned provenance must use the same validated receipt as accounting.
+            call.update(info)
             if info['cost_unknown']:
                 unknown += 1
                 continue
@@ -324,12 +344,8 @@ class Core:
             raise ValueError('Safe completed result required')
         with _lock(directory / '.lock'):
             frozen = _read(directory / 'manifest.json')
-            expected = {'engine_version': '0.1.0', 'routing_version': routing.VERSION,
-                        'profiles': self.profiles, 'decision': self.decision,
-                        'limits': asdict(self.limits), 'system': self.system,
-                        'diagnostic_contract': self.diagnostic_contract.manifest(),
-                        'local_backend': self.local_backend.descriptor() if self.local_backend else None,
-                        'execution_policy': self.execution_policy.to_dict() if self.execution_policy else None}
+            expected = {'local_backend': None, 'execution_policy': None,
+                        **self.configuration_descriptor()}
             if any(_encoded(frozen.get(key)) != _encoded(value) for key, value in expected.items()):
                 raise ValueError('Completed result configuration changed')
             result = _read(directory / 'result.json')
@@ -351,14 +367,8 @@ class Core:
             raise ValueError("Run directory cannot be a symlink")
         directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         with _lock(directory / '.lock'):
-            frozen = {'engine_version': '0.1.0', 'routing_version': routing.VERSION, 'task': task, 'mode': mode,
-                      'contract_version': contract_version, 'profiles': self.profiles, 'decision': self.decision,
-                      'limits': asdict(self.limits), 'system': self.system,
-                      'diagnostic_contract': self.diagnostic_contract.manifest()}
-            if self.local_backend is not None:
-                frozen['local_backend'] = self.local_backend.descriptor()
-            if self.execution_policy is not None:
-                frozen['execution_policy'] = self.execution_policy.to_dict()
+            frozen = {**self.configuration_descriptor(), 'task': task, 'mode': mode,
+                      'contract_version': contract_version}
             _save(directory / 'manifest.json', frozen)
             completed = directory / 'result.json'
             if completed.exists():

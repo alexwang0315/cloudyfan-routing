@@ -96,11 +96,7 @@ class BenchmarkHarness:
         frozen = {'task': task, 'contract_version': contract_version, 'configuration': config,
                   'evidence_kind': evidence_kind, 'mode': mode,
                   'measurements': measurements or {}, 'rates': rates or {},
-                  'core_configuration': {'profiles': self.core.profiles, 'decision': self.core.decision,
-                      'limits': asdict(self.core.limits), 'system': self.core.system,
-                      'diagnostic_contract': self.core.diagnostic_contract.manifest(),
-                      'local_backend': self.core.local_backend.descriptor() if self.core.local_backend else None,
-                      'execution_policy': self.core.execution_policy.to_dict() if self.core.execution_policy else None}}
+                  'core_configuration': self.core.configuration_descriptor()}
         with _lock(directory / '.lock'):
             _save(directory / 'manifest.json', frozen)
             if (directory / 'report.json').exists():

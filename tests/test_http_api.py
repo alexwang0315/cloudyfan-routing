@@ -309,3 +309,74 @@ def test_http_per_run_result_does_not_expose_shared_account_events_or_other_answ
     assert roots[0].parent != roots[1].parent
     with pytest.raises(Exception, match='unauthorized'):
         service.result('other', 'task-1')
+
+
+def test_http_result_exposes_safe_observed_and_frozen_first_pass_provenance(tmp_path):
+    client, service, runner, api, _ = service_client(tmp_path)
+    profile = runner.core.profiles['open_source']
+    profile['capability_card'] = {'private_notes': 'NEVER_EXPOSE_CARD',
+        'score_selection': {'snapshot_id': 'snapshot-1', 'policy_id': 'policy-1', 'config_id': 'oss-1',
+                            'requirements': {'private_context': 'NEVER_EXPOSE_REQUIREMENTS'}},
+        'benchmark_evidence': {'source': 'fixture', 'source_version': '2026-10', 'metric': 'sql',
+                               'raw': 'NEVER_EXPOSE_EVIDENCE'}}
+    assert client.post('/v1/tasks', json=TASK).status_code == 200
+    response = client.get('/v1/tasks/task-1/result')
+    provenance = response.json()['provenance']
+    assert provenance['contract_version'] == 'public-v1'
+    assert provenance['classifier_calls'] == []
+    attempt = provenance['attempts'][0]
+    assert attempt['attempt'] == 0 and attempt['tier'] == 'open_source'
+    call = attempt['calls'][0]
+    assert (call['actual_model'], call['actual_provider'], call['generation_id']) == (
+        'example/open_source', 'Example', 'gen-test-1')
+    assert call['configuration']['model_version'] == 'example/open_source'
+    assert call['configuration']['effort'] == 'low'
+    assert call['configuration']['quantization'] is None
+    assert call['score'] == {'snapshot_id': 'snapshot-1', 'policy_id': 'policy-1', 'config_id': 'oss-1',
+        'source': 'fixture', 'source_version': '2026-10', 'metric': 'sql'}
+    assert 'NEVER_EXPOSE' not in response.text and TASK['prompt'] not in response.text
+    assert len(provenance['config_sha256']) == 64
+    assert client.get('/v1/tasks/task-1/result').json()['provenance'] == provenance
+    assert len(api.requests) == 1
+
+
+def test_http_provenance_refreshes_validated_reconciled_identity_without_reposting(tmp_path):
+    import json
+    api = API(first='2')
+    def endpoint(request):
+        if request.method == 'GET':
+            return httpx.Response(200, json={'data': {'id': 'gen-test-1', 'total_cost': .012,
+                'model': 'example/open_source', 'provider_name': 'Example'}})
+        data = json.loads(api(request).content)
+        data['model'] = 'example/accepted-alias'
+        return httpx.Response(200, json=data)
+    client, service, runner, _, _ = service_client(tmp_path, api=endpoint)
+    runner.core.profiles['open_source']['accepted_models'].append('example/accepted-alias')
+    assert client.post('/v1/tasks', json=TASK).status_code == 200
+    def model():
+        return client.get('/v1/tasks/task-1/result').json()['provenance']['attempts'][0]['calls'][0]['actual_model']
+    assert model() == 'example/accepted-alias'
+    runner.client.reconcile('run-' + service.internal_id('admin', 'task-1') + '-a0-t0')
+    assert model() == 'example/open_source'
+    assert client.get('/v1/tasks/task-1/result').json()['costs']['complete_api_usd'] == '0.012'
+    assert len(api.requests) == 1
+
+
+def test_http_routed_repair_provenance_separates_generation_and_classifiers(tmp_path):
+    client, _, _, api, _ = service_client(tmp_path, api=API(choices=('mid', 'high')))
+    assert client.post('/v1/tasks', json=TASK).json()['status'] == 'passed'
+    result = client.get('/v1/tasks/task-1/result').json()
+    provenance = result['provenance']
+    assert [a['tier'] for a in provenance['attempts']] == ['open_source', 'high']
+    assert [a['calls'][0]['actual_model'] for a in provenance['attempts']] == [
+        'example/open_source', 'example/high']
+    assert [c['actual_model'] for c in provenance['classifier_calls']] == ['typesafe/jev-1.13'] * 2
+    for call in provenance['classifier_calls']:
+        assert call['actual_provider'] == 'TypeSafe'
+        assert call['configuration']['model_version'] == 'typesafe/jev-1.13'
+        assert call['configuration']['effort'] is None
+        assert all(value is None for value in call['score'].values())
+    assert result['first_public_pass'] is False and result['final_public_pass'] is True
+    assert client.post('/v1/tasks/task-1/resume', json={}).status_code == 200
+    assert client.get('/v1/tasks/task-1/result').json()['provenance'] == provenance
+    assert len(api.requests) == 4

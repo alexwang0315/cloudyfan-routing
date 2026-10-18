@@ -231,3 +231,18 @@ def test_restart_rejects_relaxed_queue_limits(tmp_path):
     with pytest.raises(ValueError, match='Frozen queue configuration changed'):
         QueueScheduler(queue.service, queue.path, limits=QueueLimits(100, 100, 100, 100), clock=queue.clock,
                        measurement_kind=queue.measurement_kind)
+
+
+@pytest.mark.parametrize('first,tiers,count', [('2', ['open_source'], 1),
+                                             ('3', ['open_source', 'high'], 4)])
+def test_queued_result_propagates_task_owned_provenance(tmp_path, first, tiers, count):
+    queue, client, runner, api, _ = scheduler(tmp_path, api=API(first=first, choices=('mid', 'high')))
+    assert post(client, 'A', 'traceable').status_code == 202
+    assert queue.dispatch_next()['status'] == 'passed'
+    result = client.get('/v1/tasks/traceable/result', headers={'Authorization': 'Bearer A'})
+    provenance = result.json()['provenance']
+    assert [attempt['tier'] for attempt in provenance['attempts']] == tiers
+    assert provenance['attempts'][-1]['calls'][0]['actual_model'] == 'example/' + tiers[-1]
+    assert client.get('/v1/tasks/traceable/result', headers={'Authorization': 'Bearer A'}).json()['provenance'] == provenance
+    assert client.get('/v1/tasks/traceable/result', headers={'Authorization': 'Bearer B'}).status_code == 404
+    assert len(api.requests) == count

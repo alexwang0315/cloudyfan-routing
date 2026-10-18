@@ -120,14 +120,19 @@ class _RegisteredEnvironment:
 class TaskService:
     """Registered private jobs; create freezes inputs and execute is explicit.
 
-    The single principal comes from the trusted authenticator, never JSON input.
+    Principals come from the trusted authenticator and server allowlist, never JSON input.
     Separating creation and execution lets an outer scheduler queue a frozen job.
     Every execution gets a fresh private workspace for deterministic local replay.
     """
-    def __init__(self, root, *, contracts, allowed_principal, retention_policy=None):
+    def __init__(self, root, *, contracts, allowed_principal=None, allowed_principals=None, retention_policy=None):
         self.root = Path(root)
-        if self.root.is_symlink() or not isinstance(allowed_principal, str) or not allowed_principal:
+        if allowed_principal is not None and allowed_principals is not None:
+            raise ValueError('Supply one server principal allowlist')
+        principals = {allowed_principal} if allowed_principals is None else allowed_principals
+        if (self.root.is_symlink() or not isinstance(principals, (set, frozenset, tuple, list))
+                or not principals or any(not isinstance(p, str) or not p for p in principals)):
             raise ValueError('Private root and explicit principal required')
+        self.allowed_principals = frozenset(principals)
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
         os.chmod(self.root, 0o700)
         self.contracts = dict(contracts)
@@ -136,7 +141,7 @@ class TaskService:
             contract.descriptor()
 
     def authorize(self, principal):
-        if not isinstance(principal, str) or principal != self.allowed_principal:
+        if not isinstance(principal, str) or principal not in self.allowed_principals:
             raise ServiceError('unauthorized', 401)
 
     def internal_id(self, principal, run_id):

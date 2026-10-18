@@ -1,0 +1,600 @@
+{
+  "schema_version": "cloudyfan-comparison-report-v1",
+  "plan_id": "453c4349dff7d6f8411654c234ed0de7ebbb8a747c2751b3dbcb3ea3100c62fb",
+  "source": {
+    "id": "fixture-ledger",
+    "version": "v1",
+    "kind": "synthetic"
+  },
+  "evidence_kind": "synthetic",
+  "analysis_context": {
+    "posthoc": false,
+    "caching": "disabled",
+    "cost_basis": "recorded_api_fees",
+    "limitations": [],
+    "archived_plan_status": "synthetic_ready",
+    "plan_blockers": []
+  },
+  "groups": {
+    "fixed_high": {
+      "planned_tasks": 2,
+      "observed_runs": 2,
+      "missing": 0,
+      "first_pass": 2,
+      "final_pass": 2,
+      "failed": 0,
+      "unverifiable": 0,
+      "engineering_interrupted": 0,
+      "unknown": 0,
+      "first_pass_rate": "1",
+      "final_pass_rate": "1",
+      "cost": {
+        "known_usd": "10",
+        "verified_usd": "10",
+        "unknown_events": 0,
+        "incomplete_workflows": 0,
+        "total_usd": "10"
+      },
+      "cost_per_success_usd": "5",
+      "repair_runs": 0,
+      "repair_rate": "0",
+      "classification_calls": 0,
+      "generation_calls": 2,
+      "tool_calls": 0,
+      "retry_calls": 0,
+      "by_kind": {
+        "generation": {
+          "known_usd": "10",
+          "verified_usd": "10",
+          "unknown_events": 0,
+          "incomplete_workflows": 0,
+          "total_usd": "10"
+        },
+        "classification": {
+          "known_usd": "0",
+          "verified_usd": "0",
+          "unknown_events": 0,
+          "incomplete_workflows": 0,
+          "total_usd": "0"
+        },
+        "tool": {
+          "known_usd": "0",
+          "verified_usd": "0",
+          "unknown_events": 0,
+          "incomplete_workflows": 0,
+          "total_usd": "0"
+        }
+      },
+      "latency": {
+        "end_to_end_ms": {
+          "samples": 2,
+          "missing": 0,
+          "mean": "150",
+          "median": "150"
+        },
+        "validation_ms": {
+          "samples": 2,
+          "missing": 0,
+          "mean": "10",
+          "median": "10"
+        },
+        "queue_ms": {
+          "samples": 2,
+          "missing": 0,
+          "mean": "0",
+          "median": "0"
+        }
+      }
+    },
+    "cloudyfan": {
+      "planned_tasks": 2,
+      "observed_runs": 2,
+      "missing": 0,
+      "first_pass": 2,
+      "final_pass": 2,
+      "failed": 0,
+      "unverifiable": 0,
+      "engineering_interrupted": 0,
+      "unknown": 0,
+      "first_pass_rate": "1",
+      "final_pass_rate": "1",
+      "cost": {
+        "known_usd": "7",
+        "verified_usd": "7",
+        "unknown_events": 0,
+        "incomplete_workflows": 0,
+        "total_usd": "7"
+      },
+      "cost_per_success_usd": "3.5",
+      "repair_runs": 0,
+      "repair_rate": "0",
+      "classification_calls": 0,
+      "generation_calls": 2,
+      "tool_calls": 0,
+      "retry_calls": 0,
+      "by_kind": {
+        "generation": {
+          "known_usd": "7",
+          "verified_usd": "7",
+          "unknown_events": 0,
+          "incomplete_workflows": 0,
+          "total_usd": "7"
+        },
+        "classification": {
+          "known_usd": "0",
+          "verified_usd": "0",
+          "unknown_events": 0,
+          "incomplete_workflows": 0,
+          "total_usd": "0"
+        },
+        "tool": {
+          "known_usd": "0",
+          "verified_usd": "0",
+          "unknown_events": 0,
+          "incomplete_workflows": 0,
+          "total_usd": "0"
+        }
+      },
+      "latency": {
+        "end_to_end_ms": {
+          "samples": 2,
+          "missing": 0,
+          "mean": "150",
+          "median": "150"
+        },
+        "validation_ms": {
+          "samples": 2,
+          "missing": 0,
+          "mean": "10",
+          "median": "10"
+        },
+        "queue_ms": {
+          "samples": 2,
+          "missing": 0,
+          "mean": "0",
+          "median": "0"
+        }
+      }
+    }
+  },
+  "comparisons": {
+    "cloudyfan": {
+      "paired_tasks": [
+        "holdout-1",
+        "holdout-2"
+      ],
+      "per_task": [
+        {
+          "task_id": "holdout-1",
+          "baseline_usd": "2",
+          "candidate_usd": "1",
+          "cdr_percent": "50.0",
+          "baseline_status": "passed",
+          "candidate_status": "passed"
+        },
+        {
+          "task_id": "holdout-2",
+          "baseline_usd": "8",
+          "candidate_usd": "6",
+          "cdr_percent": "25.00",
+          "baseline_status": "passed",
+          "candidate_status": "passed"
+        }
+      ],
+      "baseline_cost": {
+        "known_usd": "10",
+        "verified_usd": "10",
+        "unknown_events": 0,
+        "incomplete_workflows": 0,
+        "total_usd": "10"
+      },
+      "candidate_cost": {
+        "known_usd": "7",
+        "verified_usd": "7",
+        "unknown_events": 0,
+        "incomplete_workflows": 0,
+        "total_usd": "7"
+      },
+      "unpaired": {
+        "baseline": {
+          "known_usd": "0",
+          "verified_usd": "0",
+          "unknown_events": 0,
+          "incomplete_workflows": 0,
+          "total_usd": "0"
+        },
+        "candidate": {
+          "known_usd": "0",
+          "verified_usd": "0",
+          "unknown_events": 0,
+          "incomplete_workflows": 0,
+          "total_usd": "0"
+        }
+      },
+      "quality_gate_met": true,
+      "claim": "synthetic_comparison",
+      "aggregate_cdr_percent": "30.0",
+      "per_task_cdr": {
+        "samples": 2,
+        "undefined": 0,
+        "mean_percent": "37.50",
+        "median_percent": "37.50",
+        "min_percent": "25.00",
+        "max_percent": "50.0",
+        "more_expensive_fraction": "0"
+      }
+    }
+  },
+  "evidence_audit": {
+    "replayed_events": 0,
+    "reconciliations_applied": 0,
+    "anomalies": []
+  },
+  "overall_cost": {
+    "known_usd": "17",
+    "verified_usd": "17",
+    "unknown_events": 0,
+    "incomplete_workflows": 0,
+    "total_usd": "17"
+  },
+  "unattributed_cost": {
+    "known_usd": "0",
+    "verified_usd": "0",
+    "unknown_events": 0,
+    "incomplete_workflows": 0,
+    "total_usd": "0"
+  },
+  "common_pairing": {
+    "arms": [
+      "fixed_high",
+      "cloudyfan"
+    ],
+    "tasks": [
+      "holdout-1",
+      "holdout-2"
+    ],
+    "cost": {
+      "known_usd": "17",
+      "verified_usd": "17",
+      "unknown_events": 0,
+      "incomplete_workflows": 0,
+      "total_usd": "17"
+    }
+  },
+  "unpaired_holdout_cost": {
+    "known_usd": "0",
+    "verified_usd": "0",
+    "unknown_events": 0,
+    "incomplete_workflows": 0,
+    "total_usd": "0"
+  },
+  "calibration": {
+    "observed_runs": 0,
+    "cost": {
+      "known_usd": "0",
+      "verified_usd": "0",
+      "unknown_events": 0,
+      "incomplete_workflows": 0,
+      "total_usd": "0"
+    },
+    "by_arm": {
+      "fixed_high": {
+        "known_usd": "0",
+        "verified_usd": "0",
+        "unknown_events": 0,
+        "incomplete_workflows": 0,
+        "total_usd": "0"
+      },
+      "cloudyfan": {
+        "known_usd": "0",
+        "verified_usd": "0",
+        "unknown_events": 0,
+        "incomplete_workflows": 0,
+        "total_usd": "0"
+      }
+    }
+  },
+  "jev_attribution": {
+    "identified": false,
+    "reasons": [
+      "matching_attribution_arm_absent",
+      "overall_workflow_difference_is_not_jev_only_gain"
+    ],
+    "required_control": "same first configuration, inputs, public validation and repair contract"
+  },
+  "formulas": {
+    "aggregate_cdr_percent": "100 * (sum baseline paired full costs - sum candidate paired full costs) / sum baseline paired full costs",
+    "per_task_cdr_percent": "100 * (baseline full cost - candidate full cost) / baseline full cost",
+    "direction": "positive means lower candidate spending; negative means more expensive",
+    "undefined": "zero baseline, unknown cost or no pairs",
+    "quality_denominator": "all frozen holdout tasks per arm, including missing evidence",
+    "more_expensive_fraction_denominator": "paired tasks with defined per-task CDR",
+    "success_cost": "all arm holdout charges, including failures, divided by final successes; unknown cost stays null"
+  },
+  "strata": {
+    "easy": {
+      "fixed_high": {
+        "planned_tasks": 1,
+        "observed_runs": 1,
+        "missing": 0,
+        "first_pass": 1,
+        "final_pass": 1,
+        "failed": 0,
+        "unverifiable": 0,
+        "engineering_interrupted": 0,
+        "unknown": 0,
+        "first_pass_rate": "1",
+        "final_pass_rate": "1",
+        "cost": {
+          "known_usd": "2",
+          "verified_usd": "2",
+          "unknown_events": 0,
+          "incomplete_workflows": 0,
+          "total_usd": "2"
+        },
+        "cost_per_success_usd": "2",
+        "repair_runs": 0,
+        "repair_rate": "0",
+        "classification_calls": 0,
+        "generation_calls": 1,
+        "tool_calls": 0,
+        "retry_calls": 0,
+        "by_kind": {
+          "generation": {
+            "known_usd": "2",
+            "verified_usd": "2",
+            "unknown_events": 0,
+            "incomplete_workflows": 0,
+            "total_usd": "2"
+          },
+          "classification": {
+            "known_usd": "0",
+            "verified_usd": "0",
+            "unknown_events": 0,
+            "incomplete_workflows": 0,
+            "total_usd": "0"
+          },
+          "tool": {
+            "known_usd": "0",
+            "verified_usd": "0",
+            "unknown_events": 0,
+            "incomplete_workflows": 0,
+            "total_usd": "0"
+          }
+        },
+        "latency": {
+          "end_to_end_ms": {
+            "samples": 1,
+            "missing": 0,
+            "mean": "100",
+            "median": "100"
+          },
+          "validation_ms": {
+            "samples": 1,
+            "missing": 0,
+            "mean": "10",
+            "median": "10"
+          },
+          "queue_ms": {
+            "samples": 1,
+            "missing": 0,
+            "mean": "0",
+            "median": "0"
+          }
+        }
+      },
+      "cloudyfan": {
+        "planned_tasks": 1,
+        "observed_runs": 1,
+        "missing": 0,
+        "first_pass": 1,
+        "final_pass": 1,
+        "failed": 0,
+        "unverifiable": 0,
+        "engineering_interrupted": 0,
+        "unknown": 0,
+        "first_pass_rate": "1",
+        "final_pass_rate": "1",
+        "cost": {
+          "known_usd": "1",
+          "verified_usd": "1",
+          "unknown_events": 0,
+          "incomplete_workflows": 0,
+          "total_usd": "1"
+        },
+        "cost_per_success_usd": "1",
+        "repair_runs": 0,
+        "repair_rate": "0",
+        "classification_calls": 0,
+        "generation_calls": 1,
+        "tool_calls": 0,
+        "retry_calls": 0,
+        "by_kind": {
+          "generation": {
+            "known_usd": "1",
+            "verified_usd": "1",
+            "unknown_events": 0,
+            "incomplete_workflows": 0,
+            "total_usd": "1"
+          },
+          "classification": {
+            "known_usd": "0",
+            "verified_usd": "0",
+            "unknown_events": 0,
+            "incomplete_workflows": 0,
+            "total_usd": "0"
+          },
+          "tool": {
+            "known_usd": "0",
+            "verified_usd": "0",
+            "unknown_events": 0,
+            "incomplete_workflows": 0,
+            "total_usd": "0"
+          }
+        },
+        "latency": {
+          "end_to_end_ms": {
+            "samples": 1,
+            "missing": 0,
+            "mean": "100",
+            "median": "100"
+          },
+          "validation_ms": {
+            "samples": 1,
+            "missing": 0,
+            "mean": "10",
+            "median": "10"
+          },
+          "queue_ms": {
+            "samples": 1,
+            "missing": 0,
+            "mean": "0",
+            "median": "0"
+          }
+        }
+      }
+    },
+    "hard": {
+      "fixed_high": {
+        "planned_tasks": 1,
+        "observed_runs": 1,
+        "missing": 0,
+        "first_pass": 1,
+        "final_pass": 1,
+        "failed": 0,
+        "unverifiable": 0,
+        "engineering_interrupted": 0,
+        "unknown": 0,
+        "first_pass_rate": "1",
+        "final_pass_rate": "1",
+        "cost": {
+          "known_usd": "8",
+          "verified_usd": "8",
+          "unknown_events": 0,
+          "incomplete_workflows": 0,
+          "total_usd": "8"
+        },
+        "cost_per_success_usd": "8",
+        "repair_runs": 0,
+        "repair_rate": "0",
+        "classification_calls": 0,
+        "generation_calls": 1,
+        "tool_calls": 0,
+        "retry_calls": 0,
+        "by_kind": {
+          "generation": {
+            "known_usd": "8",
+            "verified_usd": "8",
+            "unknown_events": 0,
+            "incomplete_workflows": 0,
+            "total_usd": "8"
+          },
+          "classification": {
+            "known_usd": "0",
+            "verified_usd": "0",
+            "unknown_events": 0,
+            "incomplete_workflows": 0,
+            "total_usd": "0"
+          },
+          "tool": {
+            "known_usd": "0",
+            "verified_usd": "0",
+            "unknown_events": 0,
+            "incomplete_workflows": 0,
+            "total_usd": "0"
+          }
+        },
+        "latency": {
+          "end_to_end_ms": {
+            "samples": 1,
+            "missing": 0,
+            "mean": "200",
+            "median": "200"
+          },
+          "validation_ms": {
+            "samples": 1,
+            "missing": 0,
+            "mean": "10",
+            "median": "10"
+          },
+          "queue_ms": {
+            "samples": 1,
+            "missing": 0,
+            "mean": "0",
+            "median": "0"
+          }
+        }
+      },
+      "cloudyfan": {
+        "planned_tasks": 1,
+        "observed_runs": 1,
+        "missing": 0,
+        "first_pass": 1,
+        "final_pass": 1,
+        "failed": 0,
+        "unverifiable": 0,
+        "engineering_interrupted": 0,
+        "unknown": 0,
+        "first_pass_rate": "1",
+        "final_pass_rate": "1",
+        "cost": {
+          "known_usd": "6",
+          "verified_usd": "6",
+          "unknown_events": 0,
+          "incomplete_workflows": 0,
+          "total_usd": "6"
+        },
+        "cost_per_success_usd": "6",
+        "repair_runs": 0,
+        "repair_rate": "0",
+        "classification_calls": 0,
+        "generation_calls": 1,
+        "tool_calls": 0,
+        "retry_calls": 0,
+        "by_kind": {
+          "generation": {
+            "known_usd": "6",
+            "verified_usd": "6",
+            "unknown_events": 0,
+            "incomplete_workflows": 0,
+            "total_usd": "6"
+          },
+          "classification": {
+            "known_usd": "0",
+            "verified_usd": "0",
+            "unknown_events": 0,
+            "incomplete_workflows": 0,
+            "total_usd": "0"
+          },
+          "tool": {
+            "known_usd": "0",
+            "verified_usd": "0",
+            "unknown_events": 0,
+            "incomplete_workflows": 0,
+            "total_usd": "0"
+          }
+        },
+        "latency": {
+          "end_to_end_ms": {
+            "samples": 1,
+            "missing": 0,
+            "mean": "200",
+            "median": "200"
+          },
+          "validation_ms": {
+            "samples": 1,
+            "missing": 0,
+            "mean": "10",
+            "median": "10"
+          },
+          "queue_ms": {
+            "samples": 1,
+            "missing": 0,
+            "mean": "0",
+            "median": "0"
+          }
+        }
+      }
+    }
+  }
+}

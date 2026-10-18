@@ -231,6 +231,8 @@ def test_allowed_local_tool_and_replay_remain_inside_the_origin(tmp_path):
                     'function': {'name': 'write', 'arguments': '{"value":"2"}'}}]}}])
         return response()
     class Env(TextContract):
+        replayable_tools = ('write',)
+
         def __init__(self):
             self.value = None
             environments.append(self)

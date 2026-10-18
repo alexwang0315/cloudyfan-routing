@@ -313,6 +313,30 @@ class Core:
                            'host_and_human_usd': None, 'calls': len(refs)}
         return result
 
+    def read_completed(self, run_id):
+        """Read and revalidate saved result identity/cost, never dispatch or reconcile."""
+        if not isinstance(run_id, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,79}', run_id):
+            raise ValueError("run_id must be a short stable identifier")
+        directory = Path(self.client.root) / 'runs' / run_id
+        if (directory.parent.is_symlink() or directory.is_symlink()
+                or any((directory / name).is_symlink() for name in ('manifest.json', 'result.json', '.lock'))
+                or not (directory / 'result.json').is_file()):
+            raise ValueError('Safe completed result required')
+        with _lock(directory / '.lock'):
+            frozen = _read(directory / 'manifest.json')
+            expected = {'engine_version': '0.1.0', 'routing_version': routing.VERSION,
+                        'profiles': self.profiles, 'decision': self.decision,
+                        'limits': asdict(self.limits), 'system': self.system,
+                        'diagnostic_contract': self.diagnostic_contract.manifest(),
+                        'local_backend': self.local_backend.descriptor() if self.local_backend else None,
+                        'execution_policy': self.execution_policy.to_dict() if self.execution_policy else None}
+            if any(_encoded(frozen.get(key)) != _encoded(value) for key, value in expected.items()):
+                raise ValueError('Completed result configuration changed')
+            result = _read(directory / 'result.json')
+            if result.get('run_id') != run_id:
+                raise ValueError('Completed result identity changed')
+            return self._with_costs(result)
+
     def run(self, run_id, task, environment_factory, *, contract_version, mode='cloudyfan'):
         if not isinstance(run_id, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,79}', run_id):
             raise ValueError("run_id must be a short stable identifier")

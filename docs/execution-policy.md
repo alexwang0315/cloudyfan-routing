@@ -42,3 +42,10 @@ embedding application must sandbox tools and validators and control adapters,
 proxies and credentials. Offline tests block real sockets and monitor injected
 HTTP boundaries. They do not prove a real local engine or production network is
 isolated. Payment authorization and validation correctness remain separate gates.
+
+Integration evidence distinguishes the production `LocalBackend` text subset
+from a test-only tool-capable backend: the former verifies local text success,
+response reuse and rejection before cloud classification/direct repair; the
+latter verifies Core's tool-site checks, including replay into a fresh workspace.
+The production local adapter does not support tool calls. These fixture results
+do not add that support or qualify a real engine's tool protocol.

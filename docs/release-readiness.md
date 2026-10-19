@@ -4,12 +4,12 @@
 
 ## 三個狀態分開記錄
 
-🟢 **本輪交辦的 RG-04 v2 實作與離線驗證均已完成，已提交 `f1dd57c8a7963422c5ffd7e1c27766c7115ebd9b`；不是十項程式都未完成。** 最新完整離線證據為 **944 項測試通過**，含新增 50 項元件案例、Ruff、鎖定離線依賴檢查、兩個 mock demo 與套件建置，詳見[原始交付摘要](evidence/rg04-zero-rate-offline.json)、[提交前核對](evidence/rg04-zero-rate-precommit.json)及[完整歷史紀錄](verification.md)。本次僅重整文件，沒有重跑或另行聲稱新的 944 項通過。
+🟢 **既有 RG-04 v2 與本輪 RG-01 SQL 接入是已交付的實作子集，正式資格需另核定。** 本輪 [SQL Environment](sql-environment.md)補上公開診斷投影、工程中斷與保留答案續跑，實際離線結果見[本輪證據](evidence/rg01-sql-offline.json)。前輪 RG-04 v2 的 `f1dd57c8a7963422c5ffd7e1c27766c7115ebd9b`／944 項完整測試保留為[歷史證據](evidence/rg04-zero-rate-offline.json)，不混成這次測試數；完整檢查歷史見[驗證紀錄](verification.md)。
 
 | 狀態 | 表示什麼 | 目前如何認定 |
 |---|---|---|
 | **實作完成** | 既定範圍內的程式與接入契約已交付；不包含另列的選配功能。 | 以下逐項列出實際完成的子集，參照[實作索引](implementation-spec1.md)及各功能契約。 |
-| **離線驗證完成** | 指定來源版本的 mock／合成資料／固定 SDK 契約已通過，且證據能對上該來源。 | 本版使用上述 944 項完整驗證；其中 SDK、硬體 probe、來源、資格包各有自己的範圍，不能外推成實機成功。 |
+| **離線驗證完成** | 指定來源版本的 mock／合成資料／固定 SDK 契約已通過，且證據能對上該來源。 | 最新完整驗證依上述本輪證據；SDK、硬體 probe、來源、資格包各有自己的範圍，不能外推成實機成功。 |
 | **正式資格待核定** | 仍需首版實際範圍的真實證據與具名核定。 | [release-gates.json](release-gates.json) 十項均為 `pending`，owner／reviewer 均未指定、正式 evidence 為空；這不是「實作未完成」。 |
 
 現有 `project-state` 的 `implementation_complete` 是來源、已完成工作計畫與離線驗證紀錄一致的彙整結果，並非這三欄的新資料格式。本次不修改 checker 或 registry schema，也不將離線證據填成正式資格。`production_qualified` 只依 registry 的有效核定結果，不從 Git 提交、Issue 結案、測試數或單份模型池 `production_ready` 推定。
@@ -20,7 +20,7 @@
 
 | 放行項 | 實作完成：已交付範圍 | 離線驗證完成：可追溯證據 | 正式資格 | 首版適用性 |
 |---|---|---|---|---|
-| **RG-01 公開驗收與修正** | 完成：可注入驗收器、版本化公開診斷、唯一修正、不洩露隱藏結果。 | 完成：[診斷／修正](public-diagnostics.md)、[跨接入契約](transport-contracts.md)，`Core.run`＋注入驗收器／MockTransport。 | **待核定**：實際領域契約語義與驗收器。 | 所有路由必需。 |
+| **RG-01 公開驗收與修正** | 完成：可注入驗收器、版本化公開診斷、唯一修正；新增 SQL Environment、公開診斷投影及工程異常分類。 | 完成：[診斷／修正](public-diagnostics.md)、[SQL 接入](sql-environment.md)、[跨接入契約](transport-contracts.md)，`Core.run`＋真 SQLite／MockTransport。 | **待核定**：實際領域語義／expected、覆蓋、具名審閱及適用的硬隔離。 | 所有路由必需。 |
 | **RG-02 模型／強度／量化資格** | 完成：資格包、三模型池、精確設定綁定、未合格候選排除及效期檢查。 | 完成：[合成資格包與核定阻擋](qualification.md)、[評分快照接入](score-integration.md)。 | **待核定**：首版真實候選、門檻與設定。 | 所有實際使用的模型必需；量化只在使用該設定時適用。 |
 | **RG-03 評分來源與更新** | 完成：既有來源 adapters／受控匯入、固定快照、更新預覽、原子切換與 audit。 | 完成：[來源與快照](score-integration.md)、[更新操作](score-update-operations.md)；LiveBench v1 有歷史公開唯讀 smoke，非正式模型池。 | **待核定**：實際啟用來源的權限、映射、時效與更新責任。 | 三池所用來源必需；不用同時驗所有來源。 |
 | **RG-04 完整成本與可強制上限** | 完成：共享預算、完整預留、核帳／未知停止、供應商 adapter、元件上界及 **v2 完整零費率保證路徑**。 | 完成：[預算](budget-admission.md)、[供應商契約](provider-bounds.md)、[元件契約](component-bounds.md)、[v2 驗證](evidence/rg04-zero-rate-offline.json)。 | **待核定**：真實供應商上界／零費率及完整帳務證據。 | 任何受控模型／工具執行必需，含分類、初答、修正與失敗。 |

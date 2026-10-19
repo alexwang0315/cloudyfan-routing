@@ -98,10 +98,21 @@ This is a documentation clarification, not a registry/schema change or a new
 First-release evidence preparation now has a [scope draft](release-scope-draft.md),
 [RG-01 validator review package](rg01-validator-qualification.md) and
 [RG-04 gap matrix](rg04-evidence-gaps.md). SQL is a proposed domain backed by
-legacy workspace material, not an implemented standalone SQL Environment or an
-approved release scope. The original workspace Python environment failed to
+legacy workspace material; at that preparation baseline no standalone SQL Environment
+was implemented or release scope approved. The original workspace Python environment failed to
 import pydantic_core; isolated replay of its two stdlib SQL test files passed
 93 tests using the core environment without that unrelated conftest. Core-focused
 mock tests passed 141 tests. These are distinct focused checks, not a new full
 944-test integration pass or supplier/domain qualification. See the
 [preparation receipt](evidence/release-evidence-preparation-20261019.json).
+
+The subsequent authorized [SQL Environment](sql-environment.md) now provides
+standalone tool-free Core.run integration, public-only flat diagnostics and
+engineering error classification. Its copied helpers contain no task data,
+reference queries or hidden oracles. Runtime/fixture preflight runs before POST;
+validation interruption retains answers and budget holds, and explicit resume
+does not resend paid requests. New versions separate these semantics from legacy
+business-sql results. Current source/plan and the actual full offline receipt are
+in [rg01-sql-offline.json](evidence/rg01-sql-offline.json).
+Named domain/expected/coverage review, OS isolation and real model/provider evidence
+remain pending. No release gate is promoted by this delivery.

@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "scope": "rg04-zero-rate-offline",
+  "scope": "rg01-sql-environment-offline",
   "phase": "offline_verified",
-  "baseline_commit": "c271ddbbc94fbdefb5fca2a6de0f9da53b9b5dea",
+  "baseline_commit": "7be8616ac5ca155e2ab6a633ca3401760afe1e47",
   "integration_branch": "codex/implement-routing-spec-1",
   "constraints": {
     "paid_api": false,
@@ -14,12 +14,12 @@
   "release_registry": "docs/release-gates.json",
   "work_plan": "docs/work-plan.json",
   "last_verified": {
-    "path": "docs/evidence/rg04-zero-rate-baseline.json",
-    "sha256": "9509518eb0f25e7e0570cb8049dbe2b52a60d2b06123c48a6f2c045154a0e25d"
+    "path": "docs/evidence/rg01-sql-baseline.json",
+    "sha256": "2e36bc2e9b1322d28d95fcfea1502818a83c7fd1ec6cabf7cef9e788620d7616"
   },
   "current_verification": {
-    "path": "docs/evidence/rg04-zero-rate-precommit.json",
-    "sha256": "b2c5163d061602ddda46a19719e2169fefdbc4394e85236e98999b72302e4dce"
+    "path": "docs/evidence/rg01-sql-offline.json",
+    "sha256": "6ec0f4daf130cdf4ac17d13ff1228e5b6b42d609ae0d297fcb79b1844dbaa0a3"
   },
   "history": [
     {
@@ -45,9 +45,30 @@
     {
       "path": "docs/evidence/rg04-zero-rate-offline.json",
       "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-sql-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-sql-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg04-zero-rate-precommit.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/release-preparation-precommit-20261019.json",
+      "record_kind": "historical"
     }
   ],
   "next_steps": [
+    {
+      "gate": "RG-01",
+      "action": "Review named SQL task semantics, public expected rows/coverage, applicable process isolation and real model qualification; SQL Environment/projection/engineering classification is implemented and offline verified. Formal RG-01 remains pending.",
+      "requires_authorization": true
+    },
     {
       "gate": "G-02",
       "action": "Review exact synchronous ollama==0.6.3 / text-v2 / companion task GET evidence before formal G-02 qualification; no Async, product-client, TCP/TLS/proxy claim.",

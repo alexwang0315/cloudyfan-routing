@@ -14,6 +14,8 @@
 
 首版補證材料已整理為[範圍草案](docs/release-scope-draft.md)、[RG-01 驗收器資格準備包](docs/rg01-validator-qualification.md)與[RG-04 缺證矩陣](docs/rg04-evidence-gaps.md)；缺少的領域、供應商及具名核定證據維持 pending，沒有新增付費或正式放行。
 
+[SQL Environment](docs/sql-environment.md)已提供獨立套件接入：公開契約與 runtime 綁定、唯讀 SQLite、flat 診斷與工程中斷分類。它不依賴舊工作區套件；有限公開例子與合作式資源控制不構成一般 SQL 正確性或硬隔離資格，RG-01 仍待核定。
+
 [官方 SDK 互通證據](docs/ollama-sdk.md)固定 `ollama==0.6.3` 同步 Client，驗證純文字子集、身份、錯誤與重連不重送；模型上游保持模擬，不宣稱完整 Ollama 或部署相容。
 
 [完整費用元件上界](docs/component-bounds.md)提供 RG-04 的獨立替代驗證器：固定文字端點，以核定的資源／費率保障推導最壞費用，涵蓋分類、初答、唯一修正及失敗。未附真實供應商資格；普通價格與 key 額度仍不授權付費派送。

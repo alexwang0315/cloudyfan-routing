@@ -1,0 +1,145 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "rg01-sql-environment-offline",
+  "baseline_commit": "7be8616ac5ca155e2ab6a633ca3401760afe1e47",
+  "tested_tree": "uncommitted executable/test/build inputs identified by source_digest",
+  "source_digest": "b318bb59eee43aef1cba01f0825da72f39ff2fa5a65475881f0c3d9158c4dc5e",
+  "tests_passed": 991,
+  "new_sql_cases": 47,
+  "focused_tests_passed": 47,
+  "finished_at": "2026-10-19T05:43:47.868249+00:00",
+  "integration_receipt_sha256": "e774e9516adde9615d735506a18439ee18d49a8c9eb332a65178d2c450d8fb2b",
+  "private_receipt_path": "runtime/checks/2362d205ecaa40eaae70f12d6d3a3558/checks.json",
+  "console_sha256": "037656fafccfc37f7409ba3e69381dc03af9e7cb03be8146f2a9181444b7ad6e",
+  "private_console_path": "runtime/rg01-sql-environment-20261019/integration-release-console.log",
+  "checks": [
+    "locked-offline-sync",
+    "dependency-consistency",
+    "project-records",
+    "ruff",
+    "pytest",
+    "core-high-mock",
+    "score-high-mock",
+    "sdist-wheel"
+  ],
+  "artifacts_sha256": {
+    "runtime/checks/2362d205ecaa40eaae70f12d6d3a3558/dist/cloudyfan_jev_core-0.1.0.tar.gz": "623efa103e28810393137dc07e100ccac7d4f88ee066893ffdbcb10185dd92ed",
+    "runtime/checks/2362d205ecaa40eaae70f12d6d3a3558/dist/cloudyfan_jev_core-0.1.0-py3-none-any.whl": "7e9fba812da879bc51d540d27a2e31ed9427625a3e941023e5c18af779f511ae"
+  },
+  "private_evidence_sha256": {
+    "runtime/rg01-sql-environment-20261019/extraction.json": "5ea3caa364366ecf1d960bb8e2cdc5421391507eb847b4d5f592178bf37d3146",
+    "runtime/rg01-sql-environment-20261019/tdd-red-initial.log": "2842c96c2da5bff9f4f53d823e00d1d523379b474a76badf97e07751885e751b",
+    "runtime/rg01-sql-environment-20261019/tdd-red-engineering.log": "bad5f9cd02ffc6724ecbf7aad7d4be5439554d16033100f6815485e4842d83df",
+    "runtime/rg01-sql-environment-20261019/tdd-red-projection-preflight.log": "bc9c98081fc9e0368f9af3fe85a3704f35f54c8bd23169b31537997425e830e0",
+    "runtime/rg01-sql-environment-20261019/regression-initial.log": "4be76a321303c0cfd7ce99b874f53615afb1e3a698e1bd3765725684c4417f12",
+    "runtime/rg01-sql-environment-20261019/focused-console.log": "565625d96747f973a1f4935ee4301e151c1c82d68498819a0e46dfc5cacc4d12",
+    "runtime/rg01-sql-environment-20261019/focused-tests.xml": "599b8e923194d3ee220b3864c66ae99a9d5a4c432c4124e4e379ce666e0da7e7",
+    "runtime/rg01-sql-environment-20261019/focused-final-console.log": "b3663f67dfe4c42f2da42c20b45f20732bc563fefc3c2db577f117036d6def1f",
+    "runtime/rg01-sql-environment-20261019/focused-final-tests.xml": "0639c58b7b4ae6ed6ca70e289712b9ab73354f30179d738cc68f94740cc51931",
+    "runtime/rg01-sql-environment-20261019/integration-console.log": "824ba16ad055d5f4cb0502ae7a329f8b70ffa146e24ecf333da6dc5546336850",
+    "runtime/rg01-sql-environment-20261019/integration-restored-console.log": "00a0170c10241f7b71debe3e8ca04e02d0226cac35abc56a66abeb71d9bef1d1",
+    "runtime/rg01-sql-environment-20261019/integration-final-console.log": "e47b90e59313b43cd3724f4db16c4d5696a72697afa6438d8293d68b4693749b",
+    "runtime/rg01-sql-environment-20261019/integration-release-console.log": "037656fafccfc37f7409ba3e69381dc03af9e7cb03be8146f2a9181444b7ad6e",
+    "runtime/rg01-sql-environment-20261019/dependency-restoration.json": "2c9af17636fa174c3557db588f2a0c7167419ed77707edaec66a3912554e1b2a"
+  },
+  "extraction": {
+    "workspace_source": "src/cloudyfan/workflow_sql.py",
+    "source_sha256": "5750cf4511063707ae9df07a2ee0aeda2f2e2cf2c6cbbe526ec27c0c123efefe",
+    "selected_names": [
+      "MAX_ATTACHED_DATABASES",
+      "MAX_COMPILED_VM_OPERATIONS",
+      "MAX_COMPOUND_SELECT_TERMS",
+      "MAX_EXPRESSION_DEPTH",
+      "MAX_FUNCTION_ARGUMENTS",
+      "MAX_OUTPUT_BYTES",
+      "MAX_OUTPUT_ROWS",
+      "MAX_PUBLIC_FEEDBACK_BYTES",
+      "MAX_QUERY_SECONDS",
+      "MAX_RESPONSE_BYTES",
+      "MAX_SQLITE_WORKER_THREADS",
+      "MAX_SQL_CHARS",
+      "MAX_SQL_COLUMNS",
+      "MAX_VM_STEPS",
+      "PROGRESS_CHECK_VM_STEPS",
+      "SQL_EXECUTION_CONTRACT_VERSION",
+      "SQL_PROPOSAL_SCHEMA",
+      "SqlResponseError",
+      "_ExecutionContractUnavailable",
+      "_FUNCTIONS",
+      "_apply_sqlite_limits",
+      "_compiler_feedback",
+      "_execute_fixture",
+      "_execution_constraints",
+      "_native_sqlite_limits",
+      "_resource_feedback",
+      "_sql_input",
+      "_sqlite_resource_feedback",
+      "_sqlite_runtime_limits",
+      "parse_sql_response",
+      "table_ddl"
+    ],
+    "no_datasets_or_reference_queries_or_oracles_copied": true,
+    "historical_source_unchanged": true
+  },
+  "confirmed": [
+    "Frozen public SQL contract and runtime bound to Core.run identity",
+    "Tool-free in-memory SQLite and allowlisted flat public diagnostics",
+    "First pass skips classification; both binary selectors precede one final repair",
+    "Model failures separated from build/fixture/runtime/I/O/memory/unknown SQLite and wall timeout engineering interruptions",
+    "Preflight before dispatch; explicit resume reuses retained response without new POST",
+    "BudgetedCore preserves costs and holds on interruption; releases once on completion",
+    "Missing public samples remain unknown; finite fixtures can still accept constants"
+  ],
+  "failures_preserved": [
+    {
+      "receipt": "runtime/checks/f898c14f4bae4de0be68c8294a25265b/checks.json",
+      "exit_code": 2,
+      "reason": "native pydantic_core binary absent with iCloud placeholder; Ollama SDK import failed"
+    },
+    {
+      "receipt": "runtime/checks/50cc6e8a192c40e780add57634e248d8/checks.json",
+      "exit_code": 1,
+      "passed_tests": 987,
+      "failed_tests": 1,
+      "reason": "project-state test coupled to checkout next_steps order; isolated fixture without changing checker"
+    },
+    {
+      "receipt": "runtime/checks/81131ace5c524447b7e9daf8df454f12/checks.json",
+      "result": "passed",
+      "tests_passed": 988,
+      "note": "before three final regressions were added"
+    }
+  ],
+  "dependency_restoration": {
+    "evidence": "runtime/rg01-sql-environment-20261019/dependency-restoration.json",
+    "from_verified_offline_cache": true,
+    "installed_record_hash_and_size_verified": true,
+    "version_and_lock_unchanged": true,
+    "placeholder_preserved": true,
+    "files_deleted": 0,
+    "downloads": 0
+  },
+  "review": {
+    "method": "integrator source/contract/diff inspection with real SQLite/mock regression; not independent human or supplier qualification",
+    "blocking_findings_remaining": 0
+  },
+  "formal_registry_sha256": "1e4899eec63930dc9014d0a089d408c5d3bd650a0b64ececfc6893ca6463142b",
+  "formal_gates_pending": 10,
+  "production_qualified": false,
+  "real_api_calls": 0,
+  "account_api_calls": 0,
+  "supplier_contact": false,
+  "real_api_cost_usd": "0",
+  "deployment": false,
+  "source_push": false,
+  "committed": false,
+  "limits": [
+    "Named domain/expected/coverage and model qualification remain pending",
+    "In-process cooperative limits do not establish OS sandbox or hard memory/deadline",
+    "Finite public samples can accept constant SQL; no general correctness proof",
+    "Expected sample rows must be public; no private grading API",
+    "Real provider guarantees and deployed HTTP/Ollama/Queue/hardware unqualified"
+  ]
+}

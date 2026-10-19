@@ -6,7 +6,7 @@
 
 建議先審閱**有公開 schema、資料、結果欄位與資源契約的有限 SQLite 唯讀任務**，因舊工作區已有驗收器、獨立 Python oracle 與正反例，可先不花模型費檢查。SQL 是本次候選領域，尚未由具名人員批准；不能將此建議擴成一般 SQL 正確性或任意程式執行服務。
 
-主驗收邊界沿用已確認的 **`Core.run`＋可注入驗收器／`httpx.MockTransport`**。它確認流程與接入契約，不能單憑 mock 結果核定真實模型、供應商或部署。舊 SQL 程式位於外層工作區，獨立套件尚未提供該領域的正式 Environment 接入；見 [RG-01 資格準備包](rg01-validator-qualification.md)。不將歷史五題直接指定為新 holdout。
+主驗收邊界沿用已確認的 **`Core.run`＋可注入驗收器／`httpx.MockTransport`**。它確認流程與接入契約，不能單憑 mock 結果核定真實模型、供應商或部署。舊 SQL 程式位於外層工作區；本輪已補獨立套件的 [SQL Environment](sql-environment.md)，只抽取無資料 helpers，不依賴外層程式或私人答案。接入實作不代表領域已核定，見 [RG-01 資格準備包](rg01-validator-qualification.md)。不將歷史五題直接指定為新 holdout。
 
 ## 固定項與未決項
 
@@ -14,7 +14,7 @@
 |---|---|---|
 | 流程 | 開源首答→公開驗收；未通過／未知後低／中，選中才中／高；最後唯一修正。第二次選擇前不生成中分答案。 | 具名確認同一首版 scope；不調規則。 |
 | 次數 | 最多兩個生成階段；tool-free SQL 候選要求無工具，每階段一個生成請求；一般核心可有階段內工具往返。 | SQL 的正式 Limits、prompt、診斷、資料與版本綁定；不得將兩階段誤當任何模式最多兩個 API call。 |
-| 任務／驗收版本 | 舊 `business-sql-v2`、`business-sql-fixtures-v1`、`independent-python-v1`、`sqlite-readonly-contract-v2` 是歷史候選來源。 | 正式 adapter／契約 hash、公開期望、oracle 審閱、錯誤分類與資源隔離；改語義另立新版本。 |
+| 任務／驗收版本 | 舊 business-sql 系列是歷史候選來源；新接入採 `sql-environment-v1:<sha256>`／`sql-public-diagnostics-v1`，綁定公開期望與 runtime，保留唯讀執行限制並分離工程異常。 | 任務語義／expected 的獨立審閱、覆蓋與適用的硬資源隔離；不沿用舊實驗分數核定新版。 |
 | 輸入 | 受信任、合成且有界的 SQLite fixtures；結果嚴格比對欄名、型別、列及順序。 | 真實資料使用／存取／保留範圍；不得直接接客戶資料庫。 |
 | 入口 | `Core.run` 內嵌為證據準備起點；HTTP／Ollama／Queue 已交付但另有適用證據。 | 實際首版入口及客戶端；不得藉此草案停用已承諾功能。 |
 | 後端 | 優先整理固定端點、固定供應商、純文字、無外掛／工具／fallback 的費用證據。 | 真實模型／provider／帳戶期間與費用保障；本地部署與 local_only 是否啟用須另確認。 |

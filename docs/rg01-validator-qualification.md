@@ -1,6 +1,6 @@
 # RG-01 驗收器資格準備包
 
-日期：2026-10-19；狀態：**prepared／正式資格 pending**。依[首版範圍草案](release-scope-draft.md)整理既有資料，不新增模型答案、題庫、路由門檻或驗收語義。這不是可由執行器載入的正式資格證書。
+日期：2026-10-19；狀態：**SQL 接入已實作／正式資格 pending**。原準備包的 7be8616 基線、外層來源與測試紀錄保留；本輪另依使用者授權新增 [SQL Environment](sql-environment.md)、公開診斷投影與工程分類，不回寫原題／答案／路由門檻。新接入使用獨立版本，工程異常不再映射模型失敗。這不是可由執行器載入的正式資格證書。
 
 ## 來源與可重用範圍
 
@@ -34,15 +34,15 @@ SQLite 每個 fixture 使用新的 `:memory:` connection，關閉 extension，�
 | V03 | 只背公開答案的 false acceptance | `test_constant_sample_answer_does_not_pass_hidden_fixtures` | 已知限制：公開可過、隱藏會失敗；不能回饋隱藏結果繼續修正。 |
 | V04 | 寫入、外部表、extension、遞迴與多 statement 拒絕 | `test_unsafe_queries_are_rejected_without_mutating_public_fixture`、`test_resource_diagnostics_do_not_weaken_sql_authorization` | 本機合成拒絕證據；非一般安全認證。 |
 | V05 | parser／欄名／型別／輸出與資源界限 | `test_response_json_schema_is_strict_and_errors_do_not_echo_input`、`test_float_results_and_wrong_column_names_are_rejected`、`test_vm_deadline_and_output_limits_disclose_the_bound` | 既有約束；硬程序 deadline／memory 未證。 |
-| V06 | 不支援 SQLite build 不執行 query | `test_incompatible_sqlite_build_is_an_environment_error_and_does_not_execute` | 原函式回傳 `passed=False`；正式接入必須另映射工程／無法驗收，不能算模型答錯。 |
+| V06 | 不支援 SQLite build 不執行 query | 舊 `test_incompatible_sqlite_build_is_an_environment_error_and_does_not_execute`；新 `tests/test_sql_environment.py` | 舊函式回 False 的問題已在新接入分離為工程中斷，含派送前 preflight 與保留答案續跑；不改舊結果。 |
 | V07 | 隱藏結果不改公開 feedback | `test_hidden_resource_errors_do_not_change_public_feedback_or_disclose_fixture_content` | 合成 sentinel 檢查；不能偵測允許字串內所有私人資訊。 |
 | V08 | 核心嚴格三態及唯一修正 | `tests/test_engine.py`、`tests/test_diagnostics.py` | 已完成核心契約，不等於 SQL 接入已完成。 |
-| V09 | 原始 SQL 結果不是可直接注入診斷 | 本輪離線 probe：default DiagnosticContract 拒絕 SQL 結果；拒絕 nested feedback／hidden 欄位 | 正式 SQL Environment／projection 接入未實作，維持 pending。 |
+| V09 | 原始 SQL 結果不是可直接注入診斷 | 原離線 probe 保留；新接入以 `SQL_DIAGNOSTICS` 驗證 flat codes／完整 byte budget | Environment／projection 已實作並離線驗證，沒有 hidden grader 介面；正式語義／覆蓋資格仍 pending。 |
 | V10 | 題目歧義不能靠 oracle 猜 | 既有 final50／hierarchical25 審查，只保留來源與問題類型 | 命名欄位、輸出域、空值／缺資料、投影、排序／tie-break 的具名語義審閱待辦。 |
 
-## 正式接入前的判定／診斷設計待辦
+## 判定／診斷接入要求與本輪狀態
 
-以下是待審要求，**不是本輪已交付的新 adapter**：
+下列為準備階段提出的要求；本輪已實作契約／資料凍結、純公開 projection、工程中斷、唯一修正及答案續跑，見新接入文件與離線證據。具名領域語義、覆蓋／expected 審閱及硬隔離仍待核定：
 
 1. 每個任務固定公開 schema、資料 hash、結果欄位／型別／順序、輸出域及精確契約版本；核對 oracle 與 prompt 一致。無法唯一決定語義時保留 unknown，不私改原題。
 2. 將「依已核定契約確實不符」映射 False；已核定公開檢查通過才映射 True。缺資料、歧義或驗收不可用映射 None 或明確工程中斷；SQLite build 不支援、validator crash 不得以 False 計模型失敗。
@@ -53,4 +53,4 @@ SQLite 每個 fixture 使用新的 `:memory:` connection，關閉 extension，�
 
 ## 正式核定缺口
 
-owner／reviewer 未指定；首版任務集合及語義未核定；SQL Environment 接入／投影與工程錯誤分類未提供；OS 層隔離／硬資源上限未證；真實模型設定未核定。本包整理完成及所有離線檢查通過，也仍保持 **RG-01 pending**。補證優先順序為：先範圍／語義與責任，再明確接入設計，然後另行授權實作和相應離線／真實證據；本輪不擴大為 adapter 實作。
+owner／reviewer 未指定；首版任務集合、語義／公開 expected 與覆蓋未核定；OS 層隔離／硬資源上限未證；真實模型設定未核定。**SQL Environment／projection／工程分類的實作與離線驗證已補齊**，不再列為缺少程式；這些正式證據缺口仍使 RG-01 保持 pending。補證順序為具名 scope／語義與覆蓋審閱、適用隔離與模型資格；不以本輪 mock 測試自動核定。

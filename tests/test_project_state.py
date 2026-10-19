@@ -30,7 +30,11 @@ def checkout(tmp_path):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes((ROOT / name).read_bytes())
     state = read(tmp_path)
-    state.update(phase='in_progress', current_verification=None)
+    # A checker fixture must not depend on the checkout's current release order.
+    state.update(phase='in_progress', current_verification=None, next_steps=[{
+        'gate': 'G-02', 'action': 'Review the synthetic fixture client qualification',
+        'requires_authorization': True,
+    }])
     write(tmp_path / 'docs/agent-state.json', state)
     plan = read(tmp_path, 'docs/work-plan.json')
     for task in plan['tasks']:

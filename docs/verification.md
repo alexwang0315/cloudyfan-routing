@@ -224,3 +224,19 @@ This review authorizes only the user-requested local commit. No API spend, deplo
 本輪僅修正 RG-01 文件的歧義措辭：關閉的是 extension，query_only／authorizer／setlimit／progress handler 是啟用的控制，與既有程式一致。來源、驗收語義、選模門檻與正式 registry 不變。原準備證據的文件 hash 保留為修訂前快照；[提交前審閱紀錄](evidence/release-preparation-precommit-20261019.json)記錄修訂後的文件 hash 與核對結果，不覆寫原本 141 項／93 項測試、失敗環境及 944 項歷史整合收據，不聲稱本輪重新跑過那些測試。
 
 此審閱只授權使用者指定的本機 Git 提交；缺證項目保持 pending，未聯絡供應商、花費 API、部署或推送。提交時正常執行既有 secret scanner 與離線 quick hook，實際收據及提交後核對留在 ignored `runtime/release-preparation-commit-20261019/`。
+
+
+## 2026-10-19：RG-01 SQL Environment 接入與公開診斷
+
+基線 `7be8616ac5ca155e2ab6a633ca3401760afe1e47`。新增獨立 `sql.py`／無資料 `sql_executor.py`、SQL Environment、凍結公開契約、flat code 投影與工程分類；Core／Client／BudgetedCore／診斷 schema、路由規則及 `release-gates.json` 未修改。舊 source、題庫、答案與帳本未改，也未複製進核心。
+
+- 新增 **47 項 SQL 回歸通過**：`runtime/rg01-sql-environment-20261019/focused-final-tests.xml`，涵蓋首答／兩層分類／唯一修正、unsafe／parser／結果／資源錯誤、preflight、工程中斷、無重送、預算保留及 finite-fixture false acceptance 限制。
+- 最終 `./scripts/check --integration`：**991 passed in 50.41s**，Ruff、鎖定離線 sync／依賴與 project records、兩個 mock high-route demo、sdist／wheel 全通過。收據 `runtime/checks/2362d205ecaa40eaae70f12d6d3a3558/checks.json`。
+- TDD 初始 missing-module、工程異常未分類、projection／preflight 失敗紀錄全部留在 runtime；沒有隱藏紅燈。原始完整驗證另遇 Ollama SDK 的 pydantic_core import error：查到 `.so` 僅剩 iCloud placeholder，以本機 uv 快取同版本／平台、符合已安裝 RECORD 的 SHA256／大小，僅新增補回缺失檔案。未刪 placeholder／其他檔案、未改 metadata／lock／版本、未下載。復原證據 `runtime/rg01-sql-environment-20261019/dependency-restoration.json`。
+- 依賴復原後一次完整執行為 987 pass／1 fail，原因是舊 project-state 測試硬寫當前待辦第一項必為 G-02；只使該測試的 fixture 自帶固定待辦，保留離線完成不等於正式核定及其他錯誤驗證，不改 checker。其後 988 全通過，再新增兩層 SQL 路徑及已知常數答案限制三個案例，得到上述最終 991。
+- `SqlValidationUnavailable` 明確歸 engineering；setup／build／runtime／I/O／allocation／未知 SQLite 及 wall timeout 不冒充模型答錯，也不啟動付費補救。確定的 SQL／VM／輸出不合格才返回公開 False；缺公開例子為 None。共享預算在工程中斷保持預留，明確續跑重驗原答案，不新增 POST。
+
+[本輪離線證據](evidence/rg01-sql-offline.json)保留來源指紋、原始成功／失敗收據、抽取選單、環境復原及建置物雜湊。[接入文件](sql-environment.md)、範圍／資格準備包及放行索引已同步實作現況。正式仍缺具名領域／expected／覆蓋審閱、適用的硬隔離、模型及供應商保障；十項正式 gate 均 pending。未聯絡供應商、呼叫真實／帳戶 API、操作硬體、部署、推送或新增 Git commit。
+
+
+交付紀錄更新後另跑 `./scripts/check --quick`，收據 `runtime/checks/78c0d447a65d46dab555cdb5dcbe1e99/checks.json`，確認 `implementation_complete=True`、`production_qualification_recorded=False`。文件 116 筆本地連結、證據／來源雜湊、work-plan 及 diff 檢查通過；程式來源指紋為 `b318bb59eee43aef1cba01f0825da72f39ff2fa5a65475881f0c3d9158c4dc5e`。後續文件封裝檢查僅重建包，不重跑或另稱新一批模型實驗。

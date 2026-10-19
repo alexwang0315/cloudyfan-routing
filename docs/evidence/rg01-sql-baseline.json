@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "rg01-sql-baseline",
+  "tested_commit": "7be8616ac5ca155e2ab6a633ca3401760afe1e47",
+  "source_digest": "89ed1980ff527fb940d93fb018365a9cc4b44aee21eef39ecff1c8f5e9adeafd",
+  "tests_passed": 944,
+  "reused_unchanged_source_evidence": "docs/evidence/rg04-zero-rate-offline.json",
+  "prior_evidence_sha256": "19b51cc884c96fe96d06849b2dcea75ba6e7ca405dc4de04dd487fb3a8bcb1dd",
+  "new_full_test_run": false,
+  "production_qualified": false
+}

@@ -18,3 +18,10 @@
 `tests/test_routing.py`、`test_client.py`、`test_decisions.py` 搬移原契約測試，新增完整 engine integration tests。測試禁止真實付費 HTTP；沒有新的 API 成本。
 
 本 repo 的初始版本為0.1.0；路由 `VERSION=hierarchical50-binary-v1` 保留以識別原選模政策，名稱中的50是原題庫名稱，不能解讀為已跑50題。
+
+
+## 2026-10-19 SQL Environment 抽取
+
+`src/cloudyfan_jev/sql_executor.py` 僅抽取外層 `src/cloudyfan/workflow_sql.py` 的 parser、表定義、限制、錯誤分類及執行 helper；沒有複製 `_TABLES`、公開／隱藏題庫、reference SQL、Python oracle、原始答案或帳本。原來源 SHA256 與選取名稱保留於 `runtime/rg01-sql-environment-20261019/extraction.json` 及本輪 offline evidence。
+
+獨立套件新增 `sql.py` 的公開契約／Environment／run_sql 接入及回歸測試；使用手算的全新合成測試例子，不重跑付費題庫。抽取後刻意區分 setup／I/O／memory／未識別的 SQLite 問題為工程中斷；合作式 wall timeout 也停止，而不假裝模型答錯。這些變更使用新的 `sql-environment-v1` 契約，不回寫舊 `business-sql-v2` 或歷史結果。獨立套件執行不需要舊 CloudyFan/Pydantic 環境；詳見 [SQL 接入契約](sql-environment.md)。

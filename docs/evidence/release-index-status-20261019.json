@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "kind": "documentation",
+  "result": "passed",
+  "scope": "release-index-status-clarification",
+  "observed_commit": "f1dd57c8a7963422c5ffd7e1c27766c7115ebd9b",
+  "checked_at": "2026-10-19T00:45:42.683940+00:00",
+  "source_digest_unchanged": "89ed1980ff527fb940d93fb018365a9cc4b44aee21eef39ecff1c8f5e9adeafd",
+  "three_status_columns": [
+    "implementation_completed_in_stated_scope",
+    "offline_verification_completed_in_stated_scope",
+    "formal_qualification_pending"
+  ],
+  "gate_ids": [
+    "RG-01",
+    "RG-02",
+    "RG-03",
+    "RG-04",
+    "RG-05",
+    "G-01",
+    "G-02",
+    "G-03",
+    "RG-06",
+    "RG-07"
+  ],
+  "tri_state_row_count": 10,
+  "scope_rules": [
+    "first-release common evidence priorities are separate from activation-dependent evidence",
+    "optional extensions do not count as unfinished delivered software",
+    "activation-dependent gates remain mandatory when enabled",
+    "no release scope or not-applicable decision approved; registry unchanged"
+  ],
+  "priority_order": [
+    "P0-1 named scope and responsible reviewers",
+    "P0-2 objective domain validation",
+    "P0-3 supplier cumulative billed input and complete effective/zero rates",
+    "P1-1 selected source and actual model pool qualification",
+    "P1-2 separately authorized real execution and settlement evidence",
+    "P2 evidence for specifically advertised quality/cost/latency claims"
+  ],
+  "activated_paths": [
+    "RG-05 service identity/retention",
+    "G-02 specified Ollama client",
+    "G-03 bounded multiuser queue",
+    "RG-06 actual local inference",
+    "G-01 local_only/egress promises"
+  ],
+  "formal_registry_unchanged": true,
+  "formal_registry_sha256": "1e4899eec63930dc9014d0a089d408c5d3bd650a0b64ececfc6893ca6463142b",
+  "formal_gates_pending": 10,
+  "production_qualified": false,
+  "prior_full_integration": {
+    "path": "docs/evidence/rg04-zero-rate-offline.json",
+    "sha256": "19b51cc884c96fe96d06849b2dcea75ba6e7ca405dc4de04dd487fb3a8bcb1dd",
+    "observed_tests_passed": 944,
+    "receipt_sha256": "980aae4d07073719b28f021a5c6ff54560021d96c503852febf1e64555467012",
+    "reused_unchanged_source": true
+  },
+  "full_suite_rerun": false,
+  "quick_check": {
+    "receipt": "runtime/checks/9227ff5fd8774c56a87bf70945670cfd/checks.json",
+    "sha256": "931c867816b601cccf48758596f2135fc37c909a5260bbbe5975b5e2ae4bdc6d",
+    "steps": 4,
+    "all_returncodes_zero": true,
+    "console": "runtime/release-index-status-20261019/quick-console.log"
+  },
+  "local_links_checked": 92,
+  "documents_sha256": {
+    "README.md": "17c7813e59bd2320deaf1997bcfabe7a7ebe2bd6b7cdd1e8431c217bdf0742fc",
+    "docs/handoff.md": "bdad05f19e30769d5d72624475b9b4f01c51831cd652894beffe94a1a62e32ce",
+    "docs/implementation-spec1.md": "e581117de95b8bd65044829da84fc59dda27a9ae250ae3b9b10a022d08823c2e",
+    "docs/release-readiness.md": "182d42e008169c5b5114827f29b4f2b5c5151b6a15a7ee44b25d9c1bc49608c5",
+    "docs/verification.md": "1e5a6fb8463b275398b25c376120108c8c2838673a8a885c5fde7169027b2376"
+  },
+  "unchanged_project_state_and_work_plan": true,
+  "real_api_calls": 0,
+  "account_api_calls": 0,
+  "deployment": false,
+  "push": false,
+  "new_commit": false,
+  "limitations": [
+    "No new full-suite pass is asserted by this documentation-only check",
+    "No real model/supplier/deployment/hardware qualification or human approval created",
+    "The first-release scope remains subject to named approval; optional listing cannot remove already promised capabilities"
+  ]
+}

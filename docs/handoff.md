@@ -86,3 +86,11 @@ exact dispatch restrictions remain required. Unknown outcomes are still unknown,
 and positive charges against a zero-only bound create a durable shared violation.
 No real supplier guarantee or production approval is supplied. Current scope and
 verification are identified by project-state and the [v2 contract](component-bounds.md).
+
+The [release index](release-readiness.md) now separates implemented scope,
+offline-verified evidence and pending formal qualification for every gate.
+Use its first-release evidence priorities and activation conditions; optional
+sources/clients/streaming/multi-host features are not unfinished core work.
+Release scope and any not-applicable decision still require named approval.
+This is a documentation clarification, not a registry/schema change or a new
+944-test run; the current source verification remains the v2 evidence above.

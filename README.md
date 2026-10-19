@@ -10,7 +10,7 @@
 
 [主規格 #1 實作索引](docs/implementation-spec1.md)列出 T01～T12 的功能、使用文件、離線驗收與正式接入缺口。[完整驗證紀錄](docs/verification.md)保留各輪檢查。
 
-[統一驗證入口](docs/checks.md)提供本機與 CI 共用命令；[跨接入契約矩陣](docs/transport-contracts.md)檢查 HTTP／Ollama／Queue 的共同保證。[正式放行索引](docs/release-readiness.md)分開記錄離線實作完成與正式資格。
+[統一驗證入口](docs/checks.md)提供本機與 CI 共用命令；[跨接入契約矩陣](docs/transport-contracts.md)檢查 HTTP／Ollama／Queue 的共同保證。[正式放行索引](docs/release-readiness.md)以「實作完成／離線驗證完成／正式資格待核定」三欄列明範圍，另列首版必補證據、優先順序及選配功能。十項正式 gate pending 不表示十項程式未完成。
 
 [官方 SDK 互通證據](docs/ollama-sdk.md)固定 `ollama==0.6.3` 同步 Client，驗證純文字子集、身份、錯誤與重連不重送；模型上游保持模擬，不宣稱完整 Ollama 或部署相容。
 

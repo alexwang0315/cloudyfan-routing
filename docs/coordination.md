@@ -214,6 +214,21 @@ unknown-charge stops and classifier failure handling are unchanged. Preserve the
 fresh50 runtime and report; use new engine-version manifests for future work.
 No paid API, deployment, push or formal qualification change is authorized.
 
+## Scoped fee-policy integration and fresh50 — 2026-10-20
+
+root owns the opt-in rejection-fee integration, tests, billing preflight and new
+paired runner/report. The dataset worker owns only new runtime dataset.py and
+test_dataset.py; no API/credential access or product-source edits. Prior trial
+is read-only. New user authorization permits this separate paid comparison,
+not deployment/push or a production qualification/signature.
+
+Execution/hidden grading/account matching are complete; see
+[the new50 report](fresh50-recovery-20261020.md). Source remained frozen, no
+hidden-driven paid followup occurred, and no new429 was observed. General
+public-validator false-accept coverage is the next technical gap, not a reason
+to relabel failed answers. Keep the paid raw cohort ignored and preserve its
+inventory; only sanitized summary and per-task metrics are documentation.
+
 ## Public SQL suite qualification — 2026-10-20
 
 User authorizes offline F32/F48 diagnosis and generic public-validation
@@ -224,3 +239,12 @@ data and found equal-valued bool/float input mutation; canonical type-sensitive
 comparison and regressions address it. Native SqlContract/Core interfaces and
 all previous routing/fee changes remain unchanged. Runtime post-hoc regression
 is not a new blind experiment or an update to prior quality/cost outcomes.
+
+## Fee-policy/report commit closure — 2026-10-20
+
+root owns the explicitly authorized remaining fee-policy/report commit. A
+code-only reviewer identified late-receipt blocking and embedded-derived-proof
+bypass; root added five regressions and policy v2 fixes, then independent review
+confirmed them. Current ownership covers this closure; prior completed plans
+remain historical records. Original221-call study and private runtime are
+immutable. This review performs no real API, deployment, push or supplier contact.

@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "integration_branch": "codex/implement-routing-spec-1",
+  "baseline_commit": "666b79be14ccd227045a3108fb89c1eeb8894e54",
+  "merger_owner": "root",
+  "shared_interfaces": [
+    {
+      "id": "core-run",
+      "owner": "root",
+      "owned_files": [
+        "src/cloudyfan_jev/engine.py"
+      ],
+      "provided_by": "scoped-rejection-fee-reconciliation"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "scoped-rejection-fee-reconciliation",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/client.py",
+        "src/cloudyfan_jev/engine.py",
+        "src/cloudyfan_jev/rejection_fees.py",
+        "tests/test_rejection_fees.py",
+        "docs/agent-state.json",
+        "docs/work-plan.json",
+        "docs/handoff.md",
+        "docs/coordination.md",
+        "docs/verification.md",
+        "docs/evidence/rejection-fees-offline-20261020.json",
+        "docs/rejection-fee-policy.md"
+      ],
+      "depends_on": [],
+      "consumed_interfaces": []
+    },
+    {
+      "id": "fresh50-recovery-comparison",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "docs/fresh50-recovery-20261020.md",
+        "docs/evidence/fresh50-recovery-20261020.json",
+        "docs/evidence/fresh50-recovery-20261020-per-task.csv",
+        "README.md"
+      ],
+      "depends_on": [
+        "scoped-rejection-fee-reconciliation"
+      ],
+      "consumed_interfaces": [
+        "core-run"
+      ]
+    }
+  ]
+}

@@ -10,27 +10,31 @@
       "owned_files": [
         "src/cloudyfan_jev/engine.py"
       ],
-      "provided_by": null
+      "provided_by": "fee-policy-and-fresh50-commit-review"
     }
   ],
   "tasks": [
     {
-      "id": "public-sql-validation-suite",
+      "id": "fee-policy-and-fresh50-commit-review",
       "owner": "root",
       "status": "completed",
       "owned_files": [
-        "src/cloudyfan_jev/sql_public_suite.py",
-        "tests/test_sql_public_suite.py",
-        "docs/sql-public-suite.md",
-        "docs/evidence/sql-public-suite-offline-20261020.json",
+        "src/cloudyfan_jev/client.py",
+        "src/cloudyfan_jev/engine.py",
+        "src/cloudyfan_jev/rejection_fees.py",
+        "tests/test_rejection_fees.py",
+        "docs/agent-state.json",
+        "docs/work-plan.json",
         "docs/handoff.md",
         "docs/verification.md",
-        "docs/work-plan.json",
-        "docs/agent-state.json",
-        "README.md",
-        "docs/sql-environment.md",
         "docs/coordination.md",
-        "docs/evidence/sql-public-suite-precommit-20261020.json"
+        "docs/rejection-fee-policy.md",
+        "docs/evidence/fee-report-precommit-20261020.json",
+        "README.md",
+        "docs/fresh50-recovery-20261020.md",
+        "docs/evidence/fresh50-recovery-20261020.json",
+        "docs/evidence/fresh50-recovery-20261020-per-task.csv",
+        "docs/evidence/fresh50-recovery-final-check-20261020.json"
       ],
       "depends_on": [],
       "consumed_interfaces": []

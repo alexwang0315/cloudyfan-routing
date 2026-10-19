@@ -477,6 +477,37 @@ successful rerun are both retained in [offline evidence](evidence/provider-429-o
 All 2,369 original fresh50 files match the saved SHA inventory; no old answer,
 fee or grade changed. No new real API, deployment, push or formal qualification.
 
+## Scoped fee-policy bridge and new frozen50 — 2026-10-20
+
+An explicitly injected archived text-only429 policy reaches native Client/Core
+and ledger, with request/response/GID/source/expiry binding. Actual response or
+generation fees win; policy attribution is not a generation receipt or supplier
+qualification. Fifty focused MockTransport checks passed; full integration
+passed1,154 tests, Ruff, both mock demos and sdist/wheel, with zero real APIs in
+tests. Source digest68d912f7275c0888811591a46c078bebf1afac8263f73654e8f0fb2407555301
+matches the frozen trial. See [offline evidence](evidence/rejection-fees-offline-20261020.json).
+
+Separately authorized real comparison completed50 fresh tasks x4 arms with
+frozen source, profiles, public contracts, bounded attempts and no hidden-driven
+repair. All200 completed before hidden grading started. New221POSTs allHTTP200,
+USD5.805611568, zero unknown/unmatched charges, exact key delta.220 generation
+receipts and one authoritative response usage.cost are distinct. Latest GET408
+for the latter is preserved; the fee is known, not a fabricated receipt. Three
+old429 copies had read-only policy verification before dispatch; new429 recovery
+rate was not observed. Old2,369 files and release registry hash unchanged.
+
+Hidden-final outcomes: CF48/50, high50/50, low-first50/50, OSS-first49/50.
+Three public false accepts never triggered repair; all six CF repairs passed.
+All failures and fees remain. Only low-first vs high qualifies as equal-quality
+sample savings82.79%; CF96.80% is spending difference. See [full report](fresh50-recovery-20261020.md)
+and [sanitized evidence](evidence/fresh50-recovery-20261020.json). No new paid
+calibration, deployment, push, local commit or formal qualification. Earlier
+smoke and earlier50-task costs are disclosed separately.
+
+Final independent cost/grade aggregation,12 frozen-file hashes,source digest,
+200-state/grade counts,grading chronology and sanitized links passed; quick
+checks passed project records and Ruff. See [final consistency evidence](evidence/fresh50-recovery-final-check-20261020.json).
+
 ## General public SQL suite — 2026-10-20
 
 New opt-in builder/test files only; native SqlContract/Core/fee behavior unchanged.
@@ -508,3 +539,22 @@ fee-policy tests; it remains unchanged. Metadata-only finalization is checked
 separately. [Precommit record](evidence/sql-public-suite-precommit-20261020.json)
 binds both scopes, source hashes and original file preservation. No new API,
 deployment, push or formal qualification is authorized by this review.
+
+## Remaining fee-policy and report precommit verification — 2026-10-20
+
+Source review reproduced five failures for two defects and their stop behavior:
+policy expiry/source changes blocked later real receipt GET, and embedded
+derived fee fields bypassed independent policy-proof validation. Policy v2 fixes
+both with original/actual-only reconciliation and strict original-response fields.
+The same five cases pass after fixes; all55 fee/provider regressions pass.
+Full integration passes1,187 tests in132.36s, Ruff, both mock demos and build.
+[Precommit evidence](evidence/fee-report-precommit-20261020.json) binds source,
+receipts, failing reproductions, successful reruns and independent follow-up review.
+
+Purely offline reaggregation matches200 rows/221 saved calls, first/final grades,
+per-arm complete costs and median latency. API total USD5.805611568 equals the
+saved account delta, with220 generation receipts and one response usage.cost.
+Both raw trial inventories (2,552 and2,369 files) and three original report
+artifacts are unchanged. Prior1,154/1,182/1,166 receipts and original v1 sources
+remain preserved; no historical grade or cost was updated. No actual API GET,
+paid request, deployment, push or formal qualification during this review.

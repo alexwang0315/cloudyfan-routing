@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "scoped-rejection-fee-reconciliation",
+  "source_digest": "68d912f7275c0888811591a46c078bebf1afac8263f73654e8f0fb2407555301",
+  "tests_passed": 1154,
+  "focused_tests_passed": 50,
+  "receipt": {
+    "path": "runtime/checks/ba02a425ed7140a4bd984721792e516c/checks.json",
+    "sha256": "dce4ebd81ef9811e049fde68b91a3db12b0f1712a3c5e31bfa360db2fd1a59a2",
+    "source_digest": "68d912f7275c0888811591a46c078bebf1afac8263f73654e8f0fb2407555301"
+  },
+  "real_api_calls_in_tests": 0,
+  "fee_source": "provider_error_no_charge_policy",
+  "policy_not_generation_receipt": true,
+  "unknown_fee_stop_preserved": true,
+  "opt_in_and_scope_bound": true,
+  "formal_qualification": "pending"
+}

@@ -157,6 +157,9 @@ class Core:
             descriptor['local_backend'] = self.local_backend.descriptor()
         if self.execution_policy is not None:
             descriptor['execution_policy'] = self.execution_policy.to_dict()
+        rejection_policy = getattr(self.client, 'rejection_fee_policy', None)
+        if rejection_policy is not None:
+            descriptor['rejection_fee_policy'] = rejection_policy.descriptor()
         return deepcopy(descriptor)
 
     def _checked(self, cid, url, payload, accepted, provider, *, allow_rejection=False):

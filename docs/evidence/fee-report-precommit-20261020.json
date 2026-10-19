@@ -1,0 +1,155 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "fee-policy-and-fresh50-commit-review",
+  "tests_passed": 1187,
+  "focused_tests_passed": 55,
+  "new_regression_cases": 5,
+  "source_digest": "19fc2080cd53107037edda3912000fea455c889ddef3e2b394ec12443b10dc1a",
+  "base_commit": "12b4f348c67acc5873fa00e9f9c1ca4b14b3b514",
+  "receipt": {
+    "path": "runtime/checks/da93859b7af4432c8e548d336d359918/checks.json",
+    "sha256": "789bb3330ab5503290fb21a319af0bc0be9f0d52860b7da0a08d65bf36096abf"
+  },
+  "review_findings_fixed": [
+    {
+      "priority": "P1",
+      "problem": "Expired/changed policy blocked later actual receipt retrieval",
+      "fix": "Original/actual-only reconciliation load; valid GET receipt takes precedence while failed GET remains unresolved",
+      "regression_cases": 2
+    },
+    {
+      "priority": "P2",
+      "problem": "Embedded derived fee fields in original response bypassed separate proof validation",
+      "fix": "Reject outer derived fields; require independent receipt/proof paths",
+      "regression_cases": 2
+    },
+    {
+      "priority": "regression",
+      "problem": "Invalid policy plus failed GET must never become zero/paid retry",
+      "regression_cases": 1
+    }
+  ],
+  "policy_version": "openrouter-fixed-text-upstream429-v2",
+  "original_experiment_policy": "v1 retained; no frozen trial rewritten",
+  "review_followup": "Independent code-only reviewer confirmed fixes; no remaining actionable findings in scope; no real HTTP or experiment data inspected by reviewer.",
+  "report_offline_reaggregation": {
+    "saved_financial_and_grade_evidence": "passed",
+    "calls": 221,
+    "cost_usd": "5.805611568",
+    "cost_sources": {
+      "generation_total_cost": 220,
+      "response_usage_cost": 1
+    },
+    "first": {
+      "cloudyfan": 42,
+      "fixed_high": 50,
+      "low_first": 50,
+      "open_source_first": 41
+    },
+    "final": {
+      "cloudyfan": 48,
+      "fixed_high": 50,
+      "low_first": 50,
+      "open_source_first": 49
+    },
+    "median_seconds": {
+      "cloudyfan": 2.200659918002202,
+      "fixed_high": 8.363199725499726,
+      "low_first": 2.468670440503047,
+      "open_source_first": 2.2583783620066242
+    },
+    "api_cost_by_arm": {
+      "cloudyfan": "0.131666268",
+      "fixed_high": "4.1099125",
+      "low_first": "0.7072025",
+      "open_source_first": "0.8568303"
+    },
+    "no_new_http": true,
+    "original_results_not_regraded": true,
+    "frozen_files_verified": 12
+  },
+  "trial_files_unchanged": {
+    "runtime/fresh50-recovery-20261020": 2552,
+    "runtime/fresh50-four-arm-20261019": 2369
+  },
+  "original_report_artifacts_unchanged": 3,
+  "original_v1_source_preserved": {
+    "v1_sources_from_original_successful_build": {
+      "src/cloudyfan_jev/client.py": "45dc239407c1b1a0296850da56710c7039bd3872226f81a5df26a1985782e856",
+      "src/cloudyfan_jev/rejection_fees.py": "a8fd1b8b0ed5c3064e975a19228b252bb20acd2a55381855476813aea01d7e79",
+      "tests/test_rejection_fees.py": "ab1d8cd191a0778d09a8a9b5ede076fc00c0a62f3691b9afc09d0f41f105c52c"
+    },
+    "archive_path": "runtime/checks/52df56642114471b8588eec3ac9552e6/dist/cloudyfan_jev_core-0.1.0.tar.gz",
+    "archive_sha256": "7085df2ea9e76a8ce74468ad918a04f52dcb9cdfd08eb1de1cd9c6461536c229",
+    "reconstructed_pre_review_source_digest": "f9f2e12370724d4cf766248fb591ff45dd2a8230305a4a1b5cdfa8387d8bca04",
+    "reconstructed_frozen50_source_digest": "68d912f7275c0888811591a46c078bebf1afac8263f73654e8f0fb2407555301",
+    "original_files_not_overwritten": true
+  },
+  "credential_and_private_data_scope": "Only intended code, tests, sanitized reports and history metadata; runtime/prompt/answers/credentials excluded from Git.",
+  "prior_validation_preserved": {
+    "fee_v1_full": 1154,
+    "public_suite_with_pending_fee_v1_full": 1182,
+    "prior_isolated_public_suite_commit": 1166,
+    "new_current_combined_v2_full": 1187
+  },
+  "artifacts": [
+    {
+      "path": "runtime/checks/da93859b7af4432c8e548d336d359918/checks.json",
+      "sha256": "789bb3330ab5503290fb21a319af0bc0be9f0d52860b7da0a08d65bf36096abf"
+    },
+    {
+      "path": "runtime/fee-report-precommit-20261020/focused-fees.log",
+      "sha256": "47d879217132a9bcf0dab7f2b42d9893f883d0e8aefa5cd579c972cb1c2fb3c3"
+    },
+    {
+      "path": "runtime/fee-report-precommit-20261020/reproductions-before.log",
+      "sha256": "5b024a0d6805d2782f453c94032623d5687f70f22f1e03262e3b5289bf7fb758"
+    },
+    {
+      "path": "runtime/fee-report-precommit-20261020/focused-fixed.log",
+      "sha256": "f87c30ea5a283f36dc6e1d073e557fde59e6e8e959ad832ad7c85aec2e0f7999"
+    },
+    {
+      "path": "runtime/fee-report-precommit-20261020/integration-fixed.log",
+      "sha256": "c6c4b669f7d2fb1c7025df95b234763ef1456d570da779c1f00aab560e8667ef"
+    },
+    {
+      "path": "runtime/fee-report-precommit-20261020/review_report.py",
+      "sha256": "cfc56143730cfccc8c9b5296c71e3b1d75149ad66f75eef73fd7578839de3452"
+    },
+    {
+      "path": "runtime/fee-report-precommit-20261020/report-review.json",
+      "sha256": "62a4558c7bcf1bc8bc1d5c1311676799f4ffa08fbc1d3f0326a562d103fa2f5c"
+    },
+    {
+      "path": "runtime/fee-report-precommit-20261020/v1-source-preservation.json",
+      "sha256": "4e068491be5ec2e066d0e543488f109b5b2e5eea27bb863b9130c8f6deec128b"
+    },
+    {
+      "path": "runtime/fee-report-precommit-20261020/source-before.json",
+      "sha256": "62c31b7a4ab08737b8dc8ba75bc83cfb9c02333499a96b33f1ed373e6225321d"
+    },
+    {
+      "path": "runtime/fee-report-precommit-20261020/new-trial-before.json",
+      "sha256": "0b3949354af0c98197109a0099e0085d0efca9ea23c6cb64aacfb1963bf8b1b1"
+    },
+    {
+      "path": "runtime/fee-report-precommit-20261020/old-trial-before.json",
+      "sha256": "180902ef5f38fe3a9af2a00e4d8b834d1ab589d4707172395e1b8527399b00cd"
+    }
+  ],
+  "formal_registry_sha256": "1e4899eec63930dc9014d0a089d408c5d3bd650a0b64ececfc6893ca6463142b",
+  "new_real_api_calls": 0,
+  "new_paid_api_cost_usd": "0",
+  "deployment": false,
+  "push": false,
+  "formal_qualification": "pending",
+  "limitations": [
+    "Policy attribution is not pre-dispatch authorization or complete provider cost bound.",
+    "No new real429 in the frozen trial; provider recovery rate remains unverified.",
+    "CloudyFan48/50 lower spend is not equal-quality savings; frozen results are unchanged.",
+    "Earlier no-local-commit statements in preserved reports describe their capture-time state."
+  ]
+}

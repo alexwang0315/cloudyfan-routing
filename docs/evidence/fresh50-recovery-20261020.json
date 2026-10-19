@@ -1,0 +1,845 @@
+{
+  "schema_version": 1,
+  "kind": "real-api-paired-comparison",
+  "recorded_at": "2026-10-19T22:36:54.683214+00:00",
+  "plan_id": "4938ed408f5c715ac1000f00f32365cddf5bde5ce4cc726bbdc143b9f2a3c075",
+  "source_digest": "68d912f7275c0888811591a46c078bebf1afac8263f73654e8f0fb2407555301",
+  "base_commit": "2a6f42222febc5b3ae7afee82b4ef15ce45736f6",
+  "source_has_uncommitted_fee_policy_integration": true,
+  "tasks": 50,
+  "workflows": 200,
+  "arms": {
+    "cloudyfan": {
+      "api_cost_usd": "0.131666268",
+      "api_post_seconds_each_request": {
+        "max": 12.522864869999466,
+        "mean": 1.8454623513172255,
+        "median": 1.4800546840124298,
+        "min": 0.4498734390072059,
+        "n": 63,
+        "p95_nearest_rank": 3.6145627520163544
+      },
+      "api_post_seconds_per_workflow": {
+        "max": 17.77757842603023,
+        "mean": 2.3252825626597042,
+        "median": 1.5710798955115024,
+        "min": 0.8809263409930281,
+        "n": 50,
+        "p95_nearest_rank": 4.598298600962153
+      },
+      "availability_failure": 0,
+      "cache_counters": {
+        "prompt_tokens_details.cache_write_tokens": {
+          "missing_calls": 7,
+          "reported_calls": 56,
+          "sum_reported": 33495
+        },
+        "prompt_tokens_details.cached_tokens": {
+          "missing_calls": 7,
+          "reported_calls": 56,
+          "sum_reported": 128096
+        }
+      },
+      "cache_reporting": "reported values only; missing is unknown",
+      "calls": 63,
+      "classifier_calls": 7,
+      "completed_replay_new_posts": 0,
+      "completed_wall_missing": 0,
+      "completed_workflow_wall_seconds": {
+        "max": 18.830562296992866,
+        "mean": 2.977016894237604,
+        "median": 2.200659918002202,
+        "min": 1.375756752997404,
+        "n": 50,
+        "p95_nearest_rank": 6.310155532992212
+      },
+      "component_costs_usd": {
+        "classifier": "0.002043468",
+        "initial": "0.0330893",
+        "other": "0",
+        "repair": "0.0965335"
+      },
+      "cost_per_success_usd": "0.00274304725",
+      "cost_source_counts": {
+        "generation_total_cost": 63
+      },
+      "engineering_interruption": 0,
+      "final_fail": 2,
+      "final_pass": 48,
+      "final_pass_rate": 0.96,
+      "final_unknown": 0,
+      "first_fail": 8,
+      "first_pass": 42,
+      "first_pass_rate": 0.84,
+      "first_unknown": 0,
+      "generation_tiers": {
+        "low": 5,
+        "mid": 1,
+        "open_source": 50
+      },
+      "grading_unverifiable": 0,
+      "interruption_seconds": {
+        "max": null,
+        "mean": null,
+        "median": null,
+        "min": null,
+        "n": 0,
+        "p95_nearest_rank": null
+      },
+      "known_api_cost_subtotal_usd": "0.131666268",
+      "model_call_counts": {
+        "openai/gpt-6-sol-20260922": 5,
+        "openai/gpt-6.1-sol-20260929": 1,
+        "openai/gpt-oss-120b": 50,
+        "typesafe/jev-1.13-20260917": 7
+      },
+      "n": 50,
+      "other_unknown": 0,
+      "policy_zero_calls": 0,
+      "provider_call_counts": {
+        "BaseTen": 50,
+        "OpenAI": 6,
+        "TypeSafe": 7
+      },
+      "reconciliation_get_seconds": {
+        "max": 1.9521579310239758,
+        "mean": 0.5432685151568148,
+        "median": 0.43888878398865927,
+        "min": 0.25173394798184745,
+        "n": 50,
+        "p95_nearest_rank": 1.2137901320238598
+      },
+      "repair_final_pass": 6,
+      "repairs": 6,
+      "replay_evidence_missing": 0,
+      "unknown_cost_calls": 0
+    },
+    "fixed_high": {
+      "api_cost_usd": "4.1099125",
+      "api_post_seconds_each_request": {
+        "max": 17.936762947007082,
+        "mean": 8.082774885020918,
+        "median": 7.668690899008652,
+        "min": 3.9619509899930563,
+        "n": 50,
+        "p95_nearest_rank": 13.834724749991437
+      },
+      "api_post_seconds_per_workflow": {
+        "max": 17.936762947007082,
+        "mean": 8.082774885020918,
+        "median": 7.668690899008652,
+        "min": 3.9619509899930563,
+        "n": 50,
+        "p95_nearest_rank": 13.834724749991437
+      },
+      "availability_failure": 0,
+      "cache_counters": {
+        "prompt_tokens_details.cache_write_tokens": {
+          "missing_calls": 0,
+          "reported_calls": 50,
+          "sum_reported": 261773
+        },
+        "prompt_tokens_details.cached_tokens": {
+          "missing_calls": 0,
+          "reported_calls": 50,
+          "sum_reported": 0
+        }
+      },
+      "cache_reporting": "reported values only; missing is unknown",
+      "calls": 50,
+      "classifier_calls": 0,
+      "completed_replay_new_posts": 0,
+      "completed_wall_missing": 0,
+      "completed_workflow_wall_seconds": {
+        "max": 18.31895446300041,
+        "mean": 8.705077005298808,
+        "median": 8.363199725499726,
+        "min": 4.326671796996379,
+        "n": 50,
+        "p95_nearest_rank": 14.315897227003006
+      },
+      "component_costs_usd": {
+        "classifier": "0",
+        "initial": "4.1099125",
+        "other": "0",
+        "repair": "0"
+      },
+      "cost_per_success_usd": "0.08219825",
+      "cost_source_counts": {
+        "generation_total_cost": 50
+      },
+      "engineering_interruption": 0,
+      "final_fail": 0,
+      "final_pass": 50,
+      "final_pass_rate": 1.0,
+      "final_unknown": 0,
+      "first_fail": 0,
+      "first_pass": 50,
+      "first_pass_rate": 1.0,
+      "first_unknown": 0,
+      "generation_tiers": {
+        "high": 50
+      },
+      "grading_unverifiable": 0,
+      "interruption_seconds": {
+        "max": null,
+        "mean": null,
+        "median": null,
+        "min": null,
+        "n": 0,
+        "p95_nearest_rank": null
+      },
+      "known_api_cost_subtotal_usd": "4.1099125",
+      "model_call_counts": {
+        "openai/gpt-6-astra-20260903": 50
+      },
+      "n": 50,
+      "other_unknown": 0,
+      "policy_zero_calls": 0,
+      "provider_call_counts": {
+        "OpenAI": 50
+      },
+      "reconciliation_get_seconds": {
+        "max": 1.7938301939866506,
+        "mean": 0.4530321173003176,
+        "median": 0.3617401250085095,
+        "min": 0.25610557198524475,
+        "n": 50,
+        "p95_nearest_rank": 0.7074564750073478
+      },
+      "repair_final_pass": 0,
+      "repairs": 0,
+      "replay_evidence_missing": 0,
+      "unknown_cost_calls": 0
+    },
+    "low_first": {
+      "api_cost_usd": "0.7072025",
+      "api_post_seconds_each_request": {
+        "max": 4.441681369004073,
+        "mean": 2.0799567168811337,
+        "median": 1.9047987139929319,
+        "min": 1.3406299630005378,
+        "n": 50,
+        "p95_nearest_rank": 3.006587333016796
+      },
+      "api_post_seconds_per_workflow": {
+        "max": 4.441681369004073,
+        "mean": 2.0799567168811337,
+        "median": 1.9047987139929319,
+        "min": 1.3406299630005378,
+        "n": 50,
+        "p95_nearest_rank": 3.006587333016796
+      },
+      "availability_failure": 0,
+      "cache_counters": {
+        "prompt_tokens_details.cache_write_tokens": {
+          "missing_calls": 0,
+          "reported_calls": 50,
+          "sum_reported": 261773
+        },
+        "prompt_tokens_details.cached_tokens": {
+          "missing_calls": 0,
+          "reported_calls": 50,
+          "sum_reported": 0
+        }
+      },
+      "cache_reporting": "reported values only; missing is unknown",
+      "calls": 50,
+      "classifier_calls": 0,
+      "completed_replay_new_posts": 0,
+      "completed_wall_missing": 0,
+      "completed_workflow_wall_seconds": {
+        "max": 5.118783195997821,
+        "mean": 2.6598521149769656,
+        "median": 2.468670440503047,
+        "min": 1.7702899419819005,
+        "n": 50,
+        "p95_nearest_rank": 3.5930538850079756
+      },
+      "component_costs_usd": {
+        "classifier": "0",
+        "initial": "0.7072025",
+        "other": "0",
+        "repair": "0"
+      },
+      "cost_per_success_usd": "0.01414405",
+      "cost_source_counts": {
+        "generation_total_cost": 50
+      },
+      "engineering_interruption": 0,
+      "final_fail": 0,
+      "final_pass": 50,
+      "final_pass_rate": 1.0,
+      "final_unknown": 0,
+      "first_fail": 0,
+      "first_pass": 50,
+      "first_pass_rate": 1.0,
+      "first_unknown": 0,
+      "generation_tiers": {
+        "low": 50
+      },
+      "grading_unverifiable": 0,
+      "interruption_seconds": {
+        "max": null,
+        "mean": null,
+        "median": null,
+        "min": null,
+        "n": 0,
+        "p95_nearest_rank": null
+      },
+      "known_api_cost_subtotal_usd": "0.7072025",
+      "model_call_counts": {
+        "openai/gpt-6-sol-20260922": 50
+      },
+      "n": 50,
+      "other_unknown": 0,
+      "policy_zero_calls": 0,
+      "provider_call_counts": {
+        "OpenAI": 50
+      },
+      "reconciliation_get_seconds": {
+        "max": 1.3286272440163884,
+        "mean": 0.45488136452040634,
+        "median": 0.33248563401866704,
+        "min": 0.23565927002346143,
+        "n": 50,
+        "p95_nearest_rank": 0.7648652939824387
+      },
+      "repair_final_pass": 0,
+      "repairs": 0,
+      "replay_evidence_missing": 0,
+      "unknown_cost_calls": 0
+    },
+    "open_source_first": {
+      "api_cost_usd": "0.8568303",
+      "api_post_seconds_each_request": {
+        "max": 31.003722566005308,
+        "mean": 3.458387721292795,
+        "median": 1.5193379299889784,
+        "min": 0.8126942380040418,
+        "n": 58,
+        "p95_nearest_rank": 17.58251839800505
+      },
+      "api_post_seconds_per_workflow": {
+        "max": 32.454316488991026,
+        "mean": 4.011729756699642,
+        "median": 1.4860726765036816,
+        "min": 0.8126942380040418,
+        "n": 50,
+        "p95_nearest_rank": 21.091233410028508
+      },
+      "availability_failure": 0,
+      "cache_counters": {
+        "prompt_tokens_details.cache_write_tokens": {
+          "missing_calls": 0,
+          "reported_calls": 58,
+          "sum_reported": 43818
+        },
+        "prompt_tokens_details.cached_tokens": {
+          "missing_calls": 0,
+          "reported_calls": 58,
+          "sum_reported": 122496
+        }
+      },
+      "cache_reporting": "reported values only; missing is unknown",
+      "calls": 58,
+      "classifier_calls": 0,
+      "completed_replay_new_posts": 0,
+      "completed_wall_missing": 0,
+      "completed_workflow_wall_seconds": {
+        "max": 33.29036861300119,
+        "mean": 4.659204122578958,
+        "median": 2.2583783620066242,
+        "min": 1.4026990790152922,
+        "n": 50,
+        "p95_nearest_rank": 22.140502798982197
+      },
+      "component_costs_usd": {
+        "classifier": "0",
+        "initial": "0.0325153",
+        "other": "0",
+        "repair": "0.8243150"
+      },
+      "cost_per_success_usd": "0.01748633265306122448979591837",
+      "cost_source_counts": {
+        "generation_total_cost": 57,
+        "response_usage_cost": 1
+      },
+      "engineering_interruption": 0,
+      "final_fail": 1,
+      "final_pass": 49,
+      "final_pass_rate": 0.98,
+      "final_unknown": 0,
+      "first_fail": 9,
+      "first_pass": 41,
+      "first_pass_rate": 0.82,
+      "first_unknown": 0,
+      "generation_tiers": {
+        "high": 8,
+        "open_source": 50
+      },
+      "grading_unverifiable": 0,
+      "interruption_seconds": {
+        "max": null,
+        "mean": null,
+        "median": null,
+        "min": null,
+        "n": 0,
+        "p95_nearest_rank": null
+      },
+      "known_api_cost_subtotal_usd": "0.8568303",
+      "model_call_counts": {
+        "openai/gpt-6-astra-20260903": 8,
+        "openai/gpt-oss-120b": 50
+      },
+      "n": 50,
+      "other_unknown": 0,
+      "policy_zero_calls": 0,
+      "provider_call_counts": {
+        "BaseTen": 50,
+        "OpenAI": 8
+      },
+      "reconciliation_get_seconds": {
+        "max": 332.07937604986364,
+        "mean": 7.104781487216242,
+        "median": 0.4083216909930343,
+        "min": 0.25159890501527116,
+        "n": 50,
+        "p95_nearest_rank": 0.8139229569642339
+      },
+      "repair_final_pass": 8,
+      "repairs": 8,
+      "replay_evidence_missing": 0,
+      "unknown_cost_calls": 0
+    }
+  },
+  "comparisons_vs_fixed_high": {
+    "cloudyfan": {
+      "aggregate_cdr": 0.9679637296414462,
+      "all_pair_costs_known": true,
+      "both_arms_all_final_pass": false,
+      "cost_increase_fraction": 0.0,
+      "defined_per_task_ratios": 50,
+      "failed_flow_costs_included": true,
+      "interpretation": "spending difference only",
+      "paired_tasks": 50,
+      "per_task_cdr": [
+        0.9917110957559007,
+        0.9917407920992999,
+        0.9928491819888547,
+        0.9919015493100993,
+        0.9917974925047697,
+        0.9921112874362698,
+        0.9923478147338186,
+        0.992468872975937,
+        0.9920725209328074,
+        0.9915276199834188,
+        0.9919952051145445,
+        0.8186462368428769,
+        0.9926518391787853,
+        0.9919604568833077,
+        0.9920133132780747,
+        0.9914620201470188,
+        0.9917242766620847,
+        0.992772581946395,
+        0.9918679533417812,
+        0.9923514999006688,
+        0.9924343769321567,
+        0.9929074992856586,
+        0.9915687612430991,
+        0.9914889817265682,
+        0.9922086300286045,
+        0.9917276891697596,
+        0.9914259209384445,
+        0.9917520005204606,
+        0.9914624311262966,
+        0.9918262405946324,
+        0.9922646493756004,
+        0.992781448996756,
+        0.9921708504098361,
+        0.991084554528157,
+        0.9926013195098963,
+        0.9909170419685399,
+        0.991765095851058,
+        0.9928779253636939,
+        0.9913031838607897,
+        0.8072891920699211,
+        0.9907531154054542,
+        0.9921926754088083,
+        0.9929596460940872,
+        0.8098496236950716,
+        0.9928532622623135,
+        0.8032110085010091,
+        0.990201621986934,
+        0.9914579011754694,
+        0.8260229965665863,
+        0.786636571594035
+      ],
+      "per_task_cdr_max": 0.9929596460940872,
+      "per_task_cdr_mean": 0.9699593965441282,
+      "per_task_cdr_median": 0.9918118665497011,
+      "per_task_cdr_min": 0.786636571594035,
+      "undefined_per_task_ratios": 0
+    },
+    "fixed_high": {
+      "aggregate_cdr": 0.0,
+      "all_pair_costs_known": true,
+      "both_arms_all_final_pass": true,
+      "cost_increase_fraction": 0.0,
+      "defined_per_task_ratios": 50,
+      "failed_flow_costs_included": true,
+      "interpretation": "equal-quality sample savings",
+      "paired_tasks": 50,
+      "per_task_cdr": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "per_task_cdr_max": 0.0,
+      "per_task_cdr_mean": 0.0,
+      "per_task_cdr_median": 0.0,
+      "per_task_cdr_min": 0.0,
+      "undefined_per_task_ratios": 0
+    },
+    "low_first": {
+      "aggregate_cdr": 0.8279276018650032,
+      "all_pair_costs_known": true,
+      "both_arms_all_final_pass": true,
+      "cost_increase_fraction": 0.0,
+      "defined_per_task_ratios": 50,
+      "failed_flow_costs_included": true,
+      "interpretation": "equal-quality sample savings",
+      "paired_tasks": 50,
+      "per_task_cdr": [
+        0.8058188165981743,
+        0.8070348699563703,
+        0.8317072443901421,
+        0.8097637047835373,
+        0.8092668301989643,
+        0.8176925414457913,
+        0.823109312269478,
+        0.8229662602412747,
+        0.8117638917721957,
+        0.8291092209905733,
+        0.8166489078316462,
+        0.8340106136570206,
+        0.829940119760479,
+        0.8160309932536237,
+        0.8250904086792332,
+        0.8321868288108418,
+        0.8168974419150434,
+        0.8329877192458243,
+        0.8191051759430744,
+        0.821985298986822,
+        0.8372098251925131,
+        0.856108268176741,
+        0.8251845419018671,
+        0.8250023918104411,
+        0.8265352078388413,
+        0.8097636004948674,
+        0.8234611126073555,
+        0.8156138182291328,
+        0.8197001877674147,
+        0.8237609285039754,
+        0.8355427473583094,
+        0.8352036525291361,
+        0.8188268442622951,
+        0.8118836999699569,
+        0.8346371347785109,
+        0.8178839501338033,
+        0.8345837246560963,
+        0.8396756943246507,
+        0.8183573955445071,
+        0.8271644790937053,
+        0.8296189272169044,
+        0.8503630949271198,
+        0.8388433318946914,
+        0.8271910657926681,
+        0.8498180513556456,
+        0.8233624854748945,
+        0.8360441540887588,
+        0.843933833306739,
+        0.8459736528112597,
+        0.8490323826070171
+      ],
+      "per_task_cdr_max": 0.856108268176741,
+      "per_task_cdr_mean": 0.8268679277075985,
+      "per_task_cdr_median": 0.8251374752905501,
+      "per_task_cdr_min": 0.8058188165981743,
+      "undefined_per_task_ratios": 0
+    },
+    "open_source_first": {
+      "aggregate_cdr": 0.791521036031789,
+      "all_pair_costs_known": true,
+      "both_arms_all_final_pass": false,
+      "cost_increase_fraction": 0.16,
+      "defined_per_task_ratios": 50,
+      "failed_flow_costs_included": true,
+      "interpretation": "spending difference only",
+      "paired_tasks": 50,
+      "per_task_cdr": [
+        0.9917256427973961,
+        0.9917610849934048,
+        0.9926942217719105,
+        0.991942231413364,
+        0.992070046334151,
+        0.9916453388256744,
+        0.992432679439893,
+        0.9924559705825431,
+        0.9916365649436025,
+        0.9904283477139436,
+        0.9916022908897176,
+        -0.04835722872137684,
+        0.9928473664915067,
+        0.992200921782112,
+        0.9921093224949595,
+        0.9919460326103398,
+        0.992052838032655,
+        0.9924140197806794,
+        0.9923293368424473,
+        0.9922521687305477,
+        0.9920465403855883,
+        0.9933646777670987,
+        -0.06086595124371937,
+        0.9922352265841757,
+        0.9921051670622604,
+        0.9914468184705921,
+        0.9919585839542747,
+        0.9918560926419882,
+        0.9917887154861945,
+        0.9918688884150242,
+        0.9926909221902017,
+        0.9929736873723417,
+        0.9921324282786885,
+        0.9908041526187535,
+        0.992183081998115,
+        0.9919613602245284,
+        0.9928368598419977,
+        0.9918774078546374,
+        -0.06761258246486279,
+        -0.08261168803483875,
+        0.9909517789416652,
+        -0.4961726137610365,
+        0.9920425118687959,
+        0.9909650400582666,
+        0.9923356055558403,
+        0.9920934499418996,
+        -0.19666478936697454,
+        0.991941917983086,
+        -0.19990746828353667,
+        -0.05861493171178997
+      ],
+      "per_task_cdr_max": 0.9933646777670987,
+      "per_task_cdr_mean": 0.8090840017675746,
+      "per_task_cdr_median": 0.9919523082823072,
+      "per_task_cdr_min": -0.4961726137610365,
+      "undefined_per_task_ratios": 0
+    }
+  },
+  "total_api_usd": "5.805611568",
+  "all_calls": 221,
+  "http_status_counts": {
+    "200": 221
+  },
+  "unknown_cost_calls": 0,
+  "unmatched_calls": 0,
+  "new_calibration_usd": "0",
+  "cost_source_counts": {
+    "generation_total_cost": 220,
+    "response_usage_cost": 1
+  },
+  "key_usage_delta_usd": "5.805611568",
+  "key_delta_minus_ledger_usd": "0E-9",
+  "key_reconciliation_status": "matched",
+  "earlier_separate_fresh50_usd": "2.8850731",
+  "earlier_separate_live_smoke_usd": "0.060291624",
+  "older_costs_included_in_new_cohort": false,
+  "false_public_accepts": [
+    {
+      "task_id": "F32",
+      "arm": "cloudyfan",
+      "category": "cross_source_sets",
+      "stratum": "medium",
+      "classification": "failed",
+      "api_cost_usd": "0.0006008",
+      "classifier_calls_observed": 0,
+      "repair_attempts": 0,
+      "tiers": [
+        "open_source"
+      ]
+    },
+    {
+      "task_id": "F32",
+      "arm": "open_source_first",
+      "category": "cross_source_sets",
+      "stratum": "medium",
+      "classification": "failed",
+      "api_cost_usd": "0.0005848",
+      "classifier_calls_observed": 0,
+      "repair_attempts": 0,
+      "tiers": [
+        "open_source"
+      ]
+    },
+    {
+      "task_id": "F48",
+      "arm": "cloudyfan",
+      "category": "composed_flow_analytics",
+      "stratum": "hard",
+      "classification": "failed",
+      "api_cost_usd": "0.000803",
+      "classifier_calls_observed": 0,
+      "repair_attempts": 0,
+      "tiers": [
+        "open_source"
+      ]
+    }
+  ],
+  "fee_preflight": {
+    "archived_source": "https://openrouter.ai/pricing",
+    "source_sha256": "76a187055417bf7279fe232aa2acd7f5ded07c8208820e73eebe84249d3b17a0",
+    "old_real429_records_checked": 3,
+    "new_paid_posts": 0,
+    "policy_evidence_is_generation_receipt": false
+  },
+  "real429_in_new_trial": 0,
+  "real429_recovery_rate_verified": false,
+  "previous_trial_preservation": {
+    "files": 2369,
+    "identical": true,
+    "prior_inventory_sha256": "60be1cd26735ecd3ed941d75e4685ed7b677d0e832d5b707ef5fc020672087d5",
+    "release_registry_sha256": "1e4899eec63930dc9014d0a089d408c5d3bd650a0b64ececfc6893ca6463142b"
+  },
+  "offline_tests": {
+    "full_passed": 1154,
+    "focused_passed": 50,
+    "real_api_calls_in_tests": 0,
+    "evidence": "docs/evidence/rejection-fees-offline-20261020.json"
+  },
+  "artifacts": {
+    "plan.json": {
+      "path": "runtime/fresh50-recovery-20261020/plan.json",
+      "sha256": "a16d97578ef57a3833b967849113a4e6c42d0775af1d868d749090cd594c3101"
+    },
+    "analysis.json": {
+      "path": "runtime/fresh50-recovery-20261020/analysis.json",
+      "sha256": "8bff6cd83bb8fc6fe45c641173cf65f403b74cda11559c59bfe938279b724d9e"
+    },
+    "per-task.csv": {
+      "path": "runtime/fresh50-recovery-20261020/per-task.csv",
+      "sha256": "7496c718d8ab6131f492f970f916a7dd2632c91f89c61837f2943a693e19ef93"
+    },
+    "report.md": {
+      "path": "runtime/fresh50-recovery-20261020/report.md",
+      "sha256": "150cef8d0bbc2f7cdb170ba437c433b52d5d592eb25ab282d444b83eb937188b"
+    },
+    "dataset-checks.json": {
+      "path": "runtime/fresh50-recovery-20261020/dataset-checks.json",
+      "sha256": "d08e5dcdcef15e1da686f817c8ae2b9cfb21ccb5f4eea70fbe3804f34d069acd"
+    },
+    "offline-smoke-result.json": {
+      "path": "runtime/fresh50-recovery-20261020/offline-smoke-result.json",
+      "sha256": "f17cb9b3cddab809d7b28ca334582877b23e8eab2400d9f26612fc651303c6c9"
+    },
+    "billing-preflight.json": {
+      "path": "runtime/fresh50-recovery-20261020/billing-preflight.json",
+      "sha256": "fce7fe5fd06a62871528175764bbf4da6e252796f69a074feb9be97c43abe9e9"
+    },
+    "ledger-current.json": {
+      "path": "runtime/fresh50-recovery-20261020/ledger-current.json",
+      "sha256": "8f71600dcc1d39d4fa371642c88b69181056a166eb23c81ef55d23261167f039"
+    },
+    "dispatch-complete.json": {
+      "path": "runtime/fresh50-recovery-20261020/dispatch-complete.json",
+      "sha256": "8b24cb2ff8fbe6a6de382ca3e52632022c12aedd565881180723b6dc1ebd3bf4"
+    },
+    "grading-started.json": {
+      "path": "runtime/fresh50-recovery-20261020/grading-started.json",
+      "sha256": "0d5d9c703bfafb8e9591a39f2cd2bab07e2d51748fb8898bff841987ed13c6e6"
+    },
+    "grading-complete.json": {
+      "path": "runtime/fresh50-recovery-20261020/grading-complete.json",
+      "sha256": "d97957d5851b25e3cf88766020bb8efcf6a03c65c0ac2c976e2dfaebab22100c"
+    },
+    "key-before.json": {
+      "path": "runtime/fresh50-recovery-20261020/key-before.json",
+      "sha256": "21ed38a64ecf71a34c628d66481e8c1847d489bb9033e8a6c91c24ac85491b45"
+    },
+    "key-after.json": {
+      "path": "runtime/fresh50-recovery-20261020/key-after.json",
+      "sha256": "b83881161e902d005d7c8ca97f2d2f6f532fcd52cae3b379925cbd46ec23989e"
+    },
+    "key-final-recheck.json": {
+      "path": "runtime/fresh50-recovery-20261020/key-final-recheck.json",
+      "sha256": "67bb1b3d22610d33ed69623bb39a8242f6ec36ca25e90dc3143e85782f43d08e"
+    },
+    "raw-inventory-final.json": {
+      "path": "runtime/fresh50-recovery-20261020/raw-inventory-final.json",
+      "sha256": "a27cecbd5fa15fb2be3b64ba6271b2d7932745e77c2c0ca85716ee19a069a0b8"
+    }
+  },
+  "formal_qualification": "pending",
+  "deployment": false,
+  "source_push": false,
+  "local_commit": false,
+  "interpretation": "CloudyFan48/50 is lower spend, not equal-quality savings. Low-first50/50 vs high50/50 saves82.79% in this sample. Public false accepts bypassed all repair/selector paths.",
+  "limitations": [
+    "One frozen SQL workload; related five-task families; author-assigned difficulty, not independent domains.",
+    "Hidden fixture success is finite coverage, not universal SQL correctness.",
+    "Public-only repair; hidden grades never caused repair or routing.",
+    "All actual open-source API fees counted; no zero-cost local-host assumption.",
+    "First/final primary success requires joint public and hidden pass; unknown is neither failure nor success.",
+    "API POST times exclude reconciliation GET; engine workflow wall includes calls/public verification and inline reconciliation, excludes later batch reconciliation/hidden grading.",
+    "Completed resumed workflows with missing original wall are excluded from wall distribution and counted as missing; interruptions timed separately.",
+    "Independent requests and balanced 12/13 arm positions do not establish cache isolation.",
+    "No new paid calibration. Earlier smoke cost is disclosed separately, never added twice.",
+    "No deployment, push or formal qualification from this comparison."
+  ]
+}

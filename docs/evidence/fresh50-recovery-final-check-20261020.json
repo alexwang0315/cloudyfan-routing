@@ -1,0 +1,25 @@
+{
+  "kind": "offline-final-consistency",
+  "result": "passed",
+  "source_digest": "68d912f7275c0888811591a46c078bebf1afac8263f73654e8f0fb2407555301",
+  "plan_id": "4938ed408f5c715ac1000f00f32365cddf5bde5ce4cc726bbdc143b9f2a3c075",
+  "independent_ledger_cost_and_grade_aggregates": true,
+  "sealed_files_verified": 12,
+  "workflows": 200,
+  "max_generation_attempts": 2,
+  "max_bound_preserved": true,
+  "no_unknown_costs": true,
+  "new_paid_posts_in_check": 0,
+  "hidden_grading_after_all_dispatch": true,
+  "old_trial_files_unchanged": 2369,
+  "quick_check": {
+    "path": "runtime/checks/aff2d966591c40c9a6d5ae6a27d3033c/checks.json",
+    "sha256": "00a2d35c2867d80ae7eb9c0e2e4ac5647f26caf4e401dd1eaa8ab62d6e688a06"
+  },
+  "sanitized_report_sha256": "0bc415d97d0f77e7f4fc19f3f0010f899e43be457f4fe68d129b2508f2645106",
+  "evidence_sha256": "adfad66af56b97799b1a9d0beca59231f5b1233e4c26feef70070d79a4af3633",
+  "doc_csv_sha256": "76f75177986088819fc327289345f4296f1b40d8de21866c77c69432968f94d5",
+  "doc_csv_lf_normalized_only": true,
+  "no_deployment_or_push": true,
+  "formal_qualification": "pending"
+}

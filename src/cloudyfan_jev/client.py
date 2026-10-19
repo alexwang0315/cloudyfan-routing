@@ -90,6 +90,13 @@ def usage(record):
             result.update(cost_usd=cost, cost_source="generation_total_cost")
             result["model"] = reconciliation.get("model") or result["model"]
             result["provider"] = reconciliation.get("provider_name") or result["provider"]
+    policy = record.get('rejection_fee_evidence', {})
+    if (result['cost_usd'] is None and isinstance(policy, dict) and policy.get('verified') is True
+            and policy.get('generation_id') == result['generation_id']
+            and policy.get('request_sha256') == record.get('request_sha256')
+            and policy.get('cost_source') == 'provider_error_no_charge_policy'
+            and policy.get('cost_usd') == '0'):
+        result.update(cost_usd='0', cost_source='provider_error_no_charge_policy')
     if not_dispatched(record):
         result.update(cost_usd="0", cost_source="not_dispatched")
     result["cost_unknown"] = result["cost_usd"] is None
@@ -126,14 +133,27 @@ def rate_limit_rejection(record, requested_model, accepted_models, provider_name
 
 
 class Client(ReceiptStore):
-    def __init__(self, http, key, root: Path):
+    def __init__(self, http, key, root: Path, *, rejection_fee_policy=None):
         if not isinstance(key, str) or not key:
             raise ValueError("A nonempty credential must be supplied without logging it")
         super().__init__(root)
         self.http, self.key = http, key
+        self.rejection_fee_policy = rejection_fee_policy
 
-    def _load(self, directory):
+    def _original_record(self, directory):
         record = super()._load(directory)
+        if not isinstance(record, dict) or set(record) & {
+                'reconciliation', 'rejection_fee_evidence', 'duplicate_generation_id'}:
+            raise ValueError('Original response contains invalid derived evidence')
+        return record
+
+    def _actual_record(self, directory):
+        """Load original/actual receipts without requiring policy-zero validity.
+
+        Explicit GET reconciliation must remain available after policy expiry;
+        actual receipts can replace an expired attribution, never the reverse.
+        """
+        record = self._original_record(directory)
         # Successfully verified reconciliation is immutable. Failed GET attempts
         # remain separate receipts and cannot resolve unknown paid costs.
         receipt = directory / "reconciled.json"
@@ -141,6 +161,18 @@ class Client(ReceiptStore):
             record["reconciliation"] = _read(receipt)
         if (directory / "duplicate-generation.json").exists():
             record["duplicate_generation_id"] = True
+        return record
+
+    def _load(self, directory):
+        record = self._actual_record(directory)
+        policy_path = directory / 'rejection-fee.json'
+        if self.rejection_fee_policy is not None and policy_path.exists() and usage(record)['cost_unknown']:
+            # Validate against the original immutable response, not an invented API body.
+            original = self._original_record(directory)
+            evidence = _read(policy_path)
+            if not self.rejection_fee_policy.validate_saved(_read(directory / 'intent.json'), original, evidence):
+                raise ValueError('Rejection fee evidence no longer matches its scope or response')
+            record['rejection_fee_evidence'] = evidence
         return record
 
     def _assert_resolved(self):
@@ -228,7 +260,7 @@ class Client(ReceiptStore):
         """
         directory = self._directory(cid)
         with self._lock():
-            record = self._load(directory)
+            record = self._actual_record(directory)
             if (directory / "reconciled.json").exists():
                 return record
             gid = usage(record)["generation_id"]
@@ -259,4 +291,14 @@ class Client(ReceiptStore):
                     record["reconciliation"] = receipt
             except (ValueError, TypeError, KeyError, AttributeError, RecursionError):
                 pass
+            if self.rejection_fee_policy is not None and usage(record)['cost_unknown']:
+                evidence = self.rejection_fee_policy.evidence(_read(directory / 'intent.json'), self._original_record(directory))
+                if evidence is not None:
+                    target = directory / 'rejection-fee.json'
+                    if target.exists():
+                        if _read(target) != evidence:
+                            raise ValueError('Conflicting immutable rejection fee evidence')
+                    else:
+                        _immutable(target, evidence)
+                    record['rejection_fee_evidence'] = evidence
             return record

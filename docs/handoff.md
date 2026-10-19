@@ -323,6 +323,49 @@ hash verification, unchanged 2,369-file trial inventory and explicit staged scop
 Private runtime remains excluded. No new real API, receipt refresh, deployment,
 push or formal qualification change is part of this local commit.
 
+## New fresh50 recovery trial — 2026-10-20
+
+User authorizes checking429 fees then running fifty entirely new tasks across
+CloudyFan/high/low-first/OSS-first, with frozen rules, bounded attempts and all
+classifier/repair/failure fees; no deployment or push. An opt-in archived,
+exact-scope text429 fee policy now reaches Client/Core/ledger; policy evidence
+is separate from generation receipts, actual fees win, unknowns still stop.
+[Policy integration](rejection-fee-policy.md) and [offline evidence](evidence/rejection-fees-offline-20261020.json)
+preserve the boundary. Three previous actual429 records were copied to a new
+read-only billing preflight, GET404 retained, policy attribution confirmed with
+zero new paid POSTs. Original fresh50 directory is unchanged. New dataset,
+plan, source seals, runner and fee evidence live under ignored
+runtime/fresh50-recovery-20261020/. Do not mutate sealed files after dispatch.
+
+Fresh50 plan frozen as 4938ed408f5c715ac1000f00f32365cddf5bde5ce4cc726bbdc143b9f2a3c075.
+New projects/events/members cohort passes350 oracle/SQLite and core checks,
+50 mutants; public2/hidden5, ten families, strata15/20/15. All24 arm orders
+occur twice plus a permutation/reverse, with position12/13. Source digest and
+all task/runner/policy/report files are sealed. Native Core uses bounded429
+recovery and the same fee evidence policy in all groups. Run benchmark.py run
+in runtime/fresh50-recovery-20261020 only; successful saved responses are not
+resent. Hidden grading starts only after200 terminal workflow states. Unknown
+fees or identity mismatches stop new POST; read-only reconciliation allowed.
+
+The new cohort is complete: 200 terminal workflows and 200 post-dispatch hidden
+grades, 221 independent POSTs, USD5.805611568, zero unknown/unmatched costs. Key
+usage delta matches exactly. Sources:220 generation receipts plus one explicit
+response usage.cost (generation GET408 retained). No new429 occurred; do not
+claim a real-provider429 recovery rate. At most two generation attempts and
+completed replay0POST are verified. Original2,369-file cohort is unchanged.
+
+[Results](fresh50-recovery-20261020.md): CloudyFan48/50, high50/50,
+low-first50/50, OSS-first49/50. CloudyFan's96.80% lower spend is not equal-quality
+savings. Low-first saves82.79% with50/50 in both arms in this sample. Three
+public false accepts (CF F32/F48, OSS F32) bypassed selection/repair; six CF
+repairs all passed. Never tune or rerun the frozen cohort from hidden outcomes.
+Private raw records remain ignored, with final inventory. New API spending was
+authorized only by the separate trial; maintenance checks remain offline.
+No deployment, push, local commit or formal gate change. Prior smoke and prior
+50-task cost remain separate. Next technical priority is general public-validator
+coverage against independent unseen cases, not claiming that hidden rejection
+itself made this public validator reliable.
+
 ## Public SQL suite and false-accept regression — 2026-10-20
 
 User authorizes offline analysis/general validation strengthening only, no new
@@ -365,3 +408,26 @@ retained as historical evidence, not attributed to this narrower commit.
 the isolated source, original receipt and preserved trial inventories.
 The pending fee-policy implementation and fresh50 report stay in the working
 tree outside this commit. No paid API, deployment, push or formal qualification.
+
+## Remaining fee-policy/report local commit — 2026-10-20
+
+User subsequently authorizes review/local commit of the remaining fee-policy
+integration and sanitized50-task report. This supersedes the pending-only scope
+of12b4f34; its1,166 staged-source and1,182 larger-tree receipts remain history.
+Review found two defects: expired policy blocked actual receipt GET; derived
+fee fields embedded in original response bypassed separate proof validation.
+Policy v2 uses original/actual-only reconciliation, rejecting embedded derived
+fields while preserving actual-fee priority and all unknown/duplicate stops.
+Five reproductions failed before fixes,55 focused cases and1,187 full integration
+tests now pass, with Ruff, both mocked demos and packaging. The application
+still owns paid admission; policy attribution is not a fee cap or permission.
+
+[Commit review](evidence/fee-report-precommit-20261020.json) verifies saved221-call
+costs USD5.805611568, final48/50/50/49 and both original file inventories. No
+grading, paid POST or real receipt GET was rerun. Original v1 code is archived
+from the prior successful build and reconstructs the frozen trial source hash.
+v2 is a separate descriptor version; frozen raw records/reports remain unchanged.
+Historical report statements about no local commit describe capture time. Only
+sanitized code/tests/records are version controlled; private runtime remains local.
+No deployment, push or formal qualification. Unknown historical charges outside
+this cohort are not cleared by this commit or its matched account delta.

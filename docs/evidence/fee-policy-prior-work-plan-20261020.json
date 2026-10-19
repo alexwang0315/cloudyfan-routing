@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "integration_branch": "codex/implement-routing-spec-1",
+  "baseline_commit": "666b79be14ccd227045a3108fb89c1eeb8894e54",
+  "merger_owner": "root",
+  "shared_interfaces": [
+    {
+      "id": "core-run",
+      "owner": "root",
+      "owned_files": [
+        "src/cloudyfan_jev/engine.py"
+      ],
+      "provided_by": "provider-429-bounded-escalation"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "provider-429-bounded-escalation",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/engine.py",
+        "src/cloudyfan_jev/client.py",
+        "tests/test_provider_rejection.py",
+        "docs/agent-state.json",
+        "docs/work-plan.json",
+        "docs/coordination.md",
+        "docs/handoff.md",
+        "docs/verification.md",
+        "docs/provider-429-recovery.md",
+        "docs/evidence/provider-429-offline-20261019.json",
+        "docs/evidence/rate-limit-prior-agent-state-20261019.json",
+        "docs/evidence/rate-limit-prior-work-plan-20261019.json",
+        "docs/evidence/provider-429-precommit-20261019.json"
+      ],
+      "depends_on": [],
+      "consumed_interfaces": []
+    }
+  ]
+}

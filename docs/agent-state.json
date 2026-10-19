@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "scope": "public-sql-validation-suite",
+  "scope": "fee-policy-and-fresh50-commit-review",
   "phase": "offline_verified",
   "baseline_commit": "666b79be14ccd227045a3108fb89c1eeb8894e54",
   "integration_branch": "codex/implement-routing-spec-1",
@@ -16,10 +16,6 @@
   "last_verified": {
     "path": "docs/evidence/rg01-semantic-baseline.json",
     "sha256": "99e3af5d0c2fd758f06c3fb2554e77a105d15f02bc9ed9453b43178e849e74a2"
-  },
-  "current_verification": {
-    "path": "docs/evidence/sql-public-suite-precommit-20261020.json",
-    "sha256": "d18c81241ad450eb7eb8edfc904b87a348cbdfc0f519baa739f90cb3078ec7c7"
   },
   "history": [
     {
@@ -159,6 +155,30 @@
       "record_kind": "historical"
     },
     {
+      "path": "docs/evidence/fee-policy-prior-agent-state-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/fee-policy-prior-work-plan-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/fresh50-recovery-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/public-suite-prior-agent-state-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/public-suite-prior-work-plan-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/sql-public-suite-precommit-20261020.json",
+      "record_kind": "historical"
+    },
+    {
       "path": "docs/evidence/sql-public-suite-offline-20261020.json",
       "record_kind": "historical"
     }
@@ -166,7 +186,7 @@
   "next_steps": [
     {
       "gate": "RG-02",
-      "action": "Opt-in public SQL suite is offline verified with trusted materialized expectations and witnessed coverage. Three known false accepts now reject in offline replay only. Original50 results and costs remain unchanged. Independent unseen validation and supplier qualifications remain pending; no paid followup, deployment or push is authorized by maintenance state.",
+      "action": "Public-suite and scoped429 fee-policy v2 are offline verified. Frozen50 grades/costs remain unchanged; actual provider429 recovery and independent unseen validator/model quality remain unverified. Historical policy evidence is not supplier qualification or new spending authority.",
       "requires_authorization": true
     },
     {
@@ -184,5 +204,9 @@
       "action": "Qualify deployed identity/TLS/secret ownership, actual retention policy and storage/backup coverage, and exclusive maintenance-writer fence.",
       "requires_authorization": true
     }
-  ]
+  ],
+  "current_verification": {
+    "path": "docs/evidence/fee-report-precommit-20261020.json",
+    "sha256": "4d637135fb26f5f325d79c641775a5463a9527a7436a69976fad5f09490af738"
+  }
 }

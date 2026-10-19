@@ -1,6 +1,6 @@
 # RG-01 驗收器資格準備包
 
-日期：2026-10-19；狀態：**SQL 接入已實作／正式資格 pending**。原準備包的 7be8616 基線、外層來源與測試紀錄保留；本輪另依使用者授權新增 [SQL Environment](sql-environment.md)、公開診斷投影與工程分類，不回寫原題／答案／路由門檻。新接入使用獨立版本，工程異常不再映射模型失敗。這不是可由執行器載入的正式資格證書。
+日期：2026-10-19；狀態：**SQL v2 工程／離線審閱材料已補，正式資格 pending**。原準備包的 7be8616 基線、外層來源與測試紀錄保留；本輪另依使用者授權新增 [SQL Environment](sql-environment.md)、公開診斷投影與工程分類，不回寫原題／答案／路由門檻。新接入使用獨立版本，工程異常不再映射模型失敗。最新[正式審閱包](rg01-review-ready.md)另提供八類公開 SQL 語義、獨立答案、反例與資源子程序；這不是可由執行器載入的正式資格證書。
 
 ## 來源與可重用範圍
 
@@ -21,7 +21,7 @@
 
 結果以**精確欄名、列型別、列內容與順序**比對；NULL／重複值／空表／日期邊界與排序均須由各任務契約決定，不能從 SQL 看起來合理或模型信心判通過。公開 fixtures 的 oracle 結果可生成公開診斷；隱藏結果只能留在最後獨立評分，不能進選模或修正。
 
-SQLite 每個 fixture 使用新的 `:memory:` connection，關閉 extension，並啟用 query_only、authorizer、setlimit 與 progress handler。**這是同程序內的有限測試 harness，不是 OS sandbox**。0.25 秒是合作式檢查，可能在 callbacks 之間超過，沒有證明所有 prepare／函式／記憶體分配可被硬中止；正式非受信任 SQL 仍缺程序／記憶體／deadline 隔離證據。
+歷史 v1 SQLite 每個 fixture 使用新的 `:memory:` connection，關閉 extension，並啟用 query_only、authorizer、setlimit 與 progress handler。**這是同程序內的有限測試 harness，不是 OS sandbox**。0.25 秒是合作式檢查，可能在 callbacks 之間超過，沒有證明所有 prepare／函式／記憶體分配可被硬中止；v2 已提供子程序、外部逾時終止、CPU／SQLite allocator 限制及可要求的 RLIMIT_AS；本機嚴格 AS 不可用、整體安全 sandbox／目標環境資格仍未核定，見新審閱包。
 
 ## 可追溯驗證矩陣
 
@@ -36,7 +36,7 @@ SQLite 每個 fixture 使用新的 `:memory:` connection，關閉 extension，�
 | V05 | parser／欄名／型別／輸出與資源界限 | `test_response_json_schema_is_strict_and_errors_do_not_echo_input`、`test_float_results_and_wrong_column_names_are_rejected`、`test_vm_deadline_and_output_limits_disclose_the_bound` | 既有約束；硬程序 deadline／memory 未證。 |
 | V06 | 不支援 SQLite build 不執行 query | 舊 `test_incompatible_sqlite_build_is_an_environment_error_and_does_not_execute`；新 `tests/test_sql_environment.py` | 舊函式回 False 的問題已在新接入分離為工程中斷，含派送前 preflight 與保留答案續跑；不改舊結果。 |
 | V07 | 隱藏結果不改公開 feedback | `test_hidden_resource_errors_do_not_change_public_feedback_or_disclose_fixture_content` | 合成 sentinel 檢查；不能偵測允許字串內所有私人資訊。 |
-| V08 | 核心嚴格三態及唯一修正 | `tests/test_engine.py`、`tests/test_diagnostics.py` | 已完成核心契約，不等於 SQL 接入已完成。 |
+| V08 | 核心嚴格三態及唯一修正 | `tests/test_engine.py`、`tests/test_diagnostics.py` | 核心與 SQL v2 接入均已實作；不等於領域語義已核定。 |
 | V09 | 原始 SQL 結果不是可直接注入診斷 | 原離線 probe 保留；新接入以 `SQL_DIAGNOSTICS` 驗證 flat codes／完整 byte budget | Environment／projection 已實作並離線驗證，沒有 hidden grader 介面；正式語義／覆蓋資格仍 pending。 |
 | V10 | 題目歧義不能靠 oracle 猜 | 既有 final50／hierarchical25 審查，只保留來源與問題類型 | 命名欄位、輸出域、空值／缺資料、投影、排序／tie-break 的具名語義審閱待辦。 |
 
@@ -53,4 +53,14 @@ SQLite 每個 fixture 使用新的 `:memory:` connection，關閉 extension，�
 
 ## 正式核定缺口
 
-owner／reviewer 未指定；首版任務集合、語義／公開 expected 與覆蓋未核定；OS 層隔離／硬資源上限未證；真實模型設定未核定。**SQL Environment／projection／工程分類的實作與離線驗證已補齊**，不再列為缺少程式；這些正式證據缺口仍使 RG-01 保持 pending。補證順序為具名 scope／語義與覆蓋審閱、適用隔離與模型資格；不以本輪 mock 測試自動核定。
+新[正式審閱包](rg01-review-ready.md)及[覆蓋報告](evidence/rg01-sql-coverage.json)已將
+S01～S08 的公開語義、獨立 expected、手算與反例固定為具體審閱輸入；子程序與資源
+控制亦已實作。**這些不是缺少程式的待辦**。剩餘核定事項：
+
+- 首版 scope owner／獨立 reviewer 尚未指定；是否採用此有限任務集合仍須確認。
+- 具名審閱各任務語義／公開 expected／反例覆蓋，以及有限範例誤收的可接受風險。
+- 核定精確目標 OS 的隔離策略。SQLite heap 不等於整個 Python 程序 RAM；本機 AS
+  策略拒絕，其他平台不能繼承此證據。完整 OS security sandbox 尚無資格。
+- 真實模型設定另對 RG-02；供應商與完整費用另對 RG-04，不混成 SQL adapter 欠項。
+
+RG-01 保持 pending；不得以本輪合成／模擬上游結果或實作者自檢代替具名核定。

@@ -37,14 +37,15 @@ def test_public_sql_pass_skips_classification_and_reuses_answer(tmp_path):
     task = contract()
     result = run_sql(engine, 'sql-pass', task)
     assert result['status'] == 'passed' and result['selection'] is None
-    assert result['attempts'][0]['public']['diagnostic_source'] == 'sql-environment-v1'
+    assert result['attempts'][0]['public']['diagnostic_source'] == 'sql-environment-v2'
     assert run_sql(engine, 'sql-pass', task) == result
     assert len(api.requests) == 1 and 'tools' not in api.requests[0]
 
 
 @pytest.mark.parametrize('failure', [OSError, MemoryError, sqlite3.OperationalError])
 def test_validator_engineering_interruption_retains_answer_and_resumes_without_resend(tmp_path, monkeypatch, failure):
-    native_connect = sqlite3.connect
+    from cloudyfan_jev import sql_process
+    native = sql_process.execute
     fail = False
     api = API(messages=[answer('SELECT SUM(n) AS total FROM numbers')])
 
@@ -54,13 +55,13 @@ def test_validator_engineering_interruption_retains_answer_and_resumes_without_r
         fail = True
         return response
 
-    def connect(*args, **kwargs):
+    def execute(*args, **kwargs):
         if fail:
             raise failure('PRIVATE_HOST_DETAIL')
-        return native_connect(*args, **kwargs)
+        return native(*args, **kwargs)
 
     task = contract()
-    monkeypatch.setattr(sqlite3, 'connect', connect)
+    monkeypatch.setattr(sql_process, 'execute', execute)
     engine = sql_core(tmp_path, endpoint)
     with pytest.raises(SqlValidationUnavailable) as caught:
         run_sql(engine, 'validator-interrupted', task)
@@ -95,22 +96,10 @@ def test_invalid_fixture_stops_before_any_model_request(tmp_path):
 
 
 def test_sqlite_build_cannot_silently_lower_contract_limit_before_dispatch(tmp_path, monkeypatch):
+    from cloudyfan_jev import sql_process
     task = contract()
-    native = sqlite3.connect
-
-    class LowerLimit:
-        def __init__(self, connection):
-            self.connection = connection
-
-        def __getattr__(self, name):
-            return getattr(self.connection, name)
-
-        def getlimit(self, kind):
-            if kind == sqlite3.SQLITE_LIMIT_COMPOUND_SELECT:
-                return 1
-            return self.connection.getlimit(kind)
-
-    monkeypatch.setattr(sqlite3, 'connect', lambda *a, **k: LowerLimit(native(*a, **k)))
+    monkeypatch.setattr(sql_process, 'execute', lambda *a, **k:
+                        ([None, 'SQL_EXECUTION_CONTRACT', {}], {}))
     api = API(messages=[answer('SELECT SUM(n) AS total FROM numbers')])
     with pytest.raises(SqlValidationUnavailable):
         run_sql(sql_core(tmp_path, api), 'incompatible-build', task)
@@ -186,6 +175,14 @@ def test_unmatched_diagnostic_contract_is_rejected_before_dispatch(tmp_path):
     with pytest.raises(ValueError, match='diagnostic contract'):
         run_sql(core(tmp_path, api), 'bad-diagnostics', contract())
     assert not api.requests
+
+
+@pytest.mark.parametrize('kind,value', [('INTEGER', '2'), ('TEXT', 2),
+                                       ('INTEGER NOT NULL', None), ('INTEGER PRIMARY KEY', None)])
+def test_fixture_types_cannot_silently_coerce_or_autogenerate_values(kind, value):
+    with pytest.raises(ValueError, match='Invalid public SQL contract'):
+        contract(tables={'numbers': [('n', kind)]}, samples=[{
+            'id': 'public', 'tables': {'numbers': [{'n': value}]}, 'expected': [[2]]}])
 
 
 def test_compound_limit_is_public_and_can_be_repaired_without_changing_limits(tmp_path):
@@ -264,19 +261,9 @@ def test_changed_runtime_contract_stops_before_model_dispatch(tmp_path, monkeypa
 
 
 def test_validator_deadline_is_an_engineering_interruption_not_paid_repair(tmp_path, monkeypatch):
-    from types import SimpleNamespace
-    from cloudyfan_jev import sql_executor
-    native_clock = sql_executor.time.monotonic
+    from cloudyfan_jev import sql_process
+    native = sql_process.execute
     after_answer = False
-    ticks = 0
-
-    def clock():
-        nonlocal ticks
-        if not after_answer:
-            return native_clock()
-        ticks += 1
-        return float(ticks)
-
     api = API(messages=[answer('SELECT SUM(n) AS total FROM numbers')])
 
     def endpoint(request):
@@ -285,7 +272,12 @@ def test_validator_deadline_is_an_engineering_interruption_not_paid_repair(tmp_p
         after_answer = True
         return response
 
-    monkeypatch.setattr(sql_executor, 'time', SimpleNamespace(monotonic=clock))
+    def execute(*args, **kwargs):
+        if after_answer:
+            raise sql_process.WorkerUnavailable('SQL_VALIDATION_TIMEOUT')
+        return native(*args, **kwargs)
+
+    monkeypatch.setattr(sql_process, 'execute', execute)
     with pytest.raises(SqlValidationUnavailable) as caught:
         run_sql(sql_core(tmp_path, endpoint), 'deadline', contract())
     assert caught.value.code == 'SQL_VALIDATION_TIMEOUT' and len(api.requests) == 1
@@ -322,18 +314,15 @@ def test_unknown_sqlite_error_does_not_guess_that_the_model_was_wrong(tmp_path):
 
 def test_engineering_interruption_keeps_budget_hold_and_resume_does_not_pay_again(tmp_path, monkeypatch):
     from datetime import datetime, timezone
-    from types import SimpleNamespace
-    from cloudyfan_jev import sql_executor
+    from cloudyfan_jev import sql_process
     from cloudyfan_jev.budget import Authorization, BudgetStore, BudgetedCore, EnforcedBound
-    native_clock = sql_executor.time.monotonic
-    interrupted, ticks = False, 0
+    native = sql_process.execute
+    interrupted = False
 
-    def clock():
-        nonlocal ticks
-        if not interrupted:
-            return native_clock()
-        ticks += 1
-        return float(ticks)
+    def execute(*args, **kwargs):
+        if interrupted:
+            raise sql_process.WorkerUnavailable('SQL_VALIDATION_TIMEOUT')
+        return native(*args, **kwargs)
 
     api = API(messages=[answer('SELECT SUM(n) AS total FROM numbers')])
 
@@ -350,7 +339,7 @@ def test_engineering_interruption_keeps_budget_hold_and_resume_does_not_pay_agai
     bounds[engine.decision['version']] = EnforcedBound('.001', 'synthetic')
     controlled = BudgetedCore(engine, store, model_bounds=bounds, tool_bounds={}, verify_bound=lambda *a: True)
     task = contract()
-    monkeypatch.setattr(sql_executor, 'time', SimpleNamespace(monotonic=clock))
+    monkeypatch.setattr(sql_process, 'execute', execute)
     with pytest.raises(SqlValidationUnavailable):
         run_sql(controlled, 'held-sql', task)
     assert store.report()['known_usd'] == '0.01' and store.report()['reserved_usd'] != '0'

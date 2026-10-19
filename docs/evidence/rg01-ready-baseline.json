@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "rg01-review-ready-baseline",
+  "tested_commit": "bdc3b084bb2db680afaf42d17cf33b953cbec850",
+  "source_digest": "b318bb59eee43aef1cba01f0825da72f39ff2fa5a65475881f0c3d9158c4dc5e",
+  "tests_passed": 991,
+  "reused_unchanged_source_evidence": "docs/evidence/rg01-sql-offline.json",
+  "prior_evidence_sha256": "6ec0f4daf130cdf4ac17d13ff1228e5b6b42d609ae0d297fcb79b1844dbaa0a3",
+  "new_full_test_run": false,
+  "production_qualified": false
+}

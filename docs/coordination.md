@@ -87,3 +87,10 @@ nothing.
 ## RG-01 SQL Environment 接入
 
 目前 `rg01-sql-environment` 計畫接續 `rg04-zero-rate`，原 state／plan 已保存於 `docs/evidence/rg01-sql-prior-state.json` 與 `rg01-sql-prior-work-plan.json`。單一 integrator 擁有 `sql.py`／`sql_executor.py`、公開接入測試及文件；消費既有 Core.run，不改 engine、Client、BudgetedCore、diagnostic schema 或正式 registry。沒有平行改檔／代理人派工。唯一修正及原付費回應重用規則保留。
+
+## RG-01 review-ready ownership
+
+root owns sql.py, the worker/process boundary, public review catalog, regression tests and
+review-ready evidence/docs under the active work plan. No routing/diagnostic schema/
+provider/budget interface change or independent-human approval is implied. Preserve v1
+receipts and failure evidence. Formal gate statuses are unchanged.

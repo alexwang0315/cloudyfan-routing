@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "catalog_version": "sql-review-catalog-v1",
+  "kind": "offline",
+  "catalog_sha256": "d26b2ce3dd090860512075a4220f8db76468b13ce6e47b00d51b7747f2639ec1",
+  "cases": [
+    {
+      "id": "S01",
+      "operations": [
+        "SUM",
+        "NULL",
+        "empty"
+      ],
+      "contract_version": "sql-environment-v2:639b49263924b3b882c9f548c2b1bbc10a9f54b112c0abd4b552364e011ec3c3",
+      "public_samples": 5,
+      "hand_example_agrees": true,
+      "reference_passes": true,
+      "deliberate_mutants": 2,
+      "mutants_rejected": 2
+    },
+    {
+      "id": "S02",
+      "operations": [
+        "WHERE",
+        "date-boundary",
+        "ORDER BY"
+      ],
+      "contract_version": "sql-environment-v2:881275699e38e58f3700d8bdf765e4a5d61e2fdd5bbc5cad2e075b72eda5caa0",
+      "public_samples": 5,
+      "hand_example_agrees": true,
+      "reference_passes": true,
+      "deliberate_mutants": 2,
+      "mutants_rejected": 2
+    },
+    {
+      "id": "S03",
+      "operations": [
+        "GROUP BY",
+        "COUNT",
+        "SUM",
+        "duplicates"
+      ],
+      "contract_version": "sql-environment-v2:46b3fac54e7664c0516a4a0b7f1479c8de11b04e982c34bc06a32f65ed6a06ac",
+      "public_samples": 5,
+      "hand_example_agrees": true,
+      "reference_passes": true,
+      "deliberate_mutants": 2,
+      "mutants_rejected": 2
+    },
+    {
+      "id": "S04",
+      "operations": [
+        "LEFT JOIN",
+        "COUNT",
+        "missing"
+      ],
+      "contract_version": "sql-environment-v2:bfd6d3e8fe820dac56eb2152967a0d2c29510bba035a6a93b45f252244f43ee0",
+      "public_samples": 5,
+      "hand_example_agrees": true,
+      "reference_passes": true,
+      "deliberate_mutants": 2,
+      "mutants_rejected": 2
+    },
+    {
+      "id": "S05",
+      "operations": [
+        "NOT EXISTS",
+        "NULL",
+        "anti-join"
+      ],
+      "contract_version": "sql-environment-v2:ef24d20f78dc89a33af96678ef71b2cd01c706f42c891fe1680f8a049c05f9c8",
+      "public_samples": 5,
+      "hand_example_agrees": true,
+      "reference_passes": true,
+      "deliberate_mutants": 2,
+      "mutants_rejected": 2
+    },
+    {
+      "id": "S06",
+      "operations": [
+        "ROW_NUMBER",
+        "tie-break",
+        "NULL-order"
+      ],
+      "contract_version": "sql-environment-v2:74cd7e0ad3c0806aab031973dc8b647acc3fc3a7cf2d8ecf78599c47b149ad67",
+      "public_samples": 5,
+      "hand_example_agrees": true,
+      "reference_passes": true,
+      "deliberate_mutants": 1,
+      "mutants_rejected": 1
+    },
+    {
+      "id": "S07",
+      "operations": [
+        "window-SUM",
+        "ROWS",
+        "COALESCE",
+        "order"
+      ],
+      "contract_version": "sql-environment-v2:4609eb872a46c7a4a201cc308878048073814d465e86185cf54b6b6ed7f9314a",
+      "public_samples": 5,
+      "hand_example_agrees": true,
+      "reference_passes": true,
+      "deliberate_mutants": 1,
+      "mutants_rejected": 1
+    },
+    {
+      "id": "S08",
+      "operations": [
+        "UNION",
+        "deduplication",
+        "text-order"
+      ],
+      "contract_version": "sql-environment-v2:2cb37a434d1a419b26569ffdaa2b728f61fd5fbe617756c98455f0264d7d9237",
+      "public_samples": 5,
+      "hand_example_agrees": true,
+      "reference_passes": true,
+      "deliberate_mutants": 2,
+      "mutants_rejected": 2
+    }
+  ],
+  "human_review": "pending",
+  "model_calls": 0,
+  "limitation": "Finite public examples and mutants do not prove general SQL correctness; no real model, provider, customer data or OS security sandbox qualification."
+}

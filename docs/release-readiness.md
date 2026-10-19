@@ -4,7 +4,7 @@
 
 ## 三個狀態分開記錄
 
-🟢 **既有 RG-04 v2 與本輪 RG-01 SQL 接入是已交付的實作子集，正式資格需另核定。** 本輪 [SQL Environment](sql-environment.md)補上公開診斷投影、工程中斷與保留答案續跑，實際離線結果見[本輪證據](evidence/rg01-sql-offline.json)。前輪 RG-04 v2 的 `f1dd57c8a7963422c5ffd7e1c27766c7115ebd9b`／944 項完整測試保留為[歷史證據](evidence/rg04-zero-rate-offline.json)，不混成這次測試數；完整檢查歷史見[驗證紀錄](verification.md)。
+🟢 **既有 RG-04 v2 與本輪 RG-01 SQL 接入是已交付的實作子集，正式資格需另核定。** 本輪 [SQL Environment](sql-environment.md)補上公開診斷投影、工程中斷與保留答案續跑，實際離線結果見[v1 歷史證據](evidence/rg01-sql-offline.json)；最新 v2 見[正式審閱包](rg01-review-ready.md)與[本輪證據](evidence/rg01-review-ready-offline.json)。前輪 RG-04 v2 的 `f1dd57c8a7963422c5ffd7e1c27766c7115ebd9b`／944 項完整測試保留為[歷史證據](evidence/rg04-zero-rate-offline.json)，不混成這次測試數；完整檢查歷史見[驗證紀錄](verification.md)。v2 的子程序／CPU／SQLite allocator／外部逾時不等於整個程序 RAM 或 OS security sandbox；嚴格 AS 模式不支持即拒絕。
 
 | 狀態 | 表示什麼 | 目前如何認定 |
 |---|---|---|
@@ -20,7 +20,7 @@
 
 | 放行項 | 實作完成：已交付範圍 | 離線驗證完成：可追溯證據 | 正式資格 | 首版適用性 |
 |---|---|---|---|---|
-| **RG-01 公開驗收與修正** | 完成：可注入驗收器、版本化公開診斷、唯一修正；新增 SQL Environment、公開診斷投影及工程異常分類。 | 完成：[診斷／修正](public-diagnostics.md)、[SQL 接入](sql-environment.md)、[跨接入契約](transport-contracts.md)，`Core.run`＋真 SQLite／MockTransport。 | **待核定**：實際領域語義／expected、覆蓋、具名審閱及適用的硬隔離。 | 所有路由必需。 |
+| **RG-01 公開驗收與修正** | 完成：可注入驗收器、版本化公開診斷、唯一修正；新增 SQL v2 子程序、資源策略、公開診斷投影、工程分類及八類語義審查材料。 | 完成：[診斷／修正](public-diagnostics.md)、[SQL 接入](sql-environment.md)、[跨接入契約](transport-contracts.md)，`Core.run`＋真 SQLite／MockTransport。 | **待核定**：審閱包的具名 scope／語義／expected／覆蓋及目標環境隔離；本機嚴格 AS 不可用。 | 所有路由必需。 |
 | **RG-02 模型／強度／量化資格** | 完成：資格包、三模型池、精確設定綁定、未合格候選排除及效期檢查。 | 完成：[合成資格包與核定阻擋](qualification.md)、[評分快照接入](score-integration.md)。 | **待核定**：首版真實候選、門檻與設定。 | 所有實際使用的模型必需；量化只在使用該設定時適用。 |
 | **RG-03 評分來源與更新** | 完成：既有來源 adapters／受控匯入、固定快照、更新預覽、原子切換與 audit。 | 完成：[來源與快照](score-integration.md)、[更新操作](score-update-operations.md)；LiveBench v1 有歷史公開唯讀 smoke，非正式模型池。 | **待核定**：實際啟用來源的權限、映射、時效與更新責任。 | 三池所用來源必需；不用同時驗所有來源。 |
 | **RG-04 完整成本與可強制上限** | 完成：共享預算、完整預留、核帳／未知停止、供應商 adapter、元件上界及 **v2 完整零費率保證路徑**。 | 完成：[預算](budget-admission.md)、[供應商契約](provider-bounds.md)、[元件契約](component-bounds.md)、[v2 驗證](evidence/rg04-zero-rate-offline.json)。 | **待核定**：真實供應商上界／零費率及完整帳務證據。 | 任何受控模型／工具執行必需，含分類、初答、修正與失敗。 |

@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "rg01-review-ready-offline",
+  "baseline_commit": "bdc3b084bb2db680afaf42d17cf33b953cbec850",
+  "tested_tree": "uncommitted inputs identified by source_digest",
+  "source_digest": "a7495567821e97142ffd2d2e52e224d882894830a08ebd29a21d621704a27f72",
+  "tests_passed": 1031,
+  "new_cases": 40,
+  "pytest_seconds": "137.47",
+  "finished_at": "2026-10-19T06:32:21.514386+00:00",
+  "private_receipt_path": "runtime/checks/e6e92cef7ee04345a7f40e8ebf9291e2/checks.json",
+  "integration_receipt_sha256": "ac6e3f1dfe8f8a984aefd7fd6e510eee9f00911a2546c53ebe6248cde7535847",
+  "private_console_path": "runtime/rg01-review-ready-20261019/integration-final-console.log",
+  "console_sha256": "ff3fc4e8671d43a25456015f344a7d7f11f9f0e22516e46a2b874045d59964d4",
+  "checks": [
+    "locked-offline-sync",
+    "dependency-consistency",
+    "project-records",
+    "ruff",
+    "pytest",
+    "core-high-mock",
+    "score-high-mock",
+    "sdist-wheel"
+  ],
+  "coverage": {
+    "path": "docs/evidence/rg01-sql-coverage.json",
+    "sha256": "4961914450c59a71f20d6420c9570faf04c38f7779972d3a246f69cb7be2b1f9",
+    "task_templates": 8,
+    "public_samples": 40,
+    "deliberate_mutants_rejected": 14,
+    "constant_answer_rejections": 8,
+    "human_review": "pending"
+  },
+  "private_evidence_sha256": {
+    "runtime/rg01-review-ready-20261019/completion-requirements.json": "5310b56be5444c93c49801cf574451848884ac4d108681db607082b17af04a1f",
+    "runtime/rg01-review-ready-20261019/corrections.xml": "2e305598d01a7a34060d54960bb37b1a180888daf0e995aad9c3e6c5aaf07040",
+    "runtime/rg01-review-ready-20261019/data-capability-probe.json": "cc4e5183d4fb16a2a193c4741a7fe77ef8ec2c2865d508e7d1f08e61b878c70d",
+    "runtime/rg01-review-ready-20261019/extra-resource-tests.xml": "f657cdee670aadfc461218ea45b4a8c0139fb560cb43a60beea5799efdf582c6",
+    "runtime/rg01-review-ready-20261019/integration-console.log": "6acfb62ddb753bc7dc80d0e63ea3318147983802e670a903dfdea1230e7dd5ee",
+    "runtime/rg01-review-ready-20261019/integration-final-console.log": "ff3fc4e8671d43a25456015f344a7d7f11f9f0e22516e46a2b874045d59964d4",
+    "runtime/rg01-review-ready-20261019/interim-audit.json": "4897a03ffa54494355d938be8653082961db03fce52d24f692053c5d0733bc9c",
+    "runtime/rg01-review-ready-20261019/memory-capability-probe.json": "e988bcf5d9d4d73a0dc8e4037c5ecf91a4df412465ddf341b1ab2787a05fa388",
+    "runtime/rg01-review-ready-20261019/process-final.xml": "2d9e12950b00d5ee74f8e32bb632905f0c9c7a69df305e9c6c02d7e9fdcbd200",
+    "runtime/rg01-review-ready-20261019/process-initial.xml": "667c863b94f050fcb94881038f209843eab441a41707222cc86640823f526380",
+    "runtime/rg01-review-ready-20261019/regression-corrections.xml": "d8881bd6cb1a2374287a547f7e89e9ac6efb9a1d2a1d9d4234fc39d3c9e389ef",
+    "runtime/rg01-review-ready-20261019/semantics-initial.xml": "97350a4d017564701292195af813926c534a03cc4a8596725006d2f2f34f24e0",
+    "runtime/rg01-review-ready-20261019/soft-memory-capability-probe.json": "f37d11249e0689db8b4d138710f367074b4980f3465dddb5b9c7be7adcb71f22",
+    "runtime/rg01-review-ready-20261019/wheel-smoke.json": "a0846471e7fdd6e38f78b316a91588ef053839c318e571192d52917616bb2fd2",
+    "runtime/rg01-review-ready-20261019/worker-observation.json": "92539f237668e406df960a5776d56de34d711c48066345675de0a7938553f73f"
+  },
+  "integration_artifacts_sha256": {
+    "runtime/checks/e6e92cef7ee04345a7f40e8ebf9291e2/dist/.gitignore": "684888c0ebb17f374298b65ee2807526c066094c701bcc7ebbe1c1095f494fc1",
+    "runtime/checks/e6e92cef7ee04345a7f40e8ebf9291e2/dist/cloudyfan_jev_core-0.1.0-py3-none-any.whl": "1bf5f12fac0842564c9d9fedbee00069ec34c6e60cb2e22c53eb9e2b78c8ca2a",
+    "runtime/checks/e6e92cef7ee04345a7f40e8ebf9291e2/dist/cloudyfan_jev_core-0.1.0.tar.gz": "26f9d29001cd292a6c7b9537a5ca5f7fd57f77abddf82b63102479c0f51c944d"
+  },
+  "wheel_source_and_actual_worker_smoke": "passed",
+  "failures_preserved": [
+    {
+      "receipt": "runtime/checks/acc4d18d8ee24d4685dee75b3aa4e3ae/checks.json",
+      "passed_tests": 1025,
+      "failed_tests": 1,
+      "reason": "synthetic project-state source directory coupled to active ownership; fixture now creates its own source tree; checker unchanged"
+    },
+    {
+      "receipt": "runtime/rg01-review-ready-20261019/semantics-initial.xml",
+      "passed_tests": 18,
+      "failed_tests": 1,
+      "reason": "completed cached result does not change resumed flag; assert exact result/no POST instead"
+    },
+    {
+      "kind": "local-memory-capability",
+      "receipts": [
+        "runtime/rg01-review-ready-20261019/memory-capability-probe.json",
+        "runtime/rg01-review-ready-20261019/data-capability-probe.json",
+        "runtime/rg01-review-ready-20261019/soft-memory-capability-probe.json"
+      ],
+      "result": "local AS/DATA settings rejected; strict AS mode preflight stops without fallback"
+    },
+    {
+      "kind": "record-consistency",
+      "reason": "initial last_verified pointed at uncommitted v1 evidence; rejected by checker, replaced with commit-blob-verified baseline"
+    }
+  ],
+  "formal_registry_sha256": "1e4899eec63930dc9014d0a089d408c5d3bd650a0b64ececfc6893ca6463142b",
+  "formal_gates_pending": 10,
+  "engineering_review_material_complete": true,
+  "production_qualified": false,
+  "real_api_calls": 0,
+  "account_api_calls": 0,
+  "real_api_cost_usd": "0",
+  "supplier_contact": false,
+  "deployment": false,
+  "push": false,
+  "new_git_commit": false,
+  "limits": [
+    "Finite public fixtures and known mutants cannot prove general SQL correctness",
+    "Named scope/expected/coverage and acceptable false acceptance review pending",
+    "SQLite allocator cap is not total Python process RAM; strict AS unavailable on tested Darwin",
+    "Other OS address-space enforcement and full OS security sandbox not qualified",
+    "No real model/provider/production deployment/quality-cost claims"
+  ]
+}

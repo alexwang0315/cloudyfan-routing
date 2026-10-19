@@ -23,6 +23,8 @@ def read(root, name='docs/agent-state.json'):
 
 @pytest.fixture
 def checkout(tmp_path):
+    # This synthetic source tree exists regardless of active ownership metadata.
+    (tmp_path / 'src').mkdir()
     baseline_evidence = read(ROOT)['last_verified']['path']
     for name in ['docs/agent-state.json', 'docs/release-gates.json', 'docs/work-plan.json',
                  baseline_evidence]:

@@ -240,3 +240,22 @@ This review authorizes only the user-requested local commit. No API spend, deplo
 
 
 交付紀錄更新後另跑 `./scripts/check --quick`，收據 `runtime/checks/78c0d447a65d46dab555cdb5dcbe1e99/checks.json`，確認 `implementation_complete=True`、`production_qualification_recorded=False`。文件 116 筆本地連結、證據／來源雜湊、work-plan 及 diff 檢查通過；程式來源指紋為 `b318bb59eee43aef1cba01f0825da72f39ff2fa5a65475881f0c3d9158c4dc5e`。後續文件封裝檢查僅重建包，不重跑或另稱新一批模型實驗。
+
+
+## 2026-10-19：RG-01 集中補齊工程與離線審閱材料
+
+基線 `bdc3b084bb2db680afaf42d17cf33b953cbec850`。新增 SQL v2 disposable worker、bounded pipes、父程序 deadline／kill／reap、CPU／SQLite hard_heap_limit 及嚴格可選 RLIMIT_AS；worker 不繼承憑證環境與開啟 FD，不匯入 provider SDK。路由、生成上限、預算介面與正式 registry 不變。
+
+`sql-review-catalog-v1` 提供 S01～S08、每類五組公開合成資料、獨立 Python oracle 與手算基準、14 個已知錯誤 SQL；另測複製首組常數答案的誤收。這不是新模型實驗或一般 SQL 正確性證明。
+
+失敗紀錄保留：本機 RLIMIT_AS／DATA 設定遭拒；嚴格配置會派送前停止。語義初測 18 pass／1 fail，原因為測試錯誤期待已完成結果重讀有 resumed=True，改為核對原結果及請求數不變。新 baseline 曾錯連 v1 uncommitted evidence，project-state 正確拒絕，已用 Git commit blob 指紋核對後建立獨立 baseline 紀錄。原始記錄留於 ignored `runtime/rg01-review-ready-20261019/`。
+
+SQLite 32 MiB 限制不是 Python 全部 RAM，process containment 不是完整 OS security sandbox。具名 scope／語義／expected／覆蓋／目標環境核定仍 pending；真實模型、費用及品質主張分別沿其他 gate。沒有 API、供應商聯絡、硬體操作、模型下載、部署或推送。實際最終驗證、來源雜湊與收據見[本輪離線證據](evidence/rg01-review-ready-offline.json)。
+
+首次整套驗證為 1025 pass／1 fail，收據 `runtime/checks/acc4d18d8ee24d4685dee75b3aa4e3ae/checks.json`。失敗是 project-state synthetic fixture 依賴當前 ownership 有未提供的 src 介面才建立來源目錄；改為測試自建 src，且 work-plan 保留既有 core-run 介面依賴。checker 未修改。審閱另補公開 fixture 型別拒絕：禁止 SQLite affinity 將字串轉整數／整數轉文字，以及 INTEGER PRIMARY KEY 的 NULL 自動編號；新增四項回歸。覆蓋 hash 現在包含全部公開資料／expected、手算、操作、reference 與 mutants。
+
+最後審閱另固定平台 kernel／architecture，並要求 worker 回報的 SQLite version／native limits／執行契約與父程序完全一致；不一致在 preflight 拒絕。這避免移除環境變數後載入不同 SQLite runtime 而沿用父程序假定。對應回歸收據保留於本輪 runtime。
+
+最終 `./scripts/check --integration` 全通過：**1031 passed in 137.47s**，加上 Ruff、locked/offline sync、依賴／紀錄、兩個 mock high-route demo 與 sdist／wheel；收據 `runtime/checks/e6e92cef7ee04345a7f40e8ebf9291e2/checks.json`。對照 v1 991 項，本輪新增 40 項，沒有新增模型請求。來源精確對應本輪離線摘要。
+
+新 wheel 的 sql／worker／process／review／executor bytes 已與來源逐一核對，再從解開的 wheel package 實際執行 SQL 子程序驗收通過；原環境與 wheel 執行區分保留。公開覆蓋報告為 8 類／40 組、14 個已知 mutants 被拒絕，八類常數答案拒絕另在完整測試中驗證。狀態紀錄標示本輪工程／離線材料完成，正式十 gate 仍 pending；後續快檢與文件重建包只確認完成紀錄，不另稱新完整測試。

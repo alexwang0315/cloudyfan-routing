@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "scope": "rg01-sql-environment-offline",
+  "scope": "rg01-review-ready-offline",
   "phase": "offline_verified",
-  "baseline_commit": "7be8616ac5ca155e2ab6a633ca3401760afe1e47",
+  "baseline_commit": "bdc3b084bb2db680afaf42d17cf33b953cbec850",
   "integration_branch": "codex/implement-routing-spec-1",
   "constraints": {
     "paid_api": false,
@@ -14,12 +14,12 @@
   "release_registry": "docs/release-gates.json",
   "work_plan": "docs/work-plan.json",
   "last_verified": {
-    "path": "docs/evidence/rg01-sql-baseline.json",
-    "sha256": "2e36bc2e9b1322d28d95fcfea1502818a83c7fd1ec6cabf7cef9e788620d7616"
+    "path": "docs/evidence/rg01-ready-baseline.json",
+    "sha256": "3ac10104f7a73a3250de8ff7b269766264280a3fb474ce58024e07f2b27ca376"
   },
   "current_verification": {
-    "path": "docs/evidence/rg01-sql-offline.json",
-    "sha256": "6ec0f4daf130cdf4ac17d13ff1228e5b6b42d609ae0d297fcb79b1844dbaa0a3"
+    "path": "docs/evidence/rg01-review-ready-offline.json",
+    "sha256": "858a616039a82bec2a02d83e7c14b901cd2da3738c61eaf5eac54252a23fc87f"
   },
   "history": [
     {
@@ -61,12 +61,20 @@
     {
       "path": "docs/evidence/release-preparation-precommit-20261019.json",
       "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-ready-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-ready-prior-work-plan.json",
+      "record_kind": "historical"
     }
   ],
   "next_steps": [
     {
       "gate": "RG-01",
-      "action": "Review named SQL task semantics, public expected rows/coverage, applicable process isolation and real model qualification; SQL Environment/projection/engineering classification is implemented and offline verified. Formal RG-01 remains pending.",
+      "action": "Named review of S01-S08 scope, independent expected rows, finite mutation/constant-answer coverage and acceptable false acceptance; qualify exact target OS isolation (strict AS unavailable on tested Darwin). SQL v2 engineering and offline review material is complete; RG-01 remains pending.",
       "requires_authorization": true
     },
     {

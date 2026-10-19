@@ -9,11 +9,12 @@ import json
 
 from .diagnostics import DiagnosticContract
 from . import sql_executor as executor
+from . import sql_process
 
 
-VERSION = 'sql-environment-v1'
+VERSION = 'sql-environment-v2'
 SQL_DIAGNOSTICS = DiagnosticContract(
-    version='sql-public-diagnostics-v1', source=VERSION, allowed_fields=('checks',))
+    version='sql-public-diagnostics-v2', source=VERSION, allowed_fields=('checks',))
 _MODEL_ERRORS = frozenset({
     'SQL_READ_ONLY_REQUIRED', 'SQL_RESULT_COLUMNS', 'SQL_RESULT_TYPES',
     'SQL_OUTPUT_LIMIT', 'SQL_RESOURCE_LIMIT', 'SQL_UNSAFE', 'SQL_EXECUTION_ERROR',
@@ -51,6 +52,14 @@ def _cell(value):
     return type(value) is str and len(value.encode('utf-8')) <= executor.MAX_OUTPUT_BYTES
 
 
+def _typed_cell(value, kind):
+    # Do not let SQLite affinity or INTEGER PRIMARY KEY auto-assignment silently
+    # rewrite the supposedly frozen public fixture before validation.
+    if value is None:
+        return 'NOT NULL' not in kind and kind != 'INTEGER PRIMARY KEY'
+    return _cell(value) and type(value) is (int if kind.startswith('INTEGER') else str)
+
+
 def _validate_spec(spec):
     if (not isinstance(spec['version'], str) or not spec['version'].strip()
             or not isinstance(spec['prompt'], str) or not spec['prompt'].strip()
@@ -74,10 +83,10 @@ def _validate_spec(spec):
             raise ValueError('SQL samples must contain only complete public inputs and expected rows')
         ids.add(sample['id'])
         for table, rows in sample['tables'].items():
-            fields = {c[0] for c in spec['tables'][table]}
+            fields = dict(spec['tables'][table])
             if (not isinstance(rows, list) or len(rows) > 1000
-                    or any(not isinstance(row, dict) or set(row) != fields
-                           or not all(_cell(v) for v in row.values()) for row in rows)):
+                    or any(not isinstance(row, dict) or set(row) != set(fields)
+                           or not all(_typed_cell(v, fields[key]) for key, v in row.items()) for row in rows)):
                 raise ValueError('SQL public input rows must match the bounded schema')
         expected = sample['expected']
         if (not isinstance(expected, list) or len(expected) > executor.MAX_OUTPUT_ROWS
@@ -97,8 +106,12 @@ class SqlContract:
     """
     _public_json: str
     _runtime_json: str
+    require_address_space: bool
 
-    def __init__(self, *, version, prompt, tables, expected_columns, samples):
+    def __init__(self, *, version, prompt, tables, expected_columns, samples,
+                 require_address_space=False):
+        if type(require_address_space) is not bool:
+            raise ValueError('require_address_space must be boolean')
         try:
             encoded = _json(dict(version=version, prompt=prompt, tables=tables,
                                  expected_columns=expected_columns, samples=samples))
@@ -108,7 +121,12 @@ class SqlContract:
         except (ValueError, TypeError, UnicodeError, RecursionError):
             raise ValueError('Invalid public SQL contract') from None
         object.__setattr__(self, '_public_json', encoded)
-        object.__setattr__(self, '_runtime_json', _json(executor._execution_constraints()))
+        object.__setattr__(self, 'require_address_space', require_address_space)
+        object.__setattr__(self, '_runtime_json', _json(self._constraints()))
+
+    def _constraints(self):
+        return {'sqlite': executor._execution_constraints(),
+                'process': sql_process.constraints(self.require_address_space)}
 
     @property
     def contract_version(self):
@@ -136,10 +154,11 @@ class SqlEnvironment:
         try:
             self._check_runtime()
             # Trusted DDL/data and native limits must work before a model POST.
-            for sample in self.spec['samples']:
-                _, error, _ = executor._execute_fixture(
+            samples = self.spec['samples'] or [{'tables': {name: [] for name in self.spec['tables']}}]
+            for sample in samples:
+                _, error, _ = self._execute(
                     self.spec['tables'], ['preflight'], sample['tables'],
-                    'SELECT 1 AS preflight', public=True)
+                    'SELECT 1 AS preflight')
                 if error:
                     raise SqlValidationUnavailable('SQL_VALIDATION_PREFLIGHT')
         except SqlValidationUnavailable:
@@ -148,8 +167,16 @@ class SqlEnvironment:
             raise SqlValidationUnavailable('SQL_VALIDATION_PREFLIGHT') from None
 
     def _check_runtime(self):
-        if _json(executor._execution_constraints()) != self.contract._runtime_json:
+        if _json(self.contract._constraints()) != self.contract._runtime_json:
             raise SqlValidationUnavailable('SQL_VALIDATION_RUNTIME_CHANGED')
+
+    def _execute(self, tables, columns, data, sql):
+        try:
+            result, _ = sql_process.execute(tables, columns, data, sql,
+                                           require_address_space=self.contract.require_address_space)
+            return result
+        except sql_process.WorkerUnavailable as error:
+            raise SqlValidationUnavailable(error.code) from None
 
     def tools_schema(self):
         return []
@@ -175,8 +202,8 @@ class SqlEnvironment:
             return {'passed': None, 'checks': ['SQL_NO_PUBLIC_SAMPLES']}
         checks = []
         for sample in self.spec['samples']:
-            rows, error, detail = executor._execute_fixture(
-                self.spec['tables'], self.spec['expected_columns'], sample['tables'], sql, public=True)
+            rows, error, detail = self._execute(
+                self.spec['tables'], self.spec['expected_columns'], sample['tables'], sql)
             if error in {'SQL_EXECUTION_CONTRACT', 'SQL_VALIDATION_ENVIRONMENT'}:
                 raise SqlValidationUnavailable('SQL_VALIDATION_ENVIRONMENT')
             if detail.get('compiler', {}).get('category') == 'wall_time_limit':

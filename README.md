@@ -127,3 +127,5 @@ with httpx.Client() as http:
 Runtime receipts 含使用者 prompt／答案，預設寫入 private permissions，但仍應視為敏感資料。Git 只納入原始碼、合成測試、文件、歷史配置與來源雜湊，不納入 API key、原始實驗答案或帳本。
 
 目前為本機 repository，未選擇公開授權、未發布到 PyPI 或 GitHub。來源與抽取差異見 [provenance](docs/provenance.md)。
+
+[RG-01 正式審閱包](docs/rg01-review-ready.md)集中提供 SQL v2 子程序、資源策略與八類語義／獨立答案／反例材料；正式範圍、具名審閱與目標隔離仍 pending，沒有新增模型實驗。

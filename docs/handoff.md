@@ -116,3 +116,14 @@ business-sql results. Current source/plan and the actual full offline receipt ar
 in [rg01-sql-offline.json](evidence/rg01-sql-offline.json).
 Named domain/expected/coverage review, OS isolation and real model/provider evidence
 remain pending. No release gate is promoted by this delivery.
+
+## RG-01 review-ready engineering (2026-10-19)
+
+The v2 [review package](rg01-review-ready.md) adds disposable stdlib workers, bounded pipes,
+external kill/reap deadline, CPU/SQLite heap caps, and strict optional address-space admission.
+Darwin AS/DATA setting failed locally: strict mode stops before POST, without fallback.
+SQLite allocator caps are not total Python RAM or OS security sandbox qualification.
+Eight public task templates have independent Python/hand expectations and mutation evidence.
+Current actual checks are recorded separately from the historical 991-test v1 receipt.
+Formal scope/expected/coverage review and target-environment qualification remain pending.
+No paid requests, supplier contact, deployment or push are authorized by these records.

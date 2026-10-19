@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "integration_branch": "codex/implement-routing-spec-1",
+  "baseline_commit": "7be8616ac5ca155e2ab6a633ca3401760afe1e47",
+  "merger_owner": "root",
+  "shared_interfaces": [
+    {
+      "id": "core-run",
+      "owner": "integration-maintainer",
+      "owned_files": [
+        "src/cloudyfan_jev/engine.py"
+      ],
+      "provided_by": null
+    },
+    {
+      "id": "sql-public-environment",
+      "owner": "root",
+      "owned_files": [
+        "src/cloudyfan_jev/sql.py",
+        "src/cloudyfan_jev/sql_executor.py"
+      ],
+      "provided_by": "rg01-sql-environment"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "rg01-sql-environment",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/sql.py",
+        "src/cloudyfan_jev/sql_executor.py",
+        "tests/test_sql_environment.py",
+        "docs/sql-environment.md",
+        "docs/rg01-validator-qualification.md",
+        "docs/release-scope-draft.md",
+        "docs/release-readiness.md",
+        "docs/handoff.md",
+        "docs/coordination.md",
+        "docs/verification.md",
+        "docs/agent-state.json",
+        "docs/work-plan.json",
+        "docs/provenance.md",
+        "README.md",
+        "docs/evidence/rg01-sql-baseline.json",
+        "docs/evidence/rg01-sql-prior-state.json",
+        "docs/evidence/rg01-sql-prior-work-plan.json",
+        "docs/evidence/rg01-sql-offline.json",
+        "tests/test_project_state.py"
+      ],
+      "depends_on": [],
+      "consumed_interfaces": [
+        "core-run"
+      ]
+    }
+  ]
+}

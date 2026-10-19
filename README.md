@@ -31,6 +31,8 @@ uv run --locked --offline cloudyfan-jev-demo --route high
 
 [SQL Environment](docs/sql-environment.md)已提供獨立套件接入：公開契約與 runtime 綁定、唯讀 SQLite、flat 診斷與工程中斷分類。它不依賴舊工作區套件；有限公開例子與合作式資源控制不構成一般 SQL 正確性或硬隔離資格，RG-01 仍待核定。
 
+[公開 SQL 案例建置器](docs/sql-public-suite.md)可在新任務派送前，從可信應用的獨立計算器建立公開 expected，檢查宣告的空表／NULL／重複鍵／孤兒引用／無明細主資料覆蓋並凍結來源。它是可選接入，不能證明任意 SQL 正確，也不回寫既有實驗成績。
+
 [官方 SDK 互通證據](docs/ollama-sdk.md)固定 `ollama==0.6.3` 同步 Client，驗證純文字子集、身份、錯誤與重連不重送；模型上游保持模擬，不宣稱完整 Ollama 或部署相容。
 
 [完整費用元件上界](docs/component-bounds.md)提供 RG-04 的獨立替代驗證器：固定文字端點，以核定的資源／費率保障推導最壞費用，涵蓋分類、初答、唯一修正及失敗。未附真實供應商資格；普通價格與 key 額度仍不授權付費派送。

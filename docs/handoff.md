@@ -322,3 +322,46 @@ records fresh 34-test regression, matching 1,138-test source fingerprint, receip
 hash verification, unchanged 2,369-file trial inventory and explicit staged scope.
 Private runtime remains excluded. No new real API, receipt refresh, deployment,
 push or formal qualification change is part of this local commit.
+
+## Public SQL suite and false-accept regression — 2026-10-20
+
+User authorizes offline analysis/general validation strengthening only, no new
+API/receipt refresh, deployment or push. [Public suite](sql-public-suite.md)
+materializes independent application-owned expectations from PUBLIC cases before
+dispatch. Declared coverage requires actual empty/NULL/duplicate/orphan/unmatched
+parent witnesses; no query-text heuristic, hidden answer or live oracle enters
+the Core. Oracle/corpus/builder provenance joins the frozen public contract.
+This is opt-in; legacy SqlContract and routing remain unchanged.
+
+Controlled public-only diagnosis: F32 CF loses uniqueness and existing-parent
+membership; OSS F32 loses existing-parent membership. CF F48 drops parent rows
+without eligible children, including all-NULL work units. New shared seven-case
+public corpus plus independent Python semantics rejects all three known false-accepted
+answers while retaining five controls. This is post-hoc regression, not a new
+blind experiment, improved50-task score or measured CDR. Original48/50,50/50,
+50/50,49/50 and USD5.805611568 remain unchanged.
+
+Final full integration passed1,182 tests, Ruff, both mock demos and package build.
+Fifty-nine focused state/suite tests passed. A code-only independent review found
+int/bool/float equality could miss input mutation; type-sensitive canonical JSON
+comparison and two regressions fix it. Initial synthetic SQL alias mismatch,
+metadata null-key and historical ownership-plan failures are preserved with the
+successful final receipt in [offline evidence](evidence/sql-public-suite-offline-20261020.json).
+Current plan contains only this task; earlier completed plans remain history.
+
+All2,552 current trial files, three result documents and2,369 older trial files
+are unchanged. Existing executable inputs excluding the new builder/test match
+the original frozen source digest exactly. No new API, deployment, push, local
+commit or formal gate promotion. Trusted-oracle semantics, unseen generalization,
+new prompt/verification latency and actual live cost effects remain unverified.
+
+## Public-suite local commit review — 2026-10-20
+
+User authorizes local review/commit only. The independent staged-source export
+passes1,166 tests, Ruff, both mock demos and package build. The earlier1,182
+working-tree receipt includes16 separately pending fee-policy tests and is
+retained as historical evidence, not attributed to this narrower commit.
+[Precommit evidence](evidence/sql-public-suite-precommit-20261020.json) binds
+the isolated source, original receipt and preserved trial inventories.
+The pending fee-policy implementation and fresh50 report stay in the working
+tree outside this commit. No paid API, deployment, push or formal qualification.

@@ -10,28 +10,27 @@
       "owned_files": [
         "src/cloudyfan_jev/engine.py"
       ],
-      "provided_by": "provider-429-bounded-escalation"
+      "provided_by": null
     }
   ],
   "tasks": [
     {
-      "id": "provider-429-bounded-escalation",
+      "id": "public-sql-validation-suite",
       "owner": "root",
       "status": "completed",
       "owned_files": [
-        "src/cloudyfan_jev/engine.py",
-        "src/cloudyfan_jev/client.py",
-        "tests/test_provider_rejection.py",
-        "docs/agent-state.json",
-        "docs/work-plan.json",
-        "docs/coordination.md",
+        "src/cloudyfan_jev/sql_public_suite.py",
+        "tests/test_sql_public_suite.py",
+        "docs/sql-public-suite.md",
+        "docs/evidence/sql-public-suite-offline-20261020.json",
         "docs/handoff.md",
         "docs/verification.md",
-        "docs/provider-429-recovery.md",
-        "docs/evidence/provider-429-offline-20261019.json",
-        "docs/evidence/rate-limit-prior-agent-state-20261019.json",
-        "docs/evidence/rate-limit-prior-work-plan-20261019.json",
-        "docs/evidence/provider-429-precommit-20261019.json"
+        "docs/work-plan.json",
+        "docs/agent-state.json",
+        "README.md",
+        "docs/sql-environment.md",
+        "docs/coordination.md",
+        "docs/evidence/sql-public-suite-precommit-20261020.json"
       ],
       "depends_on": [],
       "consumed_interfaces": []

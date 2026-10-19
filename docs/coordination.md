@@ -213,3 +213,14 @@ fixed-high never retries the rejected configuration. Existing budget bounds,
 unknown-charge stops and classifier failure handling are unchanged. Preserve the
 fresh50 runtime and report; use new engine-version manifests for future work.
 No paid API, deployment, push or formal qualification change is authorized.
+
+## Public SQL suite qualification — 2026-10-20
+
+User authorizes offline F32/F48 diagnosis and generic public-validation
+strengthening, preserving the paid cohort; no API, deployment or push. root
+owns the new opt-in builder, synthetic regression tests, public-only offline
+analysis and documents. A separate code-only reviewer read no runtime/hidden
+data and found equal-valued bool/float input mutation; canonical type-sensitive
+comparison and regressions address it. Native SqlContract/Core interfaces and
+all previous routing/fee changes remain unchanged. Runtime post-hoc regression
+is not a new blind experiment or an update to prior quality/cost outcomes.

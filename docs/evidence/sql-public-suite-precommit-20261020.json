@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "public-sql-validation-suite",
+  "tests_passed": 1166,
+  "new_regression_tests": 28,
+  "source_digest": "18d5a8d7a7ea4510210f09e2be3a1709bf569761dda822a5dcba91095ef2b2f4",
+  "base_commit": "2a6f42222febc5b3ae7afee82b4ef15ce45736f6",
+  "verification_scope": "isolated export of the staged public-validation subset; pending fee-policy implementation/tests and fresh50 report excluded",
+  "receipt": {
+    "path": "runtime/public-suite-precommit-20261020/staged-tree/runtime/checks/3dcd8c20dee4451493c0a4fd5d8d7d08/checks.json",
+    "sha256": "5127503d8c03f3292ef5f6fb699741428e58e982ceb3faea7da15bc89b8fa1a3"
+  },
+  "integration_log": {
+    "path": "runtime/public-suite-precommit-20261020/isolated-integration.log",
+    "sha256": "2b208d95c3a466b72ce8ed30fe66712c47354bc24fb63150182591b3591b1fe9"
+  },
+  "prior_working_tree_verification": {
+    "path": "docs/evidence/sql-public-suite-offline-20261020.json",
+    "sha256": "8d27c9479dc0edddd0d303613424ab28ab7aa77d845222e66e139c9983c1081f",
+    "tests_passed": 1182,
+    "source_digest": "f9f2e12370724d4cf766248fb591ff45dd2a8230305a4a1b5cdfa8387d8bca04",
+    "includes_separate_pending_fee_policy": true,
+    "record_unchanged": true
+  },
+  "reviewed_paths": [
+    "README.md",
+    "docs/agent-state.json",
+    "docs/coordination.md",
+    "docs/evidence/sql-public-suite-offline-20261020.json",
+    "docs/handoff.md",
+    "docs/sql-environment.md",
+    "docs/sql-public-suite.md",
+    "docs/verification.md",
+    "docs/work-plan.json",
+    "src/cloudyfan_jev/sql_public_suite.py",
+    "tests/test_sql_public_suite.py",
+    "docs/evidence/sql-public-suite-precommit-20261020.json"
+  ],
+  "review_result": "No new actionable findings; public-only provenance, opt-in admission, type-sensitive mutation, bounded repair and reuse checks retained.",
+  "preservation": {
+    "prior_full_receipt_and_artifacts_verified": true,
+    "current_trial_files_unchanged": 2552,
+    "older_trial_files_unchanged": 2369,
+    "excluded_working_files_unchanged": 7,
+    "formal_registry_sha256": "1e4899eec63930dc9014d0a089d408c5d3bd650a0b64ececfc6893ca6463142b"
+  },
+  "excluded_paths": [
+    "src/cloudyfan_jev/client.py",
+    "src/cloudyfan_jev/engine.py",
+    "src/cloudyfan_jev/rejection_fees.py",
+    "tests/test_rejection_fees.py",
+    "docs/fresh50-recovery-20261020.md",
+    "runtime/"
+  ],
+  "source_files": {
+    "src/cloudyfan_jev/sql_public_suite.py": "6e31898280570458e3bdcc51a82568c10883d3fa2ce92fcb659e65c1df399905",
+    "tests/test_sql_public_suite.py": "da279b5b333bb741d3ed289f7de43a62745b36572089b2d62782d1deb276aa7c"
+  },
+  "credential_scan": "No token/private-key patterns found in staged texts; original prompts/answers and runtime absent.",
+  "new_api_requests": 0,
+  "deployment": false,
+  "source_push": false,
+  "formal_qualification": "pending",
+  "limitations": [
+    "Post-hoc regression evidence does not change prior50 grades or costs.",
+    "Trusted oracle semantics and finite public coverage do not prove all-input SQL equivalence.",
+    "Earlier1182 result covers a larger uncommitted working tree;1166 is the isolated staged-source result."
+  ]
+}

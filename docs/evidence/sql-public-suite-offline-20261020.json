@@ -1,0 +1,416 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "public-sql-validation-suite",
+  "tests_passed": 1182,
+  "new_regression_tests": 28,
+  "focused_tests_passed": 59,
+  "source_digest": "f9f2e12370724d4cf766248fb591ff45dd2a8230305a4a1b5cdfa8387d8bca04",
+  "receipt": {
+    "path": "runtime/checks/52df56642114471b8588eec3ac9552e6/checks.json",
+    "sha256": "fa401d84ad9cfdceecf8c0884c63e9058f9cc7d832c0b5d69c15023a457e18bd"
+  },
+  "mechanism": {
+    "module": "sql_public_suite",
+    "version": "sql-public-suite-v1",
+    "opt_in": true,
+    "public_materialized_oracle": true,
+    "candidate_independent_inputs": true,
+    "witnessed_coverage_required": true,
+    "runtime_oracle_callback": false,
+    "query_text_rules": false,
+    "general_semantic_equivalence_proven": false,
+    "legacy_contract_or_routing_changes": false
+  },
+  "offline_replay": {
+    "kind": "posthoc-known-regression-only",
+    "rows": 8,
+    "new_public_rejections": 3,
+    "control_passes": 5,
+    "cases_per_task": 7,
+    "shared_new_input_corpus": true,
+    "private_hidden_data_loaded": false,
+    "rows_without_original_answers": [
+      {
+        "task_id": "F32",
+        "arm": "cloudyfan",
+        "original_public": {
+          "passed": true,
+          "checks": []
+        },
+        "new_public": {
+          "passed": false,
+          "checks": [
+            "SQL_PUBLIC_RESULT_MISMATCH"
+          ]
+        }
+      },
+      {
+        "task_id": "F32",
+        "arm": "fixed_high",
+        "original_public": {
+          "passed": true,
+          "checks": []
+        },
+        "new_public": {
+          "passed": true,
+          "checks": []
+        }
+      },
+      {
+        "task_id": "F32",
+        "arm": "low_first",
+        "original_public": {
+          "passed": true,
+          "checks": []
+        },
+        "new_public": {
+          "passed": true,
+          "checks": []
+        }
+      },
+      {
+        "task_id": "F32",
+        "arm": "open_source_first",
+        "original_public": {
+          "passed": true,
+          "checks": []
+        },
+        "new_public": {
+          "passed": false,
+          "checks": [
+            "SQL_PUBLIC_RESULT_MISMATCH"
+          ]
+        }
+      },
+      {
+        "task_id": "F48",
+        "arm": "cloudyfan",
+        "original_public": {
+          "passed": true,
+          "checks": []
+        },
+        "new_public": {
+          "passed": false,
+          "checks": [
+            "SQL_PUBLIC_RESULT_MISMATCH"
+          ]
+        }
+      },
+      {
+        "task_id": "F48",
+        "arm": "fixed_high",
+        "original_public": {
+          "passed": true,
+          "checks": []
+        },
+        "new_public": {
+          "passed": true,
+          "checks": []
+        }
+      },
+      {
+        "task_id": "F48",
+        "arm": "low_first",
+        "original_public": {
+          "passed": true,
+          "checks": []
+        },
+        "new_public": {
+          "passed": true,
+          "checks": []
+        }
+      },
+      {
+        "task_id": "F48",
+        "arm": "open_source_first",
+        "original_public": {
+          "passed": true,
+          "checks": []
+        },
+        "new_public": {
+          "passed": true,
+          "checks": []
+        }
+      }
+    ]
+  },
+  "single_axis_diagnosis": {
+    "kind": "posthoc-controlled-public-diagnosis",
+    "rows": [
+      {
+        "task_id": "F32",
+        "axis": "duplicate-key",
+        "arm": "cloudyfan",
+        "public_verdict": {
+          "passed": false,
+          "checks": [
+            "SQL_PUBLIC_RESULT_MISMATCH"
+          ]
+        }
+      },
+      {
+        "task_id": "F32",
+        "axis": "duplicate-key",
+        "arm": "fixed_high",
+        "public_verdict": {
+          "passed": true,
+          "checks": []
+        }
+      },
+      {
+        "task_id": "F32",
+        "axis": "duplicate-key",
+        "arm": "low_first",
+        "public_verdict": {
+          "passed": true,
+          "checks": []
+        }
+      },
+      {
+        "task_id": "F32",
+        "axis": "duplicate-key",
+        "arm": "open_source_first",
+        "public_verdict": {
+          "passed": true,
+          "checks": []
+        }
+      },
+      {
+        "task_id": "F32",
+        "axis": "orphan-reference",
+        "arm": "cloudyfan",
+        "public_verdict": {
+          "passed": false,
+          "checks": [
+            "SQL_PUBLIC_RESULT_MISMATCH"
+          ]
+        }
+      },
+      {
+        "task_id": "F32",
+        "axis": "orphan-reference",
+        "arm": "fixed_high",
+        "public_verdict": {
+          "passed": true,
+          "checks": []
+        }
+      },
+      {
+        "task_id": "F32",
+        "axis": "orphan-reference",
+        "arm": "low_first",
+        "public_verdict": {
+          "passed": true,
+          "checks": []
+        }
+      },
+      {
+        "task_id": "F32",
+        "axis": "orphan-reference",
+        "arm": "open_source_first",
+        "public_verdict": {
+          "passed": false,
+          "checks": [
+            "SQL_PUBLIC_RESULT_MISMATCH"
+          ]
+        }
+      },
+      {
+        "task_id": "F48",
+        "axis": "no-child",
+        "arm": "cloudyfan",
+        "public_verdict": {
+          "passed": false,
+          "checks": [
+            "SQL_PUBLIC_RESULT_MISMATCH"
+          ]
+        }
+      },
+      {
+        "task_id": "F48",
+        "axis": "no-child",
+        "arm": "fixed_high",
+        "public_verdict": {
+          "passed": true,
+          "checks": []
+        }
+      },
+      {
+        "task_id": "F48",
+        "axis": "no-child",
+        "arm": "low_first",
+        "public_verdict": {
+          "passed": true,
+          "checks": []
+        }
+      },
+      {
+        "task_id": "F48",
+        "axis": "no-child",
+        "arm": "open_source_first",
+        "public_verdict": {
+          "passed": true,
+          "checks": []
+        }
+      },
+      {
+        "task_id": "F48",
+        "axis": "null-only-child",
+        "arm": "cloudyfan",
+        "public_verdict": {
+          "passed": false,
+          "checks": [
+            "SQL_PUBLIC_RESULT_MISMATCH"
+          ]
+        }
+      },
+      {
+        "task_id": "F48",
+        "axis": "null-only-child",
+        "arm": "fixed_high",
+        "public_verdict": {
+          "passed": true,
+          "checks": []
+        }
+      },
+      {
+        "task_id": "F48",
+        "axis": "null-only-child",
+        "arm": "low_first",
+        "public_verdict": {
+          "passed": true,
+          "checks": []
+        }
+      },
+      {
+        "task_id": "F48",
+        "axis": "null-only-child",
+        "arm": "open_source_first",
+        "public_verdict": {
+          "passed": true,
+          "checks": []
+        }
+      }
+    ],
+    "new_paid_posts": 0,
+    "hidden_data_loaded": false
+  },
+  "code_review": {
+    "independent_code_only_review": true,
+    "reviewer_saw_hidden_or_experimental_data": false,
+    "issue": "Python equality admits same-valued int/bool/float oracle input mutation",
+    "resolution": "Canonical JSON comparison with two new regression cases",
+    "formal_signoff": false
+  },
+  "preservation": {
+    "current_trial_files_unchanged": 2552,
+    "older_trial_files_unchanged": 2369,
+    "current_trial_documents_unchanged": 3,
+    "existing_executable_files_unchanged": true,
+    "existing_source_digest_excluding_two_new_files": "68d912f7275c0888811591a46c078bebf1afac8263f73654e8f0fb2407555301",
+    "new_executable_files": [
+      "src/cloudyfan_jev/sql_public_suite.py",
+      "tests/test_sql_public_suite.py"
+    ],
+    "release_registry_sha256": "1e4899eec63930dc9014d0a089d408c5d3bd650a0b64ececfc6893ca6463142b",
+    "new_paid_api_requests": 0
+  },
+  "previous_paid_results_unchanged": {
+    "cloudyfan": 48,
+    "fixed_high": 50,
+    "low_first": 50,
+    "open_source_first": 49,
+    "n_per_arm": 50,
+    "api_usd": "5.805611568"
+  },
+  "initial_failures_preserved": [
+    {
+      "stage": "synthetic SQL test",
+      "result": "1 failed,23 passed",
+      "cause": "Test-only raw column/alias GROUP BY collision; made normalized grouping explicit."
+    },
+    {
+      "stage": "record precheck",
+      "cause": "Unset current_verification key corrected to required JSON null."
+    },
+    {
+      "stage": "first full integration",
+      "result": "1 failed,1179 passed",
+      "cause": "Historical completed ownership tasks were reset active by a fixture; current plan now contains only current work, historical plan preserved."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "runtime/checks/52df56642114471b8588eec3ac9552e6/checks.json",
+      "sha256": "fa401d84ad9cfdceecf8c0884c63e9058f9cc7d832c0b5d69c15023a457e18bd"
+    },
+    {
+      "path": "runtime/public-sql-validation-20261020/integration.log",
+      "sha256": "8ec509af0b475dab8ca679a2e2bb4248e917d47159c1959b109458425e9e8533"
+    },
+    {
+      "path": "runtime/public-sql-validation-20261020/integration-rerun.log",
+      "sha256": "b4d00218d86ece5067155b58070ca85b3bf31f2659d976f69125afa2852b4486"
+    },
+    {
+      "path": "runtime/public-sql-validation-20261020/integration-final.log",
+      "sha256": "113a5fedd8f01d69e432ef004d98bf6ef8fb5c473b0c60cdf433ddb1dc970880"
+    },
+    {
+      "path": "runtime/public-sql-validation-20261020/focused.log",
+      "sha256": "02232e7506bb1f45bd2a17dc06bedcfb8e7228f25aaaebe29d0b972f3ac46593"
+    },
+    {
+      "path": "runtime/public-sql-validation-20261020/focused-type-safe.log",
+      "sha256": "c64dee7cc3d33d217aa924c70e4e3eaf48468db41247b842af32a5e40dd4ccb9"
+    },
+    {
+      "path": "runtime/public-sql-validation-20261020/type-safe-replay/offline_replay.py",
+      "sha256": "f8a1dba364d2ee18a7372f707fb7a7421967615e5fbf32f8c86d99fdef0036cc"
+    },
+    {
+      "path": "runtime/public-sql-validation-20261020/type-safe-replay/public-suite-frozen.json",
+      "sha256": "eff9e0ab1d852d644744e40ae805e007053d7560441b84ac5ff70750910ef43a"
+    },
+    {
+      "path": "runtime/public-sql-validation-20261020/type-safe-replay/new-public-contracts.json",
+      "sha256": "32fd7d11b6c68e3798c4062faee3135998dfd5697127f9214a083a3d1f4768f1"
+    },
+    {
+      "path": "runtime/public-sql-validation-20261020/type-safe-replay/offline-replay.json",
+      "sha256": "98b3ab572d0b83de2a0b5dce49030eb22e210a36f739099ead15a0a95558a030"
+    },
+    {
+      "path": "runtime/public-sql-validation-20261020/type-safe-replay/diagnostic_axes.py",
+      "sha256": "764b989f4b982bf227cc11cbd81446229a681c9963d0fcbeceaa10eefa828d9c"
+    },
+    {
+      "path": "runtime/public-sql-validation-20261020/type-safe-replay/single-axis-diagnostics.json",
+      "sha256": "80adb811979e23b8078d1d4df70a03f02f2008c405cfcc82d60fbc3c8fefe373"
+    },
+    {
+      "path": "runtime/public-sql-validation-20261020/preservation.json",
+      "sha256": "5d8aae06f96019c8cc87ef2cf7735aec2f529b119327282c3a22affaf59821af"
+    },
+    {
+      "path": "runtime/public-sql-validation-20261020/trial-inventory-before.json",
+      "sha256": "0b3949354af0c98197109a0099e0085d0efca9ea23c6cb64aacfb1963bf8b1b1"
+    }
+  ],
+  "new_paid_api_calls": 0,
+  "new_read_only_provider_api_calls": 0,
+  "actual_new_api_usd": "0",
+  "deployment": false,
+  "source_push": false,
+  "local_commit": false,
+  "formal_qualification": "pending",
+  "limitations": [
+    "Opt-in public corpus construction; legacy SqlContract does not automatically gain coverage.",
+    "Trusted application owns public provenance, semantic oracle and corpus selection. Oracle runs outside SQL worker, only before dispatch.",
+    "Coverage and repeatability do not prove oracle correctness or all-input SQL equivalence.",
+    "Post-hoc known-answer replay is not a blind result or evidence of new live accuracy, latency, CDR or profit.",
+    "More public fixtures increase context/verification effort; live impact unmeasured."
+  ]
+}

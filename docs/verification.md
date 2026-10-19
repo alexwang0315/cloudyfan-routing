@@ -476,3 +476,35 @@ budget reservation and version isolation. The initial plan-fixture failure and
 successful rerun are both retained in [offline evidence](evidence/provider-429-offline-20261019.json).
 All 2,369 original fresh50 files match the saved SHA inventory; no old answer,
 fee or grade changed. No new real API, deployment, push or formal qualification.
+
+## General public SQL suite — 2026-10-20
+
+New opt-in builder/test files only; native SqlContract/Core/fee behavior unchanged.
+Independent application Python expectations are materialized into public samples
+before dispatch, coverage requires data witnesses, and provenance is frozen.
+No historical task ID, query-shape rule or hidden oracle is embedded in the
+mechanism. Twenty-eight synthetic regressions cover general semantic contrasts,
+typed mutation, absent coverage, nondeterminism, bounded repair and replay.
+Focused state/suite59 passed; final full integration1,182 passed in184.33s,
+Ruff/demos/sdist/wheel passed. Code-only review's input-type mutation issue was
+fixed before final verification. Initial failures and reruns remain in the
+[offline evidence](evidence/sql-public-suite-offline-20261020.json).
+
+Seven independently generated shared public cases per task reject three known
+bad saved answers and retain five controls;16 controlled single-axis checks
+isolate duplicates/orphans/no eligible children. No private hidden fixture,
+expected or reference SQL was loaded into the analysis. These are post-hoc
+offline regression results, not new live quality/cost evidence. All2,552 current
+raw trial files, three result documents and2,369 older files match SHA inventories.
+The original paid grades/costs remain unchanged. No new API, supplier contact,
+deployment, push, local commit or formal qualification.
+
+## Public-suite staged-source verification — 2026-10-20
+
+Local precommit review verified the exact source/test subset in an independent
+index export:1,166 tests passed in150.63s, Ruff, mock demos and sdist/wheel passed.
+The earlier1,182-test receipt belongs to the larger working tree with16 pending
+fee-policy tests; it remains unchanged. Metadata-only finalization is checked
+separately. [Precommit record](evidence/sql-public-suite-precommit-20261020.json)
+binds both scopes, source hashes and original file preservation. No new API,
+deployment, push or formal qualification is authorized by this review.

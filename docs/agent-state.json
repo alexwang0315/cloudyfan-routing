@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "scope": "provider-429-bounded-escalation",
+  "scope": "public-sql-validation-suite",
   "phase": "offline_verified",
   "baseline_commit": "666b79be14ccd227045a3108fb89c1eeb8894e54",
   "integration_branch": "codex/implement-routing-spec-1",
@@ -18,8 +18,8 @@
     "sha256": "99e3af5d0c2fd758f06c3fb2554e77a105d15f02bc9ed9453b43178e849e74a2"
   },
   "current_verification": {
-    "path": "docs/evidence/provider-429-offline-20261019.json",
-    "sha256": "5c33ae61c0646d1cac3858d78511cc57c9446b4c017e9ccb82fa79289f6d8474"
+    "path": "docs/evidence/sql-public-suite-precommit-20261020.json",
+    "sha256": "d18c81241ad450eb7eb8edfc904b87a348cbdfc0f519baa739f90cb3078ec7c7"
   },
   "history": [
     {
@@ -157,12 +157,16 @@
     {
       "path": "docs/evidence/rate-limit-prior-work-plan-20261019.json",
       "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/sql-public-suite-offline-20261020.json",
+      "record_kind": "historical"
     }
   ],
   "next_steps": [
     {
       "gate": "RG-02",
-      "action": "Fresh50 comparison retained unchanged. Cost-resolved generation429 escalation is offline verified; real-provider recovery remains untested. Any live validation requires a separately authorized plan with fee evidence and fresh versioned run IDs; do not replay/regrade the prior 50-task cohort or reopen S01-S08 review.",
+      "action": "Opt-in public SQL suite is offline verified with trusted materialized expectations and witnessed coverage. Three known false accepts now reject in offline replay only. Original50 results and costs remain unchanged. Independent unseen validation and supplier qualifications remain pending; no paid followup, deployment or push is authorized by maintenance state.",
       "requires_authorization": true
     },
     {

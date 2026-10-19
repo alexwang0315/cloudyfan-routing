@@ -23,6 +23,8 @@ result = run_sql(controlled_core, "sql-job-001", contract)
 
 `samples` 的輸入和 `expected` 都必須是**可公開的契約例子**。此介面沒有 hidden fixtures、private oracle、外部 DB 路徑或任意驗收函式的參數。不要把私人答案當 expected 傳入，因為公開契約會放進模型 prompt。
 
+新的可選[公開案例建置器](sql-public-suite.md)在建立 `SqlContract` **之前**，由可信應用的獨立計算器物化公開 expected、檢查宣告覆蓋並綁定來源版本；執行時不保留 callable，也不改變此 Environment 或既有契約的語義。僅使用原介面的應用不會自動增加覆蓋。
+
 `SqlContract` 先拒絕欄位型別不符、NOT NULL 的空值及 INTEGER PRIMARY KEY 的 NULL 自動編號，避免 SQLite affinity 改寫公開資料。它將所有公開欄位複製為不可變 JSON 字串。`task()` 包含公開指示、schema、例子、期望結果與執行限制；`contract_version` 為 `sql-environment-v2:<sha256>`，綁定使用者契約版本、全部公開內容、executor 的限制版本、SQLite 版本與 native limits、worker 程式雜湊、Python／平台及程序資源策略。資料、期望值或 runtime 描述改變，原 run 必須拒絕重用；更改 adapter 的驗收語義須升版，不能沿用舊 SQL 實驗契約。
 
 `run_sql` 明確要求核心採用 `SQL_DIAGNOSTICS`（`sql-public-diagnostics-v2`、producer `sql-environment-v2`、4096 bytes），然後透過既有 `Core.run`／`BudgetedCore.run`，綁定 task、fresh environment factory 及版本。直接手動使用 `Core.run` 的可信應用仍須自己正確綁定這三者；此便利介面不防止管理者刻意繞過，也不授權付費。

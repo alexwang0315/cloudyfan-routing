@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "scope": "rg01-remaining-tickets-offline",
+  "scope": "rg01-scout-target-evidence",
   "phase": "blocked",
   "baseline_commit": "666b79be14ccd227045a3108fb89c1eeb8894e54",
   "integration_branch": "codex/implement-routing-spec-1",
@@ -94,12 +94,40 @@
     {
       "path": "docs/evidence/rg01-tickets-offline-20261019.json",
       "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-scout-prep-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-scout-prep-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-scout-environment-preparation-20261019.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-target-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-target-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-linux-target-runtime.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-target-offline-20261019.json",
+      "record_kind": "historical"
     }
   ],
   "next_steps": [
     {
       "gate": "RG-01",
-      "action": "RG01-01..05 and RG01-07 are implemented and offline verified (1098 tests, new worker identity protocol and installed-wheel SQL smoke). RG01-06 remains blocked: need an explicitly available authorized Linux target and actual memory/CPU/deadline/file/network/cancellation/budget-continuity attack evidence; normal-flow helper is not that evidence. RG01-08 needs actual named formal review afterwards. No spending, provider contact, deployment, downloads or push authority.",
+      "action": "RG01-01..07 technical implementation/evidence are complete: Scout normal flow 8/8 and seven bounded target exercises 7/7; final offline integration 1102 tests. RG01-08 now needs actual named formal review of finite SQL semantics, counterexamples, exact build/envelope evidence and activation/expiry/withdrawal responsibilities. AI technical review cannot supply human approval. Keep registry pending; no real API, deployment, supplier contact or push.",
       "requires_authorization": true
     },
     {

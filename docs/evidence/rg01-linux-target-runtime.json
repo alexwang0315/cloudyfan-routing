@@ -1,0 +1,231 @@
+{
+  "schema_version": 1,
+  "kind": "target_runtime",
+  "result": "passed",
+  "scope": "RG01-06 fixed Scout ARM64 sandbox envelope plus actual SQL/Core.run interruption-resume",
+  "recorded_at": "2026-10-19T10:03:14.509054+00:00",
+  "source_digest": "37954eebe35b43c6182b92bcd67c6e74fa43342e9a4ba8da4320ae3f49492ee5",
+  "formal_qualification": "pending",
+  "authorization": "User next-step after dedicated Scout preparation; bounded serial synthetic exercises in dedicated scope. No real model API, supplier contact, deployment, push or human signoff.",
+  "versions": {
+    "kernel": "6.12.75+rpt-rpi-2712",
+    "machine": "aarch64",
+    "python": "3.13.5 (main, May  5 2026, 21:05:52) [GCC 14.2.0]",
+    "sqlite": "3.46.1"
+  },
+  "policy": {
+    "version": "sql-linux-isolation-v1",
+    "configuration": {
+      "rootfs": "/opt/cloudyfan-rg01/rg01-515632f-20261019-546d8058-v2/rootfs",
+      "rootfs_sha256": "74df498bb1842408c43961e0cafb6a946690949c31302ce1837a688da5fa0f77",
+      "bwrap": "/usr/bin/bwrap",
+      "bwrap_sha256": "b3b829e18a7d43ee589dc37e351cb9480ff7301b493d8227b8c754294638b976",
+      "cgroup": "/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice/cloudyfan-rg01-target-20261019-39576759-r2.scope/worker",
+      "kernel": "6.12.75+rpt-rpi-2712",
+      "machine": "aarch64"
+    },
+    "cgroup_identity": [
+      24,
+      20623
+    ],
+    "cgroup_limits": {
+      "memory.max": "268435456",
+      "memory.swap.max": "0",
+      "memory.oom.group": "1",
+      "pids.max": "8",
+      "cpu.max": "100000 100000",
+      "cgroup.type": "domain"
+    },
+    "namespaces": [
+      "user",
+      "ipc",
+      "pid",
+      "net",
+      "uts",
+      "cgroup"
+    ],
+    "implementation_sha256": {
+      "sql_isolation.py": "a5f582f5bdb7bb1349039a2cebdf7bdc89f9d2d7cfbcbe83f2acb8446a2d9bd7",
+      "sql_isolation_entry.py": "5cdee63bd172b74bbee702c55c9ec6af9f35f13c1c354c6dbc1f043e3b56c51c"
+    }
+  },
+  "scope_limits": {
+    "memory.max": "805306368",
+    "pids.max": "32",
+    "cpu.max": "100000 100000"
+  },
+  "normal_flow": {
+    "cases": 8,
+    "passed": 8,
+    "mock_posts": 8,
+    "completed_reuse": true
+  },
+  "exercises": [
+    {
+      "id": "total_memory_and_descendants",
+      "result": "passed",
+      "summary": {
+        "subject": "trusted probe in runtime sandbox envelope",
+        "seconds": 0.14743016099964734,
+        "leaf_empty_after": true,
+        "memory_events_delta": {
+          "low": 0,
+          "high": 0,
+          "max": 22,
+          "oom": 1,
+          "oom_kill": 4,
+          "oom_group_kill": 1
+        }
+      }
+    },
+    {
+      "id": "cpu_limit",
+      "result": "passed",
+      "summary": {
+        "subject": "trusted probe in runtime sandbox envelope",
+        "seconds": 3.8478164469997864,
+        "leaf_empty_after": true,
+        "cpu_stat_delta": {
+          "usage_usec": 3842884,
+          "user_usec": 3842883,
+          "system_usec": 0,
+          "nice_usec": 0,
+          "nr_periods": 40,
+          "nr_throttled": 38,
+          "throttled_usec": 624372,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        }
+      }
+    },
+    {
+      "id": "external_deadline",
+      "result": "passed",
+      "summary": {
+        "subject": "trusted probe in runtime sandbox envelope",
+        "seconds": 3.014407281001695,
+        "leaf_empty_after": true
+      }
+    },
+    {
+      "id": "host_file_read_write_denial",
+      "result": "passed",
+      "summary": {
+        "subject": "trusted probe in runtime sandbox envelope",
+        "seconds": 0.14306151699929615,
+        "leaf_empty_after": true,
+        "host_sentinel_unchanged": true
+      }
+    },
+    {
+      "id": "network_namespace_denial",
+      "result": "passed",
+      "summary": {
+        "subject": "trusted probe in runtime sandbox envelope",
+        "seconds": 0.1655655310005386,
+        "leaf_empty_after": true,
+        "host_positive_control": true
+      }
+    },
+    {
+      "id": "cancellation_and_reaping",
+      "result": "passed",
+      "summary": {
+        "subject": "trusted probe in runtime sandbox envelope",
+        "seconds": 0.511795633001384,
+        "leaf_empty_after": true
+      }
+    },
+    {
+      "id": "interrupted_answer_and_budget_resume",
+      "result": "passed",
+      "summary": {
+        "subject": "actual SQL worker and Core.run; model API mocked",
+        "interrupted_code": "SQL_VALIDATION_TIMEOUT",
+        "fault_injected": [
+          {
+            "signal": "SIGSTOP",
+            "subject": "actual immutable SQL worker"
+          }
+        ],
+        "saved_responses_unchanged": true,
+        "mock_posts": 1,
+        "resumed": true,
+        "leaf_empty_after": true
+      }
+    }
+  ],
+  "resume_budget": {
+    "currency": "synthetic USD, not real API spend",
+    "known_after_interruption": "0.01",
+    "active_reservation_after_interruption": "0.482",
+    "active_reservation_after_resume": "0",
+    "provisional_hold_after_resume": "0.02",
+    "note": "Active run reservation release does not clear provisional billing hold. No real reconciliation or supplier guarantee is established."
+  },
+  "boundaries": [
+    "First six exercises run trusted Python probes in unchanged sandbox flags; not arbitrary SQL escape tests or universal sandbox certification.",
+    "CPU usage about 3.84 seconds is aggregate across two busy processes; per-process CPU limit remains 2 seconds.",
+    "External deadline includes cleanup overhead; real SQL worker deadline is exercised separately via actual OS SIGSTOP.",
+    "Real API spend/calls zero; all displayed budget costs are synthetic.",
+    "pids.max=8 is checked but a separate fork-exhaustion test is not claimed.",
+    "No persistent service; subsequent cgroup identities must be recreated and recorded.",
+    "Named RG01-08 formal review remains pending."
+  ],
+  "service_inventory": {
+    "containers": 10,
+    "before_after_identical": true,
+    "scope_released": true,
+    "rootfs_still_read_only": true,
+    "failed_user_unit_names": [
+      "scout-dash-diagnose1212-original-env.service"
+    ],
+    "note": "Inventory/status observation only; not end-to-end validation of existing Scout applications."
+  },
+  "preserved_interruption": {
+    "run": "runtime/rg01-target-20261019-39576759",
+    "result": "blocked",
+    "cause": "Old qualification mock provider SyntheticFixture failed unchanged Example provider identity validation after one synthetic POST; all seven target exercises not_run. Fixture corrected and new independent run used.",
+    "report": {
+      "path": "runtime/rg01-target-20261019-39576759/remote-copy/evidence/report.json",
+      "sha256": "27559d061799bed8b5002b25b58371f101a32c56f5bcdd321fd7b05b8c9be8ca"
+    }
+  },
+  "receipts": [
+    {
+      "path": "runtime/rg01-target-20261019-39576759-r2/remote-copy/context.json",
+      "sha256": "fb722ade2651857706e06d792f1f1aac4841e08c08d9e3fde3d3a523de7b1005"
+    },
+    {
+      "path": "runtime/rg01-target-20261019-39576759-r2/remote-copy/effective-policy.json",
+      "sha256": "97211a938b8130b5ffa56d72158b8e065d2aa4ed60af54f180e09a151c7ccf2b"
+    },
+    {
+      "path": "runtime/rg01-target-20261019-39576759-r2/remote-copy/evidence/report.json",
+      "sha256": "786ad3836bfe086d4ade76efd4ff3794b83b2a2ff96c53e454c2bd24995807ae"
+    },
+    {
+      "path": "runtime/rg01-target-20261019-39576759-r2/remote-copy/after.json",
+      "sha256": "7a0302d47afc5ac11b5e7da52939578e2d2838e34e1ea9432674f39bbfea964b"
+    },
+    {
+      "path": "runtime/rg01-target-20261019-39576759-r2/post-exit-hash-verification.json",
+      "sha256": "05d8e5a8e8f7dfe7a303f22d4e4ade516c60c89e0276a904914d01ef3d3bda04"
+    },
+    {
+      "path": "runtime/rg01-target-20261019-39576759-r2/final-ai-review.json",
+      "sha256": "41e0a89da56206c5afc7740ba221f5639902978e3933d758a169600766388a61"
+    },
+    {
+      "path": "runtime/rg01-target-20261019-39576759-r2/invocation.json",
+      "sha256": "5fbb1849a83602895498a79d6cf517c9cf118cc4004779d7428b5351bbbd6712"
+    }
+  ],
+  "copied_remote_files_hash_verified": 96,
+  "real_api_calls": 0,
+  "real_api_cost_usd": "0",
+  "deployment": false,
+  "push": false,
+  "supplier_contact": false,
+  "files_deleted": 0
+}

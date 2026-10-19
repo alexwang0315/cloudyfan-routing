@@ -53,13 +53,32 @@
     },
     {
       "id": "RG01-06-target-evidence",
-      "owner": "target-environment-maintainer",
-      "status": "blocked",
+      "owner": "root",
+      "status": "completed",
       "owned_files": [
-        "docs/evidence/rg01-linux-target-runtime.json"
+        "docs/evidence/rg01-linux-target-runtime.json",
+        "scripts/qualify_sql_worker.py",
+        "scripts/sql_target_exercises.py",
+        "tests/test_sql_qualification.py",
+        "docs/rg01-scout-target-20261019.md",
+        "docs/evidence/rg01-target-offline-20261019.json",
+        "docs/evidence/rg01-target-prior-state.json",
+        "docs/evidence/rg01-target-prior-work-plan.json",
+        "docs/agent-state.json",
+        "docs/work-plan.json",
+        "docs/coordination.md",
+        "docs/handoff.md",
+        "docs/release-readiness.md",
+        "docs/verification.md",
+        "docs/evidence/rg01-ticket-status.json",
+        "docs/rg01-implementation-20261019.md",
+        "docs/rg01-scout-environment-20261019.md",
+        "docs/evidence/rg01-target-precommit-20261019.json",
+        "docs/rg01-formal-review-checklist-20261019.md"
       ],
       "depends_on": [
-        "rg01-offline-implementation"
+        "rg01-offline-implementation",
+        "rg01-scout-environment-preparation"
       ],
       "consumed_interfaces": []
     },
@@ -75,6 +94,31 @@
         "RG01-06-target-evidence"
       ],
       "consumed_interfaces": []
+    },
+    {
+      "id": "rg01-scout-environment-preparation",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "docs/rg01-scout-environment-20261019.md",
+        "docs/evidence/rg01-scout-environment-preparation-20261019.json",
+        "docs/evidence/rg01-scout-prep-prior-state.json",
+        "docs/evidence/rg01-scout-prep-prior-work-plan.json",
+        "docs/agent-state.json",
+        "docs/work-plan.json",
+        "docs/coordination.md",
+        "docs/handoff.md",
+        "docs/verification.md",
+        "docs/evidence/rg01-ticket-status.json",
+        "docs/rg01-implementation-20261019.md",
+        "docs/release-readiness.md"
+      ],
+      "depends_on": [
+        "rg01-offline-implementation"
+      ],
+      "consumed_interfaces": [
+        "core-run"
+      ]
     }
   ]
 }

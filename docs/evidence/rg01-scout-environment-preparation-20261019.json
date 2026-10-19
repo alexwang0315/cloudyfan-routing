@@ -1,0 +1,187 @@
+{
+  "schema_version": 1,
+  "kind": "target_environment_preparation",
+  "result": "passed",
+  "scope": "Dedicated Scout RG-01 environment preparation and minimal strict worker/SQL startup only",
+  "recorded_at": "2026-10-19T08:25:02.285909+00:00",
+  "source_digest": "e3818e9500757ad02b44e87c4113de73a060af9643dd5b7a7d74c83b0d52de3b",
+  "observed_git_head": "515632f25a5112d0036bc5bf8a776ca3f8c652f6",
+  "formal_qualification": "pending",
+  "application_executable_inputs_changed": false,
+  "authorization": "User authorized dedicated Scout system-package and permission preparation; completed both one-shot sudo commands in own terminal. No stress/attack suite, real model API, supplier contact, service deployment or push in this preparation step.",
+  "target": {
+    "machine": "aarch64",
+    "kernel": "6.12.75+rpt-rpi-2712",
+    "python": "3.13.5 (main, May  5 2026, 21:05:52) [GCC 14.2.0]",
+    "sqlite": "3.46.1",
+    "bwrap": "bubblewrap 0.12.0"
+  },
+  "artifacts": {
+    "core_wheel_sha256": "e91427ca226c0849fd898d4162bc5d0ffed292d091fb6c8ed71931cc78b6db2d",
+    "rootfs_sha256": "74df498bb1842408c43961e0cafb6a946690949c31302ce1837a688da5fa0f77",
+    "bwrap_sha256": "b3b829e18a7d43ee589dc37e351cb9480ff7301b493d8227b8c754294638b976",
+    "rootfs_bytes": 69263163,
+    "root_artifact_template": {
+      "rootfs": "/opt/cloudyfan-rg01/rg01-515632f-20261019-546d8058-v2/rootfs",
+      "rootfs_sha256": "74df498bb1842408c43961e0cafb6a946690949c31302ce1837a688da5fa0f77",
+      "bwrap": "/usr/bin/bwrap",
+      "bwrap_sha256": "b3b829e18a7d43ee589dc37e351cb9480ff7301b493d8227b8c754294638b976",
+      "kernel": "6.12.75+rpt-rpi-2712",
+      "machine": "aarch64"
+    }
+  },
+  "effective_policy": {
+    "rootfs": "/opt/cloudyfan-rg01/rg01-515632f-20261019-546d8058-v2/rootfs",
+    "rootfs_sha256": "74df498bb1842408c43961e0cafb6a946690949c31302ce1837a688da5fa0f77",
+    "bwrap": "/usr/bin/bwrap",
+    "bwrap_sha256": "b3b829e18a7d43ee589dc37e351cb9480ff7301b493d8227b8c754294638b976",
+    "kernel": "6.12.75+rpt-rpi-2712",
+    "machine": "aarch64",
+    "cgroup": "/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice/cloudyfan-rg01-ready2-546d8058.scope/worker"
+  },
+  "cgroup_limits": {
+    "memory.max": "268435456",
+    "memory.swap.max": "0",
+    "memory.oom.group": "1",
+    "pids.max": "8",
+    "cpu.max": "100000 100000",
+    "cgroup.type": "domain"
+  },
+  "launch_lifetime": "Fresh delegated transient systemd user scope per run; supervisor is outside worker leaf. Scope and its worker leaf are released by systemd after the one-shot test exits. Effective cgroup path/inode must be freshly recorded for later exercises; do not reuse the expired path as a live policy.",
+  "checks": {
+    "root_owned_control_artifacts": true,
+    "rootfs_read_only": true,
+    "artifact_preflight": true,
+    "worker_startup": true,
+    "sql_result": {
+      "passed": true,
+      "checks": []
+    },
+    "smoke_seconds": 1.1320711959997425,
+    "cgroup_empty_after": true
+  },
+  "preserved_failures": [
+    {
+      "stage": "v1 direct root-level cgroup",
+      "result": "failed",
+      "code": "SQL_VALIDATION_WORKER_EXIT",
+      "cause": "Kernel rejected migration: target procs permission alone did not grant write access at the common ancestor. No broad permission change made.",
+      "resolution": "Fresh systemd delegated user scope, separate supervisor/worker children; same resource limits."
+    },
+    {
+      "stage": "v1 rootfs in delegated scope",
+      "result": "failed",
+      "code": "SQL_VALIDATION_WORKER_EXIT",
+      "cause": "ELF interpreter lib/ld-linux-aarch64.so.1 was mode 0444; bwrap exec returned EACCES.",
+      "resolution": "Side-by-side v2 root-owned rootfs; only loader mode changed to 0555; old bytes/modes and original receipts preserved."
+    }
+  ],
+  "candidate_check_boundary": "User-owned v2 candidate passed the same bwrap flags as a build check; this was not host-read-only qualification. Final root-owned read-only v2 was independently checked afterward.",
+  "historical_label_correction": "user-assets-verification.json field not_yet_prepared_environment_refuses_preflight used a deliberately wrong bwrap SHA. It proves bad-pin rejection only, not that host preparation was absent at that timestamp.",
+  "service_observation": {
+    "running_container_names": [
+      "scout-pi-intelligence-edge",
+      "scout-pi-phase4-admin",
+      "chirpstack-docker-chirpstack-1",
+      "chirpstack-docker-chirpstack-gateway-bridge-basicstation-1",
+      "chirpstack-docker-chirpstack-gateway-bridge-1",
+      "chirpstack-docker-mosquitto-1",
+      "scout-ollama",
+      "chirpstack-docker-chirpstack-rest-api-1",
+      "chirpstack-docker-postgres-1",
+      "chirpstack-docker-redis-1"
+    ],
+    "healthcheck_containers_healthy": [
+      "scout-pi-intelligence-edge",
+      "scout-pi-phase4-admin"
+    ],
+    "existing_user_failed_unit": "scout-dash-diagnose1212-original-env.service",
+    "new_user_failed_units_observed": [],
+    "boundary": "Inventory comparison only; no application-level service health or independent uptime guarantee."
+  },
+  "remaining_evidence": [
+    "RG01-06 total memory and descendant OOM/reaping",
+    "RG01-06 CPU/deadline/cancellation and descendant cleanup",
+    "RG01-06 synthetic host sentinel read/write and network denial",
+    "RG01-06 saved-answer interruption, budget hold and resume without resend",
+    "RG01-08 named formal qualification review"
+  ],
+  "persistence": "No startup service/fstab entry. Read-only mount must be prepared again after reboot. Original unusable v1 root policy and root-level leaf are preserved, not selected for v2 execution.",
+  "real_api_calls": 0,
+  "stress_tests": false,
+  "supplier_contact": false,
+  "services_deployed": false,
+  "source_push": false,
+  "receipts": [
+    {
+      "path": "runtime/scout-prep-rg01-515632f-20261019-546d8058/prepare-system.py",
+      "sha256": "a852cc9be96eca1cb4124384cbc5753e1b8ace395ade06ec8383be6a50ccf675"
+    },
+    {
+      "path": "runtime/scout-prep-rg01-515632f-20261019-546d8058/prepare-system-plan-final.log",
+      "sha256": "8a9bfbaa1ff241d83b8030485f88619c68e8c397e8fa2fd9b49a7f2d4d0f37ee"
+    },
+    {
+      "path": "runtime/scout-prep-rg01-515632f-20261019-546d8058/user-assets-verification.json",
+      "sha256": "403e8f8b19923827735481b444466d247c3f0c7a69defee3727985dec0ec1cf3"
+    },
+    {
+      "path": "runtime/scout-prep-rg01-515632f-20261019-546d8058/prepared-environment-verification.json",
+      "sha256": "4d45e79788930eb5d40964a49536da4b4c3b67156600683550f03fb0d9bfc3df"
+    },
+    {
+      "path": "runtime/scout-prep-rg01-515632f-20261019-546d8058/worker-startup-diagnostic.log",
+      "sha256": "4956be9114d61da9bc18906eaee7a856a75c90d306a9e3f8e2c1e910356a0e7f"
+    },
+    {
+      "path": "runtime/scout-prep-rg01-515632f-20261019-546d8058/delegated-environment-verification.json",
+      "sha256": "0be840a3b9461c8b46356a5f47458de9647cddf0a2be8936e9b67fbd1674e05a"
+    },
+    {
+      "path": "runtime/scout-prep-rg01-515632f-20261019-546d8058/delegated-startup-diagnostic.json",
+      "sha256": "d55a15989077d95d8de5861b79fb681d1d8f6ed6ac661caf400fb902389b263d"
+    },
+    {
+      "path": "runtime/scout-prep-rg01-515632f-20261019-546d8058/candidate-v2-verification.json",
+      "sha256": "56e9af670e3a751ee94064b15241cf7ce32c33640dc45c9c0c5d7b949b4197d5"
+    },
+    {
+      "path": "runtime/scout-prep-rg01-515632f-20261019-546d8058/prepare-system-v2.py",
+      "sha256": "f914c4d1fddeb94b456612dc682702bf94816a5c330e90be7d540d3059d699f0"
+    },
+    {
+      "path": "runtime/scout-prep-rg01-515632f-20261019-546d8058/prepare-system-v2-plan.json",
+      "sha256": "f887a8dbc34b4644c8ac1eb6c6d7e71b8a27fb317ed2b0d3781ecbfd74503f19"
+    },
+    {
+      "path": "runtime/scout-prep-rg01-515632f-20261019-546d8058/verify-ready-v2.py",
+      "sha256": "db2b04ee1b8fb2f99193c1ed7375e19b78a42f25cceeb4393894336e7bfd5caa"
+    },
+    {
+      "path": "runtime/scout-prep-rg01-515632f-20261019-546d8058/prepared-v2-verification.json",
+      "sha256": "eec93cfb5f4163d382431f5c35be76d83b73ce9177dc6cbc3e8d787f763234b1"
+    }
+  ],
+  "local_checks": {
+    "command": "./scripts/check --quick",
+    "result": "passed",
+    "receipt": "runtime/checks/c57e846f065d47bd991bf582e2e3b308/checks.json",
+    "receipt_sha256": "495bfa2a2bfccb66cb5481f9a983dc3547a07750e7324cd220eee7cf6cc60418",
+    "tests_passed": null,
+    "note": "Dependency compatibility, project-state and Ruff; no new pytest suite run. Historical full offline result remains 1098 tests."
+  },
+  "post_exit_observation": {
+    "v2_artifacts_still_present": true,
+    "one_shot_scope_released": true,
+    "preserved_v1_leaf_empty": true
+  },
+  "record_checks": {
+    "project_state": "passed",
+    "git_diff_check": "passed",
+    "receipt_hashes_checked": 12,
+    "local_links_checked": 70,
+    "operational_script_syntax": "passed",
+    "docs_json": "passed",
+    "release_registry_unchanged": true
+  }
+}

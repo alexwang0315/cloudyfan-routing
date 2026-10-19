@@ -153,3 +153,45 @@ No source edits, gate promotion, spending, supplier contact or deployment occurr
 ## RG-01 remaining tickets (2026-10-19)
 
 Current implementation and limits are in [the new bounded-SQL packet](rg01-implementation-20261019.md) and [ticket status](evidence/rg01-ticket-status.json). The source/catalog/strict Linux adapter are under offline verification. Real Linux attack evidence and actual named formal approval remain blocked; do not interpret implementation or mocked launch tests as target qualification. Historical semantic and decision evidence above remains unchanged. No model API, provider contact, provisioning, deployment or source push is authorized.
+
+## Authorized Scout environment preparation (2026-10-19)
+
+The user subsequently authorized dedicated Scout system packages and permissions,
+and completed both private-terminal sudo steps. [Preparation is now complete](rg01-scout-environment-20261019.md):
+pinned root-owned read-only v2 ARM64 rootfs, bwrap and a fresh systemd delegated
+user scope passed real strict-worker SQL preflight/validation and leaf cleanup.
+Original cgroup-migration and loader-mode failures remain in the evidence.
+The earlier missing-Linux/sudo blocker is resolved; no further preparation sudo
+action is pending. Ephemeral cgroup paths must be recreated and recorded per run;
+there is no persistent service or automatic remount after reboot.
+RG01-06 still needs actual resource/attack/interruption evidence, and RG01-08
+still needs named formal review. Registry status stays pending. No executable
+source change or new full pytest run occurred; see the separate scoped
+[preparation receipt](evidence/rg01-scout-environment-preparation-20261019.json).
+
+## Scout controlled target evidence (2026-10-19)
+
+Subsequent user-directed RG01-06 work completed [scoped target evidence](rg01-scout-target-20261019.md):
+normal S01-S08 flow 8/8 and seven bounded isolation/resource/interruption exercises
+7/7. The first six exercise trusted probes in the unchanged sandbox envelope;
+the last SIGSTOPs the actual immutable SQL worker after a mock answer is saved,
+then resumes the same answer without another POST. Active reservation is released
+on completion, but a 0.02 synthetic provisional billing hold remains. No real
+reconciliation or supplier/model qualification follows. Initial provider-fixture
+mismatch and all not-run rows are preserved in the earlier independent run.
+
+Final integration: 1,102 tests, Ruff, both mock high-route demos and packaging
+passed; [offline receipt](evidence/rg01-target-offline-20261019.json). The runtime
+package source is unchanged; qualification scripts/tests changed. [Target receipt](evidence/rg01-linux-target-runtime.json)
+pins the effective artifacts, ephemeral cgroup identity, raw hashes and limits.
+Seven of eight RG01 tickets are now complete; RG01-08 actual named formal review
+is the remaining blocker. Project-state remains blocked because of that explicit
+task, not because implementation or RG01-06 is missing. Formal registry unchanged.
+No model API, deployment, supplier contact or push occurred.
+
+Precommit review confirmed the target source fingerprint still matches the final
+1,102-test integration evidence. The [RG01-08 checklist](rg01-formal-review-checklist-20261019.md)
+collects the already-decided scope, expected/coverage review, exact sandbox build,
+interruption/accounting limits and named approval/expiry/withdrawal requirements.
+It is a review input, not a formal signoff. Commit-time checks are preserved in
+[the precommit record](evidence/rg01-target-precommit-20261019.json).

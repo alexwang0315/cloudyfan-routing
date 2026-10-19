@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "rg01-scout-target-evidence",
+  "recorded_at": "2026-10-19T10:03:35.683386+00:00",
+  "tests_passed": 1102,
+  "pytest_seconds": 127.53,
+  "source_digest": "37954eebe35b43c6182b92bcd67c6e74fa43342e9a4ba8da4320ae3f49492ee5",
+  "command": "./scripts/check --integration",
+  "receipt": {
+    "path": "runtime/checks/49d8383c93094d5896532114f81e13a1/checks.json",
+    "sha256": "8526891fc883d5f4eeea97bf46629f5a2f0f2de70a119e8cf74cd3ebf872fd2a"
+  },
+  "checks": [
+    "locked offline dependency compatibility",
+    "project-state",
+    "Ruff",
+    "pytest",
+    "both mocked high-route demos",
+    "sdist and wheel"
+  ],
+  "review": {
+    "independent_AI": true,
+    "initial_P2": 1,
+    "remaining_blockers": 0,
+    "formal_approval": false
+  },
+  "failed_checks_preserved": [
+    {
+      "path": "runtime/checks/797a38ac3f5e46acaaef877c82d38ef8/checks.json",
+      "sha256": "f8014a85f453ed9b1292922c9c092334421af7d060fdf76ecac233d32b2b3d69"
+    }
+  ],
+  "dependency_repair": {
+    "path": "runtime/rg01-target-20261019-39576759/dependency-restoration.json",
+    "sha256": "010fafbfd2955d24e172e916f5fd9a5dad8a8b055dec960ecc4740431d37614e"
+  },
+  "real_api_calls": 0,
+  "deployment": false,
+  "push": false,
+  "note": "Application src/ unchanged. Qualification CLI, trusted probes and regressions changed; actual target evidence is a separate record, not inferred from these offline tests."
+}

@@ -67,10 +67,13 @@
       "depends_on": [
         "RG01-05"
       ],
-      "status": "blocked",
-      "blocker": "Current host is Darwin x86_64; no bwrap/Docker/Podman/Lima/Linux target available. Target attack exercises have not run. Qualification tooling only inspects and optionally exercises normal Core flow.",
+      "status": "completed",
+      "blocker": null,
       "issue_url": null,
-      "published": false
+      "published": false,
+      "preparation_evidence": "docs/evidence/rg01-scout-environment-preparation-20261019.json",
+      "target_evidence": "docs/evidence/rg01-linux-target-runtime.json",
+      "offline_evidence": "docs/evidence/rg01-target-offline-20261019.json"
     },
     {
       "id": "RG01-07",
@@ -95,7 +98,7 @@
         "RG01-07"
       ],
       "status": "blocked",
-      "blocker": "Real target isolation evidence and actual named formal reviewer/signoff are absent. No signature is fabricated.",
+      "blocker": "RG01-06 scoped target evidence is complete. Actual named formal reviewer/signoff for the finite SQL scope remains absent; AI technical review is not formal approval.",
       "issue_url": null,
       "published": false
     }

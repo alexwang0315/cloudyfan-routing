@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "kind": "precommit",
+  "result": "passed",
+  "scope": "RG01-06 local review and commit",
+  "recorded_at": "2026-10-19T10:14:37.656197+00:00",
+  "source_digest": "37954eebe35b43c6182b92bcd67c6e74fa43342e9a4ba8da4320ae3f49492ee5",
+  "executable_changes_since_full_verification": false,
+  "review_findings_requiring_code_change": 0,
+  "reused_full_suite": {
+    "tests_passed": 1102,
+    "command": "./scripts/check --integration",
+    "receipt": {
+      "path": "runtime/checks/49d8383c93094d5896532114f81e13a1/checks.json",
+      "sha256": "8526891fc883d5f4eeea97bf46629f5a2f0f2de70a119e8cf74cd3ebf872fd2a"
+    }
+  },
+  "fresh_checks": {
+    "quick": {
+      "path": "runtime/checks/76a04ca3531147378caabdf7571ce296/checks.json",
+      "sha256": "1945c5960bab0dd86a5833cd033bbfd935df071784fb54ce4c48a1c1cde14e40"
+    },
+    "focused": {
+      "path": "runtime/rg01-06-precommit-feda1f3c/focused-tests.json",
+      "sha256": "d5c77e9ee47188eb802a46192fe658b0efd364afd26d38b3dd00e8564a728a86"
+    }
+  },
+  "raw_evidence_references_hash_checked": 23,
+  "release_registry_sha256_unchanged": "1e4899eec63930dc9014d0a089d408c5d3bd650a0b64ececfc6893ca6463142b",
+  "formal_qualification": "pending",
+  "rg01_08": "actual named formal review remains required; checklist is input, not approval",
+  "real_api_calls": 0,
+  "scout_probes_rerun": false,
+  "deployment": false,
+  "push": false,
+  "note": "Commit contains linked environment preparation records plus target harness/tests and sanitized summaries; original raw receipts remain ignored under runtime."
+}

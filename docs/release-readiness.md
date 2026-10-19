@@ -20,7 +20,7 @@
 
 | 放行項 | 實作完成：已交付範圍 | 離線驗證完成：可追溯證據 | 正式資格 | 首版適用性 |
 |---|---|---|---|---|
-| **RG-01 公開驗收與修正** | 完成：可注入驗收器、版本化公開診斷、唯一修正；新增 SQL v2 子程序、資源策略、公開診斷投影、工程分類及八類語義審查材料。 | 完成：[診斷／修正](public-diagnostics.md)、[SQL 接入](sql-environment.md)、[跨接入契約](transport-contracts.md)，`Core.run`＋真 SQLite／MockTransport。 | **待核定**：[委託決策](rg01-first-scope-decisions-20261019.md)已定首個資格切面、業務語義、有界數值域與 Linux 目標；新政策與 13 個已知反例已接入並通過新版離線回歸；Linux 實環境攻擊證據與正式具名核定仍缺，詳見[本批交付](rg01-implementation-20261019.md)，正式資格 pending。 | 所有路由必需。 |
+| **RG-01 公開驗收與修正** | 完成：可注入驗收器、版本化公開診斷、唯一修正；新增 SQL v2 子程序、資源策略、公開診斷投影、工程分類及八類語義審查材料。 | 完成：[診斷／修正](public-diagnostics.md)、[SQL 接入](sql-environment.md)、[跨接入契約](transport-contracts.md)，`Core.run`＋真 SQLite／MockTransport。 | **待核定**：[委託決策](rg01-first-scope-decisions-20261019.md)已定首個資格切面、業務語義、有界數值域與 Linux 目標；新政策與 13 個已知反例已接入並通過新版離線回歸；[Scout 限定範圍取證](rg01-scout-target-20261019.md)正常流程 8/8、七項 7/7 已完成；目前只待 RG01-08 正式具名審閱，正式資格仍 pending。 | 所有路由必需。 |
 | **RG-02 模型／強度／量化資格** | 完成：資格包、三模型池、精確設定綁定、未合格候選排除及效期檢查。 | 完成：[合成資格包與核定阻擋](qualification.md)、[評分快照接入](score-integration.md)。 | **待核定**：首版真實候選、門檻與設定。 | 所有實際使用的模型必需；量化只在使用該設定時適用。 |
 | **RG-03 評分來源與更新** | 完成：既有來源 adapters／受控匯入、固定快照、更新預覽、原子切換與 audit。 | 完成：[來源與快照](score-integration.md)、[更新操作](score-update-operations.md)；LiveBench v1 有歷史公開唯讀 smoke，非正式模型池。 | **待核定**：實際啟用來源的權限、映射、時效與更新責任。 | 三池所用來源必需；不用同時驗所有來源。 |
 | **RG-04 完整成本與可強制上限** | 完成：共享預算、完整預留、核帳／未知停止、供應商 adapter、元件上界及 **v2 完整零費率保證路徑**。 | 完成：[預算](budget-admission.md)、[供應商契約](provider-bounds.md)、[元件契約](component-bounds.md)、[v2 驗證](evidence/rg04-zero-rate-offline.json)。 | **待核定**：真實供應商上界／零費率及完整帳務證據。 | 任何受控模型／工具執行必需，含分類、初答、修正與失敗。 |
@@ -115,3 +115,14 @@ Python API：`validate_gates(data, root, *, now=None)` 回傳錯誤列表，now 
 ## RG-01 新版落實進度（2026-10-19）
 
 上述委託決策後續已接入新版本的有界 SQL 政策、13 個公開合成反例及嚴格 Linux launcher，見[本批交付與取證邊界](rg01-implementation-20261019.md)。原 SQL v2 與歷史結果保留；本批完整驗證依新的 evidence／收據。Linux 目標攻擊取證及正式具名審閱仍 blocked，其他 gate 不受本批改寫。這是新政策後續實作狀態，不回寫先前決策當時「尚未實作」的歷史紀錄。
+
+Scout 專用環境其後已依另行授權完成準備，且通過真實嚴格 worker 的最小 SQL
+啟動／驗收／回收，見[準備證據與操作邊界](rg01-scout-environment-20261019.md)。
+目前不缺 Linux 主機或 sudo 準備，仍缺 RG01-06 資源／攻擊／中斷取證與 RG01-08
+具名正式核定；環境準備完成不提升本表的正式資格狀態。
+
+後續「下一步」已完成 [RG01-06 限定範圍實環境取證](rg01-scout-target-20261019.md)：
+正常流程 8/8、七項取證 7/7；真 SQL worker 中斷後重用保存答案、Mock POST 僅一次。
+以上舊段落的 RG01-06 缺證已解除，**目前 RG-01 剩餘的是 RG01-08 正式具名審閱**。
+前六項探針不是全面 escape 測試，active reservation 釋放不等於 provisional 費用
+已核帳。正式 registry 保持 pending，沒有由技術取證自動升格。

@@ -13,9 +13,9 @@
 | RG01-03 | S06／S07 排名／累計／NULL／排序／無主群 | 補入 P06、P07、P08、P12、P13；完整唯一排序鍵的 RANGE 等價控制保留。 |
 | RG01-04 | S08 BINARY 大小寫碰撞及空字串 | 補入 P09、P10。 |
 | RG01-05 | Linux 嚴格模式與失效拒絕 | 已接入；本機只具備協定／故障注入證據，沒有 Linux 安全核定。 |
-| RG01-06 | 固定 Linux 目標實環境取證 | **blocked**；本機 Darwin x86_64，未找到 bwrap、Docker、Podman 或 Lima，沒有指定的 Linux 目標。工具的正常流程 exercise 不涵蓋全部攻擊取證。 |
+| RG01-06 | 固定 Linux 目標實環境取證 | **限定範圍技術取證完成**；[Scout 正常 8/8、七項取證 7/7](rg01-scout-target-20261019.md)，保留 probe／真 worker 邊界與原始中斷紀錄，不自動核定正式 gate。 |
 | RG01-07 | 新版全流程離線審閱包 | 本文件、反例覆蓋、回歸、產物檢查、獨立技術 review 與新收據；不等待 06 才能整理。 |
-| RG01-08 | 正式具名核定 | **blocked**；缺 06 實證與實際正式 reviewer。AI 技術 review 不冒充人類簽核。 |
+| RG01-08 | 正式具名核定 | **blocked**；06 實證已補齊，待實際正式 reviewer 審閱與具名核定。AI 技術 review 不冒充人類簽核。 |
 
 狀態機讀來源為[本批 ticket 狀態](evidence/rg01-ticket-status.json)，不是正式 gate。
 [正式 registry](release-gates.json)保持原樣，RG-01 及其他 gate 仍 pending。
@@ -114,3 +114,16 @@ cgroup 並確認 populated=0，原 worker 仍 wait/reap。驗收／取消失效�
 Standards：初審 1 項 P2（Python 身份核對缺口），修正後 0 remaining。Spec：同一缺口 1 項 P2，修正後 0 remaining。兩者為獨立 AI 技術審查，沒有正式人員簽核。
 
 [完整收據摘要](evidence/rg01-tickets-offline-20261019.json)保存命令收據／來源指紋／產物與 review 歸因；[ticket 狀態](evidence/rg01-ticket-status.json)為 6 completed、2 blocked。原正式 registry hash 不變。`project-state` 的全批 completion 仍為 false，是兩項阻擋尚未解除，不是前述六張未實作。
+
+## 後續 Scout 準備狀態
+
+上述「沒有指定 Linux 目標」是本批實作當時的阻擋。使用者其後授權 Scout 專用
+環境準備，現已完成固定 ARM64 rootfs／bwrap／專用委派 scope 的實際 SQL 啟動與
+回收驗證，見[準備紀錄](rg01-scout-environment-20261019.md)。RG01-06 的 blocker 已更新為
+尚缺受控資源、檔案／網路、取消與中斷取證，不再是缺主機；RG01-08 仍缺正式審閱。
+初版 cgroup／ELF loader 設定失敗已保留，未拿最小 smoke 取代完整隔離資格。
+
+
+## 後續取證完成
+
+[Scout 限定取證](rg01-scout-target-20261019.md)已完成 RG01-06 技術交付；本批 ticket 現為七張完成、一張正式審閱受阻。以上較早的「六張完成、缺 06」數量是當時狀態。最終完整離線驗證 1,102 tests，對應新的 source digest／收據；正式 gate 仍 pending。

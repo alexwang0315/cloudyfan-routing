@@ -287,3 +287,93 @@ source／tests／原 catalog／原 expected／診斷／正式 registry 保持原
 - Exactly one full integration run: **1098 passed in 127.00s**; Ruff, locked offline sync/pip check, record consistency, both mock demos, sdist/wheel passed. Receipt `runtime/checks/aaae39715e8d4daeb8326af6d4d946a7/checks.json`; private console `runtime/rg01-tickets-integration-20261019.log`. Source digest and receipt hashes are in [new sanitized evidence](evidence/rg01-tickets-offline-20261019.json).
 - Installed-wheel isolated-Python smoke passed 8 cases and loaded 13 counterexamples; no source checkout import. Candidate catalog independently cross-checks original 40 hand values and rejects 14 old + 13 new mutants. These are post-hoc synthetic regressions, not model quality/cost results.
 - RG01-01..05 and RG01-07 completed in their offline scope. RG01-06 real Linux attack evidence and RG01-08 actual named formal approval remain blocked, explicitly recorded. Formal registry unchanged; no production qualification. No new API spend.
+
+
+## Scout dedicated preparation — 2026-10-19
+
+User-authorized system packages/permissions; administrator authentication was
+performed by the user in their own terminal. Installed pinned bwrap and an
+isolated wheel/locked runtime. Actual first startup failed on cgroup migration,
+then on an incorrectly non-executable ELF loader. Preserved both failures and
+v1 artifacts; fresh systemd user delegation and a side-by-side read-only v2
+rootfs resolved those preparation faults without global cgroup or service changes.
+
+Real ordinary-user `LinuxIsolation` artifact/lease checks and SqlContract SQL
+preflight/validation passed (`SUM` of public 1,2 => expected 3), 1.132 seconds;
+worker leaf emptied, transient scope released afterward. Ten existing containers
+remain running and both originally healthchecked containers healthy; no new
+failed user unit observed. This inventory is not full application-health testing.
+
+`./scripts/check --quick`: PASS (dependency compatibility, project-state, Ruff),
+receipt `runtime/checks/c57e846f065d47bd991bf582e2e3b308/checks.json`.
+An earlier quick check rejected an invalid metadata authorization flag; corrected
+that record field and preserved its failed receipt. Final project-state and
+`git diff --check`: PASS. Twelve operation receipts hash-checked, 70 local links,
+JSON records and operational script syntax checked. Source digest remains
+`e3818e9500757ad02b44e87c4113de73a060af9643dd5b7a7d74c83b0d52de3b`;
+no new pytest run. Prior 1,098-test full-suite evidence is historical, unchanged.
+
+See [environment record](rg01-scout-environment-20261019.md) and
+[scoped evidence](evidence/rg01-scout-environment-preparation-20261019.json).
+Preparation task is complete; RG01-06 attack/resource/interruption evidence and
+RG01-08 named formal review remain blocked. Formal registry unchanged. No real
+model API, stress suite, supplier contact, persistent service deployment, source
+commit or push in this preparation delivery. Original assets were not deleted.
+
+
+## RG01-06 controlled Scout evidence — 2026-10-19
+
+Implemented opt-in adversarial qualification entry and fixed trusted probes,
+with Core.run/MockTransport and real immutable SQL worker interruption/resume.
+Preserved preparation documents and all prior uncommitted work. Independent AI
+read-only review found cancellation false-success P2; ready-marker admission and
+external KeyboardInterrupt propagation plus regression fixed it. Final evidence
+re-review found no remaining blocker; this is not named human approval.
+
+First target run stopped on existing helper mock provider SyntheticFixture versus
+Example profile identity mismatch after one synthetic POST; seven rows stayed
+not_run. Fixed fixture identity, added portable full-eight normal/reuse regression
+and used separate r2 stage/scope/output. No production identity rule was relaxed.
+Both raw runs remain under private runtime. Final Scout: normal 8/8 and target
+7/7 passed; 96 copied remote files hash-verified, before/after ten-container
+inventory identical, worker leaf empty, scope released, rootfs still read-only.
+First six rows prove trusted probes in the same sandbox envelope. Last row
+SIGSTOPs actual SQL worker after saved answer, observes production timeout, then
+reuses identical response without a second POST. Active reservation 0.482→0;
+synthetic provisional hold 0.02 remains. No real billing reconciliation claim.
+
+Final ./scripts/check --integration PASS: 1,102 tests in 127.53s; dependency
+compatibility, project-state, Ruff, both mock high-route demos and sdist/wheel
+passed. Receipt runtime/checks/49d8383c93094d5896532114f81e13a1/checks.json.
+Earlier full check failed collection because the same-version native pydantic_core
+.so was absent and iCloud placeholder remained; restored only absent binary from
+local cache, verified installed RECORD SHA256 and size. No version/lock change,
+download or deletion; failed receipt and repair record retained. Earlier 1,100
+and 1,101 runs do not replace the final 1,102 source-verification result.
+
+[Offline summary](evidence/rg01-target-offline-20261019.json),
+[target summary](evidence/rg01-linux-target-runtime.json) and
+[scope/interpretation](rg01-scout-target-20261019.md) retain source/receipt hashes.
+RG01-06 technical work complete; RG01-08 actual named formal review remains
+blocked. Registry unchanged. No real API, supplier contact, persistent service
+deployment, GitHub issue write, source commit or push in this turn.
+
+
+## RG01-06 local precommit review — 2026-10-19
+
+User explicitly requested checking and committing the RG01-06 changes locally;
+formal qualification stays pending, no paid API/deployment/push. Reviewed the
+qualification CLI, trusted probe module, four new regressions and linked
+preparation/target records. No new executable correction was required. Source
+fingerprint matches the prior full 1,102-test / integration receipt exactly.
+Fresh ./scripts/check --quick passed (runtime/checks/76a04ca3531147378caabdf7571ce296/checks.json),
+and tests/test_sql_qualification.py passed 7 tests in 8.70s. This is a focused
+commit-time check, not another full-suite/Scout attack run. Original target
+8/8 and 7/7 results remain the same preserved observations.
+
+Added [RG01-08 review checklist](rg01-formal-review-checklist-20261019.md) without
+changing adopted business semantics or filling any formal owner/reviewer field.
+[Precommit record](evidence/rg01-target-precommit-20261019.json) preserves source,
+receipt and registry hashes; staged review excludes runtime, private answers and
+credentials. The authorized local commit is checked afterward with Git log/tree;
+no external source or Issue write is part of this delivery.

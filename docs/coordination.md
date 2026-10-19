@@ -111,3 +111,34 @@ identities and source/runtime implementation are not changed by this decision wo
 ## RG-01 remaining-ticket implementation
 
 root is the sole editor of SQL contract/policy/catalog/isolation interfaces, public-boundary tests, qualification tooling and current records. Core.run, Client, budget and routing policies are consumed unchanged. Two independent read-only reviews will follow implementation under the code-review skill. Original uncommitted semantic/decision documents and historical evidence are preserved. Real Linux qualification and human signoff are separate from this offline implementation.
+
+## Scout dedicated environment preparation
+
+root owns preparation evidence/docs and the operational scripts retained privately under runtime. No application executable inputs change. Host provisioning is explicitly authorized by the user, but SSH sudo authentication is pending. Existing Scout project, containers and service configuration are outside the edit scope; no stress/attack suite or production deployment in this step.
+
+Preparation completion: the user executed both reviewed sudo bootstraps. Root-owned
+v2 read-only artifacts and a fresh delegated transient user scope passed actual
+strict-worker startup, known public SQL validation and empty-leaf cleanup. Root
+retains sole ownership of these preparation records. Original startup failures,
+old assets and receipts are preserved. No further sudo action is pending for
+this preparation; RG01-06 adversarial evidence and RG01-08 formal review remain
+blocked separately. See [environment record](rg01-scout-environment-20261019.md).
+
+
+## RG01-06 controlled target evidence
+
+root owns the qualification CLI, fixed trusted OS probes, mock-only Core.run interruption/resume checks and new evidence. Preserve the completed preparation documents and artifacts. No runtime application interface changes are planned. All target probes run serially within the prepared worker leaf; no global host policy, existing services, model API or formal review/registry change.
+
+Completion: root integrated the opt-in target CLI and four regression tests.
+Independent read-only AI review found one cancellation-evidence P2, now fixed
+and regression-tested; evidence re-review found no remaining blocker. Normal
+8/8 and target 7/7 passed on Scout; final offline gate passed 1,102 tests.
+RG01-06 is technically complete. RG01-08 requires an actual named formal
+reviewer; none is assigned or signed by the AI. No source commit/push occurred
+during that target-evidence turn.
+
+
+Precommit scope: the user subsequently authorized checking and committing this
+RG01-06 change locally, including its linked preparation records. root owns
+staging and the local commit; no remote write, deployment or paid API. Runtime
+receipts remain untracked; only sanitized summaries and hash references enter Git.

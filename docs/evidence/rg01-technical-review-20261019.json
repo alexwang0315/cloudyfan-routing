@@ -1,0 +1,182 @@
+{
+  "schema_version": 1,
+  "kind": "technical_review",
+  "result": "reviewed_with_limitations",
+  "recorded_at": "2026-10-19T10:22:24.856733+00:00",
+  "source_commit": "fd2c5911dfe07e6f50da1803f5ca33ab92354250",
+  "source_digest": "37954eebe35b43c6182b92bcd67c6e74fa43342e9a4ba8da4320ae3f49492ee5",
+  "formal_qualification": "pending",
+  "formal_signoff": false,
+  "new_engineering_blockers_within_limited_scope": 0,
+  "recommendation": "Submit exact finite public SQL contract and pinned sandbox/control-plane observations for conditional named approval; no approval granted by this review.",
+  "scope": {
+    "catalog": "sql-review-catalog-v2-bounded",
+    "cases": [
+      "S01",
+      "S02",
+      "S03",
+      "S04",
+      "S05",
+      "S06",
+      "S07",
+      "S08"
+    ],
+    "public_case_sample_pairs": 53,
+    "claim": "Conformance to frozen public samples/expected; not general correctness on unseen data",
+    "adopted_business_semantics_reopened": false,
+    "target_scope": "Six trusted sandbox-envelope probes plus actual SQL/Core.run normal8/8 and one saved-answer timeout/resume path, with mocked model I/O."
+  },
+  "observations": {
+    "existing_summary_hash_references_checked": 26,
+    "existing_remote_copy_files_checked": 96,
+    "current_source_matches_existing_full_and_target": true,
+    "manual_original_pairs_checked": 40,
+    "reference_case_sample_pairs_checked": 53,
+    "old_mutants_rejected": 14,
+    "posthoc_wrong_queries_rejected": 13,
+    "local_recheck_sqlite": "3.50.4",
+    "old_scout_sqlite": "3.46.1",
+    "normal_flow_cases_in_existing_evidence": 8,
+    "target_exercises_in_existing_evidence": 7,
+    "saved_response_hash_matches": true,
+    "initial_blocked_and_not_run_evidence_retained": true
+  },
+  "limitations": [
+    "Finite public samples permit unknown false acceptance; 53 pairs are not independent holdout tasks.",
+    "13 new probes were posthoc; no population false-acceptance estimate.",
+    "Reference amount bounds do not guarantee arbitrary erroneous SQL arithmetic.",
+    "Trusted expected supplier still required for any new fixture/contract.",
+    "Six trusted probes do not establish arbitrary SQL escape resistance or universal sandbox certification.",
+    "Cancellation is ready WAIT_PROBE plus injected KeyboardInterrupt; actual SQL evidence is SIGSTOP timeout/resume. No actual product cancellation/host shutdown/supervisor SIGKILL evidence.",
+    "pids.max configured/checked; no fork-exhaustion exercise. CPU total3.84 seconds is aggregate; deadline3.014 includes cleanup, not SLA.",
+    "Trust in host kernel/admin/supervisor and exclusive leaf management is required; no malicious same-UID host/multi-tenant qualification.",
+    "Existing ephemeral cgroup is gone; new runs/reboots require fresh admitted context, mount/pin/limits validation.",
+    "Synthetic cost/reservations do not establish supplier billing or fee qualification; provisional0.02 remains after active reservation release.",
+    "No model-quality/routing/commercial-savings/deployment/identity qualification supplied."
+  ],
+  "human_confirmations": [
+    {
+      "id": "H1",
+      "decision": "Accept limited scope/remaining unknown risk and exclusions, or identify a broader claim requiring additional evidence.",
+      "status": "pending"
+    },
+    {
+      "id": "H2",
+      "decision": "Actual named owner/reviewer, scoped approval/conditions/refusal with version/evidence hashes and authorization.",
+      "status": "pending"
+    },
+    {
+      "id": "H3",
+      "decision": "Effective/expiry timestamps and responsible withdrawal/disable/revalidation actor with change triggers.",
+      "status": "pending"
+    }
+  ],
+  "review_actors": [
+    "Codex AI technical synthesis/integrity review",
+    "Independent read-only AI semantic review",
+    "Independent read-only AI isolation/control-plane review"
+  ],
+  "human_identity_verified": false,
+  "inputs": [
+    {
+      "path": "docs/rg01-first-scope-decisions-20261019.md",
+      "sha256": "bd9f6dc7d88753aaeed22bbc2d290691ad36dcae2be654202caaa0d81563327b"
+    },
+    {
+      "path": "docs/rg01-semantic-review-20261019.md",
+      "sha256": "1aea11afa9c877f282ebfa47ccd305bf9e3ac09e3c46f9d0cc1a1445268f08e2"
+    },
+    {
+      "path": "docs/evidence/rg01-bounded-catalog.json",
+      "sha256": "9a026ac034f38a79c86cb74c77f0b29d8bb54ba0bd77695bdf4a7e0c37230c0b"
+    },
+    {
+      "path": "docs/evidence/rg01-linux-target-runtime.json",
+      "sha256": "649eeda3eac21d18b5f615b1138349820ef2a543ff186a1981c55c7851f11afd"
+    },
+    {
+      "path": "docs/evidence/rg01-target-offline-20261019.json",
+      "sha256": "09bba984c327c158a21b1306ddae4717267a376597ee82e29d8f814a5d756ff6"
+    },
+    {
+      "path": "docs/rg01-scout-environment-20261019.md",
+      "sha256": "c4674559484305dff482570c91dd7c9b11cbf8d8f991f1da02e73345ca155fe1"
+    },
+    {
+      "path": "src/cloudyfan_jev/sql_policy.py",
+      "sha256": "11d8a5c2edfcbdcbfc99b6e76f6384cf66c8e25dc1ace4f1bbfb4ce1836831ec"
+    },
+    {
+      "path": "src/cloudyfan_jev/sql_catalog.py",
+      "sha256": "fd861ec13e79c8eb54b086e47f1b8050b34406fa52d86046e9fed2b9d65ba2d6"
+    },
+    {
+      "path": "src/cloudyfan_jev/sql_review.py",
+      "sha256": "9cb294055a0aa534cf981737a4cabde1601a8e642e7dc80e174cde6d37c69f06"
+    },
+    {
+      "path": "src/cloudyfan_jev/sql_counterexamples.json",
+      "sha256": "e7044ba3cf3afc58b8d315b4bc1d6fcf34bedbcc563b32ef1d8e92e5866f0a92"
+    },
+    {
+      "path": "src/cloudyfan_jev/sql.py",
+      "sha256": "f8e037a71f4dca206bd8de231043e3bb802fa9d72b4ffc19f2564b659d9ac504"
+    },
+    {
+      "path": "src/cloudyfan_jev/sql_isolation.py",
+      "sha256": "a5f582f5bdb7bb1349039a2cebdf7bdc89f9d2d7cfbcbe83f2acb8446a2d9bd7"
+    },
+    {
+      "path": "src/cloudyfan_jev/sql_process.py",
+      "sha256": "e24b2eb0e4f475a6c8df9f89dc6fd562088f52fc860af30a199b60abbbd347cd"
+    },
+    {
+      "path": "scripts/sql_target_exercises.py",
+      "sha256": "10c3011b529bb49951b3573091473971656174f9321840a9433b6d03b5560148"
+    },
+    {
+      "path": "scripts/qualify_sql_worker.py",
+      "sha256": "b2a25c9166a6482f52b185e75186f3c730f5c1041d63cc6760c332f7fc37d322"
+    }
+  ],
+  "receipts": [
+    {
+      "path": "runtime/rg01-08-review-942399dc/integrity.json",
+      "sha256": "3185125f93bce4aa41c28e59322d51b6472c550ea3fc193e5f4f50b4f2a31d35"
+    },
+    {
+      "path": "runtime/rg01-08-review-942399dc/checked-references.json",
+      "sha256": "1eb15de54a09899402fcb1da95e5bb2f9be285ae0dafca8ee7a64a134a0a56e1"
+    },
+    {
+      "path": "runtime/rg01-08-review-942399dc/semantic-recheck.py",
+      "sha256": "93402e3fefbd6b27959773cd6171545f4774809e8d7af653a35c3a393ad24daa"
+    },
+    {
+      "path": "runtime/rg01-08-review-942399dc/semantic-recheck-final.json",
+      "sha256": "f71656d2b43067b3a9cbcbf55fbc1bca0a7899b25d6a46319493d90907d4e60f"
+    }
+  ],
+  "source_changed": false,
+  "full_pytest_rerun": false,
+  "scout_execution": false,
+  "real_api_calls": 0,
+  "deployment": false,
+  "push": false,
+  "supplier_contact": false,
+  "registry_sha256_unchanged": "1e4899eec63930dc9014d0a089d408c5d3bd650a0b64ececfc6893ca6463142b",
+  "note": "No fresh host readiness or attestation. Historical full1102 tests are reused only because executable fingerprint matches; current work is documentation/evidence review.",
+  "current_review_checks": {
+    "quick": {
+      "path": "runtime/checks/ccf7ca210c94445f8870c429daaa4180/checks.json",
+      "sha256": "847c8972125e1a44a21fcdac7d28a0add56d426b479aba55905597f2eb9a9717"
+    },
+    "result": "passed",
+    "review_input_and_receipt_hashes_checked": 19,
+    "local_links_checked": 48,
+    "docs_json": "passed",
+    "git_diff_check": "passed",
+    "registry_identical_to_committed_version": true,
+    "formal_ticket_still_blocked": true
+  }
+}

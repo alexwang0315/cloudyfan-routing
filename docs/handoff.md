@@ -195,3 +195,28 @@ collects the already-decided scope, expected/coverage review, exact sandbox buil
 interruption/accounting limits and named approval/expiry/withdrawal requirements.
 It is a review input, not a formal signoff. Commit-time checks are preserved in
 [the precommit record](evidence/rg01-target-precommit-20261019.json).
+
+## RG01-08 technical evidence review (2026-10-19)
+
+The user subsequently authorized reviewing existing evidence, with no formal
+signoff or qualification-state change. [Technical review](rg01-technical-review-20261019.md)
+found no new blocker within the finite public S01-S08/pinned sandbox claim.
+It rechecked 26 indexed references and 96 copied files; trusted local in-memory
+SQLite replay confirmed 53 case/sample pairs, 40 original manual/oracle pairs,
+14 old mutants and 13 post-hoc wrong-query probes. These are not new holdout
+tasks, model results, a new full pytest run or new Scout execution.
+
+The review explicitly limits cancellation evidence to a ready trusted probe plus
+injected KeyboardInterrupt; actual immutable SQL evidence is one saved-answer
+SIGSTOP/deadline/resume path. Product-client cancellation, host shutdown,
+supervisor SIGKILL, unseen-data correctness and hostile same-UID host isolation
+are not qualified by these observations. [Review record](evidence/rg01-technical-review-20261019.json)
+preserves inputs/hashes and the human decisions still required. Adopted business
+semantics are not reopened. The technical-review subtask is complete; the actual
+named approval task stays blocked. Formal registry, owner/reviewer and evidence
+remain untouched. No source edits, API, SSH, deployment, push or local commit occurred during that technical-review stage.
+
+The user subsequently authorized local review and commit of this documentation.
+[Commit checks](evidence/rg01-review-precommit-20261019.json) preserve fresh offline
+record/link/hash checks. Formal registry and named-review requirements remain
+unchanged; no API, deployment or push is authorized.

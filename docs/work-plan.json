@@ -91,7 +91,8 @@
       ],
       "depends_on": [
         "rg01-offline-implementation",
-        "RG01-06-target-evidence"
+        "RG01-06-target-evidence",
+        "RG01-08-technical-evidence-review"
       ],
       "consumed_interfaces": []
     },
@@ -119,6 +120,30 @@
       "consumed_interfaces": [
         "core-run"
       ]
+    },
+    {
+      "id": "RG01-08-technical-evidence-review",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "docs/rg01-technical-review-20261019.md",
+        "docs/evidence/rg01-technical-review-20261019.json",
+        "docs/evidence/rg01-review-prior-state.json",
+        "docs/evidence/rg01-review-prior-work-plan.json",
+        "docs/agent-state.json",
+        "docs/work-plan.json",
+        "docs/coordination.md",
+        "docs/handoff.md",
+        "docs/verification.md",
+        "docs/rg01-formal-review-checklist-20261019.md",
+        "docs/evidence/rg01-ticket-status.json",
+        "docs/evidence/rg01-review-precommit-20261019.json"
+      ],
+      "depends_on": [
+        "rg01-offline-implementation",
+        "RG01-06-target-evidence"
+      ],
+      "consumed_interfaces": []
     }
   ]
 }

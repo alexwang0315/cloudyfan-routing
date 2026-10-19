@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "kind": "precommit",
+  "result": "passed",
+  "scope": "RG01-08 documentation technical review and local commit",
+  "recorded_at": "2026-10-19T10:27:05.241311+00:00",
+  "reviewed_base_commit": "fd2c5911dfe07e6f50da1803f5ca33ab92354250",
+  "source_digest": "37954eebe35b43c6182b92bcd67c6e74fa43342e9a4ba8da4320ae3f49492ee5",
+  "executable_changes": false,
+  "formal_qualification": "pending",
+  "formal_signoff": false,
+  "formal_rg01_08_task": "blocked",
+  "release_registry_sha256_unchanged": "1e4899eec63930dc9014d0a089d408c5d3bd650a0b64ececfc6893ca6463142b",
+  "review_reference_hashes_checked": 20,
+  "prior_snapshots_match_committed_documents": true,
+  "quick": {
+    "path": "runtime/checks/f6c5a4fe735d4c0193383412b1054423/checks.json",
+    "sha256": "02bad70caab39f63f1d424e361feb50001e48d758473dbf456f17fe4b08a274e"
+  },
+  "historical_integration": {
+    "tests_passed": 1102,
+    "rerun_this_commit": false,
+    "evidence": "docs/evidence/rg01-target-offline-20261019.json"
+  },
+  "real_api_calls": 0,
+  "scout_execution": false,
+  "deployment": false,
+  "push": false,
+  "supplier_contact": false,
+  "note": "Documentation-only verification. The commit hook runs another offline quick check. Original raw evidence remains ignored in runtime; no formal approval or supplier qualification is granted.",
+  "docs_json_files_parsed": 71,
+  "local_links_checked": 101,
+  "git_diff_check": "passed",
+  "staging_allowlist": [
+    "docs/agent-state.json",
+    "docs/coordination.md",
+    "docs/evidence/rg01-review-precommit-20261019.json",
+    "docs/evidence/rg01-review-prior-state.json",
+    "docs/evidence/rg01-review-prior-work-plan.json",
+    "docs/evidence/rg01-technical-review-20261019.json",
+    "docs/evidence/rg01-ticket-status.json",
+    "docs/handoff.md",
+    "docs/rg01-formal-review-checklist-20261019.md",
+    "docs/rg01-technical-review-20261019.md",
+    "docs/verification.md",
+    "docs/work-plan.json"
+  ]
+}

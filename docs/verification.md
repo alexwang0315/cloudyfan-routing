@@ -377,3 +377,45 @@ changing adopted business semantics or filling any formal owner/reviewer field.
 receipt and registry hashes; staged review excludes runtime, private answers and
 credentials. The authorized local commit is checked afterward with Git log/tree;
 no external source or Issue write is part of this delivery.
+
+## RG01-08 existing-evidence technical review — 2026-10-19
+
+User authorized technical review only, no signatures or formal gate changes.
+Read-only semantic and control-plane AI reviews plus root integrity synthesis
+found no new blocker within the explicitly limited public-SQL/pinned-envelope
+claim. Rechecked 26 indexed hash references and all 96 copied target files,
+saved-answer hash, initial blocked/not-run evidence and unchanged source digest.
+No SSH, target probes or model API this turn. Historical full 1,102-test evidence
+was reused by matching digest; no new full-suite run is claimed.
+
+Local in-memory SQLite 3.50.4 replay of trusted existing references/public data
+confirmed 40 original manual/oracle pairs, 53 reference case/sample pairs and
+rejection of 14 old mutants plus13 post-hoc wrong queries. It is deterministic
+review of existing material, not new holdout/model/Linux qualification. The first
+private replay command resolved the venv Python symlink to a non-venv executable
+and failed import; reran the same unchanged script through the absolute venv
+entry, passed. Both diagnostic outputs remain private under runtime.
+
+Created [review report](rg01-technical-review-20261019.md) and
+[hashed review summary](evidence/rg01-technical-review-20261019.json); updated
+checklist/handoff and the separate completed technical-review subtask. Actual
+RG01-08 formal review remains blocked. Registry, formal fields and source are
+unchanged. Human confirmations are limited-risk acceptance, actual owner/reviewer
+and scoped formal outcome, effective/expiry/withdrawal/revalidation responsibility.
+No reopening of already-delegated S01-S08 semantics or numerical-domain choices.
+
+Current review-only checks: ./scripts/check --quick PASS, receipt runtime/checks/ccf7ca210c94445f8870c429daaa4180/checks.json; 19 review-input/method receipt hashes and48 local links checked, docs JSON and git diff --check passed. Formal registry bytes match committed fd2c591 exactly; RG01-08 remains blocked. No executable/test changes or new full pytest/Scout execution.
+
+## RG01-08 documentation precommit review — 2026-10-19
+
+User authorized local review and commit only. Reviewed the technical report,
+checklist, evidence summary, prior snapshots and state/plan changes. Clarified
+that the earlier no-commit statement describes the technical-review stage.
+Fresh ./scripts/check --quick passed (locked offline dependencies, record
+consistency and Ruff); 20 review input/receipt/check hashes match, prior snapshots
+match fd2c591 committed records, and executable fingerprint remains unchanged.
+Document JSON/link and whitespace checks are recorded in the
+[precommit summary](evidence/rg01-review-precommit-20261019.json). The earlier
+1,102-test integration is historical same-source evidence, not a new test run.
+Formal registry bytes remain identical, RG01-08 stays blocked/unassigned and
+RG-01 stays pending. No signature, API, Scout execution, deployment or push.

@@ -100,7 +100,8 @@
       "status": "blocked",
       "blocker": "RG01-06 scoped target evidence is complete. Actual named formal reviewer/signoff for the finite SQL scope remains absent; AI technical review is not formal approval.",
       "issue_url": null,
-      "published": false
+      "published": false,
+      "technical_review": "docs/evidence/rg01-technical-review-20261019.json"
     }
   ],
   "formal_qualification": "pending",

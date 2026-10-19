@@ -142,3 +142,20 @@ Precommit scope: the user subsequently authorized checking and committing this
 RG01-06 change locally, including its linked preparation records. root owns
 staging and the local commit; no remote write, deployment or paid API. Runtime
 receipts remain untracked; only sanitized summaries and hash references enter Git.
+
+
+## RG01-08 existing-evidence technical review
+
+root owns integrity checks, review synthesis and current documentation. Independent read-only semantic and control-plane reviews may inspect existing artifacts; no source edits, Scout execution, model calls, signatures or qualification-state changes. Formal-review task remains blocked and unassigned.
+
+Technical-review completion: both read-only AI review lanes found no new blocker
+within the finite claim; root independently replayed trusted reference SQL on
+existing public data and rechecked indexed/raw hashes. Review actors are AI,
+not named formal approvers. Current output separates conditional scope, explicit
+limitations and three human confirmation categories. Formal task remains blocked;
+registry/qualification fields and executable source are unchanged.
+
+Subsequent user authorization: root reviews and commits only these RG01-08
+documents and metadata locally. Recheck source/evidence hashes, links and formal
+status before staging; preserve private receipts outside Git. No signoff or
+qualification-state change, paid API, deployment or source push.

@@ -2,6 +2,8 @@
 
 更新日期：2026-10-19。範圍限於[主規格 #1](https://github.com/alexwang0315/cloudyfan-routing/issues/1) 的 routing core 與 T01～T12 直接配套；不涵蓋其他部門、商業定價或硬體採購。
 
+2026-10-20 接續：POOL-01～05 的[首版模型池接入](first-pool.md)整合來源歸檔、精確設定／能力證據、資格包、受控更新與帶預算的路由入口。[來源包](first-pool-source.md)維持 blocked；[逐候選費用缺證](first-pool-fee-gaps.md)仍未核定。這是可離線操作的機制與資料交付，不是正式模型池或供應商資格。RG-01 凍結，只保留必要回歸；下方較早「只待具名審閱」是當時狀態，最新公開漏判／補強與未見案例限制依 handoff 及 2026-10-20 證據，不重新審核 S01～S08。
+
 ## 三個狀態分開記錄
 
 🟢 **既有 RG-04 v2 與本輪 RG-01 SQL 接入是已交付的實作子集，正式資格需另核定。** 本輪 [SQL Environment](sql-environment.md)補上公開診斷投影、工程中斷與保留答案續跑，實際離線結果見[v1 歷史證據](evidence/rg01-sql-offline.json)；最新 v2 見[正式審閱包](rg01-review-ready.md)與[本輪證據](evidence/rg01-review-ready-offline.json)。前輪 RG-04 v2 的 `f1dd57c8a7963422c5ffd7e1c27766c7115ebd9b`／944 項完整測試保留為[歷史證據](evidence/rg04-zero-rate-offline.json)，不混成這次測試數；完整檢查歷史見[驗證紀錄](verification.md)。v2 的子程序／CPU／SQLite allocator／外部逾時不等於整個程序 RAM 或 OS security sandbox；嚴格 AS 模式不支持即拒絕。

@@ -1,0 +1,212 @@
+{
+  "schema_version": 1,
+  "scope": "fee-policy-and-fresh50-commit-review",
+  "phase": "offline_verified",
+  "baseline_commit": "666b79be14ccd227045a3108fb89c1eeb8894e54",
+  "integration_branch": "codex/implement-routing-spec-1",
+  "constraints": {
+    "paid_api": false,
+    "deployment": false,
+    "source_push": false,
+    "hardware": false,
+    "model_downloads": false
+  },
+  "release_registry": "docs/release-gates.json",
+  "work_plan": "docs/work-plan.json",
+  "last_verified": {
+    "path": "docs/evidence/rg01-semantic-baseline.json",
+    "sha256": "99e3af5d0c2fd758f06c3fb2554e77a105d15f02bc9ed9453b43178e849e74a2"
+  },
+  "history": [
+    {
+      "path": "docs/implementation-spec1.md",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/verification.md",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg04-components-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg04-components-initial-pass.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg04-zero-rate-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg04-zero-rate-offline.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-sql-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-sql-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg04-zero-rate-precommit.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/release-preparation-precommit-20261019.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-ready-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-ready-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-semantic-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-semantic-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-decision-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-decision-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-tickets-prior-agent-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-tickets-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-tickets-offline-20261019.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-scout-prep-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-scout-prep-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-scout-environment-preparation-20261019.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-target-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-target-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-linux-target-runtime.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-target-offline-20261019.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-review-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-review-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-technical-review-20261019.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-execution-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-execution-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-live-integration-20261019.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rate-limit-prior-agent-state-20261019.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rate-limit-prior-work-plan-20261019.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/fee-policy-prior-agent-state-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/fee-policy-prior-work-plan-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/fresh50-recovery-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/public-suite-prior-agent-state-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/public-suite-prior-work-plan-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/sql-public-suite-precommit-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/sql-public-suite-offline-20261020.json",
+      "record_kind": "historical"
+    }
+  ],
+  "next_steps": [
+    {
+      "gate": "RG-02",
+      "action": "Public-suite and scoped429 fee-policy v2 are offline verified. Frozen50 grades/costs remain unchanged; actual provider429 recovery and independent unseen validator/model quality remain unverified. Historical policy evidence is not supplier qualification or new spending authority.",
+      "requires_authorization": true
+    },
+    {
+      "gate": "G-02",
+      "action": "Review exact synchronous ollama==0.6.3 / text-v2 / companion task GET evidence before formal G-02 qualification; no Async, product-client, TCP/TLS/proxy claim.",
+      "requires_authorization": true
+    },
+    {
+      "gate": "RG-04",
+      "action": "Qualify pinned Jev Decisions cumulative billed input and all-path effective rates, including binding zero rates where proven, retry/failure/cancellation and in-flight coverage. No real supplier guarantees supplied. Paid validation requires a separate approved plan.",
+      "requires_authorization": true
+    },
+    {
+      "gate": "RG-05",
+      "action": "Qualify deployed identity/TLS/secret ownership, actual retention policy and storage/backup coverage, and exclusive maintenance-writer fence.",
+      "requires_authorization": true
+    }
+  ],
+  "current_verification": {
+    "path": "docs/evidence/fee-report-precommit-20261020.json",
+    "sha256": "4d637135fb26f5f325d79c641775a5463a9527a7436a69976fad5f09490af738"
+  }
+}

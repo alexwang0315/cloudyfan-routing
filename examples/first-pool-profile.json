@@ -1,0 +1,432 @@
+{
+  "schema_version": "cloudyfan-first-pool-profile-v1",
+  "synthetic": false,
+  "source_choice": {
+    "reason": "Archived model+effort scores available for historical candidates; LiveBench archived rows have unknown effort. No fallback or new fetch.",
+    "archive": "hierarchical50-20261018/radar-snapshot.json",
+    "archive_sha256": "bc53a1ade42793cf1a5faa81ded015efa214209b2ff71b1f0a6117d4539d0e2f",
+    "normalized_import_sha256": "f3b6780c799f4f1de4fbe75bfa21a9c5bcfabb3b63ac8d036a5b652ea4059632",
+    "observed_at": "2026-10-17T17:18:14.033119+00:00",
+    "extraction": "visible #bench-model-cards browser DOM",
+    "limitations": "Native Codex leaderboard prior, not API-harness qualification; GPT-5.6 Sol 62/64 partial coverage; highest xhigh effort coverage requires detail inspection.",
+    "permissions": "pending; no redistribution or current source access qualification",
+    "threshold_basis": "Previously adopted native 80/100 boundary; source/domain applicability still pending",
+    "update_owner": null
+  },
+  "observations": [
+    {
+      "source": "codexradar",
+      "source_version": "codexradar-dom:2026-10-17:bc53a1ade427",
+      "source_model_id": "openai/gpt-6-astra",
+      "metric": "overall",
+      "score": 107.3,
+      "evaluated_at": null,
+      "retrieved_at": "2026-10-17T17:18:14.033119+00:00",
+      "source_url": "https://deng.codexradar.com/",
+      "raw_sha256": "f3b6780c799f4f1de4fbe75bfa21a9c5bcfabb3b63ac8d036a5b652ea4059632",
+      "effort": "ultra",
+      "sample_count": null,
+      "channel": "reviewed_import"
+    },
+    {
+      "source": "codexradar",
+      "source_version": "codexradar-dom:2026-10-17:bc53a1ade427",
+      "source_model_id": "openai/gpt-6-astra",
+      "metric": "overall",
+      "score": 109.6,
+      "evaluated_at": null,
+      "retrieved_at": "2026-10-17T17:18:14.033119+00:00",
+      "source_url": "https://deng.codexradar.com/",
+      "raw_sha256": "f3b6780c799f4f1de4fbe75bfa21a9c5bcfabb3b63ac8d036a5b652ea4059632",
+      "effort": "max",
+      "sample_count": null,
+      "channel": "reviewed_import"
+    },
+    {
+      "source": "codexradar",
+      "source_version": "codexradar-dom:2026-10-17:bc53a1ade427",
+      "source_model_id": "openai/gpt-6-astra",
+      "metric": "overall",
+      "score": 116.2,
+      "evaluated_at": null,
+      "retrieved_at": "2026-10-17T17:18:14.033119+00:00",
+      "source_url": "https://deng.codexradar.com/",
+      "raw_sha256": "f3b6780c799f4f1de4fbe75bfa21a9c5bcfabb3b63ac8d036a5b652ea4059632",
+      "effort": "xhigh",
+      "sample_count": null,
+      "channel": "reviewed_import"
+    },
+    {
+      "source": "codexradar",
+      "source_version": "codexradar-dom:2026-10-17:bc53a1ade427",
+      "source_model_id": "openai/gpt-6-astra",
+      "metric": "overall",
+      "score": 108.5,
+      "evaluated_at": null,
+      "retrieved_at": "2026-10-17T17:18:14.033119+00:00",
+      "source_url": "https://deng.codexradar.com/",
+      "raw_sha256": "f3b6780c799f4f1de4fbe75bfa21a9c5bcfabb3b63ac8d036a5b652ea4059632",
+      "effort": "high",
+      "sample_count": null,
+      "channel": "reviewed_import"
+    },
+    {
+      "source": "codexradar",
+      "source_version": "codexradar-dom:2026-10-17:bc53a1ade427",
+      "source_model_id": "openai/gpt-6-astra",
+      "metric": "overall",
+      "score": 92.8,
+      "evaluated_at": null,
+      "retrieved_at": "2026-10-17T17:18:14.033119+00:00",
+      "source_url": "https://deng.codexradar.com/",
+      "raw_sha256": "f3b6780c799f4f1de4fbe75bfa21a9c5bcfabb3b63ac8d036a5b652ea4059632",
+      "effort": "medium",
+      "sample_count": null,
+      "channel": "reviewed_import"
+    },
+    {
+      "source": "codexradar",
+      "source_version": "codexradar-dom:2026-10-17:bc53a1ade427",
+      "source_model_id": "openai/gpt-6-astra",
+      "metric": "overall",
+      "score": 99.5,
+      "evaluated_at": null,
+      "retrieved_at": "2026-10-17T17:18:14.033119+00:00",
+      "source_url": "https://deng.codexradar.com/",
+      "raw_sha256": "f3b6780c799f4f1de4fbe75bfa21a9c5bcfabb3b63ac8d036a5b652ea4059632",
+      "effort": "low",
+      "sample_count": null,
+      "channel": "reviewed_import"
+    },
+    {
+      "source": "codexradar",
+      "source_version": "codexradar-dom:2026-10-17:bc53a1ade427",
+      "source_model_id": "openai/gpt-6.1-sol",
+      "metric": "overall",
+      "score": 105.0,
+      "evaluated_at": null,
+      "retrieved_at": "2026-10-17T17:18:14.033119+00:00",
+      "source_url": "https://deng.codexradar.com/",
+      "raw_sha256": "f3b6780c799f4f1de4fbe75bfa21a9c5bcfabb3b63ac8d036a5b652ea4059632",
+      "effort": "ultra",
+      "sample_count": null,
+      "channel": "reviewed_import"
+    },
+    {
+      "source": "codexradar",
+      "source_version": "codexradar-dom:2026-10-17:bc53a1ade427",
+      "source_model_id": "openai/gpt-6.1-sol",
+      "metric": "overall",
+      "score": 100.2,
+      "evaluated_at": null,
+      "retrieved_at": "2026-10-17T17:18:14.033119+00:00",
+      "source_url": "https://deng.codexradar.com/",
+      "raw_sha256": "f3b6780c799f4f1de4fbe75bfa21a9c5bcfabb3b63ac8d036a5b652ea4059632",
+      "effort": "max",
+      "sample_count": null,
+      "channel": "reviewed_import"
+    },
+    {
+      "source": "codexradar",
+      "source_version": "codexradar-dom:2026-10-17:bc53a1ade427",
+      "source_model_id": "openai/gpt-6.1-sol",
+      "metric": "overall",
+      "score": 95.6,
+      "evaluated_at": null,
+      "retrieved_at": "2026-10-17T17:18:14.033119+00:00",
+      "source_url": "https://deng.codexradar.com/",
+      "raw_sha256": "f3b6780c799f4f1de4fbe75bfa21a9c5bcfabb3b63ac8d036a5b652ea4059632",
+      "effort": "xhigh",
+      "sample_count": null,
+      "channel": "reviewed_import"
+    },
+    {
+      "source": "codexradar",
+      "source_version": "codexradar-dom:2026-10-17:bc53a1ade427",
+      "source_model_id": "openai/gpt-6.1-sol",
+      "metric": "overall",
+      "score": 99.9,
+      "evaluated_at": null,
+      "retrieved_at": "2026-10-17T17:18:14.033119+00:00",
+      "source_url": "https://deng.codexradar.com/",
+      "raw_sha256": "f3b6780c799f4f1de4fbe75bfa21a9c5bcfabb3b63ac8d036a5b652ea4059632",
+      "effort": "high",
+      "sample_count": null,
+      "channel": "reviewed_import"
+    },
+    {
+      "source": "codexradar",
+      "source_version": "codexradar-dom:2026-10-17:bc53a1ade427",
+      "source_model_id": "openai/gpt-6.1-sol",
+      "metric": "overall",
+      "score": 79.4,
+      "evaluated_at": null,
+      "retrieved_at": "2026-10-17T17:18:14.033119+00:00",
+      "source_url": "https://deng.codexradar.com/",
+      "raw_sha256": "f3b6780c799f4f1de4fbe75bfa21a9c5bcfabb3b63ac8d036a5b652ea4059632",
+      "effort": "medium",
+      "sample_count": null,
+      "channel": "reviewed_import"
+    },
+    {
+      "source": "codexradar",
+      "source_version": "codexradar-dom:2026-10-17:bc53a1ade427",
+      "source_model_id": "openai/gpt-6.1-sol",
+      "metric": "overall",
+      "score": 81.8,
+      "evaluated_at": null,
+      "retrieved_at": "2026-10-17T17:18:14.033119+00:00",
+      "source_url": "https://deng.codexradar.com/",
+      "raw_sha256": "f3b6780c799f4f1de4fbe75bfa21a9c5bcfabb3b63ac8d036a5b652ea4059632",
+      "effort": "low",
+      "sample_count": null,
+      "channel": "reviewed_import"
+    },
+    {
+      "source": "codexradar",
+      "source_version": "codexradar-dom:2026-10-17:bc53a1ade427",
+      "source_model_id": "openai/gpt-6-sol",
+      "metric": "overall",
+      "score": 35.4,
+      "evaluated_at": null,
+      "retrieved_at": "2026-10-17T17:18:14.033119+00:00",
+      "source_url": "https://deng.codexradar.com/",
+      "raw_sha256": "f3b6780c799f4f1de4fbe75bfa21a9c5bcfabb3b63ac8d036a5b652ea4059632",
+      "effort": "low",
+      "sample_count": null,
+      "channel": "reviewed_import"
+    },
+    {
+      "source": "codexradar",
+      "source_version": "codexradar-dom:2026-10-17:bc53a1ade427",
+      "source_model_id": "openai/gpt-5.6-sol",
+      "metric": "overall",
+      "score": 70.4,
+      "evaluated_at": null,
+      "retrieved_at": "2026-10-17T17:18:14.033119+00:00",
+      "source_url": "https://deng.codexradar.com/",
+      "raw_sha256": "f3b6780c799f4f1de4fbe75bfa21a9c5bcfabb3b63ac8d036a5b652ea4059632",
+      "effort": "max",
+      "sample_count": null,
+      "channel": "reviewed_import"
+    }
+  ],
+  "registry": {
+    "candidates": [
+      {
+        "config_id": "first-low",
+        "profile": {
+          "model": "openai/gpt-6-sol",
+          "model_version": "openai/gpt-6-sol-20260922",
+          "accepted_models": [
+            "openai/gpt-6-sol",
+            "openai/gpt-6-sol-20260922"
+          ],
+          "effort": "low",
+          "provider": "openai",
+          "provider_name": "OpenAI",
+          "capability_card": {
+            "domain": "bounded-sqlite-readonly",
+            "sql_operations": {
+              "sql_filter": "unproven",
+              "sql_join": "unproven",
+              "sql_aggregate": "unproven",
+              "sql_window": "unproven",
+              "sql_set_operations": "unproven",
+              "sql_resource_limits": "unproven"
+            },
+            "limits": "Frozen SQL contract governs resources; no SQL model-capability qualification yet.",
+            "evidence_scope": "Historical five cross-domain calibration cases; not independent SQL qualification."
+          },
+          "external_score": 35.4
+        },
+        "approved": false,
+        "context_tokens": 8192,
+        "capabilities": [
+          "sql_filter",
+          "sql_join",
+          "sql_aggregate",
+          "sql_window",
+          "sql_set_operations",
+          "sql_resource_limits"
+        ],
+        "catalog_checked_at": "2026-10-17T17:18:14.033119+00:00",
+        "estimated_request_usd": null,
+        "estimated_latency_ms": null,
+        "source_model_id": "openai/gpt-6-sol",
+        "source": "codexradar",
+        "source_version": "codexradar-dom:2026-10-17:bc53a1ade427",
+        "intended_tier": "low"
+      },
+      {
+        "config_id": "first-mid",
+        "profile": {
+          "model": "openai/gpt-6.1-sol",
+          "model_version": "openai/gpt-6.1-sol-20260929",
+          "accepted_models": [
+            "openai/gpt-6.1-sol",
+            "openai/gpt-6.1-sol-20260929"
+          ],
+          "effort": "high",
+          "provider": "openai",
+          "provider_name": "OpenAI",
+          "capability_card": {
+            "domain": "bounded-sqlite-readonly",
+            "sql_operations": {
+              "sql_filter": "unproven",
+              "sql_join": "unproven",
+              "sql_aggregate": "unproven",
+              "sql_window": "unproven",
+              "sql_set_operations": "unproven",
+              "sql_resource_limits": "unproven"
+            },
+            "limits": "Frozen SQL contract governs resources; no SQL model-capability qualification yet.",
+            "evidence_scope": "Historical five cross-domain calibration cases; not independent SQL qualification."
+          },
+          "external_score": 99.9
+        },
+        "approved": false,
+        "context_tokens": 8192,
+        "capabilities": [
+          "sql_filter",
+          "sql_join",
+          "sql_aggregate",
+          "sql_window",
+          "sql_set_operations",
+          "sql_resource_limits"
+        ],
+        "catalog_checked_at": "2026-10-17T17:18:14.033119+00:00",
+        "estimated_request_usd": null,
+        "estimated_latency_ms": null,
+        "source_model_id": "openai/gpt-6.1-sol",
+        "source": "codexradar",
+        "source_version": "codexradar-dom:2026-10-17:bc53a1ade427",
+        "intended_tier": "mid"
+      },
+      {
+        "config_id": "first-high",
+        "profile": {
+          "model": "openai/gpt-6-astra",
+          "model_version": "openai/gpt-6-astra-20260903",
+          "accepted_models": [
+            "openai/gpt-6-astra",
+            "openai/gpt-6-astra-20260903"
+          ],
+          "effort": "xhigh",
+          "provider": "openai",
+          "provider_name": "OpenAI",
+          "capability_card": {
+            "domain": "bounded-sqlite-readonly",
+            "sql_operations": {
+              "sql_filter": "unproven",
+              "sql_join": "unproven",
+              "sql_aggregate": "unproven",
+              "sql_window": "unproven",
+              "sql_set_operations": "unproven",
+              "sql_resource_limits": "unproven"
+            },
+            "limits": "Frozen SQL contract governs resources; no SQL model-capability qualification yet.",
+            "evidence_scope": "Historical five cross-domain calibration cases; not independent SQL qualification."
+          },
+          "external_score": 116.2
+        },
+        "approved": false,
+        "context_tokens": 8192,
+        "capabilities": [
+          "sql_filter",
+          "sql_join",
+          "sql_aggregate",
+          "sql_window",
+          "sql_set_operations",
+          "sql_resource_limits"
+        ],
+        "catalog_checked_at": "2026-10-17T17:18:14.033119+00:00",
+        "estimated_request_usd": null,
+        "estimated_latency_ms": null,
+        "source_model_id": "openai/gpt-6-astra",
+        "source": "codexradar",
+        "source_version": "codexradar-dom:2026-10-17:bc53a1ade427",
+        "intended_tier": "high"
+      }
+    ],
+    "open_source": {
+      "config_id": "first-open_source",
+      "profile": {
+        "model": "openai/gpt-oss-120b",
+        "model_version": "openai/gpt-oss-120b",
+        "accepted_models": [
+          "openai/gpt-oss-120b"
+        ],
+        "effort": "low",
+        "provider": "baseten/fp4",
+        "provider_name": "BaseTen",
+        "capability_card": {
+          "domain": "bounded-sqlite-readonly",
+          "sql_operations": {
+            "sql_filter": "unproven",
+            "sql_join": "unproven",
+            "sql_aggregate": "unproven",
+            "sql_window": "unproven",
+            "sql_set_operations": "unproven",
+            "sql_resource_limits": "unproven"
+          },
+          "limits": "Frozen SQL contract governs resources; no SQL model-capability qualification yet.",
+          "evidence_scope": "Historical five cross-domain calibration cases; not independent SQL qualification."
+        },
+        "external_score": null
+      },
+      "approved": false,
+      "context_tokens": 8192,
+      "capabilities": [
+        "sql_filter",
+        "sql_join",
+        "sql_aggregate",
+        "sql_window",
+        "sql_set_operations",
+        "sql_resource_limits"
+      ],
+      "catalog_checked_at": "2026-10-17T17:18:14.033119+00:00",
+      "estimated_request_usd": null,
+      "estimated_latency_ms": null,
+      "source_model_id": "openai/gpt-oss-120b",
+      "source": "codexradar",
+      "source_version": "codexradar-dom:2026-10-17:bc53a1ade427",
+      "open_weight": true
+    }
+  },
+  "policy": {
+    "id": "first-bounded-sql-codexradar-v1",
+    "domain": "bounded-sqlite-readonly",
+    "source": "codexradar",
+    "source_version": "codexradar-dom:2026-10-17:bc53a1ade427",
+    "metric": "overall",
+    "scale": "source_native",
+    "low_mid": 80,
+    "mid_high": 100,
+    "max_source_age_hours": 48,
+    "max_catalog_age_hours": 48,
+    "snapshot_ttl_hours": 24,
+    "min_samples": 1,
+    "max_evaluation_age_days": 30
+  },
+  "requirements": {
+    "domain": "bounded-sqlite-readonly",
+    "capabilities": [
+      "sql_filter",
+      "sql_join",
+      "sql_aggregate",
+      "sql_window",
+      "sql_set_operations",
+      "sql_resource_limits"
+    ],
+    "context_tokens": 8192
+  },
+  "decision": {
+    "model": "typesafe/jev-1.13",
+    "version": "typesafe/jev-1.13-20260917",
+    "provider": "typesafe",
+    "provider_name": "TypeSafe"
+  },
+  "review": {},
+  "configuration_evidence": {}
+}

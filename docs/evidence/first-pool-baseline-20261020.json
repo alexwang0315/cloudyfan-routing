@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "first-pool-baseline-source-match",
+  "tested_commit": "5a055f5fca9f408720578ddd1c0f0a73ad49685e",
+  "source_digest": "19fc2080cd53107037edda3912000fea455c889ddef3e2b394ec12443b10dc1a",
+  "tests_passed": 1187,
+  "receipt": {
+    "path": "runtime/checks/da93859b7af4432c8e548d336d359918/checks.json",
+    "sha256": "789bb3330ab5503290fb21a319af0bc0be9f0d52860b7da0a08d65bf36096abf"
+  },
+  "note": "Existing full offline receipt matches executable tree at this commit; no new test run claimed."
+}

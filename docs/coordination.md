@@ -248,3 +248,10 @@ bypass; root added five regressions and policy v2 fixes, then independent review
 confirmed them. Current ownership covers this closure; prior completed plans
 remain historical records. Original221-call study and private runtime are
 immutable. This review performs no real API, deployment, push or supplier contact.
+
+
+## First-pool tickets POOL-01 through POOL-05 — 2026-10-20
+
+root owns the five approved local tickets, source-profile preparation, configuration/capability binding, controlled qualification-plus-budget entry, offline lifecycle and fee-gap inventory. Existing qualification, update, Core.run, Client and SQL interfaces are consumed unchanged. RG-01 source and formal gate registry are frozen. There are no delegated edits; code-review skill requires two independent read-only review axes before the local commit. Prior state/plan are preserved in docs/evidence/first-pool-prior-*. No model/source API, supplier contact, host operation, deployment or push.
+
+Review refinement: a small POOL-00-binding prefactor owns the shared configuration-digest module; POOL-01, POOL-03 and POOL-04 explicitly consume it. POOL-01 and POOL-04 remain parallel after this shared identity primitive; no task waits for real supplier guarantees. The five user tickets are unchanged; the internal prefactor avoids multiple producers editing a shared interface.

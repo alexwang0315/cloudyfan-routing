@@ -431,3 +431,10 @@ Historical report statements about no local commit describe capture time. Only
 sanitized code/tests/records are version controlled; private runtime remains local.
 No deployment, push or formal qualification. Unknown historical charges outside
 this cohort are not cleared by this commit or its matched account delta.
+
+
+## First-release pool integration — 2026-10-20
+
+User authorizes implementing the five local POOL tickets under mattpocock/implement, including offline validation, review and local commit. Tickets remain local, not GitHub Issues. [Pool entry](first-pool.md) reuses the score adapters/qualification/updates/ScoreCore and composes BudgetedCore. Historical CodexRadar import keeps actual observation times, 14 native scores and unresolved version/SQL-capability/access evidence; the real archive remains blocked. Synthetic lifecycle uses fixed MockTransport and actual SQLite, explicit artificial approval/caps, and is never a production pool. Fee gaps bind every candidate plus classifier, all eight components and seven paths; no provider guarantee or numeric upper bound is invented. RG-01 and original paid trials remain unchanged. Final checks and review will be recorded separately, not inferred from prior 1,187 tests. No paid/source API, supplier contact, model download, hardware, deployment or push.
+
+Final first-pool integration passed 1,206 tests, Ruff, both mock demos and sdist/wheel; [evidence](evidence/first-pool-offline-20261020.json) and [ticket status](evidence/first-pool-ticket-status-20261020.json) separate offline completion from actual qualification. Standards P3 shared-interface ownership and Spec P2 missing new-evidence review binding were fixed and independently re-reviewed; both axes have zero remaining findings. Five evidence-change regressions were red before the review-binding fix. RG01 source, formal registry and paid50 reports match the starting commit; no new API or qualification claim.

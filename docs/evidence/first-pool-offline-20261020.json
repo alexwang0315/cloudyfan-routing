@@ -1,0 +1,144 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "first-pool-rg02-rg03-and-fee-gaps",
+  "base_commit": "5a055f5fca9f408720578ddd1c0f0a73ad49685e",
+  "source_digest": "0eeeef7cb03aecb605dfaf40961048ef8bcf0cc6eee847a5fb69f3357c2ed283",
+  "tests_passed": 1206,
+  "new_tests_passed": 19,
+  "receipt": {
+    "path": "runtime/checks/4eb0294fe47b47f4a5a63e46a2f28b82/checks.json",
+    "sha256": "31619dbaff4e127dc6d1eae550d22f184aa62a5355d1d6db293d09b721c2d0f2"
+  },
+  "build_python_inputs_matched": 99,
+  "archival_source": {
+    "observations": 14,
+    "source": "codexradar",
+    "status": "blocked",
+    "production_ready": false,
+    "report": {
+      "path": "runtime/first-pool-20261020/archival-review-final/report.json",
+      "sha256": "df4243e224b721a7451c8967b8b2246eca338904ba3c6ed10814296eca8d048a"
+    }
+  },
+  "fee_inventory": {
+    "roles": 5,
+    "component_cells": 40,
+    "dispatch_qualified": false,
+    "report": {
+      "path": "runtime/first-pool-20261020/archival-review-final/fee-gaps.json",
+      "sha256": "8d8ab89905278cc2c013640d2948926b57a93a62d8a73c53928f93636787fa2c"
+    }
+  },
+  "synthetic_lifecycle": {
+    "blocked_update_kept_current": true,
+    "expired_new_run_blocked": true,
+    "new_snapshot_id": "26f0ab4426bfebc80dd1e90428da46365ea228b28ad79e0df5e797990c9640b3",
+    "new_task_snapshot_id": "26f0ab4426bfebc80dd1e90428da46365ea228b28ad79e0df5e797990c9640b3",
+    "original_snapshot_id": "5e74440fc498826d580d2c1061657c622afade6212cc725c810e15799a351274",
+    "production_ready": false,
+    "real_api_calls": 0,
+    "resume_posts": 0,
+    "resume_snapshot_id": "5e74440fc498826d580d2c1061657c622afade6212cc725c810e15799a351274",
+    "routes": [
+      {
+        "model_requests": 1,
+        "selected_tier": "open_source",
+        "status": "passed"
+      },
+      {
+        "model_requests": 3,
+        "selected_tier": "low",
+        "status": "passed"
+      },
+      {
+        "model_requests": 4,
+        "selected_tier": "mid",
+        "status": "passed"
+      },
+      {
+        "model_requests": 4,
+        "selected_tier": "high",
+        "status": "passed"
+      }
+    ],
+    "simulated_api_usd": "0.0085",
+    "synthetic": true,
+    "unconfirmed_fee_bound_blocked": true,
+    "update_status": "published",
+    "report": {
+      "path": "runtime/first-pool-20261020/lifecycle-final/report.json",
+      "sha256": "8aceaeab4acacbc60b44238832dc95bfaad6495e26459ce4fb3c05bf3e96fe52"
+    }
+  },
+  "reviews": {
+    "Standards": {
+      "initial_findings": [
+        {
+          "priority": "P3",
+          "problem": "Shared configuration digest producer/consumer dependency absent",
+          "resolution": "Shared configuration.py owned by internal POOL-00-binding; explicit consumers and dependencies"
+        }
+      ],
+      "remaining_findings": 0,
+      "reviewer": "AI pool_standards_review; read-only, not formal human approval"
+    },
+    "Spec": {
+      "initial_findings": [
+        {
+          "priority": "P2",
+          "problem": "New qualification evidence not bound to review inputs",
+          "resolution": "Evidence and admission-context digests enter effective registry and input-bound review; five red/green regressions"
+        }
+      ],
+      "remaining_findings": 0,
+      "focused_recheck": "18 passed in 2.94s",
+      "reviewer": "AI pool_spec_review; read-only, not formal human approval"
+    }
+  },
+  "preservation": {
+    "rg01_source_unchanged": true,
+    "formal_registry_unchanged": true,
+    "original_paid_reports_unchanged": [
+      "docs/fresh50-recovery-20261020.md",
+      "docs/evidence/fresh50-recovery-20261020.json",
+      "docs/evidence/fresh50-recovery-20261020-per-task.csv"
+    ]
+  },
+  "artifacts": [
+    {
+      "path": "examples/first-pool-profile.json",
+      "sha256": "3be564f77b68704213e095c2136af8670be0c821ebaee70ea3a672640007e3a0"
+    },
+    {
+      "path": "examples/first-pool-codexradar-import.json",
+      "sha256": "f3b6780c799f4f1de4fbe75bfa21a9c5bcfabb3b63ac8d036a5b652ea4059632"
+    },
+    {
+      "path": "runtime/first-pool-20261020/integration.log",
+      "sha256": "a85d57d4fd392fa1a644822f835f65bef2def8aa76ae3b281eff6343f26fdd8e"
+    },
+    {
+      "path": "runtime/first-pool-20261020/red-green-notes.json",
+      "sha256": "b09041940d0fa2bb362db54023f3173b8cd92a2088d1ce9667ad9e4896214209"
+    },
+    {
+      "path": "runtime/first-pool-20261020/review-resolution.json",
+      "sha256": "11ac91d0db413733b32d9a34423c79f059bbc7f088befef99291cc674b5436f8"
+    }
+  ],
+  "new_paid_api_calls": 0,
+  "new_source_requests": 0,
+  "supplier_contact": false,
+  "deployment": false,
+  "push": false,
+  "formal_qualification": "pending",
+  "limitations": [
+    "Archived model-family scores do not establish dated API-model mappings or SQL capability.",
+    "Real source access/terms, coverage/freshness and update ownership remain unqualified.",
+    "All provider cost guarantees remain pending; no numeric cap derived from receipts.",
+    "Lifecycle uses synthetic score updates, approvals/caps and MockTransport, not real model performance.",
+    "No historic 50-task quality/cost results changed; RG01 remains frozen."
+  ]
+}

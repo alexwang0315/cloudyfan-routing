@@ -1,5 +1,7 @@
 # CloudyFan Jev Core
 
+[首版模型池接入與更新](docs/first-pool.md)：從保存的評分資料整理資格包／費用缺證，再以受控入口連接凍結路由。包含真 SQLite＋固定 MockTransport 的完整離線示範；實際候選缺證時保持阻擋，不宣稱正式合格。
+
 獨立的 Python model-routing 核心：**開源模型先答，以公開契約驗收；需要補救時，Jev 依序做「低／中」、「必要時中／高」二選一，最後只呼叫一次被選中的模型作修正。**
 
 此 repo 從 2026-10-18 的 CloudyFan 新階層實驗抽出，不依賴原工作區、舊 `cloudyfan` 套件或實驗答案。舊 Jev A/B、alpha/beta 保留在原專案，沒有被覆寫。

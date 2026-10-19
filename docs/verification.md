@@ -558,3 +558,8 @@ Both raw trial inventories (2,552 and2,369 files) and three original report
 artifacts are unchanged. Prior1,154/1,182/1,166 receipts and original v1 sources
 remain preserved; no historical grade or cost was updated. No actual API GET,
 paid request, deployment, push or formal qualification during this review.
+
+
+## First-pool POOL-01–05 — 2026-10-20
+
+`./scripts/check --integration`: 1,206 passed in 130.68s; Ruff, dependency/project-record checks, Core/ScoreCore mocked demos and offline sdist/wheel passed. Receipt runtime/checks/4eb0294fe47b47f4a5a63e46a2f28b82/checks.json. Nineteen new regressions; earlier 158-test focused run preceded the five evidence-binding regressions, not a contradictory full count. Archive prepare intentionally returns 1/blocked; fixed MockTransport + actual SQLite lifecycle passes four routes, new snapshot selection, expiry rejection and zero-POST original-snapshot resume. Fees in the lifecycle are simulated; USD0 real spend. Both review axes resolved their one finding, without fake human approval. Current source/evidence and limitations are in [the first-pool record](evidence/first-pool-offline-20261020.json). No RG01 change, paid trial rerun, supplier contact, source fetch, deployment or push.

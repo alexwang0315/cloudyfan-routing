@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "scope": "fee-policy-and-fresh50-commit-review",
+  "scope": "first-pool-rg02-rg03-and-fee-gaps",
   "phase": "offline_verified",
-  "baseline_commit": "666b79be14ccd227045a3108fb89c1eeb8894e54",
+  "baseline_commit": "5a055f5fca9f408720578ddd1c0f0a73ad49685e",
   "integration_branch": "codex/implement-routing-spec-1",
   "constraints": {
     "paid_api": false,
@@ -14,8 +14,8 @@
   "release_registry": "docs/release-gates.json",
   "work_plan": "docs/work-plan.json",
   "last_verified": {
-    "path": "docs/evidence/rg01-semantic-baseline.json",
-    "sha256": "99e3af5d0c2fd758f06c3fb2554e77a105d15f02bc9ed9453b43178e849e74a2"
+    "path": "docs/evidence/first-pool-baseline-20261020.json",
+    "sha256": "d1be686bad42e1fe0abd3c3508e0e01fb640c530a875420c335879d4c8df6fe6"
   },
   "history": [
     {
@@ -181,32 +181,39 @@
     {
       "path": "docs/evidence/sql-public-suite-offline-20261020.json",
       "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/first-pool-prior-agent-state-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/first-pool-prior-work-plan-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/fee-report-precommit-20261020.json",
+      "record_kind": "historical"
     }
   ],
   "next_steps": [
     {
       "gate": "RG-02",
-      "action": "Public-suite and scoped429 fee-policy v2 are offline verified. Frozen50 grades/costs remain unchanged; actual provider429 recovery and independent unseen validator/model quality remain unverified. Historical policy evidence is not supplier qualification or new spending authority.",
+      "action": "First-pool preparation and mock lifecycle are implemented. Supply independently supported exact dated-model mappings and SQL capability/context evidence before real qualification; never tune from formal holdout outcomes. RG01 remains frozen.",
       "requires_authorization": true
     },
     {
-      "gate": "G-02",
-      "action": "Review exact synchronous ollama==0.6.3 / text-v2 / companion task GET evidence before formal G-02 qualification; no Async, product-client, TCP/TLS/proxy claim.",
+      "gate": "RG-03",
+      "action": "Archived CodexRadar profile remains blocked: confirm source access/usage, coverage, evaluation/freshness and update ownership; a new reviewed input pack is required, not a timestamp refresh. No source fetch or scheduler authorized.",
       "requires_authorization": true
     },
     {
       "gate": "RG-04",
-      "action": "Qualify pinned Jev Decisions cumulative billed input and all-path effective rates, including binding zero rates where proven, retry/failure/cancellation and in-flight coverage. No real supplier guarantees supplied. Paid validation requires a separate approved plan.",
-      "requires_authorization": true
-    },
-    {
-      "gate": "RG-05",
-      "action": "Qualify deployed identity/TLS/secret ownership, actual retention policy and storage/backup coverage, and exclusive maintenance-writer fence.",
+      "action": "Candidate-specific eight-component/seven-path gap matrix remains pending. Obtain pinned Decisions cumulative input and all-role binding rates/bounds, settlement and in-flight guarantees; no supplier contact or paid test in this scope.",
       "requires_authorization": true
     }
   ],
   "current_verification": {
-    "path": "docs/evidence/fee-report-precommit-20261020.json",
-    "sha256": "4d637135fb26f5f325d79c641775a5463a9527a7436a69976fad5f09490af738"
+    "path": "docs/evidence/first-pool-offline-20261020.json",
+    "sha256": "8cc714f87177fa3d149f23651ce161962481ff217c66b6bb2ef67db100467c20"
   }
 }

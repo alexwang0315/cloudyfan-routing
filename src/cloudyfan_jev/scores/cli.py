@@ -31,6 +31,9 @@ def _output(path, value):
 def main(argv=None):
     parser = argparse.ArgumentParser(description='Benchmark data only; never invokes a generation or Jev API')
     commands = parser.add_subparsers(dest='command', required=True)
+    first = commands.add_parser('prepare-first-pool', help='Offline first-release inputs and explicit evidence gaps')
+    first.add_argument('--profile', required=True)
+    first.add_argument('--output-dir', required=True)
     fetch = commands.add_parser('fetch', help='Explicit GET requests to official benchmark sources')
     fetch.add_argument('source', choices=['livebench', 'artificial-analysis', 'openrouter'])
     fetch.add_argument('--output', required=True)
@@ -72,7 +75,22 @@ def main(argv=None):
     args = parser.parse_args(argv)
     now = utc_now()
     try:
-        if args.command in ('update-preview', 'update'):
+        if args.command == 'prepare-first-pool':
+            from .first_pool import prepare_pool
+            from .fee_readiness import fee_gap_matrix
+            profile = _read(args.profile)
+            report = prepare_pool(profile, now=now)
+            destination = Path(args.output_dir)
+            destination.mkdir(parents=True, mode=0o700, exist_ok=False)
+            values = {**report['qualification_pack']['inputs'], 'review': profile['review'],
+                      'requirements': profile['requirements'], 'decision': profile['decision'],
+                      'report': report, 'qualification-pack': report['qualification_pack'],
+                      'fee-gaps': fee_gap_matrix(profile)}
+            for name, value in values.items():
+                _output(destination / (name + '.json'), value)
+            print(json.dumps({k: report[k] for k in ('report_id', 'status', 'production_ready', 'blockers')}))
+            return 1 if report['blockers'] else 0
+        elif args.command in ('update-preview', 'update'):
             previous = _read(args.previous) if args.previous else None
             proposed = _read(args.proposed)
             if args.command == 'update-preview':

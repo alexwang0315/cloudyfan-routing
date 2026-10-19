@@ -1,0 +1,43 @@
+{
+  "kind": "offline-ticket-delivery",
+  "tickets": {
+    "POOL-01": {
+      "implementation": "completed",
+      "offline_validation": "passed",
+      "formal_qualification": "pending"
+    },
+    "POOL-02": {
+      "implementation": "completed",
+      "offline_validation": "passed",
+      "formal_qualification": "pending"
+    },
+    "POOL-03": {
+      "implementation": "completed",
+      "offline_validation": "passed",
+      "formal_qualification": "not_established_by_fixture"
+    },
+    "POOL-04": {
+      "implementation": "completed",
+      "offline_validation": "passed",
+      "formal_qualification": "pending"
+    },
+    "POOL-05": {
+      "implementation": "completed",
+      "offline_validation": "passed",
+      "formal_qualification": "pending"
+    }
+  },
+  "github_publication": false,
+  "evidence": {
+    "path": "docs/evidence/first-pool-offline-20261020.json",
+    "sha256": "8cc714f87177fa3d149f23651ce161962481ff217c66b6bb2ef67db100467c20"
+  },
+  "internal_prefactor": "POOL-00-binding is shared identity ownership, not an extra user ticket",
+  "remaining_real_evidence": [
+    "Archived model-family scores do not establish dated API-model mappings or SQL capability.",
+    "Real source access/terms, coverage/freshness and update ownership remain unqualified.",
+    "All provider cost guarantees remain pending; no numeric cap derived from receipts.",
+    "Lifecycle uses synthetic score updates, approvals/caps and MockTransport, not real model performance.",
+    "No historic 50-task quality/cost results changed; RG01 remains frozen."
+  ]
+}

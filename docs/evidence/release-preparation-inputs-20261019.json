@@ -1,0 +1,447 @@
+{
+  "schema_version": 1,
+  "kind": "documentation_review_inputs",
+  "scope": "first-release-evidence-preparation",
+  "status": "prepared_pending_review",
+  "baseline_commit": "661f06f6dd5ad5407b83f4a541f6c69f28d2393f",
+  "production_qualified": false,
+  "execution_authorized": false,
+  "scope_draft": {
+    "domain": "bounded_readonly_sql_candidate",
+    "approved": false,
+    "owner": null,
+    "reviewer": null,
+    "main_acceptance_boundary": "Core.run + injected validator + httpx.MockTransport",
+    "existing_interfaces_removed": false
+  },
+  "gate_checklist": [
+    {
+      "id": "RG-01",
+      "owner": null,
+      "reviewer": null,
+      "status": "pending"
+    },
+    {
+      "id": "RG-02",
+      "owner": null,
+      "reviewer": null,
+      "status": "pending"
+    },
+    {
+      "id": "RG-03",
+      "owner": null,
+      "reviewer": null,
+      "status": "pending"
+    },
+    {
+      "id": "RG-04",
+      "owner": null,
+      "reviewer": null,
+      "status": "pending"
+    },
+    {
+      "id": "RG-05",
+      "owner": null,
+      "reviewer": null,
+      "status": "pending"
+    },
+    {
+      "id": "G-01",
+      "owner": null,
+      "reviewer": null,
+      "status": "pending"
+    },
+    {
+      "id": "G-02",
+      "owner": null,
+      "reviewer": null,
+      "status": "pending"
+    },
+    {
+      "id": "G-03",
+      "owner": null,
+      "reviewer": null,
+      "status": "pending"
+    },
+    {
+      "id": "RG-06",
+      "owner": null,
+      "reviewer": null,
+      "status": "pending"
+    },
+    {
+      "id": "RG-07",
+      "owner": null,
+      "reviewer": null,
+      "status": "pending"
+    }
+  ],
+  "sources": {
+    "core_engine": {
+      "location": "core",
+      "path": "src/cloudyfan_jev/engine.py",
+      "sha256": "9dc050e10ff282cff31be3a2635c0f2210d1b2a489e8ae0bdd41426b4ea3be51",
+      "copied_private_content": false
+    },
+    "core_diagnostics": {
+      "location": "core",
+      "path": "src/cloudyfan_jev/diagnostics.py",
+      "sha256": "f9df8ad2685c590474efaee5126485754867ae2b24e15baf73bdb46805b51b0d",
+      "copied_private_content": false
+    },
+    "engine_tests": {
+      "location": "core",
+      "path": "tests/test_engine.py",
+      "sha256": "9cbeb742308c19d7c41f53048a25770a602ef06d3d0e599e5e10456812236329",
+      "copied_private_content": false
+    },
+    "diagnostic_tests": {
+      "location": "core",
+      "path": "tests/test_diagnostics.py",
+      "sha256": "e173b01515d2117d55f187dda922d9dd1c5e5fc1cf0af68b38d574075b1b030a",
+      "copied_private_content": false
+    },
+    "component_tests": {
+      "location": "core",
+      "path": "tests/test_component_bounds.py",
+      "sha256": "67df4f88953d32b53fe993156d4894556b1fd915c6592cfad6ac1173cb6d51cc",
+      "copied_private_content": false
+    },
+    "component_contract": {
+      "location": "core",
+      "path": "docs/component-bounds.md",
+      "sha256": "20abcdab6478df8bfd11351307d89550f37c665ae124689c99e4642fbd61bf95",
+      "copied_private_content": false
+    },
+    "budget_contract": {
+      "location": "core",
+      "path": "docs/budget-admission.md",
+      "sha256": "20474cf6b2bf3e84b379ac138c070aefe144eaef48e083dcd105ec4a015ed896",
+      "copied_private_content": false
+    },
+    "profiles": {
+      "location": "core",
+      "path": "examples/profiles.experimental-20261018.json",
+      "sha256": "da27150455ad3a20dbeeeff335e9307788608f33b45d4695e77375ce61c5371a",
+      "copied_private_content": false
+    },
+    "prior_full_evidence": {
+      "location": "core",
+      "path": "docs/evidence/rg04-zero-rate-offline.json",
+      "sha256": "19b51cc884c96fe96d06849b2dcea75ba6e7ca405dc4de04dd487fb3a8bcb1dd",
+      "copied_private_content": false
+    },
+    "historical_experiment": {
+      "location": "core",
+      "path": "docs/evidence.md",
+      "sha256": "9fdec0032efc114ccc229b28a48b7bb258b7ccb0cb7f7e5a2282c49a9bbefc1b",
+      "copied_private_content": false
+    },
+    "provenance": {
+      "location": "core",
+      "path": "docs/provenance.md",
+      "sha256": "5e28f77d12aa7c3bab729a867f7528f541770fe551ba6d1062775d6df42f666d",
+      "copied_private_content": false
+    },
+    "sql_validator": {
+      "location": "workspace",
+      "path": "src/cloudyfan/workflow_sql.py",
+      "sha256": "5750cf4511063707ae9df07a2ee0aeda2f2e2cf2c6cbbe526ec27c0c123efefe",
+      "copied_private_content": false
+    },
+    "sql_tests": {
+      "location": "workspace",
+      "path": "tests/test_workflow_sql.py",
+      "sha256": "011fe2d72450986c2d597359957e50474304b1cd9d9268a6d04eb8afc39059cc",
+      "copied_private_content": false
+    },
+    "sql_limit_tests": {
+      "location": "workspace",
+      "path": "tests/test_sql_execution_contract.py",
+      "sha256": "047fd7126c6707bcdb592d6b3e84bc872893ee8b17d16d816c702a72f660bbe3",
+      "copied_private_content": false
+    },
+    "old_contract_conclusion": {
+      "location": "workspace",
+      "path": "docs/model-routing-final50-offline-conclusion-2026-10-17.md",
+      "sha256": "d772c78312b20b7cb792bb03ac44b5248b9060f4a406774d76a314411dca3a70",
+      "copied_private_content": false
+    },
+    "latest_contract_review": {
+      "location": "workspace",
+      "path": "artifacts/hierarchical50-20261018/contract-review.md",
+      "sha256": "0799d9a19373c1713be4bd13c4f305c3c85f08a6dec680f86ac9d8269a5203c2",
+      "copied_private_content": false
+    },
+    "supplier_audit": {
+      "location": "workspace",
+      "path": "docs/jev-decisions-bounds-audit-2026-10-19.md",
+      "sha256": "d017a75ac9bc2ca82207c9ee47f47de2d7fa298b38e63914f07b8f63461a7551",
+      "copied_private_content": false
+    },
+    "supplier_research": {
+      "location": "workspace",
+      "path": "docs/jev-decisions-supplier-guarantees-2026-10-19.md",
+      "sha256": "73788924b8ae39a4331ee5ba113cabeb0b741a229d330991dd67da6ff8168761",
+      "copied_private_content": false
+    },
+    "public_supplier_projection": {
+      "location": "workspace",
+      "path": "artifacts/jev-decisions-bounds-20261019/public-evidence.json",
+      "sha256": "c714800282591d41d947f958064ab7a124624ebbcd4ec9801541978374a5fb35",
+      "copied_private_content": false
+    },
+    "historical_accounting_summary": {
+      "location": "workspace",
+      "path": "docs/cloudyfan-spec-evidence-2026-10-18.md",
+      "sha256": "2bdf655f67e88b15eb65c14f6343e518d8473bb70cef03388ca5566598b6cfac",
+      "copied_private_content": false
+    }
+  },
+  "historical_candidates": {
+    "high": {
+      "model_version": "openai/gpt-6-astra-20260903",
+      "effort": "xhigh",
+      "provider": "openai",
+      "status": "pending",
+      "qualified_bound_usd": null
+    },
+    "low": {
+      "model_version": "openai/gpt-6-sol-20260922",
+      "effort": "low",
+      "provider": "openai",
+      "status": "pending",
+      "qualified_bound_usd": null
+    },
+    "mid": {
+      "model_version": "openai/gpt-6.1-sol-20260929",
+      "effort": "high",
+      "provider": "openai",
+      "status": "pending",
+      "qualified_bound_usd": null
+    },
+    "open_source": {
+      "model_version": "openai/gpt-oss-120b",
+      "effort": "low",
+      "provider": "baseten/fp4",
+      "status": "pending",
+      "qualified_bound_usd": null
+    },
+    "decision": {
+      "model_version": "typesafe/jev-1.13-20260917",
+      "provider": "typesafe",
+      "endpoint": "https://openrouter.ai/api/alpha/decisions",
+      "status": "pending",
+      "qualified_bound_usd": null
+    }
+  },
+  "fee_component_matrix": [
+    {
+      "id": "F01",
+      "component": "input",
+      "status": "pending",
+      "sources": [
+        "supplier_audit",
+        "supplier_research",
+        "public_supplier_projection"
+      ],
+      "candidate_statuses": {
+        "high": "pending",
+        "low": "pending",
+        "mid": "pending",
+        "open_source": "pending",
+        "decision": "pending"
+      },
+      "qualified_max_usd": null
+    },
+    {
+      "id": "F02",
+      "component": "output",
+      "status": "pending",
+      "sources": [
+        "supplier_audit",
+        "supplier_research",
+        "public_supplier_projection"
+      ],
+      "candidate_statuses": {
+        "high": "pending",
+        "low": "pending",
+        "mid": "pending",
+        "open_source": "pending",
+        "decision": "pending"
+      },
+      "qualified_max_usd": null
+    },
+    {
+      "id": "F03",
+      "component": "reasoning",
+      "status": "pending",
+      "sources": [
+        "supplier_audit",
+        "supplier_research",
+        "public_supplier_projection"
+      ],
+      "candidate_statuses": {
+        "high": "pending",
+        "low": "pending",
+        "mid": "pending",
+        "open_source": "pending",
+        "decision": "pending"
+      },
+      "qualified_max_usd": null
+    },
+    {
+      "id": "F04",
+      "component": "cache_read",
+      "status": "pending",
+      "sources": [
+        "supplier_audit",
+        "supplier_research",
+        "public_supplier_projection"
+      ],
+      "candidate_statuses": {
+        "high": "pending",
+        "low": "pending",
+        "mid": "pending",
+        "open_source": "pending",
+        "decision": "pending"
+      },
+      "qualified_max_usd": null
+    },
+    {
+      "id": "F05",
+      "component": "cache_write",
+      "status": "pending",
+      "sources": [
+        "supplier_audit",
+        "supplier_research",
+        "public_supplier_projection"
+      ],
+      "candidate_statuses": {
+        "high": "pending",
+        "low": "pending",
+        "mid": "pending",
+        "open_source": "pending",
+        "decision": "pending"
+      },
+      "qualified_max_usd": null
+    },
+    {
+      "id": "F06",
+      "component": "request",
+      "status": "pending",
+      "sources": [
+        "supplier_audit",
+        "supplier_research",
+        "public_supplier_projection"
+      ],
+      "candidate_statuses": {
+        "high": "pending",
+        "low": "pending",
+        "mid": "pending",
+        "open_source": "pending",
+        "decision": "pending"
+      },
+      "qualified_max_usd": null
+    },
+    {
+      "id": "F07",
+      "component": "classification",
+      "status": "pending",
+      "sources": [
+        "supplier_audit",
+        "supplier_research",
+        "public_supplier_projection"
+      ],
+      "candidate_statuses": {
+        "high": "pending",
+        "low": "pending",
+        "mid": "pending",
+        "open_source": "pending",
+        "decision": "pending"
+      },
+      "qualified_max_usd": null
+    },
+    {
+      "id": "F08",
+      "component": "failure",
+      "status": "pending",
+      "sources": [
+        "supplier_audit",
+        "supplier_research",
+        "public_supplier_projection"
+      ],
+      "candidate_statuses": {
+        "high": "pending",
+        "low": "pending",
+        "mid": "pending",
+        "open_source": "pending",
+        "decision": "pending"
+      },
+      "qualified_max_usd": null
+    }
+  ],
+  "fee_path_matrix": [
+    {
+      "id": "P01",
+      "path": "success_and_task_failure",
+      "status": "pending"
+    },
+    {
+      "id": "P02",
+      "path": "http_errors_rejection",
+      "status": "pending"
+    },
+    {
+      "id": "P03",
+      "path": "timeout_cancellation_disconnect",
+      "status": "pending"
+    },
+    {
+      "id": "P04",
+      "path": "upstream_retry_duplicates_children",
+      "status": "pending"
+    },
+    {
+      "id": "P05",
+      "path": "inflight_price_expiry_withdrawal",
+      "status": "pending"
+    },
+    {
+      "id": "P06",
+      "path": "whole_workflow_reservation",
+      "status": "pending"
+    },
+    {
+      "id": "P07",
+      "path": "settlement_history_unknowns",
+      "status": "pending"
+    }
+  ],
+  "rg01_gaps": [
+    "named_scope_and_semantics_review",
+    "formal_sql_environment_projection_not_implemented",
+    "engineering_vs_model_failure_mapping",
+    "hard_process_resource_isolation_not_proven",
+    "finite_public_fixture_false_acceptance",
+    "formal_model_qualification_missing"
+  ],
+  "historical_limits": {
+    "latest_25_contract_unknown_count": 3,
+    "latest_25_unknown_contract_ids": [
+      "H01",
+      "H09",
+      "H33"
+    ],
+    "common_22_analysis": "retrospective_non_blind",
+    "latest_batch_487_reconciled_does_not_clear_history": true,
+    "current_historical_unknown_count": null,
+    "current_available_budget_usd": null
+  },
+  "supplier_sources_refreshed": false,
+  "supplier_contact": false,
+  "real_api_calls": 0,
+  "deployment": false,
+  "push": false,
+  "notice": "Review inventory only; not a model/fee qualification artifact, not loaded by budget admission or release-gates. Hashes do not authenticate claims or reviewers."
+}

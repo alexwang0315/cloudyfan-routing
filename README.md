@@ -12,6 +12,8 @@
 
 [統一驗證入口](docs/checks.md)提供本機與 CI 共用命令；[跨接入契約矩陣](docs/transport-contracts.md)檢查 HTTP／Ollama／Queue 的共同保證。[正式放行索引](docs/release-readiness.md)以「實作完成／離線驗證完成／正式資格待核定」三欄列明範圍，另列首版必補證據、優先順序及選配功能。十項正式 gate pending 不表示十項程式未完成。
 
+首版補證材料已整理為[範圍草案](docs/release-scope-draft.md)、[RG-01 驗收器資格準備包](docs/rg01-validator-qualification.md)與[RG-04 缺證矩陣](docs/rg04-evidence-gaps.md)；缺少的領域、供應商及具名核定證據維持 pending，沒有新增付費或正式放行。
+
 [官方 SDK 互通證據](docs/ollama-sdk.md)固定 `ollama==0.6.3` 同步 Client，驗證純文字子集、身份、錯誤與重連不重送；模型上游保持模擬，不宣稱完整 Ollama 或部署相容。
 
 [完整費用元件上界](docs/component-bounds.md)提供 RG-04 的獨立替代驗證器：固定文字端點，以核定的資源／費率保障推導最壞費用，涵蓋分類、初答、唯一修正及失敗。未附真實供應商資格；普通價格與 key 額度仍不授權付費派送。

@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "kind": "documentation",
+  "result": "passed",
+  "scope": "first-release-evidence-preparation",
+  "checked_at": "2026-10-19T05:17:41.898722+00:00",
+  "observed_commit": "661f06f6dd5ad5407b83f4a541f6c69f28d2393f",
+  "source_digest_unchanged": "89ed1980ff527fb940d93fb018365a9cc4b44aee21eef39ecff1c8f5e9adeafd",
+  "documents_sha256": {
+    "README.md": "81f344e77884ccfdb654bc74500b5b479fb5c3c3fd3294228f5a4052e5fdc9d0",
+    "docs/handoff.md": "32508671dd77f9aaa35f53dd86721cf9a0227a81a3b3a8f63f86d6dedad224cd",
+    "docs/release-readiness.md": "665d5881f6daf23e236cf8c946516fd5112b5d97dc3145b17fbed4a57f0b7745",
+    "docs/verification.md": "16500cf730e23bc28acb75025dbe9b491d6419695497c4e91a6a30f0e3b7f965",
+    "docs/release-scope-draft.md": "c79eb754e5759947e53c8eb2453507bdaed5ef64411f037774e5dd7c16009d93",
+    "docs/rg01-validator-qualification.md": "e7dcc6bc9b89a901ff36583c47d6dbe957b2ebba78feb025bdf28bc4a1190f50",
+    "docs/rg04-evidence-gaps.md": "f0311250bf8f9a25a1c552969ed187bdbdc0a3bc7e6df7558e2f548aa4cde124"
+  },
+  "input_inventory": {
+    "path": "docs/evidence/release-preparation-inputs-20261019.json",
+    "sha256": "078544b8d98b7e84312249b03cd2b71ebcd10a75b1eedb2fb59be7bac8631338"
+  },
+  "source_files_checked": 20,
+  "fee_matrix": {
+    "components": 8,
+    "candidates": 5,
+    "component_candidate_cells": 40,
+    "paths": 7,
+    "all_pending": true,
+    "no_qualified_numeric_bound": true
+  },
+  "document_local_links_checked": 108,
+  "test_name_references_checked": 11,
+  "quick_check": {
+    "path": "runtime/checks/91b23254cb68436b92b42529eb39dbf7/checks.json",
+    "sha256": "669496d274199730fa57b13d48546d43d990cbe317859a9b60c43e087345c136",
+    "steps_passed": 4
+  },
+  "core_focused_tests": {
+    "tests_passed": 141,
+    "failures": 0,
+    "errors": 0,
+    "path": "runtime/release-evidence-preparation-20261019/core-focused-tests.xml",
+    "sha256": "e0b315515c785c245b5d7c9caf6a9c32942d46a33deed217697bdfbc3ae7b1fc"
+  },
+  "legacy_sql_isolated_tests": {
+    "tests_passed": 93,
+    "failures": 0,
+    "errors": 0,
+    "path": "runtime/release-evidence-preparation-20261019/legacy-sql-isolated-tests.xml",
+    "sha256": "b5a8bf0cce791873a2287655846ee9c42f8e920ab7463171377ce29a6818df9d"
+  },
+  "legacy_environment_attempt": {
+    "exit_code": 4,
+    "test_collection_started": false,
+    "error": "pydantic_core.ArgsKwargs ImportError from unrelated root conftest",
+    "environment_repaired": false,
+    "dependency_download": false
+  },
+  "legacy_isolated_replay": {
+    "interpreter": "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/.venv/bin/python",
+    "python": "3.13.13",
+    "sqlite": "3.50.4",
+    "system": "Darwin",
+    "machine": "x86_64",
+    "conftest_disabled": true,
+    "third_party_plugin_autoload": false,
+    "two_test_files_use_only_builtin_pytest_fixtures": true,
+    "socket_dns_guard": true,
+    "original_environment_qualified": false,
+    "standalone_sql_adapter_implemented": false
+  },
+  "probes": {
+    "synthetic_public_positive_and_negative": true,
+    "public_constant_answer_false_acceptance_reproduced": true,
+    "hidden_result_does_not_change_public_feedback": true,
+    "raw_legacy_result_rejected_by_diagnostic_contract": true,
+    "nested_feedback_rejected": true,
+    "strict_three_state": true,
+    "legacy_versions_and_limits_match_documentation": true
+  },
+  "unchanged_records_sha256": {
+    "docs/release-gates.json": "1e4899eec63930dc9014d0a089d408c5d3bd650a0b64ececfc6893ca6463142b",
+    "docs/agent-state.json": "2148caa8f27bc6080bd5d65efcfb0ee5cd9cb4359c0b647d1fd746a2de0166dc",
+    "docs/work-plan.json": "5263010e3ebccc75d449b0c7771933994f4fd9fe4e1e47e5a87e132f597c7f43"
+  },
+  "formal_gates_pending": 10,
+  "production_qualified": false,
+  "scope_approved": false,
+  "current_source_full_tests_preserved": 944,
+  "full_suite_rerun": false,
+  "private_audit_script": "runtime/release-evidence-preparation-20261019/audit_preparation.py",
+  "audit_script_sha256": "7631c4600cc9fb790b4ddb7a9b2c0541aa0fafb7ece3ecd086a414ecceba015b",
+  "private_receipts": {
+    "runtime/release-evidence-preparation-20261019/baseline.json": "de9e7d93c64fd57bd5ef1f0d6fa4fe2b0bf9132c2573131e31b9dcf0451f9dfb",
+    "runtime/release-evidence-preparation-20261019/quick-console.log": "b599557789d85620d497a159dbec77c396fb7cd2266769a326ef3930d01ed4f3",
+    "runtime/release-evidence-preparation-20261019/core-focused-console.log": "aba4876e881b231d58522f71e8bb0ee52d11d80820e45888920e7b77820cf4e6",
+    "runtime/release-evidence-preparation-20261019/core-focused-invocation.json": "48edea76667cb8dadc5dbb96c8e085b02a03b6e2b9efe62ffc608dee61f6a2a9",
+    "runtime/release-evidence-preparation-20261019/core-focused-tests.xml": "e0b315515c785c245b5d7c9caf6a9c32942d46a33deed217697bdfbc3ae7b1fc",
+    "runtime/release-evidence-preparation-20261019/legacy-sql-console.log": "3f69a89516c559d58907573ecba9f1dfa6b2341a009da2c3a45f17a9f311007d",
+    "runtime/release-evidence-preparation-20261019/legacy-sql-invocation.json": "fd3b18ec764861efa316bc20218c5b6d2d1e939e81c7116b76a7a34a7f4a655f",
+    "runtime/release-evidence-preparation-20261019/legacy-sql-isolated-console.log": "85a382c1409e703dc965bf0a871bf1d34f3488c82de2e814bcc6b26e45a6d1a7",
+    "runtime/release-evidence-preparation-20261019/legacy-sql-isolated-invocation.json": "c6fccde53f9e725c20659ad9a99ef9710503e443d2394d10fcb50736281e71c4",
+    "runtime/release-evidence-preparation-20261019/legacy-sql-isolated-tests.xml": "b5a8bf0cce791873a2287655846ee9c42f8e920ab7463171377ce29a6818df9d"
+  },
+  "real_api_calls": 0,
+  "account_api_calls": 0,
+  "supplier_contact": false,
+  "supplier_sources_refreshed": false,
+  "deployment": false,
+  "push": false,
+  "new_commit": false,
+  "limitations": [
+    "SQL scope is draft; no named owner/reviewer approval",
+    "No production SQL Environment/projection, OS sandbox or real model qualification",
+    "Synthetic fixture passes do not prove task correctness or prevent all false acceptance",
+    "No supplier quantity/rate/zero-rate guarantee or terminal accounting acquired",
+    "Historical 487 reconciliations do not clear earlier unknown charges",
+    "Old workspace dependency import failed; isolated replay does not repair it",
+    "Sources are local historical records, not refreshed provider claims"
+  ]
+}

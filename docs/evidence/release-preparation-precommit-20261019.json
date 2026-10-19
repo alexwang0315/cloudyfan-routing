@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "kind": "documentation",
+  "result": "passed",
+  "scope": "first-release-evidence-precommit-review",
+  "checked_at": "2026-10-19T05:26:07.068062+00:00",
+  "observed_commit": "661f06f6dd5ad5407b83f4a541f6c69f28d2393f",
+  "source_digest_unchanged": "89ed1980ff527fb940d93fb018365a9cc4b44aee21eef39ecff1c8f5e9adeafd",
+  "preparation_evidence": {
+    "path": "docs/evidence/release-evidence-preparation-20261019.json",
+    "sha256": "c600a9262f5f04eda598ba06c34003d0831f76512c26d42c85011f54cdd07326",
+    "preserved_unmodified": true
+  },
+  "input_inventory": {
+    "path": "docs/evidence/release-preparation-inputs-20261019.json",
+    "sha256": "078544b8d98b7e84312249b03cd2b71ebcd10a75b1eedb2fb59be7bac8631338",
+    "source_hashes_verified": 20
+  },
+  "documents_sha256": {
+    "README.md": "81f344e77884ccfdb654bc74500b5b479fb5c3c3fd3294228f5a4052e5fdc9d0",
+    "docs/handoff.md": "32508671dd77f9aaa35f53dd86721cf9a0227a81a3b3a8f63f86d6dedad224cd",
+    "docs/release-readiness.md": "665d5881f6daf23e236cf8c946516fd5112b5d97dc3145b17fbed4a57f0b7745",
+    "docs/verification.md": "5894582122ba4a5e5f48776ea14fa37f064b0728245c8d90e91f3dede5a7b599",
+    "docs/release-scope-draft.md": "c79eb754e5759947e53c8eb2453507bdaed5ef64411f037774e5dd7c16009d93",
+    "docs/rg01-validator-qualification.md": "fa5a7555084888e1e7e71c0f078b6b2a04b324baf4c30a18c5f77c8fb52f2d8b",
+    "docs/rg04-evidence-gaps.md": "f0311250bf8f9a25a1c552969ed187bdbdc0a3bc7e6df7558e2f548aa4cde124"
+  },
+  "corrections": [
+    "Clarify extension loading disabled; query_only, authorizer, setlimit and progress handler enabled; verified against unchanged SQL source."
+  ],
+  "prior_document_hashes_are_historical": true,
+  "unchanged_records_sha256": {
+    "docs/release-gates.json": "1e4899eec63930dc9014d0a089d408c5d3bd650a0b64ececfc6893ca6463142b",
+    "docs/agent-state.json": "2148caa8f27bc6080bd5d65efcfb0ee5cd9cb4359c0b647d1fd746a2de0166dc",
+    "docs/work-plan.json": "5263010e3ebccc75d449b0c7771933994f4fd9fe4e1e47e5a87e132f597c7f43"
+  },
+  "local_links_checked": 109,
+  "test_name_references_checked": 11,
+  "reused_verified_test_receipts": {
+    "core_focused": 141,
+    "legacy_sql_isolated": 93,
+    "prior_full_integration": 944
+  },
+  "test_suites_rerun": false,
+  "legacy_environment_error_retained": true,
+  "formal_gates_pending": 10,
+  "production_qualified": false,
+  "scope_approved": false,
+  "review_method": "Integrator documentation, source and receipt consistency review; no independent human or supplier qualification",
+  "blocking_findings": 0,
+  "real_api_calls": 0,
+  "supplier_contact": false,
+  "deployment": false,
+  "push": false,
+  "commit_authorization": "User requested review and local Git commit only; no external actions."
+}

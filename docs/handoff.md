@@ -94,3 +94,14 @@ sources/clients/streaming/multi-host features are not unfinished core work.
 Release scope and any not-applicable decision still require named approval.
 This is a documentation clarification, not a registry/schema change or a new
 944-test run; the current source verification remains the v2 evidence above.
+
+First-release evidence preparation now has a [scope draft](release-scope-draft.md),
+[RG-01 validator review package](rg01-validator-qualification.md) and
+[RG-04 gap matrix](rg04-evidence-gaps.md). SQL is a proposed domain backed by
+legacy workspace material, not an implemented standalone SQL Environment or an
+approved release scope. The original workspace Python environment failed to
+import pydantic_core; isolated replay of its two stdlib SQL test files passed
+93 tests using the core environment without that unrelated conftest. Core-focused
+mock tests passed 141 tests. These are distinct focused checks, not a new full
+944-test integration pass or supplier/domain qualification. See the
+[preparation receipt](evidence/release-evidence-preparation-20261019.json).

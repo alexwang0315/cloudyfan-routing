@@ -200,3 +200,27 @@ This review authorizes only the user-requested local commit. No API spend, deplo
 - Extra sources, background refresh/notifications, additional clients/protocols, multi-host/automatic recovery and the plan-only control arm are separated as optional extensions. The historical spec-1 index is labeled as an initial-delivery snapshot so its former verifier/identity/SDK gaps cannot override completed later delivery.
 - Executable inputs, prior verification/evidence and `release-gates.json` are unchanged. The existing 944-test integration is checked for provenance, not rerun or relabeled as a new pass. Documentation/link/status and offline quick-check results are recorded in [documentation evidence](evidence/release-index-status-20261019.json).
 - No paid or account API, model requests/downloads, hardware, deployment, push, GitHub write, supplier contact, deletion or new Git commit. All ten formal gates remain pending; named review and real evidence still apply.
+
+
+## 2026-10-19：首版範圍／RG-01／RG-04 證據準備
+
+以本機提交 `661f06f6dd5ad5407b83f4a541f6c69f28d2393f` 為整理基線，新增首版範圍草案、RG-01 驗收器資格準備包及 RG-04 缺證矩陣；另保留 20 份既有來源的 path／SHA256、五個歷史候選、八個費用元件與七類路徑的待核定清單。沒有改動 executable/test/build inputs、正式 release registry、agent-state 或 work-plan；舊 944 項完整整合驗證只核對原始收據與來源雜湊，不聲稱本輪重跑。
+
+本輪實際離線檢查：
+
+- `./scripts/check --quick`：鎖定離線依賴、依賴一致性、project records、Ruff 全部通過。收據 `runtime/checks/91b23254cb68436b92b42529eb39dbf7/checks.json`。
+- 核心 `tests/test_engine.py`、`tests/test_diagnostics.py`、`tests/test_component_bounds.py`：**141 passed**，使用核心 `.venv`、禁止網路的既有 conftest；只證 mock 契約。
+- 舊工作區 `.venv` 跑兩份 SQL 測試先因 `pydantic_core.ArgsKwargs` import error 停止（exit 4，尚未執行測試），原失敗 log 保留。沒有修依賴或網路下載。
+- 改用核心已鎖定 `.venv`、停用無關舊 conftest／第三方插件自動載入、程序內 socket/DNS guard，重播未改動的 `tests/test_workflow_sql.py` 與 `tests/test_sql_execution_contract.py`：**93 passed**。這兩檔只用 pytest 內建 fixtures；不代表舊環境已修復、全舊專案或正式 SQL 接入已合格。
+- 補證稽核另外檢查嚴格 parser／公開正反例／已知固定答案 false acceptance、DiagnosticContract 拒絕原始 SQL return 與巢狀 feedback、test ID 可追溯、來源 hash、版本／上限、文件連結、待核定矩陣與 registry 不變。實際結果與檢查程式 hash 見下列證據。
+
+[本輪來源／缺項清單](evidence/release-preparation-inputs-20261019.json)與[驗證摘要](evidence/release-evidence-preparation-20261019.json)只含去敏材料。可重現腳本、JUnit、console 與稽核結果留在 ignored `runtime/release-evidence-preparation-20261019/`。原始 prompt、答案、收據、key 與私人帳本沒有複製或改寫；未查當前帳戶餘額／歷史未知總數。
+
+本次發現的正式缺口為：具名 scope／語義審閱、獨立核心 SQL Environment／診斷投影與工程錯誤分類、硬資源隔離的適用證據、模型池／來源資格，以及全部可達端點的完整費用保障／終局核帳。這些維持待核定，不寫入正式 evidence 或捏造批准。未聯絡供應商、未呼叫 API、未啟動服務／模型／硬體、未部署、未推送，也未執行 Git commit。
+
+
+## 2026-10-19：補證文件提交前審閱
+
+本輪僅修正 RG-01 文件的歧義措辭：關閉的是 extension，query_only／authorizer／setlimit／progress handler 是啟用的控制，與既有程式一致。來源、驗收語義、選模門檻與正式 registry 不變。原準備證據的文件 hash 保留為修訂前快照；[提交前審閱紀錄](evidence/release-preparation-precommit-20261019.json)記錄修訂後的文件 hash 與核對結果，不覆寫原本 141 項／93 項測試、失敗環境及 944 項歷史整合收據，不聲稱本輪重新跑過那些測試。
+
+此審閱只授權使用者指定的本機 Git 提交；缺證項目保持 pending，未聯絡供應商、花費 API、部署或推送。提交時正常執行既有 secret scanner 與離線 quick hook，實際收據及提交後核對留在 ignored `runtime/release-preparation-commit-20261019/`。

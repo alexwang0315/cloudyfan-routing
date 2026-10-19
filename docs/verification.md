@@ -466,3 +466,13 @@ passed. The existing full 1104-test integration receipt matches the unchanged
 source fingerprint; it was not rerun during this commit review. See the
 [precommit record](evidence/rg01-live-precommit-20261019.json). No API request,
 spending, formal signoff or release-registry change this review.
+
+## Cost-resolved generation429 recovery — 2026-10-19
+
+Final `./scripts/check --integration` passed 1,138 tests, Ruff, mock Core/score
+demos and sdist/wheel. Thirty-four new rejection regressions cover binary/direct
+upgrade, two-attempt bound, fee/identity stops, authoritative GET, durable replay,
+budget reservation and version isolation. The initial plan-fixture failure and
+successful rerun are both retained in [offline evidence](evidence/provider-429-offline-20261019.json).
+All 2,369 original fresh50 files match the saved SHA inventory; no old answer,
+fee or grade changed. No new real API, deployment, push or formal qualification.

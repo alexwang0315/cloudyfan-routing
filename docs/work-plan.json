@@ -6,57 +6,35 @@
   "shared_interfaces": [
     {
       "id": "core-run",
-      "owner": "integration-maintainer",
+      "owner": "root",
       "owned_files": [
         "src/cloudyfan_jev/engine.py"
       ],
-      "provided_by": null
+      "provided_by": "provider-429-bounded-escalation"
     }
   ],
   "tasks": [
     {
-      "id": "rg01-routing-execution-tests",
+      "id": "provider-429-bounded-escalation",
       "owner": "root",
       "status": "completed",
       "owned_files": [
+        "src/cloudyfan_jev/engine.py",
+        "src/cloudyfan_jev/client.py",
+        "tests/test_provider_rejection.py",
         "docs/agent-state.json",
         "docs/work-plan.json",
-        "docs/handoff.md",
         "docs/coordination.md",
+        "docs/handoff.md",
         "docs/verification.md",
-        "docs/evidence/rg01-execution-prior-state.json",
-        "docs/evidence/rg01-execution-prior-work-plan.json",
-        "docs/evidence/rg01-routing-execution-tests-20261019.json",
-        "README.md"
+        "docs/provider-429-recovery.md",
+        "docs/evidence/provider-429-offline-20261019.json",
+        "docs/evidence/rate-limit-prior-agent-state-20261019.json",
+        "docs/evidence/rate-limit-prior-work-plan-20261019.json",
+        "docs/evidence/provider-429-precommit-20261019.json"
       ],
       "depends_on": [],
-      "consumed_interfaces": [
-        "core-run"
-      ]
-    },
-    {
-      "id": "rg01-live-compound-order-fix",
-      "owner": "root",
-      "status": "completed",
-      "owned_files": [
-        "src/cloudyfan_jev/sql_executor.py",
-        "tests/test_sql_environment.py",
-        "docs/agent-state.json",
-        "docs/work-plan.json",
-        "docs/coordination.md",
-        "docs/handoff.md",
-        "docs/verification.md",
-        "docs/evidence/rg01-live-fix-offline-20261019.json",
-        "docs/rg01-live-integration-20261019.md",
-        "docs/evidence/rg01-live-integration-20261019.json",
-        "docs/evidence/rg01-live-precommit-20261019.json"
-      ],
-      "depends_on": [
-        "rg01-routing-execution-tests"
-      ],
-      "consumed_interfaces": [
-        "core-run"
-      ]
+      "consumed_interfaces": []
     }
   ]
 }

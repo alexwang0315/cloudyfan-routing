@@ -255,3 +255,70 @@ linked execution/live records. [Precommit checks](evidence/rg01-live-precommit-2
 preserve the original interruption and separate continuation, full receipt
 chain and a private runtime inventory. Raw runtime stays outside Git. No
 new API calls, deployment, push or formal qualification change.
+
+## Authorized fresh50 paired trial in progress — 2026-10-19
+
+Frozen plan c0427ac5d4cba63634efbb84cd7023da6def518e4bfd7494243574f19c8b6354
+is in ignored runtime/fresh50-four-arm-20261019/plan.json. Fifty new SQL specs
+across ten families, 15/20/15 strata, four independent Core modes, fixed
+model versions/efforts/cards, one public-only repair and balanced position
+rotation. Hidden grading only after all 200 terminal workflow records.
+Resume the same benchmark.py run; no edits to sealed source, new attempts,
+answer sharing, S01-S08 review, deployment or push. Progress/status, intents,
+responses and receipt GETs are durable in that directory.
+
+Fresh50 execution addenda: the first BaseTen OSS call returned upstream429 with
+no answer/usage and GET404. Official OpenRouter pricing page was captured; pure
+text requests without auxiliary services qualify for policy-backed zero model
+fees, recorded separately from generation receipts. Successful calls are never
+resent. Addenda v2/v3 retain the frozen plan and original raw records; v2 hit a
+nested receipt lock before any additional POST, and v3 fixes only that execution
+lock. Ten offline policy/unknown/duplicate/new-mock-dispatch checks passed.
+Current continuation command is the ignored runtime `resume_policy_v3.py`; do
+not run the old runner to bypass the addendum. Preserve all versions, failures,
+policy evidence and unknown stops; no hidden grading before 200 terminal flows.
+
+Fresh50 completed: all 200 workflow terminal records precede hidden grading.
+[Final comparison](fresh50-four-arm-20261019.md) and
+[sanitized evidence](evidence/fresh50-four-arm-20261019.json) retain the full
+50-task cohort and execution versions. High and low-first both 50/50 public+
+hidden pass; low-first API USD0.4089475 vs high USD2.3646875 (82.71% lower),
+median workflow 2.415s vs 5.781s. CloudyFan 10/50 plus 40 upstream429;
+OSS-first 20/50 plus 30 upstream429, including two successful high repairs.
+CloudyFan classified zero times; do not claim Jev incremental benefit or
+same-quality CloudyFan savings. Total USD2.8850731, 132 generation receipts
+plus 70 separately policy-evidenced zero-fee rejections, no unknown costs or
+unattributed calls. Final key delta USD2.885073100 matches exactly; immediate
+posting delay USD0.114122 is preserved and resolved by the later snapshot.
+Prior smoke remains separate. Raw runtime is ignored, product source/qualification
+unchanged; no commit, deployment, push or further S01-S08 review. Next engineering
+priority is bounded escalation after a confirmed no-answer provider rejection;
+that behavior was not silently added to this frozen trial. No additional paid
+request, new cohort or implementation is part of this completed comparison.
+
+## Bounded generation429 escalation — 2026-10-19
+
+User authorizes the local fix and offline regression only. [Recovery behavior](provider-429-recovery.md)
+and [offline evidence](evidence/provider-429-offline-20261019.json) distinguish
+cost-resolved explicit no-answer429 from unknown/partial/other failures. CloudyFan
+uses its existing two-stage binary selection and one final generation; low/OSS-first
+use high once. Rejection consumes the attempt; a second rejection is unverifiable.
+Fixed-high never retries the rejected high, classifier429 stops, unknown fees/IDs
+still block new POST. No default zero-fee rule or provider qualification was added.
+Engine descriptor 0.1.1 prevents applying new semantics to old frozen runs.
+
+Final full integration: 1,138 tests, Ruff, both mock demos, sdist/wheel passed.
+An initial pass attempt had 1,137 passes and one historical-work-plan dependency
+failure; the preserved prior plan was separated from the current task, 65 focused
+state/rejection tests passed and full integration was rerun. Original 2,369 fresh50
+files match before/after SHA inventories exactly; the 50-task result and all fees,
+429s, stops, continuations and original answers remain unchanged. No paid test,
+real API receipt refresh, deployment, push, local commit or formal gate change.
+Real provider recovery rate and any new savings remain untested.
+
+The user subsequently authorizes local review and commit of the 429 fix and linked
+sanitized fresh50 summary. [Precommit review](evidence/provider-429-precommit-20261019.json)
+records fresh 34-test regression, matching 1,138-test source fingerprint, receipt
+hash verification, unchanged 2,369-file trial inventory and explicit staged scope.
+Private runtime remains excluded. No new real API, receipt refresh, deployment,
+push or formal qualification change is part of this local commit.

@@ -184,3 +184,32 @@ offline/live records locally. root owns explicit-path staging and preservation
 inventory. No new API calls (including receipt refresh), deployment, source
 push or qualification changes. Inspect raw local receipts without publishing
 prompts/answers; retain original interruption, v2 continuation and GET404 history.
+
+## Fresh 50-task four-arm trial — 2026-10-19
+
+User authorizes 50 new tasks, frozen CloudyFan/fixed-high/low-first/open-source-first
+flows and all classifier/repair/failure costs. No S01-S08 re-review, deployment
+or push. root owns the live runner, immutable plan, accounting, held-out grading
+and report. A delegated dataset worker owns only runtime/fresh50-four-arm-20261019/
+dataset.py and test_dataset.py, without API or credential access. No core policy
+change or holdout-based tuning; actual public pass gates the sole repair.
+
+Fresh50 completion: dataset and report subtasks are finished. The final report
+and sanitized evidence are docs/fresh50-four-arm-20261019.md and
+ docs/evidence/fresh50-four-arm-20261019.json. All 50 x four outcomes and costs,
+including 70 policy-zero upstream429 cases, are preserved; runtime remains
+private/ignored. Source, profiles, tasks and scoring contracts stayed frozen.
+No implementation, deployment, push or formal qualification follows automatically.
+
+## Cost-resolved provider429 recovery — 2026-10-19
+
+The user authorizes bounded provider429 recovery plus offline regression tests.
+root owns the Core.run interface and the client rejection recognizer under
+`provider-429-bounded-escalation`; there are no delegated or concurrent source
+edits. Generation-only, explicit no-answer429 may consume the current attempt
+only after existing fee/unique-ID checks succeed and provider/request evidence
+matches. CloudyFan uses the existing binary selector, low/OSS baselines use high;
+fixed-high never retries the rejected configuration. Existing budget bounds,
+unknown-charge stops and classifier failure handling are unchanged. Preserve the
+fresh50 runtime and report; use new engine-version manifests for future work.
+No paid API, deployment, push or formal qualification change is authorized.

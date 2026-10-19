@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "kind": "local_precommit_review",
+  "scope": "provider-429-bounded-escalation",
+  "review_result": "no_new_blocking_findings",
+  "source_digest": "ab381b3d8b5aa939d9f659c238d23a53e85d0be5d23c409d81f0857bdb6ec195",
+  "baseline_commit": "1a2de3938f2042cde2e46ab6be6d3b1f74642571",
+  "authorization": "User explicitly authorizes local review and Git commit; no new paid tests, deployment or push.",
+  "fresh_focused_regression": {
+    "tests_passed": 34,
+    "log": "runtime/provider-429-precommit-20261019/focused.log",
+    "sha256": "ca12bcc3446cb3a3e72c45e568562e09f3f70e75c57a07973f4a90fe3b0d215a"
+  },
+  "full_integration_evidence_reused": {
+    "path": "docs/evidence/provider-429-offline-20261019.json",
+    "sha256": "5c33ae61c0646d1cac3858d78511cc57c9446b4c017e9ccb82fa79289f6d8474",
+    "tests_passed": 1138,
+    "source_digest_matches": true,
+    "receipt_hashes_verified": true
+  },
+  "prior_trial_preservation": {
+    "path": "runtime/provider-429-precommit-20261019/preserved-trial-inventory.json",
+    "sha256": "60be1cd26735ecd3ed941d75e4685ed7b677d0e832d5b707ef5fc020672087d5",
+    "files_unchanged": 2369,
+    "original_runtime_not_staged": true,
+    "original_answers_not_resent_or_regraded": true
+  },
+  "linked_sanitized_comparison": {
+    "tasks": 50,
+    "workflows": 200,
+    "csv_rows": 200,
+    "include_linked_summary_reason": "Handoff/evidence refers to these previously uncommitted sanitized comparison artifacts; retain them without private answers or receipts.",
+    "csv_rows_match_preserved_runtime": true,
+    "csv_line_ending_normalization": {
+      "from": "CRLF",
+      "to": "LF",
+      "original_runtime_sha256": "0e0ab93904e64c67ed3510791b1094feb3bf796e45bea295c9167289cdf6b6ea",
+      "normalized_document_sha256": "65b467d872841ee968f9435537e0173401c7a0a2fe254733f294a91bf310e1a7",
+      "original_runtime_changed": false
+    }
+  },
+  "checks_reviewed": [
+    "Existing unknown-charge/unique-generation guard remains before escalation",
+    "Explicit no-answer429 only; other/partial/identity errors still stop",
+    "Only two generation attempts; classifier remains bounded; fixed-high does not repeat rejected configuration",
+    "Fees of rejected request, classifier and repair counted once",
+    "Engine version isolates prior frozen manifests",
+    "All original trial files and release registry unchanged"
+  ],
+  "release_registry_sha256": "1e4899eec63930dc9014d0a089d408c5d3bd650a0b64ececfc6893ca6463142b",
+  "planned_staged_paths": [
+    "src/cloudyfan_jev/client.py",
+    "src/cloudyfan_jev/engine.py",
+    "tests/test_provider_rejection.py",
+    "docs/agent-state.json",
+    "docs/coordination.md",
+    "docs/handoff.md",
+    "docs/verification.md",
+    "docs/work-plan.json",
+    "docs/provider-429-recovery.md",
+    "docs/evidence/provider-429-offline-20261019.json",
+    "docs/evidence/rate-limit-prior-agent-state-20261019.json",
+    "docs/evidence/rate-limit-prior-work-plan-20261019.json",
+    "docs/fresh50-four-arm-20261019.md",
+    "docs/evidence/fresh50-four-arm-20261019.json",
+    "docs/evidence/fresh50-four-arm-per-task-20261019.csv",
+    "docs/evidence/provider-429-precommit-20261019.json"
+  ],
+  "new_real_api_calls": 0,
+  "deployment": false,
+  "push": false,
+  "formal_qualification_changed": false
+}

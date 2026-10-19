@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "integration_branch": "codex/implement-routing-spec-1",
+  "baseline_commit": "666b79be14ccd227045a3108fb89c1eeb8894e54",
+  "merger_owner": "root",
+  "shared_interfaces": [
+    {
+      "id": "core-run",
+      "owner": "integration-maintainer",
+      "owned_files": [
+        "src/cloudyfan_jev/engine.py"
+      ],
+      "provided_by": null
+    }
+  ],
+  "tasks": [
+    {
+      "id": "rg01-routing-execution-tests",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "docs/agent-state.json",
+        "docs/work-plan.json",
+        "docs/handoff.md",
+        "docs/coordination.md",
+        "docs/verification.md",
+        "docs/evidence/rg01-execution-prior-state.json",
+        "docs/evidence/rg01-execution-prior-work-plan.json",
+        "docs/evidence/rg01-routing-execution-tests-20261019.json",
+        "README.md"
+      ],
+      "depends_on": [],
+      "consumed_interfaces": [
+        "core-run"
+      ]
+    },
+    {
+      "id": "rg01-live-compound-order-fix",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/sql_executor.py",
+        "tests/test_sql_environment.py",
+        "docs/agent-state.json",
+        "docs/work-plan.json",
+        "docs/coordination.md",
+        "docs/handoff.md",
+        "docs/verification.md",
+        "docs/evidence/rg01-live-fix-offline-20261019.json",
+        "docs/rg01-live-integration-20261019.md",
+        "docs/evidence/rg01-live-integration-20261019.json",
+        "docs/evidence/rg01-live-precommit-20261019.json"
+      ],
+      "depends_on": [
+        "rg01-routing-execution-tests"
+      ],
+      "consumed_interfaces": [
+        "core-run"
+      ]
+    }
+  ]
+}

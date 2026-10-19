@@ -1,0 +1,570 @@
+{
+  "kind": "fresh50-four-arm-live-results",
+  "recorded_at": "2026-10-19T12:56:02.166848+00:00",
+  "plan_id": "c0427ac5d4cba63634efbb84cd7023da6def518e4bfd7494243574f19c8b6354",
+  "core_commit": "1a2de3938f2042cde2e46ab6be6d3b1f74642571",
+  "source_digest": "20b092c3b1d3671db78f3162fc120f8f099a9e076d58fc78deadd0dcdd466e24",
+  "dataset_sha256": "ff454f2d585692a16a45bec153934558fb0add803c82fd5b451506fcafba11ee",
+  "workflows": 200,
+  "tasks_per_arm": 50,
+  "real_paid_endpoint_requests": 202,
+  "all_costs_attributed": true,
+  "unknown_cost_calls": 0,
+  "api_usd": "2.8850731",
+  "cost_source_counts": {
+    "generation_total_cost": 132,
+    "provider_error_no_charge_policy": 70
+  },
+  "key_final_delta_usd": "2.885073100",
+  "key_delta_minus_ledger_usd": "0E-9",
+  "arms": {
+    "cloudyfan": {
+      "api_cost_usd": "0.0039526",
+      "api_post_seconds_each_request": {
+        "max": 2.25701036999817,
+        "mean": 0.7230035323405173,
+        "median": 0.512624405506358,
+        "min": 0.33696736200363375,
+        "n": 50,
+        "p95_nearest_rank": 1.8290049320057733
+      },
+      "api_post_seconds_per_workflow": {
+        "max": 2.25701036999817,
+        "mean": 0.7230035323405173,
+        "median": 0.512624405506358,
+        "min": 0.33696736200363375,
+        "n": 50,
+        "p95_nearest_rank": 1.8290049320057733
+      },
+      "availability_failure": 40,
+      "cache_counters": {
+        "prompt_tokens_details.cache_write_tokens": {
+          "missing_calls": 40,
+          "reported_calls": 10,
+          "sum_reported": 0
+        },
+        "prompt_tokens_details.cached_tokens": {
+          "missing_calls": 40,
+          "reported_calls": 10,
+          "sum_reported": 1408
+        }
+      },
+      "cache_reporting": "reported values only; missing is unknown",
+      "calls": 50,
+      "classifier_calls": 0,
+      "completed_replay_new_posts": 0,
+      "completed_wall_missing": 0,
+      "completed_workflow_wall_seconds": {
+        "max": 2.8639435779914493,
+        "mean": 2.091711148104514,
+        "median": 2.1940249890103587,
+        "min": 1.112015272010467,
+        "n": 10,
+        "p95_nearest_rank": 2.8639435779914493
+      },
+      "component_costs_usd": {
+        "classifier": "0",
+        "initial": "0.0039526",
+        "other": "0",
+        "repair": "0"
+      },
+      "cost_per_success_usd": "0.00039526",
+      "cost_source_counts": {
+        "generation_total_cost": 10,
+        "provider_error_no_charge_policy": 40
+      },
+      "engineering_interruption": 0,
+      "final_fail": 0,
+      "final_pass": 10,
+      "final_pass_rate": 0.2,
+      "final_unknown": 40,
+      "first_fail": 0,
+      "first_pass": 10,
+      "first_pass_rate": 0.2,
+      "first_unknown": 40,
+      "generation_tiers": {
+        "open_source": 10
+      },
+      "grading_unverifiable": 0,
+      "interruption_seconds": {
+        "max": 1.0864638009952614,
+        "mean": 0.5136294904761598,
+        "median": 0.4485018499981379,
+        "min": 0.33696736200363375,
+        "n": 40,
+        "p95_nearest_rank": 0.8068374380090972
+      },
+      "known_api_cost_subtotal_usd": "0.0039526",
+      "model_call_counts": {
+        "openai/gpt-oss-120b": 10,
+        "unknown": 40
+      },
+      "n": 50,
+      "other_unknown": 0,
+      "policy_zero_calls": 40,
+      "provider_call_counts": {
+        "BaseTen": 50
+      },
+      "reconciliation_get_seconds": {
+        "max": 3.5241876899817726,
+        "mean": 0.8859028113386012,
+        "median": 0.7617588770008297,
+        "min": 0.3417939859937178,
+        "n": 50,
+        "p95_nearest_rank": 1.5255694389925338
+      },
+      "repair_final_pass": 0,
+      "repairs": 0,
+      "replay_evidence_missing": 40,
+      "unknown_cost_calls": 0
+    },
+    "fixed_high": {
+      "api_cost_usd": "2.3646875",
+      "api_post_seconds_each_request": {
+        "max": 15.146242293994874,
+        "mean": 5.876775451620634,
+        "median": 5.2590028129998245,
+        "min": 2.9522192430013092,
+        "n": 50,
+        "p95_nearest_rank": 9.781419447012013
+      },
+      "api_post_seconds_per_workflow": {
+        "max": 15.146242293994874,
+        "mean": 5.876775451620634,
+        "median": 5.2590028129998245,
+        "min": 2.9522192430013092,
+        "n": 50,
+        "p95_nearest_rank": 9.781419447012013
+      },
+      "availability_failure": 0,
+      "cache_counters": {
+        "prompt_tokens_details.cache_write_tokens": {
+          "missing_calls": 0,
+          "reported_calls": 50,
+          "sum_reported": 150143
+        },
+        "prompt_tokens_details.cached_tokens": {
+          "missing_calls": 0,
+          "reported_calls": 50,
+          "sum_reported": 0
+        }
+      },
+      "cache_reporting": "reported values only; missing is unknown",
+      "calls": 50,
+      "classifier_calls": 0,
+      "completed_replay_new_posts": 0,
+      "completed_wall_missing": 0,
+      "completed_workflow_wall_seconds": {
+        "max": 15.886331970003084,
+        "mean": 6.4406719364598395,
+        "median": 5.7813487095045275,
+        "min": 3.5749414729943965,
+        "n": 50,
+        "p95_nearest_rank": 10.387414457989507
+      },
+      "component_costs_usd": {
+        "classifier": "0",
+        "initial": "2.3646875",
+        "other": "0",
+        "repair": "0"
+      },
+      "cost_per_success_usd": "0.04729375",
+      "cost_source_counts": {
+        "generation_total_cost": 50
+      },
+      "engineering_interruption": 0,
+      "final_fail": 0,
+      "final_pass": 50,
+      "final_pass_rate": 1.0,
+      "final_unknown": 0,
+      "first_fail": 0,
+      "first_pass": 50,
+      "first_pass_rate": 1.0,
+      "first_unknown": 0,
+      "generation_tiers": {
+        "high": 50
+      },
+      "grading_unverifiable": 0,
+      "interruption_seconds": {
+        "max": null,
+        "mean": null,
+        "median": null,
+        "min": null,
+        "n": 0,
+        "p95_nearest_rank": null
+      },
+      "known_api_cost_subtotal_usd": "2.3646875",
+      "model_call_counts": {
+        "openai/gpt-6-astra-20260903": 50
+      },
+      "n": 50,
+      "other_unknown": 0,
+      "policy_zero_calls": 0,
+      "provider_call_counts": {
+        "OpenAI": 50
+      },
+      "reconciliation_get_seconds": {
+        "max": 2.0178681779798353,
+        "mean": 0.7267719876181218,
+        "median": 0.7217118669868796,
+        "min": 0.3258902959933039,
+        "n": 50,
+        "p95_nearest_rank": 1.182496067995089
+      },
+      "repair_final_pass": 0,
+      "repairs": 0,
+      "replay_evidence_missing": 0,
+      "unknown_cost_calls": 0
+    },
+    "low_first": {
+      "api_cost_usd": "0.4089475",
+      "api_post_seconds_each_request": {
+        "max": 5.39265202099341,
+        "mean": 2.012629419141158,
+        "median": 1.7995081019980717,
+        "min": 1.2493595609994372,
+        "n": 50,
+        "p95_nearest_rank": 3.5260854350053705
+      },
+      "api_post_seconds_per_workflow": {
+        "max": 5.39265202099341,
+        "mean": 2.012629419141158,
+        "median": 1.7995081019980717,
+        "min": 1.2493595609994372,
+        "n": 50,
+        "p95_nearest_rank": 3.5260854350053705
+      },
+      "availability_failure": 0,
+      "cache_counters": {
+        "prompt_tokens_details.cache_write_tokens": {
+          "missing_calls": 0,
+          "reported_calls": 50,
+          "sum_reported": 150143
+        },
+        "prompt_tokens_details.cached_tokens": {
+          "missing_calls": 0,
+          "reported_calls": 50,
+          "sum_reported": 0
+        }
+      },
+      "cache_reporting": "reported values only; missing is unknown",
+      "calls": 50,
+      "classifier_calls": 0,
+      "completed_replay_new_posts": 0,
+      "completed_wall_missing": 0,
+      "completed_workflow_wall_seconds": {
+        "max": 5.888558859995101,
+        "mean": 2.5784028029590265,
+        "median": 2.4148069265065715,
+        "min": 1.6109427430055803,
+        "n": 50,
+        "p95_nearest_rank": 4.208452367995051
+      },
+      "component_costs_usd": {
+        "classifier": "0",
+        "initial": "0.4089475",
+        "other": "0",
+        "repair": "0"
+      },
+      "cost_per_success_usd": "0.00817895",
+      "cost_source_counts": {
+        "generation_total_cost": 50
+      },
+      "engineering_interruption": 0,
+      "final_fail": 0,
+      "final_pass": 50,
+      "final_pass_rate": 1.0,
+      "final_unknown": 0,
+      "first_fail": 0,
+      "first_pass": 50,
+      "first_pass_rate": 1.0,
+      "first_unknown": 0,
+      "generation_tiers": {
+        "low": 50
+      },
+      "grading_unverifiable": 0,
+      "interruption_seconds": {
+        "max": null,
+        "mean": null,
+        "median": null,
+        "min": null,
+        "n": 0,
+        "p95_nearest_rank": null
+      },
+      "known_api_cost_subtotal_usd": "0.4089475",
+      "model_call_counts": {
+        "openai/gpt-6-sol-20260922": 50
+      },
+      "n": 50,
+      "other_unknown": 0,
+      "policy_zero_calls": 0,
+      "provider_call_counts": {
+        "OpenAI": 50
+      },
+      "reconciliation_get_seconds": {
+        "max": 1.7370832020096714,
+        "mean": 0.652666515460005,
+        "median": 0.6521362220009905,
+        "min": 0.2938975469878642,
+        "n": 50,
+        "p95_nearest_rank": 1.2219385520002106
+      },
+      "repair_final_pass": 0,
+      "repairs": 0,
+      "replay_evidence_missing": 0,
+      "unknown_cost_calls": 0
+    },
+    "open_source_first": {
+      "api_cost_usd": "0.1074855",
+      "api_post_seconds_each_request": {
+        "max": 6.559359161008615,
+        "mean": 1.1457715288267467,
+        "median": 0.7094495534984162,
+        "min": 0.33436395700846333,
+        "n": 52,
+        "p95_nearest_rank": 2.981043988998863
+      },
+      "api_post_seconds_per_workflow": {
+        "max": 8.032531130986172,
+        "mean": 1.1916023899798165,
+        "median": 0.6848007930020685,
+        "min": 0.33436395700846333,
+        "n": 50,
+        "p95_nearest_rank": 2.981043988998863
+      },
+      "availability_failure": 30,
+      "cache_counters": {
+        "prompt_tokens_details.cache_write_tokens": {
+          "missing_calls": 30,
+          "reported_calls": 22,
+          "sum_reported": 6197
+        },
+        "prompt_tokens_details.cached_tokens": {
+          "missing_calls": 30,
+          "reported_calls": 22,
+          "sum_reported": 12256
+        }
+      },
+      "cache_reporting": "reported values only; missing is unknown",
+      "calls": 52,
+      "classifier_calls": 0,
+      "completed_replay_new_posts": 0,
+      "completed_wall_missing": 0,
+      "completed_workflow_wall_seconds": {
+        "max": 8.643802930993843,
+        "mean": 2.7196332111481754,
+        "median": 2.0797044849969097,
+        "min": 0.9943393539870158,
+        "n": 20,
+        "p95_nearest_rank": 8.612475380999967
+      },
+      "component_costs_usd": {
+        "classifier": "0",
+        "initial": "0.0077630",
+        "other": "0",
+        "repair": "0.0997225"
+      },
+      "cost_per_success_usd": "0.005374275",
+      "cost_source_counts": {
+        "generation_total_cost": 22,
+        "provider_error_no_charge_policy": 30
+      },
+      "engineering_interruption": 0,
+      "final_fail": 0,
+      "final_pass": 20,
+      "final_pass_rate": 0.4,
+      "final_unknown": 30,
+      "first_fail": 2,
+      "first_pass": 18,
+      "first_pass_rate": 0.36,
+      "first_unknown": 30,
+      "generation_tiers": {
+        "high": 2,
+        "open_source": 20
+      },
+      "grading_unverifiable": 0,
+      "interruption_seconds": {
+        "max": 1.6239726909989258,
+        "mean": 0.5291797019992373,
+        "median": 0.4358868284980417,
+        "min": 0.33436395700846333,
+        "n": 30,
+        "p95_nearest_rank": 0.7375976579933194
+      },
+      "known_api_cost_subtotal_usd": "0.1074855",
+      "model_call_counts": {
+        "openai/gpt-6-astra-20260903": 2,
+        "openai/gpt-oss-120b": 20,
+        "unknown": 30
+      },
+      "n": 50,
+      "other_unknown": 0,
+      "policy_zero_calls": 30,
+      "provider_call_counts": {
+        "BaseTen": 50,
+        "OpenAI": 2
+      },
+      "reconciliation_get_seconds": {
+        "max": 1.908027362980647,
+        "mean": 0.7440923344591284,
+        "median": 0.7170191640107078,
+        "min": 0.2849707510031294,
+        "n": 50,
+        "p95_nearest_rank": 1.4202497689984739
+      },
+      "repair_final_pass": 2,
+      "repairs": 2,
+      "replay_evidence_missing": 30,
+      "unknown_cost_calls": 0
+    }
+  },
+  "comparisons_vs_fixed_high": {
+    "cloudyfan": {
+      "aggregate_cdr": 0.9983284894938549,
+      "all_pair_costs_known": true,
+      "both_arms_all_final_pass": false,
+      "cost_increase_fraction": 0.0,
+      "defined_per_task_ratios": 50,
+      "failed_flow_costs_included": true,
+      "interpretation": "spending difference only",
+      "paired_tasks": 50,
+      "per_task_cdr_max": 1.0,
+      "per_task_cdr_mean": 0.9983746757225531,
+      "per_task_cdr_median": 1.0,
+      "per_task_cdr_min": 0.9903775167785235,
+      "undefined_per_task_ratios": 0
+    },
+    "fixed_high": {
+      "aggregate_cdr": 0.0,
+      "all_pair_costs_known": true,
+      "both_arms_all_final_pass": true,
+      "cost_increase_fraction": 0.0,
+      "defined_per_task_ratios": 50,
+      "failed_flow_costs_included": true,
+      "interpretation": "equal-quality sample savings",
+      "paired_tasks": 50,
+      "per_task_cdr_max": 0.0,
+      "per_task_cdr_mean": 0.0,
+      "per_task_cdr_median": 0.0,
+      "per_task_cdr_min": 0.0,
+      "undefined_per_task_ratios": 0
+    },
+    "low_first": {
+      "aggregate_cdr": 0.8270606581207877,
+      "all_pair_costs_known": true,
+      "both_arms_all_final_pass": true,
+      "cost_increase_fraction": 0.0,
+      "defined_per_task_ratios": 50,
+      "failed_flow_costs_included": true,
+      "interpretation": "equal-quality sample savings",
+      "paired_tasks": 50,
+      "per_task_cdr_max": 0.8683581124757596,
+      "per_task_cdr_mean": 0.8254394192728164,
+      "per_task_cdr_median": 0.8224812807785391,
+      "per_task_cdr_min": 0.7995365542810798,
+      "undefined_per_task_ratios": 0
+    },
+    "open_source_first": {
+      "aggregate_cdr": 0.9545455794898903,
+      "all_pair_costs_known": true,
+      "both_arms_all_final_pass": false,
+      "cost_increase_fraction": 0.04,
+      "defined_per_task_ratios": 50,
+      "failed_flow_costs_included": true,
+      "interpretation": "spending difference only",
+      "paired_tasks": 50,
+      "per_task_cdr_max": 1.0,
+      "per_task_cdr_mean": 0.9534313042300614,
+      "per_task_cdr_median": 1.0,
+      "per_task_cdr_min": -0.13401542649727768,
+      "undefined_per_task_ratios": 0
+    }
+  },
+  "dataset_offline_checks": {
+    "cases": 50,
+    "core_executor_reference_checks": 350,
+    "dataset_sha256": "ff454f2d585692a16a45bec153934558fb0add803c82fd5b451506fcafba11ee",
+    "families": {
+      "conditional_aggregates": 5,
+      "group_conditions": 5,
+      "join_existence": 5,
+      "rank_selection": 5,
+      "relational_division": 5,
+      "row_filters": 5,
+      "sequence_relations": 5,
+      "set_operations": 5,
+      "temporal_composition": 5,
+      "window_accumulation": 5
+    },
+    "hidden_data_in_core": false,
+    "hidden_fixtures_per_case": 5,
+    "model_calls": 0,
+    "public_fixtures_per_case": 2,
+    "python_sqlite_oracle_pairs": 350,
+    "semantic_mutants_rejected": 50,
+    "sqlite_version": "3.50.4",
+    "strata": {
+      "easy": 15,
+      "hard": 15,
+      "medium": 20
+    },
+    "version": "fresh50-sql-v1-20261019"
+  },
+  "policy_offline_checks": {
+    "checks": [
+      "Exact upstream429 policy0; actual model remains unconfirmed",
+      "404 remains unknown and blocks",
+      "500 remains unknown and blocks",
+      "tools remains unknown and blocks",
+      "fallback remains unknown and blocks",
+      "attachment remains unknown and blocks",
+      "Duplicate identity remains blocked",
+      "Future actual receipt supersedes policy estimate; never double counted",
+      "Frozen core/data/runner/plan and original receipts unchanged",
+      "One new MockTransport POST after policy0; lock does not deadlock; unknown new response blocks next"
+    ],
+    "count": 10,
+    "real_api_calls": 0,
+    "result": "passed"
+  },
+  "quick_check_record": "runtime/checks/59f2ed64c209480dbd813ab3e5be404e/checks.json",
+  "raw_runtime_excluded_from_git": true,
+  "product_source_changed": false,
+  "formal_qualification_changed": false,
+  "new_paid_calibration_usd": "0",
+  "historical_separate_smoke_usd": "0.060291624",
+  "deployment": false,
+  "push": false,
+  "commit": false,
+  "artifact_hashes": {
+    "plan.json": "7c03e2ab1e51dff25a24bdc61742b551982b5042864bd537c818fa5c6fbd111d",
+    "dataset-checks.json": "f5e649f4ca7575e486efd7805edc4b9390d2b82bb07285bebf90a77adbd04d75",
+    "execution-addendum-v2.json": "c5f494be63eeeac3a7b267f79c47e025e6245d4145d695f7cd05aad4e4539705",
+    "execution-addendum-v3.json": "e4ddeca5591cec670c2f32764e43446de8d9749a5972c11c9034ca1696dab18a",
+    "offline-policy-v3-result.json": "f09aafdc3766da85a278c018224c081d4c02f98b27ccebe3405e349c8f84e81e",
+    "analyze.py": "3224ef15bfd928141843c7472932d594b6e1d4db4eb0da393d0a12f900fb6e75",
+    "analysis.json": "450c02bfc012dccc3ea171d04d01c5021e023c6053a13b661a1c7f59b6064989",
+    "grading-started.json": "2857cf9a7f66ebec7b132a9ba3ce7cc1d172ad4bff9d87e8370e2c148310c426",
+    "grading-complete.json": "66a34f9af420ae70c289fe426a275423dc38ac266645e1161f879154c6d87b41",
+    "dispatch-complete.json": "eaac6d750e9ebe2904658cedd2a6dfb8400d469713a71b100a345647ea96e14f",
+    "final-reconciliation.json": "669400518e5ccfe5abce6131a9142ee8e88f73b2599415375c9eede6b44c160a",
+    "key-before.json": "e91096fcd6d76cb8dca96d483755595c30813d0944f53e55b292b2c992db41bf",
+    "key-after.json": "125d82065071e31381e466aba2019e2971b9fd508d962a99a57c6c11cdf31805",
+    "key-final-recheck.json": "7cd3b1ea8bfa20b60ea8a7d94d9b733307099b94fc064c9609805c0bd8a1e451",
+    "ledger-current.json": "f370b4ffdbcbe1c3e3f40470de430f1234289a5a4be8c28fb1e9ca294a3081d3",
+    "per-task.csv": "0e0ab93904e64c67ed3510791b1094feb3bf796e45bea295c9167289cdf6b6ea"
+  },
+  "post_document_checks": {
+    "quick_check_record": "runtime/checks/e6c61f766bd64f969717c23711d05af8/checks.json",
+    "passed": true,
+    "frozen_source_verified": true,
+    "sanitized_document_links_valid": 2,
+    "per_task_csv_unique_rows": 200,
+    "credential_absent_from_report_evidence_csv": true,
+    "final_key_delta_exact": true,
+    "workflows_public_and_hidden_pass": 130,
+    "upstream_rejections": 70,
+    "jev_calls": 0,
+    "git_diff_check": "passed"
+  }
+}

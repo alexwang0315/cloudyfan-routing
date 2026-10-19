@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "scope": "rg01-routing-execution-tests",
+  "scope": "provider-429-bounded-escalation",
   "phase": "offline_verified",
   "baseline_commit": "666b79be14ccd227045a3108fb89c1eeb8894e54",
   "integration_branch": "codex/implement-routing-spec-1",
@@ -18,8 +18,8 @@
     "sha256": "99e3af5d0c2fd758f06c3fb2554e77a105d15f02bc9ed9453b43178e849e74a2"
   },
   "current_verification": {
-    "path": "docs/evidence/rg01-live-fix-offline-20261019.json",
-    "sha256": "ad2e0d8584a3f344fa3ca3d44c1de587480d9c68f80778e18fd489d9220aabc9"
+    "path": "docs/evidence/provider-429-offline-20261019.json",
+    "sha256": "5c33ae61c0646d1cac3858d78511cc57c9446b4c017e9ccb82fa79289f6d8474"
   },
   "history": [
     {
@@ -149,12 +149,20 @@
     {
       "path": "docs/evidence/rg01-live-integration-20261019.json",
       "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rate-limit-prior-agent-state-20261019.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rate-limit-prior-work-plan-20261019.json",
+      "record_kind": "historical"
     }
   ],
   "next_steps": [
     {
       "gate": "RG-02",
-      "action": "Live functional pilot completed with original seven successes, separately recovered S08, three endpoint probes, 15 fully reconciled calls costing USD0.060291624. Next integrate the actual application or run a separately authorized larger frozen task batch; do not repeat S01-S08 reviews, claim CDR without paired controls, or imply the second selector branch was naturally exercised. Formal approval does not block development/testing.",
+      "action": "Fresh50 comparison retained unchanged. Cost-resolved generation429 escalation is offline verified; real-provider recovery remains untested. Any live validation requires a separately authorized plan with fee evidence and fresh versioned run IDs; do not replay/regrade the prior 50-task cohort or reopen S01-S08 review.",
       "requires_authorization": true
     },
     {

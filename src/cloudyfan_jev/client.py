@@ -96,6 +96,35 @@ def usage(record):
     return result
 
 
+def rate_limit_rejection(record, requested_model, accepted_models, provider_name):
+    """Recognize an explicit no-answer 429, never infer its billing cost.
+
+    A rejection may omit actual model identity. Match the frozen request and
+    reported provider without inventing an actual generated model. The caller
+    must still require resolved fees, a unique generation ID and durable intent.
+    """
+    if record.get('http_status') != 429 or requested_model not in accepted_models:
+        return False
+    try:
+        data = _strict_json(record.get('raw'))
+        if not isinstance(data, dict) or data.get('choices') not in (None, []):
+            return False
+        error = data.get('error')
+        if not isinstance(error, dict) or type(error.get('code')) is not int or error['code'] != 429:
+            return False
+        metadata = error.get('metadata', {})
+        route = data.get('openrouter_metadata', {})
+        if not isinstance(metadata, dict) or not isinstance(route, dict):
+            return False
+        info = usage(record)
+        providers = [v for v in (info['provider'], metadata.get('provider_name')) if v is not None]
+        return (bool(providers) and all(v == provider_name for v in providers)
+                and (info['model'] is None or info['model'] in accepted_models)
+                and (route.get('requested') is None or route['requested'] in accepted_models))
+    except (ValueError, TypeError, RecursionError):
+        return False
+
+
 class Client(ReceiptStore):
     def __init__(self, http, key, root: Path):
         if not isinstance(key, str) or not key:

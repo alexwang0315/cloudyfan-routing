@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "provider-429-bounded-escalation",
+  "source_digest": "ab381b3d8b5aa939d9f659c238d23a53e85d0be5d23c409d81f0857bdb6ec195",
+  "tests_passed": 1138,
+  "new_regression_tests": 34,
+  "state_and_429_regression_tests_passed": 65,
+  "receipt": {
+    "path": "runtime/checks/ff2a74c848aa4035b36b093977f15e58/checks.json",
+    "sha256": "cd9caba119524b224bc47658af697818f905570d39f70888d823b18a908677f2",
+    "source_digest": "ab381b3d8b5aa939d9f659c238d23a53e85d0be5d23c409d81f0857bdb6ec195"
+  },
+  "initial_integration": {
+    "result": "failed",
+    "tests_passed": 1137,
+    "tests_failed": 1,
+    "cause": "Active work-plan interface provider applied to preserved historical tasks in synthetic record test; current plan now contains only this authorized task. No source behavior change required.",
+    "path": "runtime/checks/4e75afd4b9024829939bc62d88096aa4/checks.json"
+  },
+  "focused_initial_fixture_failure": {
+    "tests_passed": 98,
+    "tests_failed": 1,
+    "cause": "Duplicate-ID test fixture initially returned a different ID; corrected fixture now exercises actual duplicate rejection.",
+    "log": "runtime/rate-limit-recovery-20261019/focused.log"
+  },
+  "policies_verified": [
+    "CloudyFan cost-resolved no-answer429 uses low/mid then optional mid/high, followed by only one generation",
+    "low/OSS-first cost-resolved429 upgrades once to high",
+    "fixed-high429 never retries same configuration",
+    "second generation rejection is unverifiable, never a third generation",
+    "unknown initial/repair/classifier fees and transport/identity errors stop new POST",
+    "all known rejection, classifier and repair charges count once inside existing reservation",
+    "saved responses resume without POST replay; new engine rejects old frozen manifests"
+  ],
+  "engine_version": "0.1.1",
+  "new_real_api_calls": 0,
+  "paid_api_usd": "0",
+  "deployment": false,
+  "push": false,
+  "commit": false,
+  "formal_qualification": "pending",
+  "prior_trial_preservation": {
+    "files": 2369,
+    "unchanged": true,
+    "inventory_before_sha256": "60be1cd26735ecd3ed941d75e4685ed7b677d0e832d5b707ef5fc020672087d5",
+    "inventory_after_sha256": "60be1cd26735ecd3ed941d75e4685ed7b677d0e832d5b707ef5fc020672087d5",
+    "original_plan_id": "c0427ac5d4cba63634efbb84cd7023da6def518e4bfd7494243574f19c8b6354",
+    "original_workflows": 200,
+    "original_calls": 202,
+    "original_api_usd": "2.8850731",
+    "regraded_or_resent": false
+  },
+  "release_registry_sha256": "1e4899eec63930dc9014d0a089d408c5d3bd650a0b64ececfc6893ca6463142b",
+  "final_record_check": {
+    "path": "runtime/checks/e179c03157ca40ce96460fb527469a4c/checks.json",
+    "sha256": "f1c5fce086d5eb067b3b7a38a0ae17932f519b180688a4b2c722c0723619ca24",
+    "passed": true
+  }
+}

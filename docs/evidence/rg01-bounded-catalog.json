@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "catalog_version": "sql-review-catalog-v2-bounded",
+  "catalog_sha256": "b98c9c72f81f1b4ee82583f416a9f0dcbedfc86b9129b49d43fb0159f891faba",
+  "cases": [
+    {
+      "id": "S01",
+      "contract_version": "sql-environment-v2:38471af825c957148619ae667b3b052b5b2725c9bec54240eb10913b10784cf2",
+      "public_samples": 6,
+      "reference_passes": true,
+      "old_mutants_rejected": 2,
+      "new_probes_rejected": [
+        "P01"
+      ]
+    },
+    {
+      "id": "S02",
+      "contract_version": "sql-environment-v2:5f4b40684f5fa8b08dc53aa5d6e5ef043874c7c09c5de7aaee0a1aead3185040",
+      "public_samples": 6,
+      "reference_passes": true,
+      "old_mutants_rejected": 2,
+      "new_probes_rejected": [
+        "P02"
+      ]
+    },
+    {
+      "id": "S03",
+      "contract_version": "sql-environment-v2:e945bd119e6b468a42dcca493327d2b9109fd6a1e9a936468706b7f0e02d5669",
+      "public_samples": 6,
+      "reference_passes": true,
+      "old_mutants_rejected": 2,
+      "new_probes_rejected": [
+        "P03"
+      ]
+    },
+    {
+      "id": "S04",
+      "contract_version": "sql-environment-v2:49b709b6540674a4bfaf1a5b399372b6376d7774686584a671b4a222efea1b2d",
+      "public_samples": 7,
+      "reference_passes": true,
+      "old_mutants_rejected": 2,
+      "new_probes_rejected": [
+        "P04",
+        "P11"
+      ]
+    },
+    {
+      "id": "S05",
+      "contract_version": "sql-environment-v2:be9536db4cd8ee8ff65d56258934f7aa2d7ebda16ade76d177004c7a56bce709",
+      "public_samples": 6,
+      "reference_passes": true,
+      "old_mutants_rejected": 2,
+      "new_probes_rejected": [
+        "P05"
+      ]
+    },
+    {
+      "id": "S06",
+      "contract_version": "sql-environment-v2:07ac2f8d92cee7526c25f5bc90e608389404dd286fc46b60b1243df04701c9b1",
+      "public_samples": 7,
+      "reference_passes": true,
+      "old_mutants_rejected": 1,
+      "new_probes_rejected": [
+        "P06",
+        "P12"
+      ]
+    },
+    {
+      "id": "S07",
+      "contract_version": "sql-environment-v2:858b3b69ba298ef1aea88ddf752ab2df101034c4af9a836b3de61d45086a0f3f",
+      "public_samples": 8,
+      "reference_passes": true,
+      "old_mutants_rejected": 1,
+      "new_probes_rejected": [
+        "P07",
+        "P08",
+        "P13"
+      ]
+    },
+    {
+      "id": "S08",
+      "contract_version": "sql-environment-v2:1be0d3aa079bb4618211f74279ccb965cd0de2bc7b46e44e986f9a3a18c87ee3",
+      "public_samples": 7,
+      "reference_passes": true,
+      "old_mutants_rejected": 2,
+      "new_probes_rejected": [
+        "P09",
+        "P10"
+      ]
+    }
+  ],
+  "original_examples_cross_checked": 40,
+  "post_hoc": true,
+  "holdout": false,
+  "model_calls": 0,
+  "human_review": "pending",
+  "production_qualified": false,
+  "limitation": "Finite public regression coverage; no general correctness, population error rate, real-model quality or OS isolation qualification."
+}

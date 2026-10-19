@@ -1,0 +1,13 @@
+{
+  "kind": "offline-installed-wheel-smoke",
+  "result": "passed",
+  "wheel_sha256": "e91427ca226c0849fd898d4162bc5d0ffed292d091fb6c8ed71931cc78b6db2d",
+  "observation": {
+    "cases_passed": 8,
+    "counterexamples_loaded": 13,
+    "worker": "sql-worker-v2"
+  },
+  "isolated_python": true,
+  "source_checkout_on_syspath": false,
+  "real_api_calls": 0
+}

@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "result_means": "Documentation review and diagnostic assertions completed; not model quality or formal qualification. Known coverage gaps remain.",
+  "scope": "rg01-semantic-review-offline",
+  "baseline_commit": "666b79be14ccd227045a3108fb89c1eeb8894e54",
+  "source_digest": "a7495567821e97142ffd2d2e52e224d882894830a08ebd29a21d621704a27f72",
+  "recorded_at": "2026-10-19T06:50:49.137160+00:00",
+  "tests_passed": 1031,
+  "tests_count_basis": "reused unchanged executable source evidence; no new pytest suite run",
+  "new_full_test_run": false,
+  "new_pytest_cases_run": 0,
+  "reused_evidence": {
+    "path": "docs/evidence/rg01-review-ready-offline.json",
+    "sha256": "858a616039a82bec2a02d83e7c14b901cd2da3738c61eaf5eac54252a23fc87f"
+  },
+  "review_document": {
+    "path": "docs/rg01-semantic-review-20261019.md",
+    "sha256": "1aea11afa9c877f282ebfa47ccd305bf9e3ac09e3c46f9d0cc1a1445268f08e2"
+  },
+  "diagnostic_evidence": {
+    "path": "docs/evidence/rg01-semantic-review-probes-20261019.json",
+    "sha256": "f6320604f509a79516c926934482b7f01688aca35e89444663d994eabbbadf8a"
+  },
+  "private_method_and_console_sha256": {
+    "runtime/rg01-semantic-review-20261019/numeric-probe-console.log": "5125ce10181d77fed4850e4939488c4e24bcabd0817620c5310af1c831ef7dae",
+    "runtime/rg01-semantic-review-20261019/numeric-probe.py": "3a11f3a0be605326992278def38a12763d8ff82ae680040c460db38323e09964",
+    "runtime/rg01-semantic-review-20261019/probe-console.log": "aca965be90a114551da739b4f9ad66c81b318ced39a7dcd7f0b92a3dbf096ba3",
+    "runtime/rg01-semantic-review-20261019/probe.py": "65fe7f444acbc14ded619cd4963e33d93978efaab75a75c0021d01c33fd14218",
+    "runtime/rg01-semantic-review-20261019/completed-review-quick-console.log": "a1440f4160fa7dee3c4e614e1a8c3c27bf2d9d50f7a4aa90c9632c3dd7288d0c"
+  },
+  "findings": {
+    "original_examples_reviewed": 40,
+    "original_expected_disagreements": 0,
+    "existing_mutants_rejected": 14,
+    "selected_diagnostic_wrong_queries": 13,
+    "known_missed_errors": 13,
+    "population_error_rate": null,
+    "post_hoc": true,
+    "blinded": false,
+    "numeric_final_vs_intermediate_int64_scope": "needs user decision",
+    "equivalent_RANGE_ROWS_control": "passed with full unique ordering key"
+  },
+  "recommendation": "Eligible to review finite test-material correctness and explicit business semantics; do not qualify general valid input domain with known misses unresolved.",
+  "required_user_decisions": [
+    "first-release domain/data/use scope",
+    "business NULL/tie/date/text semantics",
+    "actual integer and intermediate arithmetic domain",
+    "named scope/review responsibility and target OS isolation"
+  ],
+  "formal_gates_pending": 10,
+  "formal_registry_sha256": "1e4899eec63930dc9014d0a089d408c5d3bd650a0b64ececfc6893ca6463142b",
+  "human_owner": null,
+  "human_reviewer": null,
+  "formal_approval": false,
+  "production_qualified": false,
+  "implementation_changed": false,
+  "frozen_catalog_changed": false,
+  "new_model_experiment": false,
+  "real_api_calls": 0,
+  "account_api_calls": 0,
+  "real_api_cost_usd": "0",
+  "supplier_contact": false,
+  "deployment": false,
+  "push": false,
+  "new_git_commit": false,
+  "review_quick_receipt": {
+    "path": "runtime/checks/a99e8d1b6ec04d85b32a98e8eabc47e1/checks.json",
+    "sha256": "0384f9247557a9f710125dbd88b77818bf000a888d391d207463ced6b993ea02"
+  }
+}

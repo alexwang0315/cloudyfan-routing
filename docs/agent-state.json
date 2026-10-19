@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "scope": "rg01-review-ready-offline",
-  "phase": "offline_verified",
-  "baseline_commit": "bdc3b084bb2db680afaf42d17cf33b953cbec850",
+  "scope": "rg01-remaining-tickets-offline",
+  "phase": "blocked",
+  "baseline_commit": "666b79be14ccd227045a3108fb89c1eeb8894e54",
   "integration_branch": "codex/implement-routing-spec-1",
   "constraints": {
     "paid_api": false,
@@ -14,13 +14,10 @@
   "release_registry": "docs/release-gates.json",
   "work_plan": "docs/work-plan.json",
   "last_verified": {
-    "path": "docs/evidence/rg01-ready-baseline.json",
-    "sha256": "3ac10104f7a73a3250de8ff7b269766264280a3fb474ce58024e07f2b27ca376"
+    "path": "docs/evidence/rg01-semantic-baseline.json",
+    "sha256": "99e3af5d0c2fd758f06c3fb2554e77a105d15f02bc9ed9453b43178e849e74a2"
   },
-  "current_verification": {
-    "path": "docs/evidence/rg01-review-ready-offline.json",
-    "sha256": "858a616039a82bec2a02d83e7c14b901cd2da3738c61eaf5eac54252a23fc87f"
-  },
+  "current_verification": null,
   "history": [
     {
       "path": "docs/implementation-spec1.md",
@@ -69,12 +66,40 @@
     {
       "path": "docs/evidence/rg01-ready-prior-work-plan.json",
       "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-semantic-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-semantic-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-decision-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-decision-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-tickets-prior-agent-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-tickets-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-tickets-offline-20261019.json",
+      "record_kind": "historical"
     }
   ],
   "next_steps": [
     {
       "gate": "RG-01",
-      "action": "Named review of S01-S08 scope, independent expected rows, finite mutation/constant-answer coverage and acceptable false acceptance; qualify exact target OS isolation (strict AS unavailable on tested Darwin). SQL v2 engineering and offline review material is complete; RG-01 remains pending.",
+      "action": "RG01-01..05 and RG01-07 are implemented and offline verified (1098 tests, new worker identity protocol and installed-wheel SQL smoke). RG01-06 remains blocked: need an explicitly available authorized Linux target and actual memory/CPU/deadline/file/network/cancellation/budget-continuity attack evidence; normal-flow helper is not that evidence. RG01-08 needs actual named formal review afterwards. No spending, provider contact, deployment, downloads or push authority.",
       "requires_authorization": true
     },
     {

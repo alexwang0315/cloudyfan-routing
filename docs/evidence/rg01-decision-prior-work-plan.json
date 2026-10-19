@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "integration_branch": "codex/implement-routing-spec-1",
+  "baseline_commit": "666b79be14ccd227045a3108fb89c1eeb8894e54",
+  "merger_owner": "root",
+  "shared_interfaces": [
+    {
+      "id": "core-run",
+      "owner": "integration-maintainer",
+      "owned_files": [
+        "src/cloudyfan_jev/engine.py"
+      ],
+      "provided_by": null
+    }
+  ],
+  "tasks": [
+    {
+      "id": "rg01-semantic-review",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "docs/rg01-semantic-review-20261019.md",
+        "docs/evidence/rg01-semantic-review-20261019.json",
+        "docs/evidence/rg01-semantic-review-probes-20261019.json",
+        "docs/evidence/rg01-semantic-baseline.json",
+        "docs/evidence/rg01-semantic-prior-state.json",
+        "docs/evidence/rg01-semantic-prior-work-plan.json",
+        "docs/rg01-review-ready.md",
+        "docs/rg01-validator-qualification.md",
+        "docs/release-readiness.md",
+        "docs/handoff.md",
+        "docs/verification.md",
+        "docs/agent-state.json",
+        "docs/work-plan.json",
+        "docs/coordination.md"
+      ],
+      "depends_on": [],
+      "consumed_interfaces": []
+    }
+  ]
+}

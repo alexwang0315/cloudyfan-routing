@@ -5,6 +5,7 @@ portable policy caps SQLite's allocator; total address-space enforcement is a
 separate, fail-closed opt-in because Darwin may not implement RLIMIT_AS.
 """
 import hashlib
+from contextlib import nullcontext
 import json
 import os
 from pathlib import Path
@@ -15,9 +16,10 @@ import sys
 import time
 
 from . import sql_executor
+from .sql_isolation import IsolationUnavailable, LinuxIsolation
 
 
-VERSION = 'sql-worker-v1'
+VERSION = 'sql-worker-v2'
 WALL_SECONDS = 3.0
 CPU_SECONDS = 2
 SQLITE_HEAP_BYTES = 32 * 1024 * 1024
@@ -40,6 +42,8 @@ def constraints(require_address_space=False):
         'require_address_space': require_address_space,
         'max_request_bytes': MAX_REQUEST_BYTES, 'max_response_bytes': MAX_RESPONSE_BYTES,
         'python': list(sys.version_info[:3]), 'platform': sys.platform,
+        'python_identity': {'implementation': sys.implementation.name,
+                            'version': sys.version, 'cache_tag': sys.implementation.cache_tag},
         'kernel': platform.release(), 'machine': platform.machine(),
         'implementation_sha256': {name: hashlib.sha256((folder / name).read_bytes()).hexdigest()
                                   for name in ('sql.py', 'sql_process.py', 'sql_worker.py',
@@ -101,13 +105,24 @@ def _exchange(process, payload, deadline):
     return response
 
 
-def execute(tables, columns, data, sql, *, require_address_space=False):
+def execute(tables, columns, data, sql, *, require_address_space=False, isolation=None):
+    if isolation is not None and (not isinstance(isolation, LinuxIsolation) or require_address_space):
+        raise WorkerUnavailable('SQL_ISOLATION_POLICY')
+    try:
+        with isolation.lease() if isolation is not None else nullcontext(None) as command:
+            return _execute(tables, columns, data, sql, require_address_space=require_address_space,
+                            command=command)
+    except IsolationUnavailable as error:
+        raise WorkerUnavailable(error.code) from None
+
+
+def _execute(tables, columns, data, sql, *, require_address_space=False, command=None):
     payload = json.dumps({'tables': tables, 'columns': columns, 'data': data, 'sql': sql},
                          ensure_ascii=True, allow_nan=False, separators=(',', ':')).encode()
     if len(payload) > MAX_REQUEST_BYTES:
         raise WorkerUnavailable('SQL_VALIDATION_WORKER_INPUT')
     worker = Path(__file__).resolve().with_name('sql_worker.py')
-    command = [sys.executable, '-I', '-S', '-B', str(worker)]
+    command = command or [sys.executable, '-I', '-S', '-B', str(worker)]
     if require_address_space:
         command.append('--require-address-space')
     process = None
@@ -119,6 +134,8 @@ def execute(tables, columns, data, sql, *, require_address_space=False):
         response = _exchange(process, payload, deadline)
         resources = response['resources']
         if (not isinstance(resources, dict) or resources.get('sqlite_heap_bytes') != SQLITE_HEAP_BYTES
+                or resources.get('python_identity') != {'implementation': sys.implementation.name,
+                    'version': sys.version, 'cache_tag': sys.implementation.cache_tag}
                 or resources.get('cpu_seconds') != CPU_SECONDS
                 or resources.get('file_bytes') != 0 or resources.get('core_bytes') != 0
                 or resources.get('open_files') != 32

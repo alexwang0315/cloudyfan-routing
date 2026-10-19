@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "integration_branch": "codex/implement-routing-spec-1",
+  "baseline_commit": "bdc3b084bb2db680afaf42d17cf33b953cbec850",
+  "merger_owner": "root",
+  "shared_interfaces": [
+    {
+      "id": "core-run",
+      "owner": "integration-maintainer",
+      "owned_files": [
+        "src/cloudyfan_jev/engine.py"
+      ],
+      "provided_by": null
+    },
+    {
+      "id": "sql-public-environment",
+      "owner": "root",
+      "owned_files": [
+        "src/cloudyfan_jev/sql.py",
+        "src/cloudyfan_jev/sql_process.py",
+        "src/cloudyfan_jev/sql_worker.py",
+        "src/cloudyfan_jev/sql_review.py"
+      ],
+      "provided_by": "rg01-review-ready"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "rg01-review-ready",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/sql.py",
+        "src/cloudyfan_jev/sql_process.py",
+        "src/cloudyfan_jev/sql_worker.py",
+        "src/cloudyfan_jev/sql_review.py",
+        "tests/test_sql_environment.py",
+        "tests/test_sql_process.py",
+        "tests/test_sql_review.py",
+        "docs/sql-environment.md",
+        "docs/rg01-validator-qualification.md",
+        "docs/rg01-review-ready.md",
+        "docs/release-readiness.md",
+        "docs/release-scope-draft.md",
+        "docs/handoff.md",
+        "docs/coordination.md",
+        "docs/verification.md",
+        "docs/agent-state.json",
+        "docs/work-plan.json",
+        "docs/evidence/rg01-ready-prior-state.json",
+        "docs/evidence/rg01-ready-prior-work-plan.json",
+        "docs/evidence/rg01-review-ready-offline.json",
+        "docs/evidence/rg01-sql-coverage.json",
+        "README.md",
+        "src/cloudyfan_jev/sql_executor.py",
+        "docs/evidence/rg01-ready-baseline.json",
+        "tests/test_project_state.py"
+      ],
+      "depends_on": [],
+      "consumed_interfaces": [
+        "core-run"
+      ]
+    }
+  ]
+}

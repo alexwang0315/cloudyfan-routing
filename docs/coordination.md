@@ -94,3 +94,20 @@ root owns sql.py, the worker/process boundary, public review catalog, regression
 review-ready evidence/docs under the active work plan. No routing/diagnostic schema/
 provider/budget interface change or independent-human approval is implied. Preserve v1
 receipts and failure evidence. Formal gate statuses are unchanged.
+
+## S01-S08 semantic review ownership
+
+root owns documentation/evidence preparation only for the active semantic review plan.
+Runtime diagnostic methods are retained privately. Executable/test/build inputs, frozen
+catalog and formal gate records are not edited; formal owners/reviewers remain unassigned.
+
+## Delegated RG-01 scope decisions
+
+root owns documentation and the prospective policy under the active plan, preserving
+the preceding uncommitted semantic review. The workspace root ADR is an external
+documentation artifact, not a new standalone-package runtime dependency. Formal
+identities and source/runtime implementation are not changed by this decision work.
+
+## RG-01 remaining-ticket implementation
+
+root is the sole editor of SQL contract/policy/catalog/isolation interfaces, public-boundary tests, qualification tooling and current records. Core.run, Client, budget and routing policies are consumed unchanged. Two independent read-only reviews will follow implementation under the code-review skill. Original uncommitted semantic/decision documents and historical evidence are preserved. Real Linux qualification and human signoff are separate from this offline implementation.

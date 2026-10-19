@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "policy_version": "rg01-sql-first-scope-policy-v1",
+  "decision_status": "adopted_under_explicit_user_delegation",
+  "implementation_status": "not_implemented",
+  "formal_qualification": "pending",
+  "decision_actor": "Codex AI assistant",
+  "authorization_basis": "User delegated the four pending scope, semantics, numeric domain and responsibility/environment decisions in this chat on 2026-10-19.",
+  "qualification_slice": {
+    "task_ids": [
+      "S01",
+      "S02",
+      "S03",
+      "S04",
+      "S05",
+      "S06",
+      "S07",
+      "S08"
+    ],
+    "entry": "Core.run with injected public validator; mocked upstream for present offline qualification",
+    "data": "public synthetic fixtures and bounded in-memory SQLite",
+    "not_whole_product_scope": true,
+    "existing_other_interfaces_disabled": false,
+    "arbitrary_customer_database_access": false
+  },
+  "numeric_domain": {
+    "amount_type": "integer or NULL; no inferred currency/unit conversion",
+    "max_abs_amount": 1000000000,
+    "max_orders_per_fixture": 1000,
+    "max_input_rows_per_table": 1000,
+    "max_abs_sum_bound": 1000000000000,
+    "require_all_reference_intermediate_accumulations_fit_int64": true,
+    "customer_and_order_id": "unique non-NULL signed int64 within each table; zero and negatives remain valid",
+    "customer_reference": "signed int64 or NULL; absent referenced customers remain valid",
+    "max_output_rows": 100,
+    "max_output_cell_bytes": 32768,
+    "overflow_or_out_of_domain": "reject before model dispatch under a new enforced contract; never clamp, drop rows or change expected values"
+  },
+  "semantics": {
+    "S01": "SUM all orders including void; ignore NULL; empty/all NULL returns NULL",
+    "S02": "paid orders with ISO date >=2026-01-01 and <2026-02-01; NULL dates excluded; ascending id; other periods require their own frozen contract",
+    "S03": "paid orders by customer including NULL and undeclared customer groups; COUNT includes NULL amounts; retain duplicate values",
+    "S04": "all declared customers, paid order count, zero if none; ignore NULL/undeclared foreign keys; ascending signed id",
+    "S05": "declared customers with no matching paid orders; NULL foreign key matches nobody, including customer id zero",
+    "S06": "paid order groups including NULL and undeclared customers; amount DESC with NULL last, then id ASC; all NULL still selects smallest id",
+    "S07": "paid orders by customer; day ASC NULL first then id ASC; NULL amount contributes zero; cumulative through current row; equivalent SQL allowed",
+    "S08": "distinct text union; NULL once; empty string preserved; BINARY case-sensitive comparison and ordering; no trimming or normalization"
+  },
+  "date_domain": "valid proleptic Gregorian YYYY-MM-DD calendar dates, years 0001..9999, or NULL; no timestamps/timezone conversion",
+  "responsibility": {
+    "technical_decision_owner": "Codex AI assistant under explicit delegation",
+    "evidence_preparation_owner": "Codex AI assistant",
+    "release_accountability_role": "CloudyFan project maintainer",
+    "formal_human_signoff_recorded": false,
+    "independent_reviewer_identity": null
+  },
+  "environment": {
+    "development": "existing macOS portable worker for offline synthetic tests only",
+    "production_qualification_target": "Linux isolated SQL worker with independently demonstrated total-process memory, CPU, external deadline, file and network restrictions",
+    "exact_build_pin": "freeze actual kernel, interpreter/SQLite and isolation artifact digests before qualification; no deployed artifact selected or verified in this decision",
+    "local_only_claim": "not granted by choosing Linux or local model backend"
+  },
+  "quality_admission": {
+    "all_13_known_counterexamples_must_remain_in_scope": true,
+    "known_false_acceptances_allowed_before_qualification": 0,
+    "finite_pass_is_general_correctness_proof": false,
+    "hidden_grading_feedback_to_routing": false,
+    "new_contract_version_required": true,
+    "original_catalog_or_scores_may_be_rewritten": false
+  },
+  "authorized_actions_this_step": {
+    "documentation_and_offline_arithmetic_checks": true,
+    "source_implementation": false,
+    "paid_api": false,
+    "supplier_contact": false,
+    "deployment": false,
+    "push": false,
+    "git_commit": false
+  }
+}

@@ -20,7 +20,7 @@
 
 | 放行項 | 實作完成：已交付範圍 | 離線驗證完成：可追溯證據 | 正式資格 | 首版適用性 |
 |---|---|---|---|---|
-| **RG-01 公開驗收與修正** | 完成：可注入驗收器、版本化公開診斷、唯一修正；新增 SQL v2 子程序、資源策略、公開診斷投影、工程分類及八類語義審查材料。 | 完成：[診斷／修正](public-diagnostics.md)、[SQL 接入](sql-environment.md)、[跨接入契約](transport-contracts.md)，`Core.run`＋真 SQLite／MockTransport。 | **待核定**：審閱包的具名 scope／語義／expected／覆蓋及目標環境隔離；本機嚴格 AS 不可用。 | 所有路由必需。 |
+| **RG-01 公開驗收與修正** | 完成：可注入驗收器、版本化公開診斷、唯一修正；新增 SQL v2 子程序、資源策略、公開診斷投影、工程分類及八類語義審查材料。 | 完成：[診斷／修正](public-diagnostics.md)、[SQL 接入](sql-environment.md)、[跨接入契約](transport-contracts.md)，`Core.run`＋真 SQLite／MockTransport。 | **待核定**：[委託決策](rg01-first-scope-decisions-20261019.md)已定首個資格切面、業務語義、有界數值域與 Linux 目標；新政策與 13 個已知反例已接入並通過新版離線回歸；Linux 實環境攻擊證據與正式具名核定仍缺，詳見[本批交付](rg01-implementation-20261019.md)，正式資格 pending。 | 所有路由必需。 |
 | **RG-02 模型／強度／量化資格** | 完成：資格包、三模型池、精確設定綁定、未合格候選排除及效期檢查。 | 完成：[合成資格包與核定阻擋](qualification.md)、[評分快照接入](score-integration.md)。 | **待核定**：首版真實候選、門檻與設定。 | 所有實際使用的模型必需；量化只在使用該設定時適用。 |
 | **RG-03 評分來源與更新** | 完成：既有來源 adapters／受控匯入、固定快照、更新預覽、原子切換與 audit。 | 完成：[來源與快照](score-integration.md)、[更新操作](score-update-operations.md)；LiveBench v1 有歷史公開唯讀 smoke，非正式模型池。 | **待核定**：實際啟用來源的權限、映射、時效與更新責任。 | 三池所用來源必需；不用同時驗所有來源。 |
 | **RG-04 完整成本與可強制上限** | 完成：共享預算、完整預留、核帳／未知停止、供應商 adapter、元件上界及 **v2 完整零費率保證路徑**。 | 完成：[預算](budget-admission.md)、[供應商契約](provider-bounds.md)、[元件契約](component-bounds.md)、[v2 驗證](evidence/rg04-zero-rate-offline.json)。 | **待核定**：真實供應商上界／零費率及完整帳務證據。 | 任何受控模型／工具執行必需，含分類、初答、修正與失敗。 |
@@ -111,3 +111,7 @@ path 為本 repo 內的相對檔案路徑，不允許 `..`、絕對路徑或逃�
 Python API：`validate_gates(data, root, *, now=None)` 回傳錯誤列表，now 可注入含時區 datetime 作固定時間測試；不修改輸入或檔案。只有對**同一份資料、同一 root 及有效當下時間**取得空錯誤列表後，才可呼叫 `production_ready(data)` 聚合狀態。所有項目須為 qualified 或有核定的不適用，才得到 true。
 
 **限制：這是結構與檔案完整性檢查，不能驗證人員身分、授權真偽、證據內容真實性或領域適用性。** 將 fixture 謊稱 real 仍可能騙過結構檢查；hash 不證明實測，具名欄位不等同簽章。人工審查本表要求仍是必要條件，checker 不得用作付費執行、安全存取或部署的授權邊界。不得把 `production_ready: true` 自動轉換成服務啟動或成效宣稱。
+
+## RG-01 新版落實進度（2026-10-19）
+
+上述委託決策後續已接入新版本的有界 SQL 政策、13 個公開合成反例及嚴格 Linux launcher，見[本批交付與取證邊界](rg01-implementation-20261019.md)。原 SQL v2 與歷史結果保留；本批完整驗證依新的 evidence／收據。Linux 目標攻擊取證及正式具名審閱仍 blocked，其他 gate 不受本批改寫。這是新政策後續實作狀態，不回寫先前決策當時「尚未實作」的歷史紀錄。

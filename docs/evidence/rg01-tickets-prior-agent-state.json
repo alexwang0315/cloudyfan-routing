@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "scope": "rg01-delegated-decisions-offline",
+  "phase": "offline_verified",
+  "baseline_commit": "666b79be14ccd227045a3108fb89c1eeb8894e54",
+  "integration_branch": "codex/implement-routing-spec-1",
+  "constraints": {
+    "paid_api": false,
+    "deployment": false,
+    "source_push": false,
+    "hardware": false,
+    "model_downloads": false
+  },
+  "release_registry": "docs/release-gates.json",
+  "work_plan": "docs/work-plan.json",
+  "last_verified": {
+    "path": "docs/evidence/rg01-semantic-baseline.json",
+    "sha256": "99e3af5d0c2fd758f06c3fb2554e77a105d15f02bc9ed9453b43178e849e74a2"
+  },
+  "current_verification": {
+    "path": "docs/evidence/rg01-delegated-decisions-20261019.json",
+    "sha256": "a72020a50b1c42e5087b65057dd5cc79f5ffeb22603f6fce07ab71b8252af578"
+  },
+  "history": [
+    {
+      "path": "docs/implementation-spec1.md",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/verification.md",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg04-components-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg04-components-initial-pass.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg04-zero-rate-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg04-zero-rate-offline.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-sql-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-sql-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg04-zero-rate-precommit.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/release-preparation-precommit-20261019.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-ready-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-ready-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-semantic-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-semantic-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-decision-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-decision-prior-work-plan.json",
+      "record_kind": "historical"
+    }
+  ],
+  "next_steps": [
+    {
+      "gate": "RG-01",
+      "action": "Four user-delegated scope/semantics/numeric/environment choices are adopted in the decision record. Next implement a new frozen contract/catalog enforcing amount abs<=1e9 and at most 1000 orders, retain all 13 known counterexamples, and obtain actual Linux isolation evidence; do not reopen settled choices or infer formal signoff, API spend, supplier contact, deployment or push authority.",
+      "requires_authorization": true
+    },
+    {
+      "gate": "G-02",
+      "action": "Review exact synchronous ollama==0.6.3 / text-v2 / companion task GET evidence before formal G-02 qualification; no Async, product-client, TCP/TLS/proxy claim.",
+      "requires_authorization": true
+    },
+    {
+      "gate": "RG-04",
+      "action": "Qualify pinned Jev Decisions cumulative billed input and all-path effective rates, including binding zero rates where proven, retry/failure/cancellation and in-flight coverage. No real supplier guarantees supplied. Paid validation requires a separate approved plan.",
+      "requires_authorization": true
+    },
+    {
+      "gate": "RG-05",
+      "action": "Qualify deployed identity/TLS/secret ownership, actual retention policy and storage/backup coverage, and exclusive maintenance-writer fence.",
+      "requires_authorization": true
+    },
+    {
+      "gate": "RG-02",
+      "action": "Qualify real domain/model configurations before production model use.",
+      "requires_authorization": true
+    }
+  ]
+}

@@ -127,3 +127,29 @@ Eight public task templates have independent Python/hand expectations and mutati
 Current actual checks are recorded separately from the historical 991-test v1 receipt.
 Formal scope/expected/coverage review and target-environment qualification remain pending.
 No paid requests, supplier contact, deployment or push are authorized by these records.
+
+## S01-S08 semantic review (2026-10-19)
+
+The [technical semantic review](rg01-semantic-review-20261019.md) rechecks all 40 original
+expected rows against new explicit calculations, Python oracle and SQLite reference.
+The original 14 mutants still fail. Thirteen selected post-hoc wrong queries pass the
+frozen examples but fail valid counterexamples; no population false-accept rate follows.
+The int64 domain also needs an explicit final-versus-intermediate accumulation decision.
+Original catalog, source, tests and historical scores remain unchanged. No model calls,
+formal signoff or supplier/deployment authority was created by this documentation work.
+
+## Delegated RG-01 choices adopted (2026-10-19)
+
+The user delegated the four open choices. The [decision record](rg01-first-scope-decisions-20261019.md)
+adopts S01-S08 as the first qualification slice, preserves existing NULL/order/text
+semantics, zero/negative IDs and orphan references, and specifies a new amount domain
+(abs<=1e9, at most 1000 orders, all reference partial sums bounded by 1e12).
+Linux isolated SQL worker is the formal qualification target; the current Darwin
+portable worker retains only its existing offline scope. Codex is the AI technical
+decision/evidence actor, not a forged human signatory. These choices are settled;
+input-domain enforcement, new-version counterexamples and target evidence are pending.
+No source edits, gate promotion, spending, supplier contact or deployment occurred.
+
+## RG-01 remaining tickets (2026-10-19)
+
+Current implementation and limits are in [the new bounded-SQL packet](rg01-implementation-20261019.md) and [ticket status](evidence/rg01-ticket-status.json). The source/catalog/strict Linux adapter are under offline verification. Real Linux attack evidence and actual named formal approval remain blocked; do not interpret implementation or mocked launch tests as target qualification. Historical semantic and decision evidence above remains unchanged. No model API, provider contact, provisioning, deployment or source push is authorized.

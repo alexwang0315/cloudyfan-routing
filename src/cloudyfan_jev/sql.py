@@ -10,6 +10,8 @@ import json
 from .diagnostics import DiagnosticContract
 from . import sql_executor as executor
 from . import sql_process
+from . import sql_policy
+from .sql_isolation import LinuxIsolation
 
 
 VERSION = 'sql-environment-v2'
@@ -107,26 +109,40 @@ class SqlContract:
     _public_json: str
     _runtime_json: str
     require_address_space: bool
+    isolation: LinuxIsolation | None
 
     def __init__(self, *, version, prompt, tables, expected_columns, samples,
-                 require_address_space=False):
+                 require_address_space=False, domain_policy=None, isolation=None):
         if type(require_address_space) is not bool:
             raise ValueError('require_address_space must be boolean')
+        if isolation is not None and (not isinstance(isolation, LinuxIsolation) or require_address_space):
+            raise ValueError('Select a LinuxIsolation or the separate portable AS policy')
         try:
-            encoded = _json(dict(version=version, prompt=prompt, tables=tables,
-                                 expected_columns=expected_columns, samples=samples))
+            public = dict(version=version, prompt=prompt, tables=tables,
+                          expected_columns=expected_columns, samples=samples)
+            if domain_policy is not None:
+                public['domain_policy'] = domain_policy
+            encoded = _json(public)
             if len(encoded.encode('utf-8')) > 1024 * 1024:
                 raise ValueError('oversized public contract')
             _validate_spec(json.loads(encoded))
+            if domain_policy is not None:
+                sql_policy.validate(json.loads(encoded))
         except (ValueError, TypeError, UnicodeError, RecursionError):
             raise ValueError('Invalid public SQL contract') from None
         object.__setattr__(self, '_public_json', encoded)
         object.__setattr__(self, 'require_address_space', require_address_space)
+        object.__setattr__(self, 'isolation', isolation)
         object.__setattr__(self, '_runtime_json', _json(self._constraints()))
 
     def _constraints(self):
-        return {'sqlite': executor._execution_constraints(),
-                'process': sql_process.constraints(self.require_address_space)}
+        result = {'sqlite': executor._execution_constraints(),
+                  'process': sql_process.constraints(self.require_address_space)}
+        if 'domain_policy' in json.loads(self._public_json):
+            result['domain_policy'] = sql_policy.constraints()
+        if self.isolation is not None:
+            result['linux_isolation'] = self.isolation.descriptor()
+        return result
 
     @property
     def contract_version(self):
@@ -172,8 +188,10 @@ class SqlEnvironment:
 
     def _execute(self, tables, columns, data, sql):
         try:
-            result, _ = sql_process.execute(tables, columns, data, sql,
-                                           require_address_space=self.contract.require_address_space)
+            execution = {'require_address_space': self.contract.require_address_space}
+            if self.contract.isolation is not None:
+                execution['isolation'] = self.contract.isolation
+            result, _ = sql_process.execute(tables, columns, data, sql, **execution)
             return result
         except sql_process.WorkerUnavailable as error:
             raise SqlValidationUnavailable(error.code) from None

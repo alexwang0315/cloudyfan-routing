@@ -259,3 +259,31 @@ SQLite 32 MiB 限制不是 Python 全部 RAM，process containment 不是完整 
 最終 `./scripts/check --integration` 全通過：**1031 passed in 137.47s**，加上 Ruff、locked/offline sync、依賴／紀錄、兩個 mock high-route demo 與 sdist／wheel；收據 `runtime/checks/e6e92cef7ee04345a7f40e8ebf9291e2/checks.json`。對照 v1 991 項，本輪新增 40 項，沒有新增模型請求。來源精確對應本輪離線摘要。
 
 新 wheel 的 sql／worker／process／review／executor bytes 已與來源逐一核對，再從解開的 wheel package 實際執行 SQL 子程序驗收通過；原環境與 wheel 執行區分保留。公開覆蓋報告為 8 類／40 組、14 個已知 mutants 被拒絕，八類常數答案拒絕另在完整測試中驗證。狀態紀錄標示本輪工程／離線材料完成，正式十 gate 仍 pending；後續快檢與文件重建包只確認完成紀錄，不另稱新完整測試。
+
+
+## 2026-10-19：S01～S08 題意／expected／反例覆蓋離線審閱
+
+基線 `666b79be14ccd227045a3108fb89c1eeb8894e54`；source fingerprint 保持 `a7495567821e97142ffd2d2e52e224d882894830a08ebd29a21d621704a27f72`。本輪僅新增文件／審閱證據，不改 source／tests／路由／能力卡／門檻／原五組 fixtures、expected、mutants 及正式 registry；沒有重跑模型或整套 pytest。舊 1031 pass 僅為相同來源的歷史證據。
+
+逐筆另列 40 組 expected，實際 SQLite reference 與 Python oracle 均一致；原 14 個 mutants 再驗均拒絕。13 個選定、事後、非盲錯誤 SQL 均可過凍結五組，卻在對應的新公開診斷資料答錯。這是覆蓋缺口，不是原 40 組答案錯誤，也不能估母體誤收率。另有相同多重集合不同插入順序的 int64 中間累加溢位，最終和可表示卻可能工程中斷，需釐清數值域。S07 完整唯一排序鍵下 RANGE／ROWS 的等價正向控制通過，避免把字面不同當成錯誤。
+
+執行腳本與 console 保留在 ignored `runtime/rg01-semantic-review-20261019/`；[逐題審閱](rg01-semantic-review-20261019.md)、[原始診斷資料](evidence/rg01-semantic-review-probes-20261019.json)及[摘要](evidence/rg01-semantic-review-20261019.json)分開存放。這些是全新合成、公開測試資料，不含私人實驗 prompt／答案／原始帳本或憑證。正式 owner／reviewer 未代填，gate 全 pending；未花費 API、聯絡供應商、部署或推送。
+
+文件／紀錄完成後 `./scripts/check --quick` 通過：`runtime/checks/a99e8d1b6ec04d85b32a98e8eabc47e1/checks.json`，含 locked/offline sync、依賴、project records 與 Ruff。108 筆本地文件連結及來源／證據 hash 核對通過；正式核定 false、十 gate 全 pending。新診斷的錯誤被接納本身是審閱發現，不被這份 quick PASS 清除。
+
+
+## 2026-10-19：依使用者委託決定 RG-01 四項選擇
+
+使用者明確委託代決。本輪採用首個 S01～S08 SQL 資格切面、既定題意／NULL／排序／文字語義、新 amount 絕對值 10^9／最多 1000 訂單的充分安全數值域、AI 技術責任與專案維護者發行責任，以及 Linux 隔離取證目標。完整規則見[決策紀錄](rg01-first-scope-decisions-20261019.md)及[policy](evidence/rg01-first-scope-policy-v1.json)；工作區 root ADR 另記取捨。這是被委託的決策，不是原始碼已實作、使用者簽名或正式放行。
+
+source／tests／原 catalog／原 expected／診斷／正式 registry 保持原樣，既有未提交語義審閱也保留。不為取得綠燈刪除 0／負 ID 或無主引用；13 個已知反例仍須留在新域內。新數值限制只適用未來版本，不將舊最大 int64 診斷改算成功。實際檢查、舊 1031 項測試的重用範圍、來源及新文件 hash 另存[本輪摘要](evidence/rg01-delegated-decisions-20261019.json)。本輪不做付費 API、供應商聯絡、部署、推送或 Git 提交。
+
+本輪新數值域的四組真 SQLite 合計檢查（1000 筆全正、全負、抵銷、全 NULL）均通過；數學界限與既有 40 組／13 個反例仍在域內已核對。另實測凍結 adapter 仍接受 amount=1000000001，故明確記錄新政策未由 runtime 強制，不冒充實作完成。完成紀錄 quick 通過：`runtime/checks/0024e5ba23034770bae8046f5631c441/checks.json`；沒有重跑完整 1031 項來源測試。
+
+## RG-01 remaining tickets — 2026-10-19
+
+- User authorized all eight local review drafts through mattpocock/implement; no issue publication, paid API, provider contact, provisioning, deployment or push. Related prior uncommitted semantic/decision docs preserved.
+- Implemented bounded catalog/policy, all 13 counterexamples and strict Linux cgroup/bwrap launcher. Python identity gap found independently by Standards/Spec, reproduced then fixed with worker v2 and four mismatch/missing zero-POST regressions. Both follow-up reviews: 0 remaining findings.
+- Exactly one full integration run: **1098 passed in 127.00s**; Ruff, locked offline sync/pip check, record consistency, both mock demos, sdist/wheel passed. Receipt `runtime/checks/aaae39715e8d4daeb8326af6d4d946a7/checks.json`; private console `runtime/rg01-tickets-integration-20261019.log`. Source digest and receipt hashes are in [new sanitized evidence](evidence/rg01-tickets-offline-20261019.json).
+- Installed-wheel isolated-Python smoke passed 8 cases and loaded 13 counterexamples; no source checkout import. Candidate catalog independently cross-checks original 40 hand values and rejects 14 old + 13 new mutants. These are post-hoc synthetic regressions, not model quality/cost results.
+- RG01-01..05 and RG01-07 completed in their offline scope. RG01-06 real Linux attack evidence and RG01-08 actual named formal approval remain blocked, explicitly recorded. Formal registry unchanged; no production qualification. No new API spend.

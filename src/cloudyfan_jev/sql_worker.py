@@ -29,12 +29,14 @@ def limits(require_address_space):
         if value != (33554432,):
             raise RuntimeError('SQLite allocator limit unavailable')
     return {'cpu_seconds': 2, 'sqlite_heap_bytes': 33554432,
+            'python_identity': {'implementation': sys.implementation.name,
+                                'version': sys.version, 'cache_tag': sys.implementation.cache_tag},
             'address_space_bytes': address_space, 'file_bytes': 0, 'core_bytes': 0,
             'open_files': 32, 'pid': os.getpid(), 'inherited_environment_keys': sorted(os.environ)}
 
 
 def main():
-    response = {'protocol': 'sql-worker-v1', 'status': 'unavailable'}
+    response = {'protocol': 'sql-worker-v2', 'status': 'unavailable'}
     try:
         resources = limits(sys.argv[1:] == ['--require-address-space'])
         payload = sys.stdin.buffer.read(2097153)
@@ -55,7 +57,7 @@ def main():
         if len(encoded) > 262144:
             raise ValueError('oversized output')
     except Exception:
-        encoded = b'{"protocol":"sql-worker-v1","status":"unavailable"}'
+        encoded = b'{"protocol":"sql-worker-v2","status":"unavailable"}'
     sys.stdout.buffer.write(encoded)
 
 

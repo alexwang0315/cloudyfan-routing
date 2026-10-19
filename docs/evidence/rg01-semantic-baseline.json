@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "rg01-semantic-review-baseline",
+  "tested_commit": "666b79be14ccd227045a3108fb89c1eeb8894e54",
+  "source_digest": "a7495567821e97142ffd2d2e52e224d882894830a08ebd29a21d621704a27f72",
+  "tests_passed": 1031,
+  "reused_unchanged_source_evidence": "docs/evidence/rg01-review-ready-offline.json",
+  "prior_evidence_sha256": "858a616039a82bec2a02d83e7c14b901cd2da3738c61eaf5eac54252a23fc87f",
+  "new_full_test_run": false,
+  "production_qualified": false
+}

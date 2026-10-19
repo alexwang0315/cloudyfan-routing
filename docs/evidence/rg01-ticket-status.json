@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "scope": "RG-01 remaining tickets",
+  "recorded_at": "2026-10-19T07:38:02.823283+00:00",
+  "source_ticket_directory": "workspace:.scratch/rg01-remaining-tickets-20261019",
+  "authorization": "User invoked mattpocock/implement for all eight draft tickets on 2026-10-19; local implementation, necessary offline checks and skill-required local commit only. No issue publication, paid API, deployment, supplier contact or push.",
+  "tickets": [
+    {
+      "id": "RG01-01",
+      "title": "落實有界 SQL 契約與派送前拒絕",
+      "depends_on": [],
+      "status": "completed",
+      "blocker": null,
+      "issue_url": null,
+      "published": false,
+      "offline_evidence": "docs/evidence/rg01-tickets-offline-20261019.json"
+    },
+    {
+      "id": "RG01-02",
+      "title": "補齊合計、日期與客戶關聯的誤收防線",
+      "depends_on": [
+        "RG01-01"
+      ],
+      "status": "completed",
+      "blocker": null,
+      "issue_url": null,
+      "published": false,
+      "offline_evidence": "docs/evidence/rg01-tickets-offline-20261019.json"
+    },
+    {
+      "id": "RG01-03",
+      "title": "補齊排名與逐列累計的 NULL、排序及無主群驗收",
+      "depends_on": [
+        "RG01-01"
+      ],
+      "status": "completed",
+      "blocker": null,
+      "issue_url": null,
+      "published": false,
+      "offline_evidence": "docs/evidence/rg01-tickets-offline-20261019.json"
+    },
+    {
+      "id": "RG01-04",
+      "title": "補齊文字聯集的大小寫碰撞與空字串驗收",
+      "depends_on": [
+        "RG01-01"
+      ],
+      "status": "completed",
+      "blocker": null,
+      "issue_url": null,
+      "published": false,
+      "offline_evidence": "docs/evidence/rg01-tickets-offline-20261019.json"
+    },
+    {
+      "id": "RG01-05",
+      "title": "接入 Linux 受限 SQL worker 並拒絕隔離失效",
+      "depends_on": [],
+      "status": "completed",
+      "blocker": null,
+      "issue_url": null,
+      "published": false,
+      "offline_evidence": "docs/evidence/rg01-tickets-offline-20261019.json"
+    },
+    {
+      "id": "RG01-06",
+      "title": "取得固定 Linux worker 的實環境隔離證據",
+      "depends_on": [
+        "RG01-05"
+      ],
+      "status": "blocked",
+      "blocker": "Current host is Darwin x86_64; no bwrap/Docker/Podman/Lima/Linux target available. Target attack exercises have not run. Qualification tooling only inspects and optionally exercises normal Core flow.",
+      "issue_url": null,
+      "published": false
+    },
+    {
+      "id": "RG01-07",
+      "title": "產出新版 SQL 全流程離線資格審閱包",
+      "depends_on": [
+        "RG01-02",
+        "RG01-03",
+        "RG01-04",
+        "RG01-05"
+      ],
+      "status": "completed",
+      "blocker": null,
+      "issue_url": null,
+      "published": false,
+      "offline_evidence": "docs/evidence/rg01-tickets-offline-20261019.json"
+    },
+    {
+      "id": "RG01-08",
+      "title": "完成 RG-01 有限範圍的具名資格審查",
+      "depends_on": [
+        "RG01-06",
+        "RG01-07"
+      ],
+      "status": "blocked",
+      "blocker": "Real target isolation evidence and actual named formal reviewer/signoff are absent. No signature is fabricated.",
+      "issue_url": null,
+      "published": false
+    }
+  ],
+  "formal_qualification": "pending",
+  "real_api_calls": 0,
+  "deployment": false,
+  "push": false
+}

@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "rg01-remaining-tickets-offline",
+  "result_means": "Offline implemented subset verification passed; RG01-06 real Linux attacks and RG01-08 named formal qualification remain blocked. This is not completion of all eight tickets or general SQL/model correctness.",
+  "baseline_commit": "666b79be14ccd227045a3108fb89c1eeb8894e54",
+  "source_digest": "e3818e9500757ad02b44e87c4113de73a060af9643dd5b7a7d74c83b0d52de3b",
+  "recorded_at": "2026-10-19T07:38:02.823283+00:00",
+  "tests_passed": 1098,
+  "test_seconds": 127.0,
+  "full_suite_runs": 1,
+  "new_pytest_cases": 67,
+  "implemented_and_offline_verified": [
+    "RG01-01",
+    "RG01-02",
+    "RG01-03",
+    "RG01-04",
+    "RG01-05",
+    "RG01-07"
+  ],
+  "blocked_tickets": [
+    "RG01-06",
+    "RG01-08"
+  ],
+  "verification_receipt": {
+    "path": "runtime/checks/aaae39715e8d4daeb8326af6d4d946a7/checks.json",
+    "sha256": "94d72d03d9a7b20955bb5d4ef2d316051fce8305d4a5e25503dcb99d1228336f"
+  },
+  "console_receipt": {
+    "path": "runtime/rg01-tickets-integration-20261019.log",
+    "sha256": "7a32ead30a4e65c8620f1d16a54d5d5dcce96d69bb903f28ca8e76e0754a69ad"
+  },
+  "additional_evidence": [
+    {
+      "path": "docs/evidence/rg01-bounded-catalog.json",
+      "sha256": "9a026ac034f38a79c86cb74c77f0b29d8bb54ba0bd77695bdf4a7e0c37230c0b"
+    },
+    {
+      "path": "docs/evidence/rg01-target-inspection-20261019.json",
+      "sha256": "3aaee2bc17dc8d7f00a4af89d9db482c2128a70e336c2ff69ff73741c1f11646"
+    },
+    {
+      "path": "docs/evidence/rg01-wheel-smoke-20261019.json",
+      "sha256": "f87a362087b36ee2ecb358887b2d19c735a8139840e1d2c23e581f6b02b57f5d"
+    }
+  ],
+  "reviews": {
+    "kind": "independent AI technical review, not formal human signoff",
+    "Standards": {
+      "initial_findings": 1,
+      "severity": "P2",
+      "issue": "Actual sandbox Python identity not compared with frozen runtime",
+      "remaining_findings": 0,
+      "review_agent": "rg01_standards_review_available"
+    },
+    "Spec": {
+      "initial_findings": 1,
+      "severity": "P2",
+      "issue": "Same Python identity requirement gap",
+      "remaining_findings": 0,
+      "review_agent": "rg01_spec_review_available"
+    },
+    "unique_findings_fixed": 1,
+    "remediation": "Worker v2 requires exact implementation, full version and cache tag; four missing/mismatch Core.run child-process regressions reject before POST."
+  },
+  "formal_registry_sha256": "1e4899eec63930dc9014d0a089d408c5d3bd650a0b64ececfc6893ca6463142b",
+  "formal_qualification": "pending",
+  "real_api_calls": 0,
+  "account_api_calls": 0,
+  "real_api_cost_usd": "0",
+  "supplier_contact": false,
+  "deployment": false,
+  "source_push": false,
+  "hardware_operations": false,
+  "model_downloads": false,
+  "notes": [
+    "Original sql_review.py v1 preserved; 40 original hand values cross-checked; 14 old mutants and 13 new probes rejected.",
+    "Post-hoc synthetic regressions, not holdout, population error rate or a new cost experiment.",
+    "Mock model costs in tests are synthetic, not billed API results. Current Darwin worker tests do not qualify Linux containment.",
+    "No ticket published or parent issue modified. Prior uncommitted related RG-01 documentation preserved."
+  ]
+}

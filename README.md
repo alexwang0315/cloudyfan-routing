@@ -129,3 +129,5 @@ Runtime receipts 含使用者 prompt／答案，預設寫入 private permissions
 目前為本機 repository，未選擇公開授權、未發布到 PyPI 或 GitHub。來源與抽取差異見 [provenance](docs/provenance.md)。
 
 [RG-01 正式審閱包](docs/rg01-review-ready.md)集中提供 SQL v2 子程序、資源策略與八類語義／獨立答案／反例材料；正式範圍、具名審閱與目標隔離仍 pending，沒有新增模型實驗。
+
+[RG-01 新版有界 SQL／隔離接入](docs/rg01-implementation-20261019.md)記錄新資料域、13 個已知反例補強與 Linux 嚴格 launcher；實作與離線回歸、實環境取證及正式核定分列，Linux 攻擊證據與具名簽核仍待補。

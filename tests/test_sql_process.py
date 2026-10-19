@@ -130,6 +130,7 @@ def test_child_does_not_inherit_open_parent_descriptor(tmp_path, monkeypatch):
         response = {'protocol': worker.VERSION, 'status': 'ok', 'result': [[], None, {}],
                     'resources': {'cpu_seconds': 2, 'sqlite_heap_bytes': 33554432,
                                   'file_bytes': 0, 'core_bytes': 0, 'open_files': 32,
+                                  'python_identity': worker.constraints()['python_identity'],
                                   'sqlite_constraints': worker.sql_executor._execution_constraints()}}
         program = ('import os,json\nr=' + repr(response)
                    + '\ntry:\n os.fstat(' + str(private.fileno()) + ')'
@@ -214,6 +215,7 @@ def test_resource_protocol_cannot_silently_omit_or_downgrade_caps(monkeypatch):
 def test_worker_cannot_validate_against_a_different_sqlite_runtime(monkeypatch):
     resources = {'cpu_seconds': 2, 'sqlite_heap_bytes': 33554432, 'file_bytes': 0,
                  'core_bytes': 0, 'open_files': 32,
+                 'python_identity': worker.constraints()['python_identity'],
                  'sqlite_constraints': dict(worker.sql_executor._execution_constraints(), sqlite_version='OTHER')}
     response = {'protocol': worker.VERSION, 'status': 'ok', 'result': [[[7]], None, {}],
                 'resources': resources}

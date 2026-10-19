@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "scope": "rg01-semantic-review-offline",
+  "phase": "offline_verified",
+  "baseline_commit": "666b79be14ccd227045a3108fb89c1eeb8894e54",
+  "integration_branch": "codex/implement-routing-spec-1",
+  "constraints": {
+    "paid_api": false,
+    "deployment": false,
+    "source_push": false,
+    "hardware": false,
+    "model_downloads": false
+  },
+  "release_registry": "docs/release-gates.json",
+  "work_plan": "docs/work-plan.json",
+  "last_verified": {
+    "path": "docs/evidence/rg01-semantic-baseline.json",
+    "sha256": "99e3af5d0c2fd758f06c3fb2554e77a105d15f02bc9ed9453b43178e849e74a2"
+  },
+  "current_verification": {
+    "path": "docs/evidence/rg01-semantic-review-20261019.json",
+    "sha256": "e6ce0b645352a356fbc17317934d525a7b6dc1ee1a6fb655265d7cd40e3f33c6"
+  },
+  "history": [
+    {
+      "path": "docs/implementation-spec1.md",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/verification.md",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg04-components-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg04-components-initial-pass.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg04-zero-rate-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg04-zero-rate-offline.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-sql-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-sql-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg04-zero-rate-precommit.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/release-preparation-precommit-20261019.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-ready-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-ready-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-semantic-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-semantic-prior-work-plan.json",
+      "record_kind": "historical"
+    }
+  ],
+  "next_steps": [
+    {
+      "gate": "RG-01",
+      "action": "Review S01-S08 technical findings: original 40 expected rows agree, 13 selected missed errors and int64 intermediate-sum ambiguity remain. User must decide actual scope/business semantics/numeric domain and named review/target isolation. No formal signoff or authorization for source changes, paid models, supplier contact or deployment is inferred.",
+      "requires_authorization": true
+    },
+    {
+      "gate": "G-02",
+      "action": "Review exact synchronous ollama==0.6.3 / text-v2 / companion task GET evidence before formal G-02 qualification; no Async, product-client, TCP/TLS/proxy claim.",
+      "requires_authorization": true
+    },
+    {
+      "gate": "RG-04",
+      "action": "Qualify pinned Jev Decisions cumulative billed input and all-path effective rates, including binding zero rates where proven, retry/failure/cancellation and in-flight coverage. No real supplier guarantees supplied. Paid validation requires a separate approved plan.",
+      "requires_authorization": true
+    },
+    {
+      "gate": "RG-05",
+      "action": "Qualify deployed identity/TLS/secret ownership, actual retention policy and storage/backup coverage, and exclusive maintenance-writer fence.",
+      "requires_authorization": true
+    },
+    {
+      "gate": "RG-02",
+      "action": "Qualify real domain/model configurations before production model use.",
+      "requires_authorization": true
+    }
+  ]
+}

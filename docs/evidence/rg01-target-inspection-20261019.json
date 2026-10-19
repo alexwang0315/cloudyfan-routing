@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "kind": "target-qualification-candidate",
+  "result": "blocked",
+  "recorded_at": "2026-10-19T07:37:01.696404+00:00",
+  "formal_qualification": "pending",
+  "platform": {
+    "system": "darwin",
+    "kernel": "22.6.0",
+    "machine": "x86_64",
+    "python": "3.13.13",
+    "sqlite": "3.50.4"
+  },
+  "available_local_tools": {
+    "bwrap": false,
+    "docker": false,
+    "podman": false,
+    "limactl": false
+  },
+  "real_api_calls": 0,
+  "processes_launched": 0,
+  "required_target_exercises": [
+    {
+      "id": "total_memory_and_descendants",
+      "result": "not_run"
+    },
+    {
+      "id": "cpu_limit",
+      "result": "not_run"
+    },
+    {
+      "id": "external_deadline",
+      "result": "not_run"
+    },
+    {
+      "id": "host_file_read_write_denial",
+      "result": "not_run"
+    },
+    {
+      "id": "network_namespace_denial",
+      "result": "not_run"
+    },
+    {
+      "id": "cancellation_and_reaping",
+      "result": "not_run"
+    },
+    {
+      "id": "interrupted_answer_and_budget_resume",
+      "result": "not_run"
+    }
+  ],
+  "blocker": "authorized Linux target and pinned artifacts are required"
+}

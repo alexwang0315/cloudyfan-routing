@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "result_means": "Delegated policy choices documented and prospective numeric-domain checks passed; no runtime implementation or release qualification.",
+  "scope": "rg01-delegated-decisions-offline",
+  "baseline_commit": "666b79be14ccd227045a3108fb89c1eeb8894e54",
+  "source_digest": "a7495567821e97142ffd2d2e52e224d882894830a08ebd29a21d621704a27f72",
+  "recorded_at": "2026-10-19T07:03:12.894823+00:00",
+  "tests_passed": 1031,
+  "tests_count_basis": "reused unchanged executable source suite; not rerun in this documentation turn",
+  "new_full_test_run": false,
+  "new_pytest_cases_run": 0,
+  "prospective_numeric_sql_checks_passed": 4,
+  "user_choices_still_pending": [],
+  "implementation_and_qualification_pending": [
+    "new version must enforce prospective input domain",
+    "all 13 known missed errors need regression coverage and repair",
+    "target Linux isolation needs actual pinned-build evidence",
+    "formal review/approval identities and evidence must be real, not AI-invented"
+  ],
+  "decision_document": {
+    "path": "docs/rg01-first-scope-decisions-20261019.md",
+    "sha256": "bd9f6dc7d88753aaeed22bbc2d290691ad36dcae2be654202caaa0d81563327b"
+  },
+  "prospective_policy": {
+    "path": "docs/evidence/rg01-first-scope-policy-v1.json",
+    "sha256": "bcd3ef6f55f11f5cbedd3b35e5f0a02460b5bc3e477cf1fa50fe990317189206"
+  },
+  "workspace_adr": {
+    "workspace_relative_path": "docs/adr/0005-rg01-bounded-sql-first-qualification.md",
+    "sha256": "842d7504b5993c39af36e84773b953338fe356bab6d3b247aaf0cd6e4229a6a9",
+    "standalone_runtime_dependency": false
+  },
+  "prior_semantic_review_preserved": {
+    "path": "docs/evidence/rg01-semantic-review-20261019.json",
+    "sha256": "e6ce0b645352a356fbc17317934d525a7b6dc1ee1a6fb655265d7cd40e3f33c6"
+  },
+  "private_check_evidence": {
+    "path": "runtime/rg01-delegated-decisions-20261019/decision-checks.json",
+    "sha256": "7664423bc5ab8f7bc2d4b623949cb4e02eb3f859d627e4375c8a451401c4c76e"
+  },
+  "all_13_known_counterexamples_still_in_scope": true,
+  "numeric_max_abs_partial_sum": 1000000000000,
+  "runtime_enforces_new_policy": false,
+  "technical_actor": "Codex AI assistant under explicit delegation",
+  "formal_human_signoff": false,
+  "formal_gates_pending": 10,
+  "formal_registry_sha256": "1e4899eec63930dc9014d0a089d408c5d3bd650a0b64ececfc6893ca6463142b",
+  "production_qualified": false,
+  "source_changed": false,
+  "catalog_changed": false,
+  "new_model_experiment": false,
+  "real_api_calls": 0,
+  "account_api_calls": 0,
+  "real_api_cost_usd": "0",
+  "supplier_contact": false,
+  "deployment": false,
+  "push": false,
+  "new_git_commit": false,
+  "decision_quick_receipt": {
+    "path": "runtime/checks/0024e5ba23034770bae8046f5631c441/checks.json",
+    "sha256": "7d75205e4dcc7714166e4314f56c58ca17a84f837d78f2595fea967d8420b508"
+  },
+  "private_quick_console_sha256": "2c413924074ecbcfd3aa6ec55b93f956d28b938eeda49481e54471d19e93fc8e"
+}

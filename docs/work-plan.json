@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "integration_branch": "codex/implement-routing-spec-1",
-  "baseline_commit": "bdc3b084bb2db680afaf42d17cf33b953cbec850",
+  "baseline_commit": "666b79be14ccd227045a3108fb89c1eeb8894e54",
   "merger_owner": "root",
   "shared_interfaces": [
     {
@@ -11,55 +11,70 @@
         "src/cloudyfan_jev/engine.py"
       ],
       "provided_by": null
-    },
-    {
-      "id": "sql-public-environment",
-      "owner": "root",
-      "owned_files": [
-        "src/cloudyfan_jev/sql.py",
-        "src/cloudyfan_jev/sql_process.py",
-        "src/cloudyfan_jev/sql_worker.py",
-        "src/cloudyfan_jev/sql_review.py"
-      ],
-      "provided_by": "rg01-review-ready"
     }
   ],
   "tasks": [
     {
-      "id": "rg01-review-ready",
+      "id": "rg01-offline-implementation",
       "owner": "root",
       "status": "completed",
       "owned_files": [
         "src/cloudyfan_jev/sql.py",
+        "src/cloudyfan_jev/sql_policy.py",
+        "src/cloudyfan_jev/sql_catalog.py",
+        "src/cloudyfan_jev/sql_isolation.py",
         "src/cloudyfan_jev/sql_process.py",
-        "src/cloudyfan_jev/sql_worker.py",
-        "src/cloudyfan_jev/sql_review.py",
-        "tests/test_sql_environment.py",
-        "tests/test_sql_process.py",
-        "tests/test_sql_review.py",
-        "docs/sql-environment.md",
-        "docs/rg01-validator-qualification.md",
-        "docs/rg01-review-ready.md",
-        "docs/release-readiness.md",
-        "docs/release-scope-draft.md",
-        "docs/handoff.md",
-        "docs/coordination.md",
-        "docs/verification.md",
+        "scripts/qualify_sql_worker.py",
+        "tests/test_sql_bounded.py",
+        "tests/test_sql_isolation.py",
+        "tests/test_sql_qualification.py",
+        "docs/rg01-implementation-20261019.md",
+        "docs/evidence/rg01-ticket-status.json",
         "docs/agent-state.json",
         "docs/work-plan.json",
-        "docs/evidence/rg01-ready-prior-state.json",
-        "docs/evidence/rg01-ready-prior-work-plan.json",
-        "docs/evidence/rg01-review-ready-offline.json",
-        "docs/evidence/rg01-sql-coverage.json",
+        "docs/coordination.md",
+        "docs/handoff.md",
+        "docs/release-readiness.md",
+        "docs/verification.md",
+        "src/cloudyfan_jev/sql_counterexamples.json",
+        "src/cloudyfan_jev/sql_isolation_entry.py",
+        "docs/evidence/rg01-bounded-catalog.json",
+        "docs/evidence/rg01-tickets-offline-20261019.json",
+        "docs/evidence/rg01-target-inspection-20261019.json",
+        "src/cloudyfan_jev/sql_worker.py",
+        "tests/test_sql_process.py",
         "README.md",
-        "src/cloudyfan_jev/sql_executor.py",
-        "docs/evidence/rg01-ready-baseline.json",
-        "tests/test_project_state.py"
+        "docs/evidence/rg01-wheel-smoke-20261019.json"
       ],
       "depends_on": [],
       "consumed_interfaces": [
         "core-run"
       ]
+    },
+    {
+      "id": "RG01-06-target-evidence",
+      "owner": "target-environment-maintainer",
+      "status": "blocked",
+      "owned_files": [
+        "docs/evidence/rg01-linux-target-runtime.json"
+      ],
+      "depends_on": [
+        "rg01-offline-implementation"
+      ],
+      "consumed_interfaces": []
+    },
+    {
+      "id": "RG01-08-formal-review",
+      "owner": "formal-reviewer-unassigned",
+      "status": "blocked",
+      "owned_files": [
+        "docs/evidence/rg01-formal-review.json"
+      ],
+      "depends_on": [
+        "rg01-offline-implementation",
+        "RG01-06-target-evidence"
+      ],
+      "consumed_interfaces": []
     }
   ]
 }

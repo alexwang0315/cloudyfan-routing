@@ -159,3 +159,28 @@ Subsequent user authorization: root reviews and commits only these RG01-08
 documents and metadata locally. Recheck source/evidence hashes, links and formal
 status before staging; preserve private receipts outside Git. No signoff or
 qualification-state change, paid API, deployment or source push.
+
+## Direct RG01 execution testing
+
+User directs no further S01-S08 review and immediate routing-core tests. root
+owns focused SQL execution checks, the full offline integration gate and four
+route demonstrations. Formal RG01-08 is preserved in the prior plan and ticket
+as deferred/nonblocking for tests; no signature or registry promotion. No paid
+API, deployment, source push or new host operation.
+
+## Live RG01 integration fix
+
+Authorized live pilot reached seven completed workflows; S08 saved answer hit
+an unrecognized compound ORDER BY compiler error and stopped as engineering.
+root owns the narrow compiler classification/regression fix. Preserve the v1
+plan, stopped run and paid answer; use a separately versioned continuation for
+repair only, never relabel v1 as an uninterrupted successful cohort. No new
+initial answer, deployment, source push or formal signoff.
+
+## SQL live-integration local commit review
+
+The user authorizes reviewing and committing the SQL compiler fix plus linked
+offline/live records locally. root owns explicit-path staging and preservation
+inventory. No new API calls (including receipt refresh), deployment, source
+push or qualification changes. Inspect raw local receipts without publishing
+prompts/answers; retain original interruption, v2 continuation and GET404 history.

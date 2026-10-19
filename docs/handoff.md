@@ -220,3 +220,38 @@ The user subsequently authorized local review and commit of this documentation.
 [Commit checks](evidence/rg01-review-precommit-20261019.json) preserve fresh offline
 record/link/hash checks. Formal registry and named-review requirements remain
 unchanged; no API, deployment or push is authorized.
+
+## Direct RG01 testing — user direction 2026-10-19
+
+Do not add further S01-S08 semantic or formal review as a prerequisite to
+development/testing. The user explicitly directs routing-core execution tests.
+Formal RG01-08 remains recorded separately; it is excluded from the active
+execution-test plan without creating a signature or changing release gates.
+Run the focused SQL tests and full integration entry, then report execution
+results; mocked upstream is not live model-quality or provider-cost evidence.
+
+Execution complete: focused RG01 139/139, final full integration 1102/1102,
+Ruff, core/score demos and sdist/wheel passed. Four explicit route/replay
+pairs passed with zero additional requests on every replay. An initial full
+run failed one newly edited plan-ownership check (1101 other tests passed);
+the current plan was narrowed to execution work, 31 metadata tests passed and
+full integration was rerun successfully. [Current execution receipt](evidence/rg01-routing-execution-tests-20261019.json)
+preserves both runs. No runtime source change, real model API, Scout execution,
+deployment or push. This scope is offline-tested; no formal review blocks it.
+
+## Live integration completed — 2026-10-19
+
+[Actual API results](rg01-live-integration-20261019.md): six open-source first passes,
+S07 low-tier Jev repair, S08 saved-answer recovery after a narrowly versioned
+compiler-classification fix. Preserve v1 seven completed/one interruption and
+the separate v2 repair; do not call this a clean eight-case cohort. Three model
+endpoint probes passed; second selector branch not naturally triggered. Fifteen
+POSTs, USD0.060291624, all generation receipts and key delta match, zero new
+unknown costs. Full source-fingerprint verification is now 1104 tests. No
+deployment, source push, signature or further S01-S08 audit.
+
+The user subsequently authorized local review and commit of the SQL fix and
+linked execution/live records. [Precommit checks](evidence/rg01-live-precommit-20261019.json)
+preserve the original interruption and separate continuation, full receipt
+chain and a private runtime inventory. Raw runtime stays outside Git. No
+new API calls, deployment, push or formal qualification change.

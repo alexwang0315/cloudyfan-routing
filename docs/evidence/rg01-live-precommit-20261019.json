@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "kind": "precommit",
+  "result": "passed",
+  "scope": "SQL compiler fix and real integration evidence local commit",
+  "recorded_at": "2026-10-19T11:05:41.563120+00:00",
+  "reviewed_base_commit": "56540a3b205c71b77b58ccb0894dbb717610d6e2",
+  "source_digest": "20b092c3b1d3671db78f3162fc120f8f099a9e076d58fc78deadd0dcdd466e24",
+  "review_findings_requiring_code_change": 0,
+  "documentation_fixes": [
+    "README stale no-post-extraction-paid-test claim updated; historical Linux evidence linked without broadening qualification."
+  ],
+  "fresh_focused": {
+    "path": "runtime/rg01-live-precommit-5880f3fc/focused-result.json",
+    "sha256": "93cea994c062da14685c3d09721d8b142c660c926a15fda7f21e9b1d1ebdce6f"
+  },
+  "fresh_quick": {
+    "path": "runtime/checks/04305405d30e4821a519e67a2d4fab6c/checks.json",
+    "sha256": "b43882e076a11509cf6f364600ec0ba762dbad26bc0c54018d44924560705638"
+  },
+  "reused_full_integration": {
+    "tests_passed": 1104,
+    "rerun_this_commit_review": false,
+    "source_digest_matches": true,
+    "evidence": {
+      "path": "docs/evidence/rg01-live-fix-offline-20261019.json",
+      "sha256": "ad2e0d8584a3f344fa3ca3d44c1de587480d9c68f80778e18fd489d9220aabc9"
+    }
+  },
+  "existing_hash_references_checked": 21,
+  "private_preservation_inventory": {
+    "path": "runtime/rg01-live-precommit-5880f3fc/private-preservation-inventory.json",
+    "sha256": "19bef491a579800b19b3fab117df8f1a9ebdcd36d60fa326b515aa02846d5670"
+  },
+  "preserved_runtime_file_count": 138,
+  "preserved_runtime_bytes": 1789563,
+  "existing_paid_calls_checked": 15,
+  "existing_paid_cost_usd": "0.060291624",
+  "original_interruption_retained": true,
+  "continuation_version_retained": true,
+  "high_probe_get404_and_followup_retained": true,
+  "initial_generation_count": 8,
+  "original_completed_results": 7,
+  "new_initial_generations_in_continuation": 0,
+  "release_registry_sha256_unchanged": "1e4899eec63930dc9014d0a089d408c5d3bd650a0b64ececfc6893ca6463142b",
+  "formal_qualification": "pending",
+  "formal_signoff": false,
+  "new_api_calls_this_review": 0,
+  "new_api_cost_usd": "0",
+  "deployment": false,
+  "source_push": false,
+  "note": "Commit sanitized source/tests/docs only. Raw prompts, answers and billing evidence remain locally preserved under ignored runtime; manifest binds all files. No full pytest rerun is claimed.",
+  "local_links_checked": 115,
+  "changed_json_parsed": true,
+  "git_diff_check": "passed",
+  "staging_allowlist": [
+    "README.md",
+    "docs/agent-state.json",
+    "docs/coordination.md",
+    "docs/evidence/rg01-execution-prior-state.json",
+    "docs/evidence/rg01-execution-prior-work-plan.json",
+    "docs/evidence/rg01-live-fix-offline-20261019.json",
+    "docs/evidence/rg01-live-integration-20261019.json",
+    "docs/evidence/rg01-live-precommit-20261019.json",
+    "docs/evidence/rg01-routing-execution-tests-20261019.json",
+    "docs/handoff.md",
+    "docs/rg01-live-integration-20261019.md",
+    "docs/verification.md",
+    "docs/work-plan.json",
+    "src/cloudyfan_jev/sql_executor.py",
+    "tests/test_sql_environment.py"
+  ]
+}

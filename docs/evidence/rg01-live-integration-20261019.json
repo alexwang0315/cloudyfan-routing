@@ -1,0 +1,473 @@
+{
+  "schema_version": 1,
+  "kind": "live_integration",
+  "result": "completed_with_documented_validator_revision",
+  "recorded_at": "2026-10-19T11:00:34.962504+00:00",
+  "purpose": "Functional real-model integration; not a controlled quality/CDR benchmark.",
+  "original_frozen_trial": {
+    "tasks": 8,
+    "first_public_pass": 6,
+    "completed_final_pass": 7,
+    "engineering_interruptions": 1,
+    "model_failed_final": 0,
+    "not_run": 0,
+    "results": [
+      {
+        "case_id": "S01",
+        "classifier_calls": 0,
+        "completed_replay_new_requests": 0,
+        "costs": {
+          "api_usd": "0.000269",
+          "calls": 1,
+          "classifier_usd": "0",
+          "host_and_human_usd": null,
+          "hypothetical_open_source_zero_usd": "0",
+          "known_api_usd": "0.000269",
+          "unknown_calls": 0
+        },
+        "final_public_pass": true,
+        "first_public_pass": true,
+        "mode": "cloudyfan",
+        "run_id": "live-S01",
+        "status": "passed",
+        "tiers": [
+          "open_source"
+        ],
+        "wall_seconds": 3.8796572030114476
+      },
+      {
+        "case_id": "S02",
+        "classifier_calls": 0,
+        "completed_replay_new_requests": 0,
+        "costs": {
+          "api_usd": "0.0002893",
+          "calls": 1,
+          "classifier_usd": "0",
+          "host_and_human_usd": null,
+          "hypothetical_open_source_zero_usd": "0",
+          "known_api_usd": "0.0002893",
+          "unknown_calls": 0
+        },
+        "final_public_pass": true,
+        "first_public_pass": true,
+        "mode": "cloudyfan",
+        "run_id": "live-S02",
+        "status": "passed",
+        "tiers": [
+          "open_source"
+        ],
+        "wall_seconds": 1.8560922369943
+      },
+      {
+        "case_id": "S03",
+        "classifier_calls": 0,
+        "completed_replay_new_requests": 0,
+        "costs": {
+          "api_usd": "0.0003095",
+          "calls": 1,
+          "classifier_usd": "0",
+          "host_and_human_usd": null,
+          "hypothetical_open_source_zero_usd": "0",
+          "known_api_usd": "0.0003095",
+          "unknown_calls": 0
+        },
+        "final_public_pass": true,
+        "first_public_pass": true,
+        "mode": "cloudyfan",
+        "run_id": "live-S03",
+        "status": "passed",
+        "tiers": [
+          "open_source"
+        ],
+        "wall_seconds": 2.0407953429967165
+      },
+      {
+        "case_id": "S04",
+        "classifier_calls": 0,
+        "completed_replay_new_requests": 0,
+        "costs": {
+          "api_usd": "0.0003043",
+          "calls": 1,
+          "classifier_usd": "0",
+          "host_and_human_usd": null,
+          "hypothetical_open_source_zero_usd": "0",
+          "known_api_usd": "0.0003043",
+          "unknown_calls": 0
+        },
+        "final_public_pass": true,
+        "first_public_pass": true,
+        "mode": "cloudyfan",
+        "run_id": "live-S04",
+        "status": "passed",
+        "tiers": [
+          "open_source"
+        ],
+        "wall_seconds": 2.2777110099996207
+      },
+      {
+        "case_id": "S05",
+        "classifier_calls": 0,
+        "completed_replay_new_requests": 0,
+        "costs": {
+          "api_usd": "0.000275",
+          "calls": 1,
+          "classifier_usd": "0",
+          "host_and_human_usd": null,
+          "hypothetical_open_source_zero_usd": "0",
+          "known_api_usd": "0.000275",
+          "unknown_calls": 0
+        },
+        "final_public_pass": true,
+        "first_public_pass": true,
+        "mode": "cloudyfan",
+        "run_id": "live-S05",
+        "status": "passed",
+        "tiers": [
+          "open_source"
+        ],
+        "wall_seconds": 1.9133226050034864
+      },
+      {
+        "case_id": "S06",
+        "classifier_calls": 0,
+        "completed_replay_new_requests": 0,
+        "costs": {
+          "api_usd": "0.0003923",
+          "calls": 1,
+          "classifier_usd": "0",
+          "host_and_human_usd": null,
+          "hypothetical_open_source_zero_usd": "0",
+          "known_api_usd": "0.0003923",
+          "unknown_calls": 0
+        },
+        "final_public_pass": true,
+        "first_public_pass": true,
+        "mode": "cloudyfan",
+        "run_id": "live-S06",
+        "status": "passed",
+        "tiers": [
+          "open_source"
+        ],
+        "wall_seconds": 2.6459112979937345
+      },
+      {
+        "case_id": "S07",
+        "classifier_calls": 1,
+        "completed_replay_new_requests": 0,
+        "costs": {
+          "api_usd": "0.008265464",
+          "calls": 3,
+          "classifier_usd": "0.000171864",
+          "host_and_human_usd": null,
+          "hypothetical_open_source_zero_usd": "0.007872864",
+          "known_api_usd": "0.008265464",
+          "unknown_calls": 0
+        },
+        "final_public_pass": true,
+        "first_public_pass": false,
+        "mode": "cloudyfan",
+        "run_id": "live-S07",
+        "status": "passed",
+        "tiers": [
+          "open_source",
+          "low"
+        ],
+        "wall_seconds": 6.1591313739918405
+      }
+    ]
+  },
+  "separate_s08_continuation": {
+    "validator_changed": true,
+    "original_paid_answer_reused_as_repair_context": true,
+    "new_initial_generations": 0,
+    "repair_generations": 1,
+    "final_public_pass": true,
+    "selected_tier": "low",
+    "classifier_calls": 1,
+    "all_s08_cost_usd": "0.00692726",
+    "uninterrupted_end_to_end_seconds": null
+  },
+  "eventual_tasks_with_passing_answers": 8,
+  "not_an_uninterrupted_eight_task_cohort": true,
+  "endpoint_probes": [
+    {
+      "tier": "low",
+      "public_pass": true,
+      "model": "openai/gpt-6-sol",
+      "provider": "OpenAI",
+      "elapsed_ms": 1392.9064639960416
+    },
+    {
+      "tier": "mid",
+      "public_pass": true,
+      "model": "openai/gpt-6.1-sol",
+      "provider": "OpenAI",
+      "elapsed_ms": 1535.2624399965862
+    },
+    {
+      "tier": "high",
+      "public_pass": true,
+      "model": "openai/gpt-6-astra",
+      "provider": "OpenAI",
+      "elapsed_ms": 3650.1669059944106
+    }
+  ],
+  "natural_low_mid_repair_exercised": true,
+  "natural_mid_high_branch_exercised": false,
+  "completed_replays_with_zero_new_requests": 7,
+  "accounting": {
+    "paid_calls": 15,
+    "generation_calls": 13,
+    "classifier_calls": 2,
+    "total_api_usd": "0.060291624",
+    "sql_workflows_and_s08_recovery_usd": "0.017032124",
+    "endpoint_probes_usd": "0.0432595",
+    "classifier_usd": "0.000328524",
+    "generation_receipts_verified": 15,
+    "unknown_calls": 0,
+    "account_usage_delta_usd": "0.060291624",
+    "account_delta_matches": true,
+    "open_source_model_fee": "Actual OpenRouter fee retained; not set to zero.",
+    "host_and_human_usd": null,
+    "historical_unknown_fees": "Not altered or cleared by this new-trial reconciliation."
+  },
+  "latency": {
+    "original_seven_completed_workflows_median_seconds": 2.2777110099996207,
+    "s08_uninterrupted_wall_seconds": null,
+    "s08_note": "Do not exclude debugging time and present an uninterrupted workflow latency; API timings remain in individual receipts."
+  },
+  "offline_fix_tests": {
+    "focused_passed": 3,
+    "full_integration_passed": 1104,
+    "full_pytest_seconds": 112.36,
+    "source_digest": "20b092c3b1d3671db78f3162fc120f8f099a9e076d58fc78deadd0dcdd466e24",
+    "evidence": {
+      "path": "docs/evidence/rg01-live-fix-offline-20261019.json",
+      "sha256": "ad2e0d8584a3f344fa3ca3d44c1de587480d9c68f80778e18fd489d9220aabc9"
+    }
+  },
+  "receipt_references": [
+    {
+      "path": "runtime/rg01-live-20261019/plan.json",
+      "sha256": "4902f009bdaf153d3c1bad7f9ba52a5eb3761d72fac7c0747fdbfd61792d99e9"
+    },
+    {
+      "path": "runtime/rg01-live-20261019/execution.log",
+      "sha256": "dd7a2ab96bdb4f3ef25a56c415a49df18f17ec57edaa44110d676e496f239c6d"
+    },
+    {
+      "path": "runtime/rg01-live-20261019/continuation-plan.json",
+      "sha256": "aba94849b25402a4533631131b5e9ed9336487c69dd27749e3055bb58f8eb118"
+    },
+    {
+      "path": "runtime/rg01-live-20261019/continuation.log",
+      "sha256": "d467cb140e0bb7cb8bfbfa301c33f6062a338229328de1aa9126483b4e9dd13d"
+    },
+    {
+      "path": "runtime/rg01-live-20261019/stopped-105319.json",
+      "sha256": "9b0d533da0ef3b5116a59e857ca4220f3cc13256d29161b495e7aec20c638a01"
+    },
+    {
+      "path": "runtime/rg01-live-20261019/complete-v2.json",
+      "sha256": "a97b0859a5dac2bd0711d828576ebc88480231903a2325a7e96f7e751679e306"
+    },
+    {
+      "path": "runtime/rg01-live-20261019/ledger-final.json",
+      "sha256": "4639a4d497560e29d920a758415264572062890579796d0a452aac233bcd2ed4"
+    },
+    {
+      "path": "runtime/rg01-live-20261019/ledger-rechecked.json",
+      "sha256": "0eb39c399e3c6d484e82dc4e54fe7da4653cf0ffa7b7c10724d99e5c4247899b"
+    },
+    {
+      "path": "runtime/rg01-live-20261019/key-before.json",
+      "sha256": "50242fd7b08545f8625ff99646d23282ca77b03fbfe50c7f82b16c17c5e30c8d"
+    },
+    {
+      "path": "runtime/rg01-live-20261019/key-after.json",
+      "sha256": "0a95b636171c02855607b6b28ed06fd05b7eac8df7b481cf1f06313c11f4e284"
+    },
+    {
+      "path": "runtime/rg01-live-20261019/s08-offline-reclassification.json",
+      "sha256": "013fccac738714925f4c34b173c748388da1ce9eb7553cfce7f0edb00fadf6bd"
+    }
+  ],
+  "calls": [
+    {
+      "call_id": "endpoint-probe-v2-high",
+      "cost_source": "generation_total_cost",
+      "cost_unknown": false,
+      "cost_usd": "0.0314425",
+      "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+      "evidence_status": "cost_recorded",
+      "generation_id": "gen-1792407476-LuvcdX9QujSKUQDi4ZPX",
+      "model": "openai/gpt-6-astra-20260903",
+      "provider": "OpenAI"
+    },
+    {
+      "call_id": "endpoint-probe-v2-low",
+      "cost_source": "generation_total_cost",
+      "cost_unknown": false,
+      "cost_usd": "0.0059085",
+      "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+      "evidence_status": "cost_recorded",
+      "generation_id": "gen-1792407471-fk3gjruOxLV0Wmg3nuOh",
+      "model": "openai/gpt-6-sol-20260922",
+      "provider": "OpenAI"
+    },
+    {
+      "call_id": "endpoint-probe-v2-mid",
+      "cost_source": "generation_total_cost",
+      "cost_unknown": false,
+      "cost_usd": "0.0059085",
+      "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+      "evidence_status": "cost_recorded",
+      "generation_id": "gen-1792407473-Hi7cMRwiBcWensnkIfuX",
+      "model": "openai/gpt-6.1-sol-20260929",
+      "provider": "OpenAI"
+    },
+    {
+      "call_id": "run-live-S01-a0-t0",
+      "cost_source": "generation_total_cost",
+      "cost_unknown": false,
+      "cost_usd": "0.000269",
+      "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+      "evidence_status": "cost_recorded",
+      "generation_id": "gen-1792407180-2nQZqYccFUF31lOyZkSW",
+      "model": "openai/gpt-oss-120b",
+      "provider": "BaseTen"
+    },
+    {
+      "call_id": "run-live-S02-a0-t0",
+      "cost_source": "generation_total_cost",
+      "cost_unknown": false,
+      "cost_usd": "0.0002893",
+      "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+      "evidence_status": "cost_recorded",
+      "generation_id": "gen-1792407183-tLGJGEBMWa7f8tw2uqqQ",
+      "model": "openai/gpt-oss-120b",
+      "provider": "BaseTen"
+    },
+    {
+      "call_id": "run-live-S03-a0-t0",
+      "cost_source": "generation_total_cost",
+      "cost_unknown": false,
+      "cost_usd": "0.0003095",
+      "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+      "evidence_status": "cost_recorded",
+      "generation_id": "gen-1792407185-gaHlkBiMPVYOrYrCLfTA",
+      "model": "openai/gpt-oss-120b",
+      "provider": "BaseTen"
+    },
+    {
+      "call_id": "run-live-S04-a0-t0",
+      "cost_source": "generation_total_cost",
+      "cost_unknown": false,
+      "cost_usd": "0.0003043",
+      "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+      "evidence_status": "cost_recorded",
+      "generation_id": "gen-1792407187-qYt0GCOiHV0KHUJhn8L1",
+      "model": "openai/gpt-oss-120b",
+      "provider": "BaseTen"
+    },
+    {
+      "call_id": "run-live-S05-a0-t0",
+      "cost_source": "generation_total_cost",
+      "cost_unknown": false,
+      "cost_usd": "0.000275",
+      "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+      "evidence_status": "cost_recorded",
+      "generation_id": "gen-1792407189-VKOzCypbnnaSiOvWFjOz",
+      "model": "openai/gpt-oss-120b",
+      "provider": "BaseTen"
+    },
+    {
+      "call_id": "run-live-S06-a0-t0",
+      "cost_source": "generation_total_cost",
+      "cost_unknown": false,
+      "cost_usd": "0.0003923",
+      "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+      "evidence_status": "cost_recorded",
+      "generation_id": "gen-1792407192-fHIn0H7gtC3rHiD8gb27",
+      "model": "openai/gpt-oss-120b",
+      "provider": "BaseTen"
+    },
+    {
+      "call_id": "run-live-S07-a0-t0",
+      "cost_source": "generation_total_cost",
+      "cost_unknown": false,
+      "cost_usd": "0.0003926",
+      "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+      "evidence_status": "cost_recorded",
+      "generation_id": "gen-1792407194-7o0FuxoDJjbFmZvXTRYl",
+      "model": "openai/gpt-oss-120b",
+      "provider": "BaseTen"
+    },
+    {
+      "call_id": "run-live-S07-a1-t0",
+      "cost_source": "generation_total_cost",
+      "cost_unknown": false,
+      "cost_usd": "0.007701",
+      "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+      "evidence_status": "cost_recorded",
+      "generation_id": "gen-1792407197-Ot9mUH1aN3LNOoffbudt",
+      "model": "openai/gpt-6-sol-20260922",
+      "provider": "OpenAI"
+    },
+    {
+      "call_id": "run-live-S07-decision-low_mid",
+      "cost_source": "generation_total_cost",
+      "cost_unknown": false,
+      "cost_usd": "0.000171864",
+      "endpoint": "https://openrouter.ai/api/alpha/decisions",
+      "evidence_status": "cost_recorded",
+      "generation_id": "gen-dec-1792407196-osEz5xRZWORMKnawAeJu",
+      "model": "typesafe/jev-1.13-20260917",
+      "provider": "TypeSafe"
+    },
+    {
+      "call_id": "run-live-S08-a0-t0",
+      "cost_source": "generation_total_cost",
+      "cost_unknown": false,
+      "cost_usd": "0.0002971",
+      "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+      "evidence_status": "cost_recorded",
+      "generation_id": "gen-1792407200-331MUpI0oU9u2v03ZIwY",
+      "model": "openai/gpt-oss-120b",
+      "provider": "BaseTen"
+    },
+    {
+      "call_id": "s08-validator-fix-v2-decision-low_mid",
+      "cost_source": "generation_total_cost",
+      "cost_unknown": false,
+      "cost_usd": "0.00015666",
+      "endpoint": "https://openrouter.ai/api/alpha/decisions",
+      "evidence_status": "cost_recorded",
+      "generation_id": "gen-dec-1792407467-hxlXMhYKDJO5jrYpslrX",
+      "model": "typesafe/jev-1.13-20260917",
+      "provider": "TypeSafe"
+    },
+    {
+      "call_id": "s08-validator-fix-v2-repair",
+      "cost_source": "generation_total_cost",
+      "cost_unknown": false,
+      "cost_usd": "0.0064735",
+      "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+      "evidence_status": "cost_recorded",
+      "generation_id": "gen-1792407468-3Ou0508nHH4FE2rrLWO0",
+      "model": "openai/gpt-6-sol-20260922",
+      "provider": "OpenAI"
+    }
+  ],
+  "formal_qualification": "pending",
+  "formal_signoff": false,
+  "deployment": false,
+  "source_push": false,
+  "limitations": [
+    "Existing public S01-S08; not fresh holdout or model qualification.",
+    "Historical model pools, efforts and capability cards retained; no threshold tuning.",
+    "Mid/high endpoint probes passed, but the second binary selector branch was not naturally triggered.",
+    "No matched fixed-high comparison, CDR or commercial savings claim.",
+    "Original cohort and revised-validator continuation must remain separate."
+  ]
+}

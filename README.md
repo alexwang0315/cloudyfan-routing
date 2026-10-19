@@ -6,6 +6,21 @@
 
 新增的[評分資料層](docs/score-integration.md)可接入 LiveBench、AA／OpenRouter benchmark API 與經審閱的 CodexRadar 匯入，建立高／中／低模型池，再以 `ScoreCore` 將候選與快照固定到單一任務。快速離線驗證：`uv run cloudyfan-score-demo --route high`。來源接入不代表候選已完成生產資格確認。
 
+## 直接進入核心測試
+
+依最新指示，S01～S08 沿用既定契約，不再追加審核；正式資格紀錄不阻擋開發與離線測試。
+在本目錄執行：
+
+```bash
+uv run --locked --offline --extra dev python -m pytest -q tests/test_sql_environment.py tests/test_sql_bounded.py tests/test_sql_process.py tests/test_sql_isolation.py tests/test_sql_qualification.py
+./scripts/check --integration
+uv run --locked --offline cloudyfan-jev-demo --route high
+```
+
+第一個入口直接測 SQL 驗收、二層選模／唯一修正、資源限制與中斷續跑；第二個執行完整
+回歸、兩個路由 demo 及打包。模型上游使用 MockTransport，無真實 API 費用；真實
+模型品質／成本須由另行授權的模型測試確認。正式 pending 不等於程式不能執行。
+
 ## 實作與文件入口
 
 [主規格 #1 實作索引](docs/implementation-spec1.md)列出 T01～T12 的功能、使用文件、離線驗收與正式接入缺口。[完整驗證紀錄](docs/verification.md)保留各輪檢查。
@@ -122,12 +137,12 @@ with httpx.Client() as http:
 
 ## 驗證程度與資料邊界
 
-這是已抽取並離線驗證的核心，不是已部署 SaaS。原25題實測、3題契約歧義、22題後驗敏感度與第二層未正式觸發等限制，見 [實驗證據摘要](docs/evidence.md)。搬移後沒有新增付費測試；mock 路徑測試不能冒稱新的實測降本。
+這是已抽取並離線驗證的核心，不是已部署 SaaS。原25題實測、3題契約歧義、22題後驗敏感度與第二層未正式觸發等限制，見 [實驗證據摘要](docs/evidence.md)。抽取當時沒有新增付費測試；後續已完成[真實模型接線測試](docs/rg01-live-integration-20261019.md)，含原版中斷與新版修正接續，共 15 筆 API 費用 US$0.060291624。這是功能接線結果，mock 或小量接線結果都不能冒稱新的實測降本。
 
 Runtime receipts 含使用者 prompt／答案，預設寫入 private permissions，但仍應視為敏感資料。Git 只納入原始碼、合成測試、文件、歷史配置與來源雜湊，不納入 API key、原始實驗答案或帳本。
 
 目前為本機 repository，未選擇公開授權、未發布到 PyPI 或 GitHub。來源與抽取差異見 [provenance](docs/provenance.md)。
 
-[RG-01 正式審閱包](docs/rg01-review-ready.md)集中提供 SQL v2 子程序、資源策略與八類語義／獨立答案／反例材料；正式範圍、具名審閱與目標隔離仍 pending，沒有新增模型實驗。
+[RG-01 正式審閱包](docs/rg01-review-ready.md)集中提供 SQL v2 子程序、資源策略與八類語義／獨立答案／反例材料；正式資格仍 pending；該審閱包產出時未新增模型實驗，後續實環境取證與真實 API 結果依[目前接手入口](docs/handoff.md)分列。
 
-[RG-01 新版有界 SQL／隔離接入](docs/rg01-implementation-20261019.md)記錄新資料域、13 個已知反例補強與 Linux 嚴格 launcher；實作與離線回歸、實環境取證及正式核定分列，Linux 攻擊證據與具名簽核仍待補。
+[RG-01 新版有界 SQL／隔離接入](docs/rg01-implementation-20261019.md)記錄新資料域、13 個已知反例補強與 Linux 嚴格 launcher；實作與離線回歸、實環境取證及正式核定分列，後續限定 Linux 取證見[目標測試紀錄](docs/rg01-scout-target-20261019.md)，探針與真 worker 的證據界線保留；具名正式資格仍待核定，不阻擋開發／測試。

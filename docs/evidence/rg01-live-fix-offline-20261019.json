@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "rg01-routing-execution-tests",
+  "source_digest": "20b092c3b1d3671db78f3162fc120f8f099a9e076d58fc78deadd0dcdd466e24",
+  "tests_passed": 1104,
+  "receipt": {
+    "path": "runtime/checks/6ae4474ec0a04addb6b9c044daf8f398/checks.json",
+    "sha256": "6e8f8621ab423cb96b6df443974a91ec509f01837ed1ef5bca70a7bfb942f848",
+    "source_digest": "20b092c3b1d3671db78f3162fc120f8f099a9e076d58fc78deadd0dcdd466e24"
+  },
+  "focused_tests_passed": 3,
+  "change": "Classify exact SQLite compound ORDER BY output-column errors as public syntax errors; retain engineering classification for unknown failures.",
+  "real_api_calls_in_offline_checks": 0,
+  "formal_qualification": "pending"
+}

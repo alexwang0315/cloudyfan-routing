@@ -366,3 +366,14 @@ def test_finite_public_examples_do_not_prove_general_sql_correctness(tmp_path):
     result = run_sql(sql_core(tmp_path, api), 'finite-public-only', contract())
     assert result['status'] == 'passed' and result['selection'] is None
     assert len(api.requests) == 1
+
+
+@pytest.mark.parametrize('ordering', ['(total IS NOT NULL)', '1, (total IS NOT NULL)'])
+def test_compound_order_expression_is_a_public_model_error_with_one_repair(tmp_path, ordering):
+    query = 'SELECT n AS total FROM numbers UNION SELECT n AS total FROM numbers ORDER BY ' + ordering
+    api = API(messages=[answer(query), answer('SELECT SUM(n) AS total FROM numbers')])
+    result = run_sql(sql_core(tmp_path, api), 'compound-order-repair', contract())
+    assert result['status'] == 'passed' and len(result['attempts']) == 2
+    assert result['attempts'][0]['public']['checks'] == ['SQL_EXECUTION_ERROR:syntax_error']
+    assert len(api.requests) == 3
+    assert 'ORDER BY' not in json.dumps(result['attempts'][0]['public'])

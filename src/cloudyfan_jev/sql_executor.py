@@ -302,7 +302,8 @@ def _compiler_feedback(error):
     for prefix, category, hint in categories:
         if message.startswith(prefix):
             return {"category": category, "message": hint}
-    if "syntax error" in message:
+    if ("syntax error" in message or re.fullmatch(
+            r"\d+(?:st|nd|rd|th) ORDER BY term does not match any column in the result set", message)):
         return {"category": "syntax_error", "message": "Check the SQLite syntax and parentheses."}
     return {"category": "execution_error", "message": "Check the public SQL execution contract."}
 

@@ -419,3 +419,50 @@ Document JSON/link and whitespace checks are recorded in the
 1,102-test integration is historical same-source evidence, not a new test run.
 Formal registry bytes remain identical, RG01-08 stays blocked/unassigned and
 RG-01 stays pending. No signature, API, Scout execution, deployment or push.
+
+## Direct RG01 routing execution tests — 2026-10-19
+
+User stopped additional S01-S08 review and directed immediate tests. Focused SQL
+adapter/bounded/process/isolation/qualification tests: 139 passed in 93.94s.
+Initial full run: 1101 passed, one plan-ownership fixture failed because the new
+execution task had unordered overlaps with historical tasks. Preserved failure;
+restricted the active plan to execution scope, preserving prior state/plan.
+Metadata regressions: 31 passed in 3.89s. Final ./scripts/check --integration:
+1102 passed in 201.11s; dependency checks, Ruff, both mocked high-route demos
+and sdist/wheel build passed. Four core routes plus four completed replays passed;
+replays each made zero new requests. Counts are overlapping checks, not summed.
+[Execution summary](evidence/rg01-routing-execution-tests-20261019.json) binds
+actual receipts/output hashes. Source fingerprint and formal registry unchanged.
+No more S01-S08 review prerequisite, no signature, paid API, deployment or push.
+
+## Real-model RG01 integration and compiler fix — 2026-10-19
+
+User authorized real-model end-to-end tests. Frozen existing S01-S08 and fixed
+profiles/efforts; no re-review or threshold tuning. v1 completed seven workflows
+and stopped S08 after saving its answer: compound ORDER BY output-term error
+was not classified. Narrow exact-message mapping to existing syntax_error plus
+two real-SQL/mock regressions; focused 3 passed, full integration 1104 passed
+in 112.36s including Ruff/demos/build. Retain old source, plan and stopped record.
+A new repair-only plan used the saved S08 answer, one true Jev selection and
+one true low-model repair, without repurchasing its first answer. Three
+additional low/mid/high endpoint probes passed. Fifteen paid calls total
+(13 generation, 2 classifier), USD0.060291624, all fifteen GET generation
+receipts now verified and key usage delta matches. Initial final-generation
+GET404 preserved; explicit GET followup succeeded without a POST. Original
+cohort is not relabeled 8/8; no population quality, CDR, second-stage routing
+or formal qualification claim. See [live evidence](evidence/rg01-live-integration-20261019.json).
+
+## SQL live-integration precommit review — 2026-10-19
+
+User authorized local review/commit with no API tests, deployment or push.
+Reviewed the exact compiler mapping and two regression cases; no new code
+fix needed. Updated stale README history to link the real integration results.
+Rechecked 15 original responses/reconciled costs against the recorded account
+delta: USD0.060291624. Original seven completed results, S08 interruption,
+unchanged initial answer, new validator continuation and GET404 followup remain
+separate and preserved. A private all-file inventory binds the live runtime.
+Fresh focused regressions: 3 passed/50 deselected in 3.87s. Fresh quick checks
+passed. The existing full 1104-test integration receipt matches the unchanged
+source fingerprint; it was not rerun during this commit review. See the
+[precommit record](evidence/rg01-live-precommit-20261019.json). No API request,
+spending, formal signoff or release-registry change this review.

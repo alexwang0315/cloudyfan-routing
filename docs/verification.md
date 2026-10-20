@@ -568,3 +568,48 @@ paid request, deployment, push or formal qualification during this review.
 ## Release-readiness document commit review — 2026-10-20
 
 Reviewed the release index against local implementation commit ec58e74 and existing first-pool/ticket/financial evidence. Clarified unverifiable-to-selector and mid-to-second-selector wording; no code or RG01 contract changes. All 42 local links and ten gate rows match; full 1,206-test evidence and profile hashes still match current source. Fresh `./scripts/check --quick`, release-gates and diff checks pass; no new full pytest run is claimed. [Document commit evidence](evidence/release-readiness-precommit-20261020.json) preserves the current document hash, quick receipt and formal pending state. Only the index and sanitized verification records are committed; no API, supplier contact, deployment, push, or formal qualification promotion.
+
+
+## 2026-10-20 — RG-02/RG-03 public evidence supplement
+
+Existing material  + 32 explicitly archived unauthenticated public GETs (26 HTTP 200,
+3 old-score 410,3 LiveBench 404), no inference POST/spend or supplier contact.
+[Evidence and limitations](first-pool-public-evidence-20261020.md) and
+[machine-readable matrix](evidence/first-pool-public-20261020.json) contain
+precise URLs, times, hashes, fixed candidate identities and scoped pending facts.
+New three-row import/profile preserve old inputs and all thresholds/TTLs; no current
+activation or formal qualification. Declared context is metadata, not SQL quality;
+API canonical slug is not benchmark snapshot identity. latest grading is not evaluation.
+
+- Existing focused first-pool/update/adapters/scores/qualification tests: 141 passed
+  in 2.94 s, socket-denied fixtures. No source/test changes.
+- `./scripts/check --quick`: locked offline dependencies, project records and Ruff
+  passed; receipt `runtime/checks/e997cf19a41045f1b85365803c4aef3a/checks.json`.
+- Offline evidence checker: 32 raw hashes,4 configuration digests,3 aggregate score
+  recomputations, original/new report replay, evaluation-date blocking, 49 h future
+  source expiry, local links and 257 unchanged tracked files passed. Two initial
+  runtime checker import/setup errors were resolved without source changes and
+  recorded separately. No failed model outcome was dropped.
+- CLI prepare of the new public profile exited 1/blocked as expected; empty review
+  and unresolved mapping/SQL/date evidence do not produce a qualified pool.
+- Executable digest remains `0eeeef7cb03aecb605dfaf40961048ef8bcf0cc6eee847a5fb69f3357c2ed283`;
+  prior 1,206 full tests remain historical reference, not a new full-suite run.
+
+No S01-S08 review, RG01 changes, paid experiment, account API, supplier contact,
+deployment, push, local commit or formal gate promotion. Raw public task details
+remain ignored locally; only selected public facts/provenance are versioned.
+
+
+## 2026-10-20 — Public-evidence local commit review
+
+Reviewed the complete RG02/RG03 public-supplement and candidate-input diff against
+archived local sources only. Fresh focused regression: 141 passed in 10.67 s.
+Independent derivation confirms three 64-task aggregates and 80/110/74 included
+rewards; original 32-response/receipt hashes and blocked/expiry behavior match.
+[Precommit evidence](evidence/first-pool-public-precommit-20261020.json) records
+actual offline checks, source identity, intended paths and preserved evidence.
+No substantive defect found in this bounded document/data review; no supplier
+statement was upgraded to a model qualification. Full 1,206-test result remains
+historical, with unchanged executable digest. RG01 and formal registry stay frozen;
+unknown evidence stays pending. New local Git commit is authorized; no API,
+supplier contact, deployment or source push is authorized or performed.

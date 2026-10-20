@@ -1,0 +1,167 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "first-pool-public-evidence-precommit",
+  "reviewed_at": "2026-10-20T02:39:26.574818+00:00",
+  "base_commit": "1587435b11786162e5789692be93daadfc0c1dc8",
+  "review_actor": "Codex technical document/data review; not formal qualification",
+  "source_digest": "0eeeef7cb03aecb605dfaf40961048ef8bcf0cc6eee847a5fb69f3357c2ed283",
+  "tests_passed": 141,
+  "review_conclusion": "No substantive issue found in the bounded public-evidence/candidate diff. API metadata, SQL capability and benchmark identity remain separately scoped; no pending evidence is promoted.",
+  "scope_paths": [
+    "docs/agent-state.json",
+    "docs/first-pool-source.md",
+    "docs/first-pool.md",
+    "docs/handoff.md",
+    "docs/release-readiness.md",
+    "docs/score-integration.md",
+    "docs/verification.md",
+    "docs/work-plan.json",
+    "docs/evidence/first-pool-public-20261020.json",
+    "docs/first-pool-public-evidence-20261020.md",
+    "examples/first-pool-codexradar-public-20261020.json",
+    "examples/first-pool-profile-public-20261020.json",
+    "docs/evidence/first-pool-public-precommit-20261020.json"
+  ],
+  "reviewed_file_sha256": {
+    "docs/agent-state.json": "3c2235d538e823e8622398fcfc78881033cfa67c3eebdd95dd853a8a65b7be38",
+    "docs/first-pool-source.md": "ba1dd93cb01cf16fa492af1ff4c31cfcaf0cb8bd4f4b39983e8fa2bb452f0150",
+    "docs/first-pool.md": "a065aef31fd76491e1e78582d8226ab86b6dcbe733d0c1f43c6ccbc8e50fa616",
+    "docs/handoff.md": "62366c825e8cfc72da58cfd5e155b1d149006f5e5e451b94dc624a4a8a472e6c",
+    "docs/release-readiness.md": "a5b98e6341993b69ca70e7400b6cedc335910d03d93eefee8e378574ebd9bc90",
+    "docs/score-integration.md": "8009cc3aef778b39a98522db4837ad51d1f98dea877a480258e95e4b0bc03fac",
+    "docs/verification.md": "debf2b7a6be6c83d02ca69b55427b3f6c7e9a1a24c78add938371e99b3762faa",
+    "docs/work-plan.json": "1bf9c6d8dfa2d6cc37b433ca5136a90a137979d731dcc46ad963cf26813fe2ef",
+    "docs/evidence/first-pool-public-20261020.json": "ad309b1cb47bcf7252b24c7a3c1436d26183de6b06b9e551ffa9ff6f18c15716",
+    "docs/first-pool-public-evidence-20261020.md": "de4b4714adf666a099725e0b6a2a63238bf3b7db1f6ac59e997a94c7f64cd590",
+    "examples/first-pool-codexradar-public-20261020.json": "54162f4b0a727e0f423388da57623f11874cb281833101b146d424a031e293f0",
+    "examples/first-pool-profile-public-20261020.json": "5ed964f013923be3226bb57317ee1e35f68b777919a4ece9704d41d14822302b"
+  },
+  "checks": {
+    "quick": {
+      "path": "runtime/checks/56c2d43d4c6f471e9e061c8535ea0fa6/checks.json",
+      "sha256": "034a0a0cc3d66004c3837d71d9183ae47792fd01e346e11d9a5bfaf161985cb2"
+    },
+    "focused_pytest": {
+      "path": "runtime/pool-public-precommit-20261020/focused-pytest.json",
+      "sha256": "f2cbd82c650a022a400b22d931bc22f5a8988e705ddfeb35fbd85d5136db9f34",
+      "log": {
+        "path": "runtime/pool-public-precommit-20261020/focused-pytest.log",
+        "sha256": "627cde31d508b77f2c6e3a1645311229c13ad811823b2c696ed9db66d1755446"
+      },
+      "passed": 141,
+      "exit_code": 0
+    },
+    "offline_evidence": {
+      "path": "runtime/pool-public-precommit-20261020/offline-final.json",
+      "sha256": "2c056effc2c7035ebef76eef84bc559ec8a9622464661de93d65b688467307c5",
+      "summary": {
+        "checked_at": "2026-10-20T02:38:51.632219+00:00",
+        "result": "passed",
+        "network_denied": true,
+        "archived_responses_verified": 32,
+        "configuration_bindings_verified": 4,
+        "new_score_aggregate_recomputations": 3,
+        "source_observation_reasons": {
+          "first-low": "evaluation_date_unknown",
+          "first-mid": "evaluation_date_unknown",
+          "first-high": "evaluation_date_unknown"
+        },
+        "source_after_49h_reasons": {
+          "first-low": "source_stale",
+          "first-mid": "source_stale",
+          "first-high": "source_stale"
+        },
+        "original_profile_source_and_formal_registry_unchanged": true,
+        "tracked_files_compared_unchanged": 257,
+        "source_digest": "0eeeef7cb03aecb605dfaf40961048ef8bcf0cc6eee847a5fb69f3357c2ed283",
+        "local_links_checked": 111,
+        "missing_links": [],
+        "new_profile_report_replay_identical": true,
+        "old_profile_report_replay_identical": true,
+        "new_profile_admission": "blocked",
+        "formal_gate_promotions": 0
+      }
+    },
+    "independent_derivation": {
+      "path": "runtime/pool-public-precommit-20261020/independent-derivation.json",
+      "sha256": "d890f062ea660ce0ae3e66f174add82bdb4efb7986e32dbf364060332f41631e",
+      "summary": {
+        "result": "passed",
+        "scores": [
+          {
+            "role": "low",
+            "recomputed_score": 34.18142158006467,
+            "coverage": 64,
+            "used_rewards": 80
+          },
+          {
+            "role": "mid",
+            "recomputed_score": 99.07398070679321,
+            "coverage": 64,
+            "used_rewards": 110
+          },
+          {
+            "role": "high",
+            "recomputed_score": 115.03535098973606,
+            "coverage": 64,
+            "used_rewards": 74
+          }
+        ],
+        "all_prior_receipts_verified": true,
+        "raw_responses_verified": 32,
+        "formal_qualification_promoted": false,
+        "no_network_operations": true
+      }
+    },
+    "credential_pattern_scan": {
+      "paths": 12,
+      "matches": 0
+    },
+    "diff_check": "passed before staging; staged scope checked separately"
+  },
+  "preserved": {
+    "original_source_evidence": {
+      "path": "docs/evidence/first-pool-public-20261020.json",
+      "sha256": "ad309b1cb47bcf7252b24c7a3c1436d26183de6b06b9e551ffa9ff6f18c15716"
+    },
+    "original_archive_manifest": {
+      "path": "runtime/pool-public-evidence-20261020/manifest.json",
+      "sha256": "16e0fa13a5ac7c78ba17645804111ed5b1b08260352e176d98282c999ee65eac"
+    },
+    "original_offline_receipt": {
+      "path": "runtime/pool-public-evidence-20261020/offline-checks.json",
+      "sha256": "6f6d371c5c3c0696a7330d6e8c1c0ac838323dc1a7b1f2c3c5bf05a1262d5bf7"
+    },
+    "original_profile": {
+      "path": "examples/first-pool-profile.json",
+      "sha256": "3be564f77b68704213e095c2136af8670be0c821ebaee70ea3a672640007e3a0"
+    },
+    "original_import": {
+      "path": "examples/first-pool-codexradar-import.json",
+      "sha256": "f3b6780c799f4f1de4fbe75bfa21a9c5bcfabb3b63ac8d036a5b652ea4059632"
+    },
+    "formal_registry": {
+      "path": "docs/release-gates.json",
+      "sha256": "1e4899eec63930dc9014d0a089d408c5d3bd650a0b64ececfc6893ca6463142b"
+    },
+    "full_suite_reference": {
+      "path": "docs/evidence/first-pool-offline-20261020.json",
+      "sha256": "8cc714f87177fa3d149f23651ce161962481ff217c66b6bb2ef67db100467c20"
+    }
+  },
+  "new_full_suite_run": false,
+  "full_suite_reference_tests": 1206,
+  "executable_inputs_unchanged": true,
+  "rg01_unchanged": true,
+  "new_profile_status": "blocked",
+  "formal_qualification": "pending",
+  "model_posts": 0,
+  "public_source_gets_this_review": 0,
+  "supplier_contact": false,
+  "deployment": false,
+  "push": false,
+  "local_commit_authorized": true,
+  "runtime_excluded_from_commit": true
+}

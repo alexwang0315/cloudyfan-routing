@@ -1,0 +1,1078 @@
+{
+  "schema_version": 1,
+  "kind": "public-source-evidence",
+  "result": "partial",
+  "captured_at": "2026-10-20T02:30:17.712308+00:00",
+  "actor": "Codex technical evidence preparation; no formal approver",
+  "scope": "RG-02/RG-03 first pool; no RG01 change",
+  "baseline_commit": "1587435b11786162e5789692be93daadfc0c1dc8",
+  "authorization": {
+    "free_public_get": true,
+    "model_posts": false,
+    "paid_api": false,
+    "supplier_contact": false,
+    "deployment": false,
+    "push": false
+  },
+  "network": {
+    "archived_public_get_requests": 32,
+    "http200": 26,
+    "non200": 6,
+    "authentication": "none",
+    "model_post_requests": 0,
+    "inference_api_usd": "0",
+    "sources": [
+      {
+        "id": "openrouter-models",
+        "url": "https://openrouter.ai/api/v1/models",
+        "method": "GET",
+        "authentication": "none",
+        "retrieved_at": "2026-10-20T02:20:54.020726+00:00",
+        "status": 200,
+        "final_url": "https://openrouter.ai/api/v1/models",
+        "content_type": "application/json",
+        "file": "runtime/pool-public-evidence-20261020/openrouter-models.body",
+        "sha256": "b4916117a2da5b91cbce19536344108230a8fe2cb8d6f85b49d0a1f0cc0fff19",
+        "bytes": 788324
+      },
+      {
+        "id": "radar-page",
+        "url": "https://deng.codexradar.com/",
+        "method": "GET",
+        "authentication": "none",
+        "retrieved_at": "2026-10-20T02:20:54.026751+00:00",
+        "status": 200,
+        "final_url": "https://deng.codexradar.com/",
+        "content_type": "text/html; charset=utf-8",
+        "file": "runtime/pool-public-evidence-20261020/radar-page.body",
+        "sha256": "ceb74efd67d37cc1dadcdaf430e5cbb8bf7950a68885b8ace2055d5e9aa8b07e",
+        "bytes": 1046022
+      },
+      {
+        "id": "oss-card",
+        "url": "https://huggingface.co/openai/gpt-oss-120b/raw/main/README.md",
+        "method": "GET",
+        "authentication": "none",
+        "retrieved_at": "2026-10-20T02:20:54.027180+00:00",
+        "status": 200,
+        "final_url": "https://huggingface.co/openai/gpt-oss-120b/raw/main/README.md",
+        "content_type": "text/plain; charset=utf-8",
+        "file": "runtime/pool-public-evidence-20261020/oss-card.body",
+        "sha256": "92b0408cf5dce04e4c5e4e5f2be0361da710d3650baefd7d7519badd1c687919",
+        "bytes": 7111
+      },
+      {
+        "id": "oss-config",
+        "url": "https://huggingface.co/openai/gpt-oss-120b/raw/main/config.json",
+        "method": "GET",
+        "authentication": "none",
+        "retrieved_at": "2026-10-20T02:20:54.027874+00:00",
+        "status": 200,
+        "final_url": "https://huggingface.co/openai/gpt-oss-120b/raw/main/config.json",
+        "content_type": "text/plain; charset=utf-8",
+        "file": "runtime/pool-public-evidence-20261020/oss-config.body",
+        "sha256": "933aeb666a3fd851133ddd7686414f369bc564c4185fb5704416550879f10566",
+        "bytes": 2089
+      },
+      {
+        "id": "oss-revision",
+        "url": "https://huggingface.co/api/models/openai/gpt-oss-120b",
+        "method": "GET",
+        "authentication": "none",
+        "retrieved_at": "2026-10-20T02:20:54.028662+00:00",
+        "status": 200,
+        "final_url": "https://huggingface.co/api/models/openai/gpt-oss-120b",
+        "content_type": "application/json; charset=utf-8",
+        "file": "runtime/pool-public-evidence-20261020/oss-revision.body",
+        "sha256": "7cc890fb10f503d88e6f138da955be9d91e4a00de932bfe12ac1adfc1531a03b",
+        "bytes": 23639
+      },
+      {
+        "id": "openai-sol",
+        "url": "https://developers.openai.com/api/docs/models/gpt-6-sol.md",
+        "method": "GET",
+        "authentication": "none",
+        "retrieved_at": "2026-10-20T02:20:54.029001+00:00",
+        "status": 200,
+        "final_url": "https://developers.openai.com/api/docs/models/gpt-6-sol.md",
+        "content_type": "text/markdown; charset=utf-8",
+        "file": "runtime/pool-public-evidence-20261020/openai-sol.body",
+        "sha256": "3dcb62c16386c40e52438e7fa7fb46b979d13cbfc324d0807246e24ce43345bb",
+        "bytes": 4013
+      },
+      {
+        "id": "openai-sol61",
+        "url": "https://developers.openai.com/api/docs/models/gpt-6.1-sol.md",
+        "method": "GET",
+        "authentication": "none",
+        "retrieved_at": "2026-10-20T02:20:55.421956+00:00",
+        "status": 200,
+        "final_url": "https://developers.openai.com/api/docs/models/gpt-6.1-sol.md",
+        "content_type": "text/markdown; charset=utf-8",
+        "file": "runtime/pool-public-evidence-20261020/openai-sol61.body",
+        "sha256": "acfe91d19882aaf7bb52877898684614035a947de02f2955c9de905a7efb1362",
+        "bytes": 4436
+      },
+      {
+        "id": "openai-astra",
+        "url": "https://developers.openai.com/api/docs/models/gpt-6-astra.md",
+        "method": "GET",
+        "authentication": "none",
+        "retrieved_at": "2026-10-20T02:20:55.428386+00:00",
+        "status": 200,
+        "final_url": "https://developers.openai.com/api/docs/models/gpt-6-astra.md",
+        "content_type": "text/markdown; charset=utf-8",
+        "file": "runtime/pool-public-evidence-20261020/openai-astra.body",
+        "sha256": "b7c19b3bb89e87a392a0f3f8b732c5e7c9f0bf558cbe3022c491575a947fcef8",
+        "bytes": 3704
+      },
+      {
+        "id": "livebench-head",
+        "url": "https://api.github.com/repos/LiveBench/new-livebench/commits/main",
+        "method": "GET",
+        "authentication": "none",
+        "retrieved_at": "2026-10-20T02:20:55.428949+00:00",
+        "status": 404,
+        "final_url": "https://api.github.com/repos/LiveBench/new-livebench/commits/main",
+        "error": "HTTPError",
+        "file": "runtime/pool-public-evidence-20261020/livebench-head.body",
+        "sha256": "c391981e33b3d73d489d22c8ae4da47417d407010e28de24ee4b1a1673554ba5",
+        "bytes": 118
+      },
+      {
+        "id": "endpoints-openai--gpt-6-sol",
+        "url": "https://openrouter.ai/api/v1/models/openai/gpt-6-sol/endpoints",
+        "method": "GET",
+        "authentication": "none",
+        "retrieved_at": "2026-10-20T02:20:55.532952+00:00",
+        "status": 200,
+        "final_url": "https://openrouter.ai/api/v1/models/openai/gpt-6-sol/endpoints",
+        "content_type": "application/json",
+        "file": "runtime/pool-public-evidence-20261020/endpoints-openai--gpt-6-sol.body",
+        "sha256": "c27d6f4ee559892049fa6d4e8ab9c22a3fa3de4ac7cf341535748bac9dc08804",
+        "bytes": 9117
+      },
+      {
+        "id": "endpoints-openai--gpt-6.1-sol",
+        "url": "https://openrouter.ai/api/v1/models/openai/gpt-6.1-sol/endpoints",
+        "method": "GET",
+        "authentication": "none",
+        "retrieved_at": "2026-10-20T02:20:55.546278+00:00",
+        "status": 200,
+        "final_url": "https://openrouter.ai/api/v1/models/openai/gpt-6.1-sol/endpoints",
+        "content_type": "application/json",
+        "file": "runtime/pool-public-evidence-20261020/endpoints-openai--gpt-6.1-sol.body",
+        "sha256": "95bf0541fd5d778551dc1da611ad5a6a3c292cdd0d163896c6bd5a402e5c9ca4",
+        "bytes": 10417
+      },
+      {
+        "id": "endpoints-openai--gpt-6-astra",
+        "url": "https://openrouter.ai/api/v1/models/openai/gpt-6-astra/endpoints",
+        "method": "GET",
+        "authentication": "none",
+        "retrieved_at": "2026-10-20T02:20:55.765614+00:00",
+        "status": 200,
+        "final_url": "https://openrouter.ai/api/v1/models/openai/gpt-6-astra/endpoints",
+        "content_type": "application/json",
+        "file": "runtime/pool-public-evidence-20261020/endpoints-openai--gpt-6-astra.body",
+        "sha256": "2433bb49dd0135a80b3fc94cd24844f88d043e4c11fc4f808ecccc0a49fd0d45",
+        "bytes": 9177
+      },
+      {
+        "id": "endpoints-openai--gpt-oss-120b",
+        "url": "https://openrouter.ai/api/v1/models/openai/gpt-oss-120b/endpoints",
+        "method": "GET",
+        "authentication": "none",
+        "retrieved_at": "2026-10-20T02:20:55.771871+00:00",
+        "status": 200,
+        "final_url": "https://openrouter.ai/api/v1/models/openai/gpt-oss-120b/endpoints",
+        "content_type": "application/json",
+        "file": "runtime/pool-public-evidence-20261020/endpoints-openai--gpt-oss-120b.body",
+        "sha256": "154a1b9d9d265cb4b6ae99a46ea3483648a78280f6c4126017be0b4c5c267fef",
+        "bytes": 24642
+      },
+      {
+        "id": "endpoints-typesafe--jev-1.13",
+        "url": "https://openrouter.ai/api/v1/models/typesafe/jev-1.13/endpoints",
+        "method": "GET",
+        "authentication": "none",
+        "retrieved_at": "2026-10-20T02:20:56.087498+00:00",
+        "status": 200,
+        "final_url": "https://openrouter.ai/api/v1/models/typesafe/jev-1.13/endpoints",
+        "content_type": "application/json",
+        "file": "runtime/pool-public-evidence-20261020/endpoints-typesafe--jev-1.13.body",
+        "sha256": "dbfc5c2adb571a5af0bc7ba627683a4d6060683bf568a2e5784e36e332fcfaa5",
+        "bytes": 1237
+      },
+      {
+        "id": "radar-channels",
+        "url": "https://deng.codexradar.com/assets/library-channels.js?v=radar150-v1-8f765535f01f",
+        "method": "GET",
+        "authentication": "none",
+        "retrieved_at": "2026-10-20T02:21:39.197823+00:00",
+        "status": 200,
+        "final_url": "https://deng.codexradar.com/assets/library-channels.js?v=radar150-v1-8f765535f01f",
+        "content_type": "application/javascript",
+        "file": "runtime/pool-public-evidence-20261020/radar-channels.body",
+        "bytes": 31617,
+        "sha256": "8f765535f01f14de26a7e4fb8a022f5a753086d2105dd226e40790035146ece4"
+      },
+      {
+        "id": "radar-home",
+        "url": "https://deng.codexradar.com/assets/home-bench64.mjs?v=options-inputs-af8705616ef2",
+        "method": "GET",
+        "authentication": "none",
+        "retrieved_at": "2026-10-20T02:21:39.198950+00:00",
+        "status": 200,
+        "final_url": "https://deng.codexradar.com/assets/home-bench64.mjs?v=options-inputs-af8705616ef2",
+        "content_type": "application/javascript",
+        "file": "runtime/pool-public-evidence-20261020/radar-home.body",
+        "bytes": 54164,
+        "sha256": "af8705616ef2dcf955f0fb86432842313394a2ca55d5a549c28984d4d6e282c0"
+      },
+      {
+        "id": "radar-catalog",
+        "url": "https://api.codexradar.com/api/v1/library-catalog",
+        "method": "GET",
+        "authentication": "none",
+        "retrieved_at": "2026-10-20T02:21:39.199193+00:00",
+        "status": 200,
+        "final_url": "https://api.codexradar.com/api/v1/library-catalog",
+        "content_type": "application/json",
+        "file": "runtime/pool-public-evidence-20261020/radar-catalog.body",
+        "bytes": 173196,
+        "sha256": "670f3bae8900a87bdbee357a5779bc72b4366c051534a54d530a614120744bc7"
+      },
+      {
+        "id": "livebench-readme",
+        "url": "https://raw.githubusercontent.com/LiveBench/new-livebench/main/README.md",
+        "method": "GET",
+        "authentication": "none",
+        "retrieved_at": "2026-10-20T02:21:39.199401+00:00",
+        "status": 404,
+        "error": "HTTPError",
+        "file": "runtime/pool-public-evidence-20261020/livebench-readme.body",
+        "bytes": 14,
+        "sha256": "d5558cd419c8d46bdc958064cb97f963d1ea793866414c025906ec15033512ed"
+      },
+      {
+        "id": "livebench-pinned-readme",
+        "url": "https://raw.githubusercontent.com/LiveBench/new-livebench/90f8d44da9650d4bf4a8454157947d7b8432551e/README.md",
+        "method": "GET",
+        "authentication": "none",
+        "retrieved_at": "2026-10-20T02:21:39.199599+00:00",
+        "status": 404,
+        "error": "HTTPError",
+        "file": "runtime/pool-public-evidence-20261020/livebench-pinned-readme.body",
+        "bytes": 14,
+        "sha256": "d5558cd419c8d46bdc958064cb97f963d1ea793866414c025906ec15033512ed"
+      },
+      {
+        "id": "or-model-doc",
+        "url": "https://openrouter.ai/docs/api/api-reference/models/get-models.md",
+        "method": "GET",
+        "authentication": "none",
+        "retrieved_at": "2026-10-20T02:21:39.740800+00:00",
+        "status": 200,
+        "final_url": "https://openrouter.ai/docs/api/api-reference/models/list-all-models-and-their-properties.md",
+        "content_type": "text/markdown; charset=utf-8",
+        "file": "runtime/pool-public-evidence-20261020/or-model-doc.body",
+        "bytes": 51045,
+        "sha256": "e34bf4a4e01c917f7c1e39d2592b2b1f108982e34edfc5c18501d4e05c77180c"
+      },
+      {
+        "id": "radar-score-low",
+        "url": "https://api.codexradar.com/api/v1/radar-bench?model=gpt-6-sol&effort=low",
+        "method": "GET",
+        "authentication": "none",
+        "retrieved_at": "2026-10-20T02:22:28.985172+00:00",
+        "status": 410,
+        "error": "HTTPError",
+        "file": "runtime/pool-public-evidence-20261020/radar-score-low.body",
+        "bytes": 126,
+        "sha256": "f5d7855fc01aaeccb1f38732d8b8bd5cd0a4e27fcec5a32a65070a335fc4ca09"
+      },
+      {
+        "id": "radar-score-mid",
+        "url": "https://api.codexradar.com/api/v1/radar-bench?model=gpt-6.1-sol&effort=high",
+        "method": "GET",
+        "authentication": "none",
+        "retrieved_at": "2026-10-20T02:22:28.986119+00:00",
+        "status": 410,
+        "error": "HTTPError",
+        "file": "runtime/pool-public-evidence-20261020/radar-score-mid.body",
+        "bytes": 126,
+        "sha256": "f5d7855fc01aaeccb1f38732d8b8bd5cd0a4e27fcec5a32a65070a335fc4ca09"
+      },
+      {
+        "id": "radar-score-high",
+        "url": "https://api.codexradar.com/api/v1/radar-bench?model=gpt-6-astra&effort=xhigh",
+        "method": "GET",
+        "authentication": "none",
+        "retrieved_at": "2026-10-20T02:22:28.986389+00:00",
+        "status": 410,
+        "error": "HTTPError",
+        "file": "runtime/pool-public-evidence-20261020/radar-score-high.body",
+        "bytes": 126,
+        "sha256": "f5d7855fc01aaeccb1f38732d8b8bd5cd0a4e27fcec5a32a65070a335fc4ca09"
+      },
+      {
+        "id": "oss-pinned-card",
+        "url": "https://huggingface.co/openai/gpt-oss-120b/raw/b5c939de8f754692c1647ca79fbf85e8c1e70f8a/README.md",
+        "method": "GET",
+        "authentication": "none",
+        "retrieved_at": "2026-10-20T02:22:28.987067+00:00",
+        "status": 200,
+        "final_url": "https://huggingface.co/openai/gpt-oss-120b/raw/b5c939de8f754692c1647ca79fbf85e8c1e70f8a/README.md",
+        "content_type": "text/plain; charset=utf-8",
+        "file": "runtime/pool-public-evidence-20261020/oss-pinned-card.body",
+        "bytes": 7111,
+        "sha256": "92b0408cf5dce04e4c5e4e5f2be0361da710d3650baefd7d7519badd1c687919"
+      },
+      {
+        "id": "oss-pinned-config",
+        "url": "https://huggingface.co/openai/gpt-oss-120b/raw/b5c939de8f754692c1647ca79fbf85e8c1e70f8a/config.json",
+        "method": "GET",
+        "authentication": "none",
+        "retrieved_at": "2026-10-20T02:22:28.987334+00:00",
+        "status": 200,
+        "final_url": "https://huggingface.co/openai/gpt-oss-120b/raw/b5c939de8f754692c1647ca79fbf85e8c1e70f8a/config.json",
+        "content_type": "text/plain; charset=utf-8",
+        "file": "runtime/pool-public-evidence-20261020/oss-pinned-config.body",
+        "bytes": 2089,
+        "sha256": "933aeb666a3fd851133ddd7686414f369bc564c4185fb5704416550879f10566"
+      },
+      {
+        "id": "radar-robots",
+        "url": "https://deng.codexradar.com/robots.txt",
+        "method": "GET",
+        "authentication": "none",
+        "retrieved_at": "2026-10-20T02:22:29.876006+00:00",
+        "status": 200,
+        "final_url": "https://deng.codexradar.com/robots.txt",
+        "content_type": "text/plain; charset=utf-8",
+        "file": "runtime/pool-public-evidence-20261020/radar-robots.body",
+        "bytes": 73,
+        "sha256": "4462147a0b53962458112e6c54b94248706e52dfc9c98af54f8ece1492ea1b9e"
+      },
+      {
+        "id": "radar-score-v2-low",
+        "url": "https://api.codexradar.com/api/v1/radar-bench-score?model=gpt-6-sol&effort=low",
+        "method": "GET",
+        "authentication": "none",
+        "retrieved_at": "2026-10-20T02:23:20.529416+00:00",
+        "status": 200,
+        "final_url": "https://api.codexradar.com/api/v1/radar-bench-score?model=gpt-6-sol&effort=low",
+        "content_type": "application/json",
+        "file": "runtime/pool-public-evidence-20261020/radar-score-v2-low.body",
+        "bytes": 150598,
+        "sha256": "f22bfb7779519f3059bfbb17127285395526812b084652af4fb9ef7a1da27301"
+      },
+      {
+        "id": "radar-score-v2-mid",
+        "url": "https://api.codexradar.com/api/v1/radar-bench-score?model=gpt-6.1-sol&effort=high",
+        "method": "GET",
+        "authentication": "none",
+        "retrieved_at": "2026-10-20T02:23:20.530416+00:00",
+        "status": 200,
+        "final_url": "https://api.codexradar.com/api/v1/radar-bench-score?model=gpt-6.1-sol&effort=high",
+        "content_type": "application/json",
+        "file": "runtime/pool-public-evidence-20261020/radar-score-v2-mid.body",
+        "bytes": 159547,
+        "sha256": "8faff337be4b9d5c93d2e9a6e1389365d629f6799d593f6f17d663f278657096"
+      },
+      {
+        "id": "radar-score-v2-high",
+        "url": "https://api.codexradar.com/api/v1/radar-bench-score?model=gpt-6-astra&effort=xhigh",
+        "method": "GET",
+        "authentication": "none",
+        "retrieved_at": "2026-10-20T02:23:20.530739+00:00",
+        "status": 200,
+        "final_url": "https://api.codexradar.com/api/v1/radar-bench-score?model=gpt-6-astra&effort=xhigh",
+        "content_type": "application/json",
+        "file": "runtime/pool-public-evidence-20261020/radar-score-v2-high.body",
+        "bytes": 149419,
+        "sha256": "955e73442e9ac1b70573e07fca382854c679b65730feeac342ae206283ff0c32"
+      },
+      {
+        "id": "baseten-oss-engineering",
+        "url": "https://www.baseten.co/blog/how-we-made-the-fastest-gpt-oss-on-nvidia-gpus-60-percent-faster/",
+        "method": "GET",
+        "authentication": "none",
+        "retrieved_at": "2026-10-20T02:29:40.909022+00:00",
+        "status": 200,
+        "final_url": "https://www.baseten.co/blog/how-we-made-the-fastest-gpt-oss-on-nvidia-gpus-60-percent-faster/",
+        "content_type": "text/html; charset=utf-8",
+        "file": "runtime/pool-public-evidence-20261020/baseten-oss-engineering.body",
+        "bytes": 343003,
+        "sha256": "a2880401fe63d4adf5c7b1b630cef55e6bda3de609daa04c13035fe88db19c91"
+      },
+      {
+        "id": "sqlserver-tuning-benchmark",
+        "url": "https://aisqltuner.com/2026/09/30/gpt-6-1-sol-vs-gpt-6-sol-sql-tuning/",
+        "method": "GET",
+        "authentication": "none",
+        "retrieved_at": "2026-10-20T02:29:42.331660+00:00",
+        "status": 200,
+        "final_url": "https://aisqltuner.com/2026/09/30/gpt-6-1-sol-vs-gpt-6-sol-sql-tuning/",
+        "content_type": "text/html; charset=UTF-8",
+        "file": "runtime/pool-public-evidence-20261020/sqlserver-tuning-benchmark.body",
+        "bytes": 291033,
+        "sha256": "3da9a270b1f94a6a14dd6be0dd9e9a3f61ca03b98055375151227eed98567093"
+      },
+      {
+        "id": "sol61-community-benchmark",
+        "url": "https://raw.githubusercontent.com/joonlab/gpt-6.1-sol-benchmark/main/README.md",
+        "method": "GET",
+        "authentication": "none",
+        "retrieved_at": "2026-10-20T02:29:46.051786+00:00",
+        "status": 200,
+        "final_url": "https://raw.githubusercontent.com/joonlab/gpt-6.1-sol-benchmark/main/README.md",
+        "content_type": "text/plain; charset=utf-8",
+        "file": "runtime/pool-public-evidence-20261020/sol61-community-benchmark.body",
+        "bytes": 16552,
+        "sha256": "f4f6b5fa5837bf604db1082601a068a1e3bd6397a5dbfb3d6af21d12de11593b"
+      }
+    ],
+    "archive_manifest_sha256": "16e0fa13a5ac7c78ba17645804111ed5b1b08260352e176d98282c999ee65eac",
+    "count_scope": "Explicit archived urllib GETs; web search/page discovery excluded."
+  },
+  "configurations": [
+    {
+      "config_id": "first-open_source",
+      "configuration_sha256": "f447b4ad730882f90af115e0004e8b31e104e32ad4352f7e5e229eb6cc34b219",
+      "model": "openai/gpt-oss-120b",
+      "model_version": "openai/gpt-oss-120b",
+      "effort": "low",
+      "requested_provider": "baseten/fp4",
+      "endpoint_observed_at": "2026-10-20T02:20:55.771871+00:00",
+      "endpoint_source": "https://openrouter.ai/api/v1/models/openai/gpt-oss-120b/endpoints",
+      "endpoint_raw_sha256": "154a1b9d9d265cb4b6ae99a46ea3483648a78280f6c4126017be0b4c5c267fef",
+      "catalog_canonical_slug": "openai/gpt-oss-120b",
+      "catalog_reasoning": {
+        "mandatory": true,
+        "supported_efforts": [
+          "high",
+          "medium",
+          "low"
+        ],
+        "default_effort": "medium"
+      },
+      "catalog_endpoint": {
+        "name": "BaseTen | openai/gpt-oss-120b",
+        "model_id": "openai/gpt-oss-120b",
+        "provider_name": "BaseTen",
+        "tag": "baseten/fp4",
+        "quantization": "fp4",
+        "context_length": 128072,
+        "max_prompt_tokens": null,
+        "max_completion_tokens": 115264,
+        "supported_parameters": [
+          "reasoning",
+          "include_reasoning",
+          "max_tokens",
+          "temperature",
+          "top_p",
+          "stop",
+          "frequency_penalty",
+          "presence_penalty",
+          "response_format",
+          "structured_outputs",
+          "tools",
+          "tool_choice",
+          "reasoning_effort"
+        ],
+        "status": 0
+      },
+      "context_requirement_tokens": 8192,
+      "declared_context_requirement_met": true,
+      "evidence_scope": "Published metadata, not a live completion, entitlement or capacity guarantee.",
+      "api_catalog_identity": "documented",
+      "benchmark_snapshot_identity": "not applicable to separate unscored OSS lane",
+      "sql_operations": {
+        "sql_filter": "unproven",
+        "sql_join": "unproven",
+        "sql_aggregate": "unproven",
+        "sql_window": "unproven",
+        "sql_set_operations": "unproven",
+        "sql_resource_limits": "unproven"
+      },
+      "approved": false
+    },
+    {
+      "config_id": "first-low",
+      "configuration_sha256": "ef08af04a817fb6ff22d3a33180165e5e1d3d3ef5be96ce5e5c3b0f9dba151ad",
+      "model": "openai/gpt-6-sol",
+      "model_version": "openai/gpt-6-sol-20260922",
+      "effort": "low",
+      "requested_provider": "openai",
+      "endpoint_observed_at": "2026-10-20T02:20:55.532952+00:00",
+      "endpoint_source": "https://openrouter.ai/api/v1/models/openai/gpt-6-sol/endpoints",
+      "endpoint_raw_sha256": "c27d6f4ee559892049fa6d4e8ab9c22a3fa3de4ac7cf341535748bac9dc08804",
+      "catalog_canonical_slug": "openai/gpt-6-sol-20260922",
+      "catalog_reasoning": {
+        "mandatory": false,
+        "default_enabled": true,
+        "supported_efforts": [
+          "max",
+          "xhigh",
+          "high",
+          "medium",
+          "low",
+          "none"
+        ],
+        "default_effort": "medium"
+      },
+      "catalog_endpoint": {
+        "name": "OpenAI | openai/gpt-6-sol-20260922",
+        "model_id": "openai/gpt-6-sol",
+        "provider_name": "OpenAI",
+        "tag": "openai",
+        "quantization": "unknown",
+        "context_length": 1050000,
+        "max_prompt_tokens": 922000,
+        "max_completion_tokens": 128000,
+        "supported_parameters": [
+          "reasoning",
+          "include_reasoning",
+          "seed",
+          "max_tokens",
+          "response_format",
+          "structured_outputs",
+          "tools",
+          "tool_choice",
+          "verbosity",
+          "reasoning_effort"
+        ],
+        "status": 0
+      },
+      "context_requirement_tokens": 8192,
+      "declared_context_requirement_met": true,
+      "evidence_scope": "Published metadata, not a live completion, entitlement or capacity guarantee.",
+      "api_catalog_identity": "documented",
+      "benchmark_snapshot_identity": "pending",
+      "sql_operations": {
+        "sql_filter": "unproven",
+        "sql_join": "unproven",
+        "sql_aggregate": "unproven",
+        "sql_window": "unproven",
+        "sql_set_operations": "unproven",
+        "sql_resource_limits": "unproven"
+      },
+      "approved": false
+    },
+    {
+      "config_id": "first-mid",
+      "configuration_sha256": "f585ee4fe0cb6d9e336ec32088c11a07bde789ae3a3f62bc97560c8ae45ed231",
+      "model": "openai/gpt-6.1-sol",
+      "model_version": "openai/gpt-6.1-sol-20260929",
+      "effort": "high",
+      "requested_provider": "openai",
+      "endpoint_observed_at": "2026-10-20T02:20:55.546278+00:00",
+      "endpoint_source": "https://openrouter.ai/api/v1/models/openai/gpt-6.1-sol/endpoints",
+      "endpoint_raw_sha256": "95bf0541fd5d778551dc1da611ad5a6a3c292cdd0d163896c6bd5a402e5c9ca4",
+      "catalog_canonical_slug": "openai/gpt-6.1-sol-20260929",
+      "catalog_reasoning": {
+        "mandatory": true,
+        "default_enabled": true,
+        "supported_efforts": [
+          "max",
+          "xhigh",
+          "high",
+          "medium",
+          "low"
+        ],
+        "default_effort": "medium"
+      },
+      "catalog_endpoint": {
+        "name": "OpenAI | openai/gpt-6.1-sol-20260929",
+        "model_id": "openai/gpt-6.1-sol",
+        "provider_name": "OpenAI",
+        "tag": "openai",
+        "quantization": "unknown",
+        "context_length": 1050000,
+        "max_prompt_tokens": 922000,
+        "max_completion_tokens": 128000,
+        "supported_parameters": [
+          "reasoning",
+          "include_reasoning",
+          "seed",
+          "max_tokens",
+          "response_format",
+          "structured_outputs",
+          "tools",
+          "tool_choice",
+          "verbosity",
+          "reasoning_effort"
+        ],
+        "status": 0
+      },
+      "context_requirement_tokens": 8192,
+      "declared_context_requirement_met": true,
+      "evidence_scope": "Published metadata, not a live completion, entitlement or capacity guarantee.",
+      "api_catalog_identity": "documented",
+      "benchmark_snapshot_identity": "pending",
+      "sql_operations": {
+        "sql_filter": "unproven",
+        "sql_join": "unproven",
+        "sql_aggregate": "unproven",
+        "sql_window": "unproven",
+        "sql_set_operations": "unproven",
+        "sql_resource_limits": "unproven"
+      },
+      "approved": false
+    },
+    {
+      "config_id": "first-high",
+      "configuration_sha256": "1575d655d9ea655bbc43bfb7021c1e4d2c06f26ccf085ad9ea934e8a4e177ed3",
+      "model": "openai/gpt-6-astra",
+      "model_version": "openai/gpt-6-astra-20260903",
+      "effort": "xhigh",
+      "requested_provider": "openai",
+      "endpoint_observed_at": "2026-10-20T02:20:55.765614+00:00",
+      "endpoint_source": "https://openrouter.ai/api/v1/models/openai/gpt-6-astra/endpoints",
+      "endpoint_raw_sha256": "2433bb49dd0135a80b3fc94cd24844f88d043e4c11fc4f808ecccc0a49fd0d45",
+      "catalog_canonical_slug": "openai/gpt-6-astra-20260903",
+      "catalog_reasoning": {
+        "mandatory": true,
+        "default_enabled": true,
+        "supported_efforts": [
+          "max",
+          "xhigh",
+          "high",
+          "medium",
+          "low"
+        ],
+        "default_effort": "medium"
+      },
+      "catalog_endpoint": {
+        "name": "OpenAI | openai/gpt-6-astra-20260903",
+        "model_id": "openai/gpt-6-astra",
+        "provider_name": "OpenAI",
+        "tag": "openai",
+        "quantization": "unknown",
+        "context_length": 1050000,
+        "max_prompt_tokens": 922000,
+        "max_completion_tokens": 128000,
+        "supported_parameters": [
+          "reasoning",
+          "include_reasoning",
+          "seed",
+          "max_tokens",
+          "response_format",
+          "structured_outputs",
+          "tools",
+          "tool_choice",
+          "verbosity",
+          "reasoning_effort"
+        ],
+        "status": 0
+      },
+      "context_requirement_tokens": 8192,
+      "declared_context_requirement_met": true,
+      "evidence_scope": "Published metadata, not a live completion, entitlement or capacity guarantee.",
+      "api_catalog_identity": "documented",
+      "benchmark_snapshot_identity": "pending",
+      "sql_operations": {
+        "sql_filter": "unproven",
+        "sql_join": "unproven",
+        "sql_aggregate": "unproven",
+        "sql_window": "unproven",
+        "sql_set_operations": "unproven",
+        "sql_resource_limits": "unproven"
+      },
+      "approved": false
+    }
+  ],
+  "score_source": {
+    "source": "codexradar",
+    "version": "codexradar-public:radar-bench-v2-150:670f3bae8900",
+    "metric": "overall",
+    "scale_max": 150,
+    "candidate_selection": "Only same pre-existing low/mid/high model+effort; three rows, not full leaderboard.",
+    "thresholds": {
+      "low_below": 80,
+      "mid_inclusive": [
+        80,
+        100
+      ],
+      "high_above": 100
+    },
+    "new_rows": [
+      {
+        "model": "gpt-6-sol",
+        "effort": "low",
+        "harness": "codex",
+        "score": 34.18142158006467,
+        "score_version": "radar-bench-v2-150",
+        "score_max": 150.0,
+        "score_status": "complete",
+        "coverage": 64,
+        "required_tasks": 64,
+        "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+        "selection_version": "dradar-four-library-deployment007-server024-20261004-config64",
+        "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+        "valid_grade_events": 80,
+        "latest_graded_at": "2026-10-20T01:01:26.174766Z",
+        "scoring_policy": {
+          "version": "radar-bench-v2-last3-per-task-equal-weight-150",
+          "base_score_max": 100,
+          "display_multiplier": 1.5,
+          "score_max": 150.0,
+          "latest_valid_per_task": 3,
+          "missing_tasks_are_zero": false,
+          "time_window_days": null,
+          "task_weight": "equal among covered tasks",
+          "grade_zero_included": true,
+          "reward_and_points_unchanged": true,
+          "model_effort_separate": true,
+          "order": [
+            "graded_at",
+            "unique_submission_id"
+          ],
+          "not_recommendation_or_contribution_points": true
+        },
+        "statistics_policy": {
+          "dradar_signal_policy": "dradar-product-signals-audit-v2",
+          "population_scope": "new DRadar timing/token/throughput/similarity and trajectory text network hints are audit only; prior flagged rows remain excluded",
+          "historical_flags_reclassified": false,
+          "same_population_as_prior_policy": false,
+          "official_verifier_reward_and_network_rules_changed": false
+        },
+        "role": "low",
+        "retrieved_at": "2026-10-20T02:23:20.529416+00:00",
+        "url": "https://api.codexradar.com/api/v1/radar-bench-score?model=gpt-6-sol&effort=low",
+        "raw_sha256": "f22bfb7779519f3059bfbb17127285395526812b084652af4fb9ef7a1da27301",
+        "used_reward_count": 80,
+        "per_task_sample_range": [
+          1,
+          2
+        ],
+        "trend_grade_range": [
+          "2026-10-08T05:55:00.162722Z",
+          "2026-10-20T01:01:26.174766Z"
+        ],
+        "recomputed_score": 34.18142158006467,
+        "evaluated_at": null,
+        "api_snapshot_binding": "not supplied"
+      },
+      {
+        "model": "gpt-6.1-sol",
+        "effort": "high",
+        "harness": "codex",
+        "score": 99.07398070679321,
+        "score_version": "radar-bench-v2-150",
+        "score_max": 150.0,
+        "score_status": "complete",
+        "coverage": 64,
+        "required_tasks": 64,
+        "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+        "selection_version": "dradar-four-library-deployment007-server024-20261004-config64",
+        "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+        "valid_grade_events": 112,
+        "latest_graded_at": "2026-10-19T08:30:48.005121Z",
+        "scoring_policy": {
+          "version": "radar-bench-v2-last3-per-task-equal-weight-150",
+          "base_score_max": 100,
+          "display_multiplier": 1.5,
+          "score_max": 150.0,
+          "latest_valid_per_task": 3,
+          "missing_tasks_are_zero": false,
+          "time_window_days": null,
+          "task_weight": "equal among covered tasks",
+          "grade_zero_included": true,
+          "reward_and_points_unchanged": true,
+          "model_effort_separate": true,
+          "order": [
+            "graded_at",
+            "unique_submission_id"
+          ],
+          "not_recommendation_or_contribution_points": true
+        },
+        "statistics_policy": {
+          "dradar_signal_policy": "dradar-product-signals-audit-v2",
+          "population_scope": "new DRadar timing/token/throughput/similarity and trajectory text network hints are audit only; prior flagged rows remain excluded",
+          "historical_flags_reclassified": false,
+          "same_population_as_prior_policy": false,
+          "official_verifier_reward_and_network_rules_changed": false
+        },
+        "role": "mid",
+        "retrieved_at": "2026-10-20T02:23:20.530416+00:00",
+        "url": "https://api.codexradar.com/api/v1/radar-bench-score?model=gpt-6.1-sol&effort=high",
+        "raw_sha256": "8faff337be4b9d5c93d2e9a6e1389365d629f6799d593f6f17d663f278657096",
+        "used_reward_count": 110,
+        "per_task_sample_range": [
+          1,
+          3
+        ],
+        "trend_grade_range": [
+          "2026-10-08T17:35:17.958311Z",
+          "2026-10-19T08:30:48.005121Z"
+        ],
+        "recomputed_score": 99.07398070679321,
+        "evaluated_at": null,
+        "api_snapshot_binding": "not supplied"
+      },
+      {
+        "model": "gpt-6-astra",
+        "effort": "xhigh",
+        "harness": "codex",
+        "score": 115.03535098973606,
+        "score_version": "radar-bench-v2-150",
+        "score_max": 150.0,
+        "score_status": "complete",
+        "coverage": 64,
+        "required_tasks": 64,
+        "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+        "selection_version": "dradar-four-library-deployment007-server024-20261004-config64",
+        "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+        "valid_grade_events": 74,
+        "latest_graded_at": "2026-10-19T03:44:07.908308Z",
+        "scoring_policy": {
+          "version": "radar-bench-v2-last3-per-task-equal-weight-150",
+          "base_score_max": 100,
+          "display_multiplier": 1.5,
+          "score_max": 150.0,
+          "latest_valid_per_task": 3,
+          "missing_tasks_are_zero": false,
+          "time_window_days": null,
+          "task_weight": "equal among covered tasks",
+          "grade_zero_included": true,
+          "reward_and_points_unchanged": true,
+          "model_effort_separate": true,
+          "order": [
+            "graded_at",
+            "unique_submission_id"
+          ],
+          "not_recommendation_or_contribution_points": true
+        },
+        "statistics_policy": {
+          "dradar_signal_policy": "dradar-product-signals-audit-v2",
+          "population_scope": "new DRadar timing/token/throughput/similarity and trajectory text network hints are audit only; prior flagged rows remain excluded",
+          "historical_flags_reclassified": false,
+          "same_population_as_prior_policy": false,
+          "official_verifier_reward_and_network_rules_changed": false
+        },
+        "role": "high",
+        "retrieved_at": "2026-10-20T02:23:20.530739+00:00",
+        "url": "https://api.codexradar.com/api/v1/radar-bench-score?model=gpt-6-astra&effort=xhigh",
+        "raw_sha256": "955e73442e9ac1b70573e07fca382854c679b65730feeac342ae206283ff0c32",
+        "used_reward_count": 74,
+        "per_task_sample_range": [
+          1,
+          2
+        ],
+        "trend_grade_range": [
+          "2026-10-09T12:49:55.721441Z",
+          "2026-10-19T03:44:07.908308Z"
+        ],
+        "recomputed_score": 115.03535098973606,
+        "evaluated_at": null,
+        "api_snapshot_binding": "not supplied"
+      }
+    ],
+    "normalized_import": "examples/first-pool-codexradar-public-20261020.json",
+    "normalized_import_sha256": "54162f4b0a727e0f423388da57623f11874cb281833101b146d424a031e293f0",
+    "latest_grade_is_evaluation_date": false,
+    "grade_events_are_independent_tasks": false,
+    "commercial_data_license": "pending",
+    "update_owner": null,
+    "robots_scope": "Public crawl allowed; no inference about commercial reuse."
+  },
+  "open_weight": {
+    "repository": "openai/gpt-oss-120b",
+    "revision": "b5c939de8f754692c1647ca79fbf85e8c1e70f8a",
+    "declared_license": "apache-2.0",
+    "declared_max_position_embeddings": 131072,
+    "declared_quant_method": "mxfp4",
+    "pinned_config_sha256": "933aeb666a3fd851133ddd7686414f369bc564c4185fb5704416550879f10566",
+    "pinned_card_sha256": "92b0408cf5dce04e4c5e4e5f2be0361da710d3650baefd7d7519badd1c687919",
+    "provider_fp4_is_same_revision_and_mxfp4": null,
+    "provider_weights_digest": null,
+    "engine_build": null,
+    "local_hardware_qualification": false
+  },
+  "prior_calibration_check": {
+    "hierarchical50": "Five cross-domain calibration cases per role, not SQL operation qualification.",
+    "older_sql": "Inspected v2 SQL calibration-plan identities: gpt-4.1-mini-2025-04-14 / effort null and gpt-5.6-sol-20260709 / low; not current four candidates.",
+    "formal_holdout_used_for_rules": false,
+    "result": "No matching independently established six-operation SQL qualification located in inspected materials; not a claim that all workspace archives were searched."
+  },
+  "admission": {
+    "profile": "examples/first-pool-profile-public-20261020.json",
+    "profile_sha256": "5ed964f013923be3226bb57317ee1e35f68b777919a4ece9704d41d14822302b",
+    "before_status": "blocked",
+    "after_status": "blocked",
+    "production_ready": false,
+    "before_model_blockers": {
+      "first-open_source": [
+        "configuration_evidence_unbound",
+        "mapping_unproven",
+        "capabilities_unproven"
+      ],
+      "first-low": [
+        "configuration_evidence_unbound",
+        "mapping_unproven",
+        "capabilities_unproven"
+      ],
+      "first-mid": [
+        "configuration_evidence_unbound",
+        "mapping_unproven",
+        "capabilities_unproven"
+      ],
+      "first-high": [
+        "configuration_evidence_unbound",
+        "mapping_unproven",
+        "capabilities_unproven"
+      ]
+    },
+    "after_model_blockers": {
+      "first-open_source": [
+        "mapping_unproven",
+        "capabilities_unproven"
+      ],
+      "first-low": [
+        "mapping_unproven",
+        "capabilities_unproven"
+      ],
+      "first-mid": [
+        "mapping_unproven",
+        "capabilities_unproven"
+      ],
+      "first-high": [
+        "mapping_unproven",
+        "capabilities_unproven"
+      ]
+    },
+    "remaining_blockers": [
+      "access:review_pending",
+      "coverage:review_pending",
+      "domain:review_pending",
+      "expiry:review_pending",
+      "inputs:invalid_or_unqualified",
+      "model:first-high:capabilities_unproven",
+      "model:first-high:mapping_unproven",
+      "model:first-high:review_pending",
+      "model:first-low:capabilities_unproven",
+      "model:first-low:mapping_unproven",
+      "model:first-low:review_pending",
+      "model:first-mid:capabilities_unproven",
+      "model:first-mid:mapping_unproven",
+      "model:first-mid:review_pending",
+      "model:first-open_source:capabilities_unproven",
+      "model:first-open_source:mapping_unproven",
+      "model:first-open_source:review_pending",
+      "review:input_binding_mismatch",
+      "source:review_pending",
+      "thresholds:review_pending"
+    ],
+    "current_store_activated": false,
+    "review": {},
+    "evaluated_at_populated": false
+  },
+  "remaining": [
+    "Benchmark family/effort is not bound to the dated API snapshot, exact provider, weights/quantization or harness equivalence.",
+    "SQL filter/join/aggregate/window/set/resource limits are not independently qualified for these exact configurations.",
+    "Source exposes latest grading time and grade trend, not execution/evaluation dates for all aggregate samples. Existing max_evaluation_age_days remains enforced.",
+    "Source/domain applicability, access/commercial reuse policy, update ownership and input-bound formal review remain pending.",
+    "Baseten fp4 tag is not proof of exact Hugging Face revision, MXFP4 identity, engine or local hardware.",
+    "Public catalog support does not prove dated model ID is executable/pinned on POST or confirm current account entitlement.",
+    "RG04 provider fee bounds remain independent and unchanged."
+  ],
+  "additional_public_materials": {
+    "baseten": {
+      "url": "https://www.baseten.co/blog/how-we-made-the-fastest-gpt-oss-on-nvidia-gpus-60-percent-faster/",
+      "published_at": "2025-10-24",
+      "scope": "Provider historically described native MXFP4 / TensorRT-LLM / NVIDIA Dynamo and speculative decoding. No current endpoint revision/build binding supplied.",
+      "admission": "supporting history only"
+    },
+    "sol61_community": {
+      "url": "https://github.com/joonlab/gpt-6.1-sol-benchmark/blob/main/README.md",
+      "scope": "Author reports Codex/ChatGPT Pro harness, general reasoning/coding/vision/tools; no executable harness or complete model responses in repository.",
+      "admission": "Not six-operation bounded-SQL qualification or dated OpenRouter snapshot equivalence."
+    },
+    "sqlserver_tuning": {
+      "url": "https://aisqltuner.com/2026/09/30/gpt-6-1-sol-vs-gpt-6-sol-sql-tuning/",
+      "scope": "SQL Server tuning title/page, not evidence of this exact SQLite contract and six operations.",
+      "admission": "Not admitted; exact configured-version/effort/provider and reproducible matching-contract qualification not established."
+    }
+  },
+  "checks": {
+    "raw_hashes": true,
+    "scores_recomputed_from_public_task_means": true,
+    "same_fixed_candidates": true,
+    "same_thresholds_and_ttl_and_requirements": true,
+    "prior_inputs_unchanged": true,
+    "new_pack_blocked_without_review": true,
+    "full_suite_rerun": false,
+    "offline_archive_and_profile_validation": {
+      "path": "runtime/pool-public-evidence-20261020/offline-checks.json",
+      "sha256": "6f6d371c5c3c0696a7330d6e8c1c0ac838323dc1a7b1f2c3c5bf05a1262d5bf7",
+      "result": {
+        "checked_at": "2026-10-20T02:33:26.110018+00:00",
+        "result": "passed",
+        "network_denied": true,
+        "archived_responses_verified": 32,
+        "configuration_bindings_verified": 4,
+        "new_score_aggregate_recomputations": 3,
+        "source_observation_reasons": {
+          "first-low": "evaluation_date_unknown",
+          "first-mid": "evaluation_date_unknown",
+          "first-high": "evaluation_date_unknown"
+        },
+        "source_after_49h_reasons": {
+          "first-low": "source_stale",
+          "first-mid": "source_stale",
+          "first-high": "source_stale"
+        },
+        "original_profile_source_and_formal_registry_unchanged": true,
+        "tracked_files_compared_unchanged": 257,
+        "source_digest": "0eeeef7cb03aecb605dfaf40961048ef8bcf0cc6eee847a5fb69f3357c2ed283",
+        "local_links_checked": 110,
+        "missing_links": [],
+        "new_profile_report_replay_identical": true,
+        "old_profile_report_replay_identical": true,
+        "new_profile_admission": "blocked",
+        "formal_gate_promotions": 0
+      }
+    },
+    "cli_prepare": {
+      "command": [
+        ".venv/bin/cloudyfan-scores",
+        "prepare-first-pool",
+        "--profile",
+        "examples/first-pool-profile-public-20261020.json",
+        "--output-dir",
+        "runtime/pool-public-evidence-20261020/cli-prepared"
+      ],
+      "exit_code": 1,
+      "expected_exit_code": 1,
+      "status": "blocked",
+      "production_ready": false,
+      "report_id": "9ec7bcb6d1cbb537d5310609bee01bf60ee7d4777bac41b492102d9ad1f22b51",
+      "report_sha256": "271087a21b7318da9321493d45226abc250f49e257fd5e6e841070c23dcb7d12"
+    },
+    "focused_pytest": {
+      "command": ".venv/bin/python -m pytest -q tests/test_first_pool.py tests/test_first_pool_updates.py tests/test_score_adapters.py tests/test_scores.py tests/test_qualification.py tests/test_score_updates.py",
+      "exit_code": 0,
+      "passed": 141,
+      "seconds": 2.94,
+      "scope": "Existing offline tests; no new source/test files or live model requests."
+    },
+    "quick_check": {
+      "path": "runtime/checks/e997cf19a41045f1b85365803c4aef3a/checks.json",
+      "sha256": "eadd78abf780c58485a39367fac8a4159d5dba3f287ca06485fdc730aad3550d",
+      "result": "passed"
+    },
+    "offline_script_setup_failures": [
+      "Initial checker import scripts.project_state failed because runtime script directory was sys.path root.",
+      "Importlib loading exposed sibling release_gates import; checker corrected to use explicit local scripts directory. No production source change."
+    ],
+    "source_digest": "0eeeef7cb03aecb605dfaf40961048ef8bcf0cc6eee847a5fb69f3357c2ed283",
+    "full_suite_reference": {
+      "tests_passed": 1206,
+      "evidence": "docs/evidence/first-pool-offline-20261020.json",
+      "rerun_this_turn": false
+    }
+  }
+}

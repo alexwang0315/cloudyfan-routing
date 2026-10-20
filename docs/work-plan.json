@@ -113,6 +113,30 @@
         "POOL-04"
       ],
       "consumed_interfaces": []
+    },
+    {
+      "id": "POOL-PUBLIC-EVIDENCE",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "examples/first-pool-profile-public-20261020.json",
+        "examples/first-pool-codexradar-public-20261020.json",
+        "docs/first-pool-public-evidence-20261020.md",
+        "docs/evidence/first-pool-public-20261020.json",
+        "docs/first-pool.md",
+        "docs/first-pool-source.md",
+        "docs/release-readiness.md",
+        "docs/score-integration.md",
+        "docs/agent-state.json",
+        "docs/work-plan.json",
+        "docs/handoff.md",
+        "docs/verification.md",
+        "docs/evidence/first-pool-public-precommit-20261020.json"
+      ],
+      "depends_on": [
+        "POOL-05"
+      ],
+      "consumed_interfaces": []
     }
   ]
 }

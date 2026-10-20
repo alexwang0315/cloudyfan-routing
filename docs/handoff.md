@@ -438,3 +438,46 @@ this cohort are not cleared by this commit or its matched account delta.
 User authorizes implementing the five local POOL tickets under mattpocock/implement, including offline validation, review and local commit. Tickets remain local, not GitHub Issues. [Pool entry](first-pool.md) reuses the score adapters/qualification/updates/ScoreCore and composes BudgetedCore. Historical CodexRadar import keeps actual observation times, 14 native scores and unresolved version/SQL-capability/access evidence; the real archive remains blocked. Synthetic lifecycle uses fixed MockTransport and actual SQLite, explicit artificial approval/caps, and is never a production pool. Fee gaps bind every candidate plus classifier, all eight components and seven paths; no provider guarantee or numeric upper bound is invented. RG-01 and original paid trials remain unchanged. Final checks and review will be recorded separately, not inferred from prior 1,187 tests. No paid/source API, supplier contact, model download, hardware, deployment or push.
 
 Final first-pool integration passed 1,206 tests, Ruff, both mock demos and sdist/wheel; [evidence](evidence/first-pool-offline-20261020.json) and [ticket status](evidence/first-pool-ticket-status-20261020.json) separate offline completion from actual qualification. Standards P3 shared-interface ownership and Spec P2 missing new-evidence review binding were fixed and independently re-reviewed; both axes have zero remaining findings. Five evidence-change regressions were red before the review-binding fix. RG01 source, formal registry and paid50 reports match the starting commit; no new API or qualification claim.
+
+
+## RG-02/RG-03 free public evidence — 2026-10-20
+
+User authorizes existing-material and unauthenticated free public-source checks only;
+no paid API, supplier contact, deployment or push. [New evidence](first-pool-public-evidence-20261020.md)
+separates API catalog identities/efforts/provider tags/declared context from benchmark
+snapshot identity and actual SQL capability. Three original fixed candidates have
+new native scores 34.181422 / 99.073981 / 115.035351, each with 64/64 coverage; current last3
+uses 80 / 110 / 74 rewards (middle 112 total valid events is not 110 used rewards). Source
+explicitly reports a changed audit population; no controlled trend or SQL quality
+claim follows. Old DOM 14 rows, requirements/thresholds/TTLs, RG01 source, formal
+registry and historical trials remain unchanged.
+
+New public profile is separate, approved=false/review empty, no current activation.
+All four configuration evidence digests bind; exact benchmark/API snapshot links,
+OSS deployed artifacts, six SQL operations, complete execution/evaluation dates,
+source/domain/use policy and update owner/review remain pending. latest_graded_at
+is not evaluated_at; do not populate missing evaluation dates with retrieval time.
+Robots crawl permission and OSS Apache-2.0 do not license score-data redistribution.
+410 old score endpoint then declared new endpoint 200, and LiveBench 404s are retained.
+
+141 focused offline score/qualification/update tests and quick check passed; 32 raw
+public GET hashes, three public score recomputations, blocked report replay,
+future source expiry and unchanged executable source were checked. CLI expected
+exit 1/blocked is a successful admission-guard check. Full 1,206 test evidence is
+historical and still matches source; it was not rerun. [Matrix](evidence/first-pool-public-20261020.json)
+retains actual receipts, setup failures and limits. No model POST, weights download,
+new benchmark, local commit, deployment, push or gate promotion. Continue from
+specific remaining evidence, not S01-S08 review or another validator experiment.
+
+
+## Public-evidence local commit review — 2026-10-20
+
+User now authorizes review and local Git commit of the RG02/RG03 public supplement,
+not new source reads or model requests. The earlier no-local-commit statements
+above describe their capture time. [Precommit evidence](evidence/first-pool-public-precommit-20261020.json)
+records fresh 141-test offline regression, independent recomputation of all three
+scores/coverage/used rewards, exact prior receipt hashes, blocked admission and
+future expiry, unchanged executable/RG01/formal-registry inputs, and explicit
+staged scope. Public facts remain separate from missing benchmark snapshot/SQL/
+evaluation-date/use-policy qualification. Prior evidence and private raw responses
+are preserved. No API, supplier contact, deployment, push or formal gate promotion.

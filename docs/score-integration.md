@@ -116,3 +116,7 @@ result = engine.run("job-001", task, make_fresh_isolated_environment,
 ## 分類投影版本
 
 路由政策 `hierarchical50-binary-v2` 將候選固定版本與明確供應商身份納入分類輸入。舊 `v1` manifest／實驗計畫不能在新版核心續跑；原始 intent、回答與核帳紀錄保持不變，不重送已付費請求。需要續用舊凍結流程時應保留原版執行環境，不能直接改寫歷史版本標記。這項相容性限制不表示新版分類效果或節省率已實測。
+
+## 首版公開來源補證（2026-10-20）
+
+[補證與限制](first-pool-public-evidence-20261020.md)記錄 CodexRadar 頁面明示 score 介面的免費唯讀取得；保留舊介面 410、新介面 200、新 source 版本與受控匯入。這是單次來源查核，未新增遠端自動 adapter／排程、未啟用 current，也沒有把 latest_graded_at 轉成 evaluated_at。新版統計母體與舊版不同。LiveBench 官方 HEAD／README 本次 404 留存，不影響既有離線 adapter 測試，也不假設歷史 v1 資料今天仍可重新取得。

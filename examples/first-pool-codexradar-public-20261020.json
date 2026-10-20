@@ -1,0 +1,28 @@
+{
+  "kind": "model_benchmark",
+  "source_url": "https://deng.codexradar.com/",
+  "source_version": "codexradar-public:radar-bench-v2-150:670f3bae8900",
+  "rows": [
+    {
+      "model_id": "openai/gpt-6-sol",
+      "effort": "low",
+      "score": 34.18142158006467,
+      "sample_count": 80,
+      "evaluated_at": null
+    },
+    {
+      "model_id": "openai/gpt-6.1-sol",
+      "effort": "high",
+      "score": 99.07398070679321,
+      "sample_count": 110,
+      "evaluated_at": null
+    },
+    {
+      "model_id": "openai/gpt-6-astra",
+      "effort": "xhigh",
+      "score": 115.03535098973606,
+      "sample_count": 74,
+      "evaluated_at": null
+    }
+  ]
+}

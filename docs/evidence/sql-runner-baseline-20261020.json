@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "tested_commit": "c2993bb9d902bc79ea0f161cc2596dc4d52125f5",
+  "source_digest": "057d6fbc5f15da1082298e651f91a5874ff4476e489d68d4a23d26a37e8f6c27",
+  "tests_passed": 1304,
+  "source_evidence": "docs/evidence/sequential-integration-offline-20261020.json",
+  "check_receipt": {
+    "path": "runtime/checks/14b5123d5ff740609a6e6cf7c4f876c0/checks.json",
+    "sha256": "c23816a5db197355c76d92ee3743b2623a42d9be898c70cd10e24639d9c20fcb"
+  },
+  "note": "Baseline reuses exact unchanged executable inputs; no fresh full-suite run is claimed."
+}

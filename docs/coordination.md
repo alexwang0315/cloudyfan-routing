@@ -267,3 +267,17 @@ Root owns the reviewed integration patch and overlapping current documentation, 
 ## Sequential integration local commit review — 2026-10-20
 
 The user authorizes review and local Git commit of the integrated sequential route, preserving the related SQL qualification work and all failure/final verification records. Root owns selective staging and commit; two independent read-only skill reviewers checked Standards and Spec, with no source edits. No blocking finding; one optional old test-name wording observation remains. Current executable inputs still match the 1,304-test full integration fingerprint, so no full-suite rerun is attributed to this commit review. The Spec reviewer additionally ran the22 sequential regressions successfully. The independent whole-document plain-language rewrite of release-readiness.md is preserved unstaged; a reconstructed blob includes only SQL-v2/sequential/state evidence updates. No runtime/private receipt or root-workspace-only document is staged; no API, supplier contact, deployment or push.
+
+
+## SQL qualification capture runner and manual source operations — 2026-10-20
+
+Root owns a new coordinator consuming unchanged Client, BudgetStore, SQL exam/grader and public validator interfaces, plus its boundary tests, mock-only demo and documentation. No concurrent editors. Existing RG01 modules/tests/data, qualification thresholds, model profiles, formal registry and paid-trial records remain frozen. Capture performs public-only repair; sealed grading is a separate post-capture operation. No paid/source API, supplier contact, deployment, push, qualification promotion or local commit is authorized in this scope.
+
+Integration correction: the existing capture normalizer used compact score JSON hashing instead of the actual Client encoding. Root also owns this narrow SQL-model capture binding fix and its former synthetic fixture correction. SQL validator/exam, capability thresholds and formal gates remain unchanged; the previous normalizer and failed first Client integration receipt are retained.
+
+Completion: root retained sole edit ownership. The read-only technical reviewer found same-model role binding and completed billing-seal defects, both reproduced and fixed; final targeted review found no remaining actionable defect. Root additionally fixed actual Client encoding and repair checkpoint JSON ordering. Full1,322 checks and complete synthetic50x4 capture/grade passed. Existing RG01/exam/profile/formal/history inputs remain frozen; one RG02 fixture changed to actual Client encoding. Formal qualifications remain pending; no external actions or local commit.
+
+
+## SQL qualification runner local commit review — 2026-10-20
+
+The user now authorizes review and local Git commit; earlier no-commit statements describe their capture time. Direct review found no new blocking issue. The current executable/test/build fingerprint exactly matches the preserved1,322-test full integration result; this review reuses that result, not a fresh full run. A fresh offline quick check passed. All621 files from the original failed mock and the original failure/fix receipts remain intact;136 of137 protected inputs are unchanged, with only the declared RG02 Client-encoding fixture correction. [Precommit evidence](evidence/sql-runner-precommit-20261020.json) records the checks and preservation. RG01 and formal gates remain unchanged/pending. Raw answers, prompts and receipts remain in ignored runtime; no API, supplier contact, deployment or push.

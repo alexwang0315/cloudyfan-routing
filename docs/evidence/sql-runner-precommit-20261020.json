@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "kind": "local_commit_review",
+  "result": "passed",
+  "observed_at": "2026-10-20T06:10:33.075344+00:00",
+  "base_commit": "c2993bb9d902bc79ea0f161cc2596dc4d52125f5",
+  "source_digest": "dad094a8af7536bb704f199f5fbca4802ae30631e0d7caa722e0f49407547363",
+  "review": "Direct inspection of runner, regressions, mock-only CLI, manual operations, release index and verification records; no new blocking finding",
+  "full_integration": {
+    "tests_passed": 1322,
+    "receipt": {
+      "path": "runtime/checks/9cb9f51c1eb14235b080c8cec7e86981/checks.json",
+      "sha256": "72a7f12e02f97adf211925e6f453888e4df4974b5378783b3a8931ecf6c67be4"
+    },
+    "reused_identical_executable_inputs": true,
+    "fresh_full_run": false
+  },
+  "fresh_quick_check": {
+    "path": "runtime/checks/eeb8bdeea8b3472f92dfa0874a8c5e85/checks.json",
+    "sha256": "d7514309d7a62c7053c96c8870580e0ccb53b2645e879e27c803a7b654a5bc5a"
+  },
+  "preservation": {
+    "protected_paths_checked": 137,
+    "unchanged": 136,
+    "expected_fixture_change": [
+      "tests/test_sql_model_qualification.py"
+    ],
+    "original_failed_mock_files_unchanged": 621,
+    "original_implementation_evidence": {
+      "path": "docs/evidence/sql-runner-offline-20261020.json",
+      "sha256": "ac33f4eb0c8c4799a90f2ec8076d19726e77cb1becd8d31261c0110820cf5fd4"
+    },
+    "private_review_audit": {
+      "path": "runtime/sql-runner-precommit-20261020/review-audit.json",
+      "sha256": "6a858c25d8da0f628f6b8470813c982b90e2d20d671a3a6d4f6c7af77f5939f8"
+    }
+  },
+  "rg01_frozen": true,
+  "production_qualification_recorded": false,
+  "real_api_requests": 0,
+  "supplier_contact": false,
+  "deployment": false,
+  "push": false,
+  "private_answers_and_receipts_staged": false,
+  "local_commit_authorized": true,
+  "limitations": [
+    "Mock results are synthetic, not real model SQL qualification",
+    "Source-use grounds, named reviewers, real identities/results and supplier full-fee guarantees remain pending"
+  ]
+}

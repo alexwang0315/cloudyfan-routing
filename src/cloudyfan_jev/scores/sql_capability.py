@@ -196,8 +196,9 @@ def captured_attempt(entry, case, intent, record):
     original content before parsing, and the grader checks the saved payload too.
     """
     import json
-    from ..client import usage
-    if (intent.get('request_sha256') != digest({'url': intent['url'], 'payload': intent['payload']})
+    from ..client import _encoded, usage
+    client_hash = hashlib.sha256(_encoded({'url': intent['url'], 'payload': intent['payload']})).hexdigest()
+    if (intent.get('request_sha256') != client_hash
             or record.get('request_sha256') != intent.get('request_sha256')
             or record.get('call_id') != intent.get('call_id')):
         raise ValueError('Client intent/response binding mismatch')

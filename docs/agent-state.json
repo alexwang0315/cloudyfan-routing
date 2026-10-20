@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "scope": "sequential-routing-sql-qualification-integration",
+  "scope": "sql-model-capture-runner-and-manual-source-operations",
   "phase": "offline_verified",
-  "baseline_commit": "c6e53fdec9b403c8dc04e99c1e77d16f3f73d26f",
+  "baseline_commit": "c2993bb9d902bc79ea0f161cc2596dc4d52125f5",
   "integration_branch": "codex/implement-routing-spec-1",
   "constraints": {
     "paid_api": false,
@@ -14,8 +14,8 @@
   "release_registry": "docs/release-gates.json",
   "work_plan": "docs/work-plan.json",
   "last_verified": {
-    "path": "docs/evidence/sql-model-baseline-20261020.json",
-    "sha256": "e139d36f17f73796ac6a26499d130025c9e1c5f368f6c201715874edfea2ab70"
+    "path": "docs/evidence/sql-runner-baseline-20261020.json",
+    "sha256": "323632b37fc27db96495cb742fbaff2a7d7d83d8f103858d52d67d95f4f7cbcf"
   },
   "history": [
     {
@@ -217,17 +217,25 @@
     {
       "path": "docs/evidence/sequential-integration-prior-work-plan-20261020.json",
       "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/sql-runner-prior-agent-state-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/sql-runner-prior-work-plan-20261020.json",
+      "record_kind": "historical"
     }
   ],
   "next_steps": [
     {
       "gate": "RG-02",
-      "action": "New explicit v2 policy uses family/effort rank prior and independent exact-API SQL qualification. Offline version table, 50-task exam and saved-record grading are implemented. Next approve a controlled API plan, verify actual identities and run the sealed cohort; no API spend is authorized now. RG01 stays frozen. Sequential routing is integrated locally only; future routing experiments require a new three-generation CloudyFan plan with full cost reservation. The fixed-high standalone control remains paused per user direction; model qualification is a separate scope and no paid execution is authorized.",
+      "action": "Capture runner, private Client-bound records, public-only same-model repair, post-capture grading and mock50x4 rehearsal are implemented/offline verified. Next obtain separate authority, fresh exact API identity/prices and RG04 enforceable full bounds before running real independent SQL qualification. No API spend is authorized now; RG01 and old experiments remain frozen; fixed-high standalone routing control remains paused.",
       "requires_authorization": true
     },
     {
       "gate": "RG-03",
-      "action": "v2 retains source retrieval freshness, native tiers and honest unknown benchmark dates; independent SQL dates control capability expiry. Confirm operational source use/update ownership and input-bound review before activating a real current; do not require unavailable exact benchmark/API equivalence as SQL qualification.",
+      "action": "Manual source-use/update runbook is documented. Actual source-use grounds, named update/review responsibility and fresh retrieval/catalog evidence remain pending. Use existing native family/effort tiers and independently dated SQL qualification; do not fabricate benchmark/API equivalence, refresh archived dates or activate a real current.",
       "requires_authorization": true
     },
     {
@@ -237,7 +245,7 @@
     }
   ],
   "current_verification": {
-    "path": "docs/evidence/sequential-integration-offline-20261020.json",
-    "sha256": "5803956f69229cfbf944eca2a435c4699b6b0cdfbb80a2b0d05b747b0c935a1d"
+    "path": "docs/evidence/sql-runner-offline-20261020.json",
+    "sha256": "ac33f4eb0c8c4799a90f2ec8076d19726e77cb1becd8d31261c0110820cf5fd4"
   }
 }

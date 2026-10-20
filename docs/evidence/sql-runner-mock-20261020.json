@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "kind": "offline_mock_rehearsal",
+  "result": "passed",
+  "synthetic": true,
+  "observed_at": "2026-10-20T05:50:10.937202+00:00",
+  "source_digest": "dad094a8af7536bb704f199f5fbca4802ae30631e0d7caa722e0f49407547363",
+  "summary": {
+    "classifier_calls": 0,
+    "completed_replay_new_posts": 0,
+    "deployment": false,
+    "explicit_mock_receipt_gets": 1,
+    "formal_qualification": "pending",
+    "identity_calls": 4,
+    "interruption_resumed_without_resending": true,
+    "kind": "offline_mock_rehearsal",
+    "known_synthetic_usd": "0.208",
+    "mock_posts": 205,
+    "models": {
+      "high": {
+        "final_pass": 50,
+        "first_pass": 50,
+        "known_synthetic_usd": "0.050",
+        "synthetic_exam_pass": true
+      },
+      "low": {
+        "final_pass": 50,
+        "first_pass": 50,
+        "known_synthetic_usd": "0.053",
+        "synthetic_exam_pass": true
+      },
+      "mid": {
+        "final_pass": 50,
+        "first_pass": 50,
+        "known_synthetic_usd": "0.050",
+        "synthetic_exam_pass": true
+      },
+      "open_source": {
+        "final_pass": 50,
+        "first_pass": 49,
+        "known_synthetic_usd": "0.051",
+        "synthetic_exam_pass": true
+      }
+    },
+    "pool_activated": false,
+    "push": false,
+    "real_api_cost_usd": "0",
+    "repair_calls": 1,
+    "synthetic": true,
+    "tasks_per_model": 50,
+    "unknown_cost_count": 0
+  },
+  "private_summary": {
+    "path": "runtime/sql-model-runner-20261020/final-mock/summary.json",
+    "sha256": "c0b91b6848ccf43f69bf42899f6e8a5df5b995efa0b1e9b9822210c76b68df34"
+  },
+  "original_failed_rehearsal": {
+    "path": "runtime/sql-model-runner-20261020/full-mock.log",
+    "reason": "Repair diagnostic JSON key order changed payload on replay; zero extra POSTs, original 205 calls retained",
+    "inventory": "runtime/sql-model-runner-20261020/initial-failed-demo-inventory.json",
+    "inventory_sha256": "bdb901dd47df4c76b1f0e71a7b305224f874fbc6e88a09d4443ff276ce6d92b2"
+  },
+  "qualification": "Synthetic controls only, no real model API or SQL capability qualification",
+  "rg01_rules_exam_and_formal_registry_unchanged": true,
+  "pool_activated": false
+}

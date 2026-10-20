@@ -261,7 +261,9 @@ def test_readonly_capture_reuses_client_actual_cost_once_and_leaves_estimates_un
     sample = captured_records(entry)[0]['attempts'][0]
     intent = {'call_id': 'fixture-one', 'url': sample['request_url'], 'payload': sample['request'],
               'started_at': NOW}
-    intent['request_sha256'] = digest({'url': intent['url'], 'payload': intent['payload']})
+    from cloudyfan_jev.client import _encoded
+    import hashlib
+    intent['request_sha256'] = hashlib.sha256(_encoded({'url': intent['url'], 'payload': intent['payload']})).hexdigest()
     response = {**sample['response'], 'id': 'gen-fixture-sql-qualification', 'usage': {'cost': '0.003'}}
     record = {'call_id': 'fixture-one', 'request_sha256': intent['request_sha256'], 'raw': json.dumps(response),
               'reconciliation': {'verified': True, 'generation_id': response['id'], 'total_cost': '0.004'}}

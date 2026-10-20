@@ -1,0 +1,221 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "sql-model-capture-runner-and-manual-source-operations",
+  "observed_at": "2026-10-20T06:02:47.102612+00:00",
+  "base_commit": "c2993bb9d902bc79ea0f161cc2596dc4d52125f5",
+  "tested_tree": "Uncommitted local capture-runner implementation and manual source operations; no production/model qualification",
+  "source_digest": "dad094a8af7536bb704f199f5fbca4802ae30631e0d7caa722e0f49407547363",
+  "tests_passed": 1322,
+  "pytest_seconds": 517.76,
+  "new_runner_tests": 18,
+  "focused_tests": {
+    "passed": 18,
+    "seconds": 59.22,
+    "log": "runtime/sql-model-runner-20261020/final-focused-billing.log",
+    "sha256": "3f5f2b3d438ee034dad8db72783c1c8265a0be65256ffd6bdf1e9383201b32a7"
+  },
+  "check_receipt": {
+    "path": "runtime/checks/9cb9f51c1eb14235b080c8cec7e86981/checks.json",
+    "sha256": "72a7f12e02f97adf211925e6f453888e4df4974b5378783b3a8931ecf6c67be4"
+  },
+  "check_steps": [
+    {
+      "command": [
+        "/Users/alexwang0315/.local/bin/uv",
+        "sync",
+        "--project",
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core",
+        "--locked",
+        "--offline",
+        "--extra",
+        "dev",
+        "--no-python-downloads"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/Users/alexwang0315/.local/bin/uv",
+        "pip",
+        "check",
+        "--python",
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/.venv/bin/python"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/.venv/bin/python",
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/scripts/project_state.py",
+        "check"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/.venv/bin/python",
+        "-m",
+        "ruff",
+        "check",
+        "."
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-q"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/.venv/bin/cloudyfan-jev-demo",
+        "--route",
+        "high",
+        "--output",
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/runtime/checks/9cb9f51c1eb14235b080c8cec7e86981/core"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/.venv/bin/cloudyfan-score-demo",
+        "--route",
+        "high",
+        "--output",
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/runtime/checks/9cb9f51c1eb14235b080c8cec7e86981/scores"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/Users/alexwang0315/.local/bin/uv",
+        "build",
+        "--offline",
+        "--no-python-downloads",
+        "--python",
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/.venv/bin/python",
+        "--out-dir",
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/runtime/checks/9cb9f51c1eb14235b080c8cec7e86981/dist"
+      ],
+      "returncode": 0
+    }
+  ],
+  "integration_log": {
+    "path": "runtime/sql-model-runner-20261020/full-integration-recheck.log",
+    "sha256": "b9db9c88424e1ea99f393cb3106e6789a44b717d0242d4a07dc0267c3c957d28"
+  },
+  "mock_evidence": "docs/evidence/sql-runner-mock-20261020.json",
+  "mock_summary": {
+    "classifier_calls": 0,
+    "completed_replay_new_posts": 0,
+    "deployment": false,
+    "explicit_mock_receipt_gets": 1,
+    "formal_qualification": "pending",
+    "identity_calls": 4,
+    "interruption_resumed_without_resending": true,
+    "kind": "offline_mock_rehearsal",
+    "known_synthetic_usd": "0.208",
+    "mock_posts": 205,
+    "models": {
+      "high": {
+        "final_pass": 50,
+        "first_pass": 50,
+        "known_synthetic_usd": "0.050",
+        "synthetic_exam_pass": true
+      },
+      "low": {
+        "final_pass": 50,
+        "first_pass": 50,
+        "known_synthetic_usd": "0.053",
+        "synthetic_exam_pass": true
+      },
+      "mid": {
+        "final_pass": 50,
+        "first_pass": 50,
+        "known_synthetic_usd": "0.050",
+        "synthetic_exam_pass": true
+      },
+      "open_source": {
+        "final_pass": 50,
+        "first_pass": 49,
+        "known_synthetic_usd": "0.051",
+        "synthetic_exam_pass": true
+      }
+    },
+    "pool_activated": false,
+    "push": false,
+    "real_api_cost_usd": "0",
+    "repair_calls": 1,
+    "synthetic": true,
+    "tasks_per_model": 50,
+    "unknown_cost_count": 0
+  },
+  "packaging": {
+    "wheel_contains_current_sql_runner": true,
+    "sdist_contains_mock_only_cli": true
+  },
+  "preservation": {
+    "existing_protected_files_checked": 137,
+    "unchanged": 136,
+    "expected_RG02_fixture_change": [
+      "tests/test_sql_model_qualification.py"
+    ],
+    "rg01_validator_exam_profiles_formal_registry_and_prior_evidence_unchanged": true,
+    "original_failed_demo_files_unchanged": 621,
+    "raw_answers_and_receipts": "Private ignored runtime only"
+  },
+  "earlier_failures": {
+    "red_tests_preserved": [
+      "first-red.log",
+      "first-green.log",
+      "validation-red.log",
+      "synthetic-red.log",
+      "role-identity-red.log",
+      "repair-replay-red.log",
+      "billing-revision-red.log"
+    ],
+    "log_root": "runtime/sql-model-runner-20261020",
+    "initial_full_mock": "Full capture205 mock POSTs preserved; repair replay payload JSON ordering was unstable; no extra POST",
+    "first_integration": {
+      "receipt": "runtime/checks/9dbaa2da82ee4d078784328f163a8240/checks.json",
+      "sha256": "10a51b1aeb7a9482f27f3ec0690977b04a91850fa516e994688a166010a55b86",
+      "error": "One collection ImportError in existing Ollama SDK dependency; no tests executed"
+    },
+    "environment_recovery": {
+      "path": "runtime/sql-model-runner-20261020/dependency-restoration.json",
+      "sha256": "528f901b2fb13caaf510540f33a0a6e8849c97d8f5fb9314805531e26e6497e1",
+      "package": "pydantic_core",
+      "version": "2.50.1",
+      "native_sha256": "e2ec2e4405cd7716e290685e6d08930c67c39a11319af915ecd3a79412c40e6b",
+      "matches_installed_RECORD": true,
+      "network": false,
+      "existing_files_deleted": false
+    }
+  },
+  "review": {
+    "actor": "qualification_runner_audit (AI, read-only)",
+    "role_identity_and_completed_billing_findings": "Reproduced and fixed; final targeted read-only review found no remaining actionable correctness defect",
+    "post_reconciliation_grade": "Covered by final complete mock rehearsal"
+  },
+  "real_model_requests": 0,
+  "api_cost_usd": "0",
+  "source_network_requests": 0,
+  "supplier_contact": false,
+  "deployment": false,
+  "push": false,
+  "local_commit": false,
+  "production_qualification_recorded": false,
+  "limitations": [
+    "All model responses, identity data, fee bounds and authorization in rehearsal are synthetic",
+    "No real API identity, SQL model capability, supplier cap, production/source-use qualification or savings claim",
+    "Real caller must supply valid shared authorization, enforceable verified bounds and reviewed source data",
+    "Non-text/null/tool-call replies are retained and stopped under this text-only capture contract",
+    "RG01 remains frozen; no S01-S08 review or old paid requests repeated"
+  ]
+}

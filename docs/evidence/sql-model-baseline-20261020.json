@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "sql-model-qualification-baseline",
+  "tested_commit": "c6e53fdec9b403c8dc04e99c1e77d16f3f73d26f",
+  "source_digest": "0eeeef7cb03aecb605dfaf40961048ef8bcf0cc6eee847a5fb69f3357c2ed283",
+  "tests_passed": 1206,
+  "basis": "Inherited verified source with unchanged executable inputs; no new full test run."
+}

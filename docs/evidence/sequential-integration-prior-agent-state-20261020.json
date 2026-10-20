@@ -1,0 +1,231 @@
+{
+  "schema_version": 1,
+  "scope": "sql-independent-qualification-v2",
+  "phase": "offline_verified",
+  "baseline_commit": "c6e53fdec9b403c8dc04e99c1e77d16f3f73d26f",
+  "integration_branch": "codex/implement-routing-spec-1",
+  "constraints": {
+    "paid_api": false,
+    "deployment": false,
+    "source_push": false,
+    "hardware": false,
+    "model_downloads": false
+  },
+  "release_registry": "docs/release-gates.json",
+  "work_plan": "docs/work-plan.json",
+  "last_verified": {
+    "path": "docs/evidence/sql-model-baseline-20261020.json",
+    "sha256": "e139d36f17f73796ac6a26499d130025c9e1c5f368f6c201715874edfea2ab70"
+  },
+  "history": [
+    {
+      "path": "docs/implementation-spec1.md",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/verification.md",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg04-components-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg04-components-initial-pass.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg04-zero-rate-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg04-zero-rate-offline.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-sql-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-sql-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg04-zero-rate-precommit.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/release-preparation-precommit-20261019.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-ready-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-ready-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-semantic-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-semantic-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-decision-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-decision-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-tickets-prior-agent-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-tickets-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-tickets-offline-20261019.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-scout-prep-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-scout-prep-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-scout-environment-preparation-20261019.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-target-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-target-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-linux-target-runtime.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-target-offline-20261019.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-review-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-review-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-technical-review-20261019.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-execution-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-execution-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-live-integration-20261019.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rate-limit-prior-agent-state-20261019.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rate-limit-prior-work-plan-20261019.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/fee-policy-prior-agent-state-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/fee-policy-prior-work-plan-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/fresh50-recovery-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/public-suite-prior-agent-state-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/public-suite-prior-work-plan-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/sql-public-suite-precommit-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/sql-public-suite-offline-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/first-pool-prior-agent-state-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/first-pool-prior-work-plan-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/fee-report-precommit-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/sql-model-prior-state-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/sql-model-prior-plan-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/first-pool-public-20261020.json",
+      "record_kind": "historical"
+    }
+  ],
+  "next_steps": [
+    {
+      "gate": "RG-02",
+      "action": "New explicit v2 policy uses family/effort rank prior and independent exact-API SQL qualification. Offline version table, 50-task exam and saved-record grading are implemented. Next approve a controlled API plan, verify actual identities and run the sealed cohort; no API spend is authorized now. RG01 stays frozen.",
+      "requires_authorization": true
+    },
+    {
+      "gate": "RG-03",
+      "action": "v2 retains source retrieval freshness, native tiers and honest unknown benchmark dates; independent SQL dates control capability expiry. Confirm operational source use/update ownership and input-bound review before activating a real current; do not require unavailable exact benchmark/API equivalence as SQL qualification.",
+      "requires_authorization": true
+    },
+    {
+      "gate": "RG-04",
+      "action": "Candidate-specific eight-component/seven-path gap matrix remains pending. Obtain pinned Decisions cumulative input and all-role binding rates/bounds, settlement and in-flight guarantees; no supplier contact or paid test in this scope.",
+      "requires_authorization": true
+    }
+  ],
+  "current_verification": {
+    "path": "docs/evidence/sql-model-offline-20261020.json",
+    "sha256": "8650af0499e106c8b1937497c5d7194d8193150ca99e2dbd2a06b7dd2850a71e"
+  }
+}

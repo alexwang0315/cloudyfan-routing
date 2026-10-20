@@ -310,7 +310,7 @@ def test_cli_build_select_and_missing_credential(tmp_path, monkeypatch, capsys):
     assert 'KeyError' in capsys.readouterr().err
 
 
-@pytest.mark.parametrize('route,count', [('pass', 1), ('low', 3), ('mid', 4), ('high', 4)])
+@pytest.mark.parametrize('route,count', [('pass', 1), ('low', 3), ('mid', 3), ('high', 5)])
 def test_score_demo_all_paths(tmp_path, route, count):
     from cloudyfan_jev.scores.demo import main
     output = tmp_path / route

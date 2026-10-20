@@ -1,0 +1,198 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "sequential-routing-sql-qualification-integration",
+  "observed_at": "2026-10-20T04:11:08.739521+00:00",
+  "base_commit": "c6e53fdec9b403c8dc04e99c1e77d16f3f73d26f",
+  "tested_tree": "Uncommitted main checkout combining preserved SQL qualification v2 with sequential routing; not a release or production qualification",
+  "source_digest": "057d6fbc5f15da1082298e651f91a5874ff4476e489d68d4a23d26a37e8f6c27",
+  "tests_passed": 1304,
+  "pytest_seconds": 493.59,
+  "dedicated_sequential_tests": 22,
+  "preserved_sql_qualification_tests": 75,
+  "check_receipt": {
+    "path": "runtime/checks/14b5123d5ff740609a6e6cf7c4f876c0/checks.json",
+    "sha256": "c23816a5db197355c76d92ee3743b2623a42d9be898c70cd10e24639d9c20fcb"
+  },
+  "check_steps": [
+    {
+      "command": [
+        "/Users/alexwang0315/.local/bin/uv",
+        "sync",
+        "--project",
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core",
+        "--locked",
+        "--offline",
+        "--extra",
+        "dev",
+        "--no-python-downloads"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/Users/alexwang0315/.local/bin/uv",
+        "pip",
+        "check",
+        "--python",
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/.venv/bin/python"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/.venv/bin/python",
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/scripts/project_state.py",
+        "check"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/.venv/bin/python",
+        "-m",
+        "ruff",
+        "check",
+        "."
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-q"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/.venv/bin/cloudyfan-jev-demo",
+        "--route",
+        "high",
+        "--output",
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/runtime/checks/14b5123d5ff740609a6e6cf7c4f876c0/core"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/.venv/bin/cloudyfan-score-demo",
+        "--route",
+        "high",
+        "--output",
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/runtime/checks/14b5123d5ff740609a6e6cf7c4f876c0/scores"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/Users/alexwang0315/.local/bin/uv",
+        "build",
+        "--offline",
+        "--no-python-downloads",
+        "--python",
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/.venv/bin/python",
+        "--out-dir",
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/runtime/checks/14b5123d5ff740609a6e6cf7c4f876c0/dist"
+      ],
+      "returncode": 0
+    }
+  ],
+  "integration_log": {
+    "path": "runtime/sequential-integration-20261020/integration-recheck.log",
+    "sha256": "56c20720e0f2f0f86e94c6809a310e34bb3c6a9b2a22aac2efb2952cadbf07d2"
+  },
+  "isolated_evidence": {
+    "path": "/Users/alexwang0315/Documents/CloudyFan/.scratch/routing-sequential-20261020/docs/evidence/sequential-routing-offline-20261020.json",
+    "sha256": "43d0ea1a632fdc0e3832be170ce6c3e9546513785611f9b443c7b14f2ed31306",
+    "historical_isolated_tests": 1226
+  },
+  "integration_patch": {
+    "path": "/Users/alexwang0315/Documents/CloudyFan/.scratch/routing-sequential-20261020/runtime/sequential-routing-evidence-20261020/integration.patch",
+    "sha256": "988fc31b644a30254425ebde98f0b0f033cf6d96f42b1354d1ce9d45d8f9c702",
+    "renewed_apply_check_exit": 0,
+    "applied": true,
+    "state_plan_coordination_copied_from_isolated_checkout": false
+  },
+  "preservation": {
+    "protected_files_unchanged": 132,
+    "check": "runtime/sequential-integration-20261020/preservation-check.json",
+    "sql_rules_exam_grader_profiles_and_original_evidence_unchanged": true,
+    "formal_release_registry_unchanged": true
+  },
+  "earlier_checks": {
+    "mistyped_test_path": {
+      "exit_code": 4,
+      "result": "no tests ran",
+      "path": "tests/test_comparison_reports.py",
+      "correction": "tests/test_reports.py"
+    },
+    "initial_focused": {
+      "passed": 139,
+      "failed": 1,
+      "seconds": 120.88,
+      "failure": "Q021 frozen SQL worker wall_time_limit, SQL_VALIDATION_TIMEOUT; no SQL limits changed"
+    },
+    "sequential_focused": {
+      "passed": 22,
+      "seconds": 12.49
+    },
+    "Q021_isolated_recheck": {
+      "passed": 1,
+      "seconds": 1.97,
+      "sql_limits_or_verifier_changed": false
+    },
+    "first_full": {
+      "receipt": "runtime/checks/7dcfbf3b30f2466594002d5e66f4e87d/checks.json",
+      "passed": 1291,
+      "failed": 13,
+      "seconds": 794.25
+    },
+    "failed_case_recheck": {
+      "passed": 13,
+      "deselected": 100,
+      "seconds": 37.6,
+      "log": "runtime/sequential-integration-20261020/failed-case-recheck.log",
+      "sha256": "4cb59243c385a8eca46c8619939b73a781d458c52eaa2ff01ccf36319528ccc4",
+      "source_changes_between_runs": false
+    }
+  },
+  "versions": {
+    "routing_version": "hierarchical-sequential-v1",
+    "engine_version": "0.2.0",
+    "experiment_schema": "cloudyfan-experiment-plan-v2"
+  },
+  "maximum_generation_attempts": {
+    "cloudyfan": 3,
+    "fixed_high": 2,
+    "low_first": 2,
+    "open_source_first": 2
+  },
+  "maximum_classifier_calls": 2,
+  "verified": [
+    "Generation and public validation occur between selectors; second selector uses latest answer/configuration/diagnostic",
+    "All seven passing branches, terminal false/unknown, reason stripping, no fourth generation",
+    "Three-phase full reservation, all classifiers and tools; insufficient reservation refuses before POST",
+    "Known-charge 429 follows remaining stages; unknown fee stops dispatch",
+    "Interrupted second/third validation resumes saved requests without resending",
+    "Legacy plans remain reportable but execution and legacy run resume are refused",
+    "Preserved independent SQL qualification remains a separate two-same-model-attempt contract"
+  ],
+  "real_model_requests": 0,
+  "api_cost_usd": "0",
+  "deployment": false,
+  "push": false,
+  "local_commit": false,
+  "production_qualification_recorded": false,
+  "limitations": [
+    "No new real-model quality, cost or latency evidence",
+    "First full integration failed on 13 SQL worker/resource checks; retained, then all 13 passed unchanged; final full integration passed independently",
+    "Observed host swap pressure does not prove causality for earlier failures",
+    "Application verifier remains necessary; no universal correctness detector",
+    "CloudyFan allows one additional attempt versus baseline modes; compare complete workflows, not isolated Jev gain",
+    "Fixed-high control remains paused; no new experiment is authorized; old two-attempt budget estimates are not new sequential bounds"
+  ]
+}

@@ -2,6 +2,8 @@
 
 沿用 qualified_snapshot、ScoreUpdater、ScoreCore 及 BudgetedCore。來源、SQL 驗收器、選模樹與舊實驗結果均不在執行途中變更。
 
+目前新任務採[順序式路由](sequential-routing.md)：低／中選模後先作答驗收，仍未通過才中／高選模再答；CloudyFan最多三次作答，對照模式最多兩次。這不改變下述獨立SQL模型資格的「兩次同模型作答」契約，也不允許舊兩次作答任務套新規則續跑。
+
 ## 一次整理既有來源
 
 ```sh
@@ -55,3 +57,7 @@ qualified_pool_core(client, report, run_id=..., budget_store=..., model_bounds=.
 本批交付的是可用的**本機整理／受控接入／更新及離線演示機制**，以及首版真實資料缺證包。沒有正式合格的真實三池、正式 current 更新、真實模型呼叫可用性或供應商費用保障；後續免費公開目錄／評分取得另見補證。RG-02／03／04 仍 pending，不修改其他 gate。
 
 RG-01 維持凍結與必要回歸；不再審 S01～S08，不重新跑 50 題，不重算既有正確率或節費率。原 POOL 實作階段無來源網路請求；後續公開補證僅有免費公開 GET，無付費模型 API、供應商聯絡、硬體操作、部署或推送。
+
+## v2：排行榜參考與獨立SQL資格
+
+依使用者2026-10-20決策新增[獨立SQL資格規則](sql-model-qualification-v2.md)。[新版待驗profile](../examples/first-pool-profile-sql-v2.json)以family／effort評分分群，API可用資格另由固定版本的50題SQL證據決定。來源取得時效照檢查，未知榜單評測日期保留null，不再假裝是SQL測試日期；SQL資格有自己的30天效期。舊v1包與本檔前述v1映射規則不追溯更改。新包尚無真實API／SQL結果，仍blocked；沒有切換current或豁免費用保障。

@@ -95,11 +95,11 @@ def test_nonempty_unvalidated_answer_is_not_protocol_success(tmp_path, passed, s
     assert response.status_code == 422
     assert response.json()['error'] == error
     assert response.json()['cloudyfan']['status'] == status
-    assert response.json()['cloudyfan']['costs']['complete_api_usd'] == '0.0201'
+    assert response.json()['cloudyfan']['costs']['complete_api_usd'] == '0.0302'
     assert 'response' not in response.json()
     result = client.get('/v1/tasks/ollama-1/result').json()
     assert result['final_public_pass'] is passed
-    assert len(api.requests) == 3
+    assert len(api.requests) == 5
 
 
 def test_interrupted_validation_requires_explicit_resume_not_repeated_post(tmp_path):
@@ -198,7 +198,7 @@ def test_native_audit_and_errors_are_redacted(tmp_path):
 
 
 @pytest.mark.parametrize('first,tiers,count', [('2', ['open_source'], 1),
-                                             ('3', ['open_source', 'high'], 4)])
+                                             ('3', ['open_source', 'mid', 'high'], 5)])
 def test_native_result_preserves_task_provenance_without_extra_generation(tmp_path, first, tiers, count):
     from test_engine import API
     client, _, _, api, _ = consumer(tmp_path, api=API(first=first, choices=('mid', 'high')))

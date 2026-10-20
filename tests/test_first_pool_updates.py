@@ -9,9 +9,9 @@ def test_pool_delivery_covers_binary_routes_update_expiry_and_saved_resume(tmp_p
     assert result['real_api_calls'] == 0
     assert result['production_ready'] is False
     assert [r['selected_tier'] for r in result['routes']] == ['open_source', 'low', 'mid', 'high']
-    assert [r['model_requests'] for r in result['routes']] == [1, 3, 4, 4]
+    assert [r['model_requests'] for r in result['routes']] == [1, 3, 3, 5]
     assert all(r['status'] == 'passed' for r in result['routes'])
-    assert result['simulated_api_usd'] == '0.0085'
+    assert result['simulated_api_usd'] == '0.0094'
     assert result['update_status'] == 'published'
     assert result['original_snapshot_id'] != result['new_snapshot_id']
     assert result['new_task_snapshot_id'] == result['new_snapshot_id']

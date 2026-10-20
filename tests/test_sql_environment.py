@@ -129,10 +129,10 @@ def test_invalid_or_exhausted_response_receives_only_one_public_repair(tmp_path,
 def test_unsafe_sql_can_fail_both_attempts_without_becoming_engineering_or_success(tmp_path, query):
     api = API(messages=[answer(query), answer(query)])
     result = run_sql(sql_core(tmp_path, api), 'unsafe', contract())
-    assert result['status'] == 'failed' and len(result['attempts']) == 2
+    assert result['status'] == 'failed' and len(result['attempts']) == 3
     assert all(a['public']['passed'] is False for a in result['attempts'])
     assert 'PRIVATE_PATH' not in json.dumps([a['public'] for a in result['attempts']])
-    assert len(api.requests) == 3
+    assert len(api.requests) == 5
 
 
 def test_no_public_samples_is_unverifiable_after_the_same_bounded_flow(tmp_path):
@@ -141,7 +141,7 @@ def test_no_public_samples_is_unverifiable_after_the_same_bounded_flow(tmp_path)
     assert result['status'] == 'unverifiable'
     assert result['first_public_pass'] is None and result['final_public_pass'] is None
     assert result['attempts'][0]['public']['checks'] == ['SQL_NO_PUBLIC_SAMPLES']
-    assert len(api.requests) == 3
+    assert len(api.requests) == 5
 
 
 def test_public_contract_is_detached_and_changed_expected_rows_cannot_reuse_run(tmp_path):
@@ -349,15 +349,18 @@ def test_engineering_interruption_keeps_budget_hold_and_resume_does_not_pay_agai
     assert store.report()['known_usd'] == '0.01' and len(api.requests) == 1
 
 
-@pytest.mark.parametrize('choices,tier', [(('mid', 'mid'), 'mid'), (('mid', 'high'), 'high')])
-def test_sql_diagnostics_survive_both_binary_decisions_before_one_repair(tmp_path, choices, tier):
-    api = API(choices=choices, messages=[answer('SELECT 4 AS total'),
-                                       answer('SELECT SUM(n) AS total FROM numbers')])
+@pytest.mark.parametrize('choices,tier', [(('mid',), 'mid'), (('mid', 'high'), 'high')])
+def test_sql_diagnostics_survive_sequential_generation_and_decisions(tmp_path, choices, tier):
+    replies=[answer('SELECT 4 AS total')]
+    if tier=='high': replies.append(answer('SELECT 5 AS total'))
+    replies.append(answer('SELECT SUM(n) AS total FROM numbers'))
+    api = API(choices=choices, messages=replies)
     result = run_sql(sql_core(tmp_path, api), 'two-decisions', contract())
     assert result['status'] == 'passed'
-    assert [a['tier'] for a in result['attempts']] == ['open_source', tier]
-    assert result['selection']['classifier_calls'] == 2 and len(api.requests) == 4
-    assert result['costs']['api_usd'] == '0.0202'
+    assert [a['tier'] for a in result['attempts']] == (['open_source','mid','high'] if tier=='high' else ['open_source','mid'])
+    assert result['selection']['classifier_calls']==len(choices)
+    assert len(api.requests)==(5 if tier=='high' else 3)
+    assert result['costs']['api_usd']==('0.0302' if tier=='high' else '0.0201')
 
 
 def test_finite_public_examples_do_not_prove_general_sql_correctness(tmp_path):

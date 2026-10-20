@@ -71,13 +71,13 @@ def test_budgeted_core_reserves_full_workflow_and_counts_repair_classifier(tmp_p
     result = app.run('repair', TASK, ArithmeticEnvironment, contract_version='v1')
     assert result['status'] == 'passed'
     report = store.report()
-    assert report['reservations'][0]['amount'] == '0.482'
-    assert report['known_usd'] == '0.0202'
+    assert report['reservations'][0]['amount'] == '0.722'
+    assert report['known_usd'] == '0.0302'
     assert report['reserved_usd'] == '0'
-    assert result['budget']['run_total_usd'] == '0.0202'
+    assert result['budget']['run_total_usd'] == '0.0302'
     app.run('repair', TASK, ArithmeticEnvironment, contract_version='v1')
-    assert len(api.requests) == 4
-    assert store.report()['known_usd'] == '0.0202'
+    assert len(api.requests) == 5
+    assert store.report()['known_usd'] == '0.0302'
 
 
 def test_existing_client_spending_is_imported_before_new_admission(tmp_path):
@@ -143,7 +143,7 @@ def test_external_tool_cost_counts_once_with_model_turns_and_stays_out_of_prompt
     result = app.run('tool', TASK, Environment, contract_version='v1')
     assert result['budget']['run_total_usd'] == '0.06'
     assert result['budget']['shared']['verified_usd'] == '0.04'
-    assert result['budget']['shared']['reservations'][0]['amount'] == '0.322'
+    assert result['budget']['shared']['reservations'][0]['amount'] == '0.482'
     assert 'external-unique' not in str(api.requests)
     app.run('tool', TASK, Environment, contract_version='v1')
     assert app.store.report()['known_usd'] == '0.06'
@@ -170,7 +170,7 @@ def test_interruption_preserves_unknown_and_never_resends_on_restart(tmp_path):
     with pytest.raises(RuntimeError, match='incomplete billing'):
         app.run('crash', TASK, ArithmeticEnvironment, contract_version='v1')
     assert app.store.report()['unknown_events'] == 1
-    assert app.store.report()['reserved_usd'] == '0.482'
+    assert app.store.report()['reserved_usd'] == '0.722'
     restarted = controlled(tmp_path, interrupted)
     with pytest.raises(BudgetError, match='unknown'):
         restarted.run('crash', TASK, ArithmeticEnvironment, contract_version='v1')
@@ -189,7 +189,7 @@ def test_expiry_between_first_answer_and_classification_stops_dispatch(tmp_path)
         app.run('expired', TASK, Environment, contract_version='v1')
     assert len(api.requests) == 1
     assert app.store.report()['known_usd'] == '0.01'
-    assert app.store.report()['reserved_usd'] == '0.482'
+    assert app.store.report()['reserved_usd'] == '0.722'
 
 
 def test_external_tool_interruption_remains_unknown_and_cannot_be_replayed(tmp_path):

@@ -234,7 +234,7 @@ def test_restart_rejects_relaxed_queue_limits(tmp_path):
 
 
 @pytest.mark.parametrize('first,tiers,count', [('2', ['open_source'], 1),
-                                             ('3', ['open_source', 'high'], 4)])
+                                             ('3', ['open_source', 'mid', 'high'], 5)])
 def test_queued_result_propagates_task_owned_provenance(tmp_path, first, tiers, count):
     queue, client, runner, api, _ = scheduler(tmp_path, api=API(first=first, choices=('mid', 'high')))
     assert post(client, 'A', 'traceable').status_code == 202

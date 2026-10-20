@@ -54,7 +54,8 @@ def main(argv=None):
                 'usage': {'input_tokens': 1, 'output_tokens': 1, 'cost': .0001},
                 'answers': {stage: {'type': 'choice', 'choice': choice,
                             'probabilities': {tier: .8 if tier == choice else .2 for tier in pair}}}})
-        answer = '2' if args.route == 'pass' or payload['model'] != 'example/open_source' else '3'
+        answer = ('3' if (args.route != 'pass' and payload['model'] == 'example/open_source')
+                  or (args.route == 'high' and payload['model'] == 'example/mid') else '2')
         return httpx.Response(200, json={
             'id': f'gen-demo-{count}', 'model': payload['model'], 'provider': 'Example',
             'usage': {'cost': .001, 'prompt_tokens': 1, 'completion_tokens': 1},

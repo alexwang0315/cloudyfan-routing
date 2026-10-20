@@ -1,4 +1,4 @@
-# Public diagnostics and one repair
+# Public diagnostics and bounded repairs
 
 `Core(..., diagnostic_contract=DiagnosticContract(...))` binds the diagnostic
 schema to a run alongside the application's `contract_version`. The default
@@ -21,9 +21,11 @@ contract = DiagnosticContract(
 
 The injected validator returns only allowed fields. Core adds
 `diagnostic_version` and `diagnostic_source`, saves that public projection, and
-uses it for selection and the single final repair. A strict `False` produces
-`failed` if repair does not pass; `None` produces `unverifiable`. Neither permits
-a third generation stage. Changing schema, provenance, size, or contract version
+uses the latest attempt's projection for the next selection and repair. Under
+[sequential routing](sequential-routing.md), CloudyFan permits at most three
+generation stages and two selections; baseline modes retain two generations.
+A strict `False` produces `failed` if the final repair does not pass; `None`
+produces `unverifiable`. Neither permits unbounded retries. Changing schema, provenance, size, or contract version
 rejects reuse of the same run. Identical completed runs retain their answers and
 make no new model requests.
 

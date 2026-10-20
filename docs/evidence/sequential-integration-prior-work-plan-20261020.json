@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "integration_branch": "codex/implement-routing-spec-1",
+  "baseline_commit": "c6e53fdec9b403c8dc04e99c1e77d16f3f73d26f",
+  "merger_owner": "root",
+  "shared_interfaces": [],
+  "tasks": [
+    {
+      "id": "SQL-MODEL-01",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/scores/first_pool.py",
+        "src/cloudyfan_jev/scores/catalog.py",
+        "src/cloudyfan_jev/scores/sql_capability.py",
+        "src/cloudyfan_jev/scores/sql_exam.py",
+        "tests/test_sql_model_qualification.py",
+        "docs/coordination.md",
+        "docs/agent-state.json",
+        "docs/work-plan.json",
+        "scripts/prepare_sql_model_exam.py",
+        "scripts/grade_sql_model_exam.py",
+        "examples/first-pool-profile-sql-v2.json",
+        "examples/sql-model-versions-v1.json",
+        "docs/sql-model-qualification-v2.md",
+        "docs/first-pool.md",
+        "docs/first-pool-source.md",
+        "docs/score-integration.md",
+        "docs/release-readiness.md",
+        "docs/handoff.md",
+        "docs/verification.md",
+        "docs/evidence/sql-model-offline-20261020.json",
+        "docs/evidence/sql-model-api-plan-20261020.json"
+      ],
+      "depends_on": [],
+      "consumed_interfaces": []
+    }
+  ]
+}

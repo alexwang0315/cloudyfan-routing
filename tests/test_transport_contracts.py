@@ -126,7 +126,7 @@ def assert_provenance(result, tiers, calls_per_attempt):
                                     'source': 'fixture', 'source_version': 'v1', 'metric': 'arithmetic'}
             calls.append(call)
     classifiers = provenance['classifier_calls']
-    assert len(classifiers) == (2 if len(tiers) == 2 else 0)
+    assert len(classifiers) == len(tiers)-1
     for call in classifiers:
         assert call['actual_model'] == call['configuration']['model_version'] == 'typesafe/jev-1.13'
         assert call['actual_provider'] == 'TypeSafe'
@@ -158,13 +158,13 @@ def test_completed_contract_preserves_provenance_full_cost_and_no_repeat(transpo
     body = result.json()
     assert body['answer'] == '2' and body['status'] == 'passed'
     assert body['first_public_pass'] is (not repair) and body['final_public_pass'] is True
-    # Independent arithmetic: 3 generation turns + 2 classifiers + 1 billed tool.
-    expected_cost = Decimal('.01') if not repair else Decimal('.01') * 3 + Decimal('.0001') * 2 + Decimal('.04')
+    # Independent arithmetic: 3 generation turns + 1 classifier + 1 billed tool.
+    expected_cost = Decimal('.01') if not repair else Decimal('.01') * 3 + Decimal('.0001') + Decimal('.04')
     assert Decimal(body['costs']['complete_api_usd']) == expected_cost
     assert body['costs']['unknown_events'] == 0 and body['costs']['host_and_human_usd'] is None
-    assert_provenance(body, ['open_source', 'high'] if repair else ['open_source'], [2, 1] if repair else [1])
+    assert_provenance(body, ['open_source', 'mid'] if repair else ['open_source'], [2, 1] if repair else [1])
     assert PRIVATE not in result.text and PROMPT not in result.text
-    count = 5 if repair else 1
+    count = 4 if repair else 1
     assert len(t.api.requests) == count
     repeated = t.submit()
     assert repeated.status_code == 200
@@ -254,11 +254,11 @@ def test_unavailable_public_validation_is_never_protocol_success(transport):
     t.dispatch()
     result = t.result().json()
     assert result['status'] == 'unverifiable' and result['final_public_pass'] is None
-    assert result['costs']['complete_api_usd'] == '0.0202'
+    assert result['costs']['complete_api_usd'] == '0.0302'
     if t.kind.startswith('ollama'):
         assert response.json()['error'] == 'public_validation_unavailable'
         assert 'response' not in response.json() and 'message' not in response.json()
-    assert len(t.api.requests) == 4
+    assert len(t.api.requests) == 5
 
 
 def test_validation_interruption_preserves_answer_and_explicit_resume_policy(transport):

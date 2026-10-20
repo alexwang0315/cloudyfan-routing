@@ -167,7 +167,7 @@ def test_constant_first_example_cannot_pass_new_catalog(case):
 
 
 @pytest.mark.parametrize('unverifiable', [False,True])
-def test_new_policy_final_failure_or_unknown_never_passes_or_generates_a_third_answer(tmp_path,unverifiable):
+def test_new_policy_final_failure_or_unknown_never_passes_or_generates_a_fourth_answer(tmp_path,unverifiable):
     task=sql_catalog.contract('S01')
     if unverifiable:
         spec=json.loads(task._public_json)
@@ -176,5 +176,5 @@ def test_new_policy_final_failure_or_unknown_never_passes_or_generates_a_third_a
     api=API(messages=[answer('SELECT 0 AS total'),answer('SELECT 0 AS total')])
     result=run_sql(sql_core(tmp_path,api),'new-final-status',task)
     assert result['status']==('unverifiable' if unverifiable else 'failed')
-    assert len(result['attempts'])==2 and len(api.requests)==3
-    assert result['costs']['api_usd']=='0.0201'
+    assert len(result['attempts'])==3 and len(api.requests)==5
+    assert result['costs']['api_usd']=='0.0302'

@@ -25,8 +25,9 @@ def setup_plan():
             'calibration_tasks': [task('calibration-1', 'Return the sum of 3 and 4.', 'easy')],
             'requirements': requirements, 'baseline_config_id': 'high', 'decision_profile': decision,
             'contract_version': 'sum-v1', 'system': SYSTEM, 'diagnostic_contract': DiagnosticContract().manifest(),
-            'limits': asdict(Limits()), 'max_generation_attempts': 2,
-            'repair_policy': 'one-public-diagnostic-repair-v1',
+            'limits': asdict(Limits()), 'max_generation_attempts': {arm: 3 if arm=='cloudyfan' else 2 for arm in
+                ['fixed_high','low_first','open_source_first','cloudyfan','open_source_fixed_low']},
+            'repair_policy': 'sequential-public-diagnostic-repairs-v2',
             'arms': ['fixed_high', 'low_first', 'open_source_first', 'cloudyfan', 'open_source_fixed_low'],
             'budget': {'cap_usd': '10', 'next_block_upper_usd': '1', 'authorization_id': 'synthetic-only',
                        'expires_at': '2026-10-19T00:00:00Z', 'enforcement_evidence': 'fixture://bounded-reservation'},
@@ -179,7 +180,7 @@ def test_attribution_arm_is_explicitly_plan_only_and_never_dispatches():
 
 @pytest.mark.parametrize('branch,expected_tiers', [
     ('pass', ['open_source']), ('low', ['open_source', 'low']),
-    ('mid', ['open_source', 'mid']), ('high', ['open_source', 'high']),
+    ('mid', ['open_source', 'mid']), ('high', ['open_source', 'mid', 'high']),
     ('engineering', None), ('accounting', None),
 ])
 def test_frozen_synthetic_plan_through_core_branch_matrix(tmp_path, branch, expected_tiers):
@@ -195,7 +196,7 @@ def test_frozen_synthetic_plan_through_core_branch_matrix(tmp_path, branch, expe
     spec, pack, review = setup_plan()
     plan = build_plan(spec, pack, review, now=NOW)
     bound = execution_binding(plan, 'cloudyfan', 'holdout-1', now=NOW, allow_synthetic=True)
-    choices = ('low',) if branch == 'low' else ('mid', branch)
+    choices = (('low',) if branch == 'low' else ('mid',) if branch == 'mid' else ('mid', branch))
     api = API(first='2' if branch == 'pass' else '3', choices=choices,
               messages=[{'content': None, 'tool_calls': [{'function': {'name': 'bad'}}]}]
               if branch == 'engineering' else None)

@@ -1,6 +1,6 @@
 """Pure hierarchical policy; no transport, generation, fitting or ledger mutation.
 
-Public open-source validation gates two binary decisions. Choice distributions
+Each failed public validation gates exactly one binary decision. Choice distributions
 are routing evidence, never probabilities of task correctness. Free-form text
 must already have public provenance; structural checks cannot establish that.
 """
@@ -11,12 +11,12 @@ import re
 from .decisions import DecisionContext, DecisionQuestion, build_payload, parse_response
 from .errors import RoutingError
 
-VERSION = "hierarchical50-binary-v2"
+VERSION = "hierarchical-sequential-v1"
 STAGES = {"low_mid": ("low", "mid"), "mid_high": ("mid", "high")}
 TASK_FIELDS = ("prompt", "public_schema", "public_sample", "public_samples", "expected_columns",
                "execution_constraints", "requirements", "constraints", "requested_output", "sources", "tools")
 STATE_FIELDS = ("task", "prompt", "requirements", "constraints", "requested_output", "sources", "tools",
-                "previous_answer", "prior_answer", "tool_results", "public_diagnostics")
+                "previous_answer", "prior_answer", "previous_tier", "previous_configuration", "tool_results", "public_diagnostics")
 PROFILE_FIELDS = ("model", "model_version", "effort", "capability_card", "external_score")
 OPTIONAL_IDENTITY_FIELDS = ("provider", "provider_name")
 
@@ -54,7 +54,7 @@ def project_public(public_state):
         if key in public:
             state[key] = public[key]
     observations = {key: public[key] for key in
-                    ("previous_answer", "prior_answer", "tool_results", "public_diagnostics") if key in public}
+                    ("previous_answer", "prior_answer", "previous_tier", "previous_configuration", "tool_results", "public_diagnostics") if key in public}
     if observations:
         state["observations"] = observations
     _reject_private(state)
@@ -81,7 +81,8 @@ def build_request(stage, public_state, profiles, model, model_version=None):
     _reject_private(candidates)
     state = project_public(public_state)
     state["candidates"] = candidates
-    state["step"] = {"stage": stage, "purpose": "repair_after_public_open_source_failure",
+    state["step"] = {"stage": stage, "purpose": "repair_after_public_failure",
+                     "failed_phase": "open_source" if stage == "low_mid" else "low_mid",
                      "external_scores_are_correctness_probabilities": False,
                      "option_distributions_are_correctness_probabilities": False}
     context = DecisionContext(tenant_id="cloudyfan-hierarchical50", state=state,
@@ -96,8 +97,8 @@ def build_request(stage, public_state, profiles, model, model_version=None):
         f"Choose {lower} when its demonstrated capabilities suffice; choose {upper} when additional "
         "capability is needed or evidence is insufficient. Do not infer that the higher tier is always necessary. "
         "No global mean-cost ranking is applied. "
-        + ("Selecting mid triggers a separate mid-versus-high decision; no mid answer has been generated."
-           if stage == "low_mid" else "Select the final mid or high configuration; no intermediate mid generation occurred.")
+        + ("Generate the selected low or mid answer next. Only a failed public validation of that answer may trigger mid-versus-high."
+           if stage == "low_mid" else "The preceding low-or-mid answer failed public validation. Select mid or high for the final repair using that answer and its diagnostics.")
     )
     questions = [DecisionQuestion(question_id=stage, type="choice", version=VERSION,
         instructions=instructions, criteria={
@@ -149,8 +150,8 @@ def parse_choice(raw, context, questions, model, allowed_response_models=()):
 
 
 def route(public_passed, public_state, profiles, model, decide, *, model_version=None,
-          allowed_response_models=()):
-    """Select only; decide(stage, context, questions, payload) returns a receipt.
+          allowed_response_models=(), stage="low_mid"):
+    """Select ONE stage; the runner generates and validates before a later stage.
 
     True public validation terminates with zero calls. False/None means fail or
     unverifiable. Generation is owned by the runner and happens only after this
@@ -160,13 +161,8 @@ def route(public_passed, public_state, profiles, model, decide, *, model_version
         raise ValueError("Public pass status must be True, False or None")
     if public_passed is True:
         return {"selected_tier": "open_source", "decisions": [], "classifier_calls": 0}
-    decisions = []
-    for stage in ("low_mid", "mid_high"):
-        context, questions, payload = build_request(stage, public_state, profiles, model, model_version)
-        raw = decide(stage, context, questions, payload)
-        outcome = parse_choice(raw, context, questions, model, allowed_response_models)
-        decisions.append(outcome)
-        if stage == "low_mid" and outcome["selected_tier"] == "low":
-            break
-    return {"selected_tier": decisions[-1]["selected_tier"], "decisions": decisions,
-            "classifier_calls": len(decisions)}
+    context, questions, payload = build_request(stage, public_state, profiles, model, model_version)
+    raw = decide(stage, context, questions, payload)
+    outcome = parse_choice(raw, context, questions, model, allowed_response_models)
+    return {"selected_tier": outcome["selected_tier"], "decisions": [outcome],
+            "classifier_calls": 1}

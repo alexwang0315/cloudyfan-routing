@@ -481,3 +481,49 @@ future expiry, unchanged executable/RG01/formal-registry inputs, and explicit
 staged scope. Public facts remain separate from missing benchmark snapshot/SQL/
 evaluation-date/use-policy qualification. Prior evidence and private raw responses
 are preserved. No API, supplier contact, deployment, push or formal gate promotion.
+
+
+## Explicit family-prior + independent SQL qualification v2 — 2026-10-20
+
+User authorizes the policy change, offline version table/exam/grading and future
+API plan only. V1 profiles and their exact-mapping/date semantics remain intact.
+V2 accepts rank scores as explicit family/effort priors (never API snapshot equality),
+requires separately bound exact-API identity and a complete independent50-task SQL
+report, retains original unknown benchmark dates and retrieval freshness, and adds
+SQL evidence30-day expiry to snapshot lifetime. Input-bound review, synthetic
+rejection, missing-pool stops, budget admission and formal pending registry remain.
+Only aggregate qualified operation/card metadata reaches Jev, not exam answers.
+
+[Contract and plan](sql-model-qualification-v2.md), [pending profile](../examples/first-pool-profile-sql-v2.json)
+and [versions](../examples/sql-model-versions-v1.json) are prepared. Offline scripts
+write private runtime material and grade saved Client-bound records, never POST/GET.
+Python semantics and frozen SQLite agree on50 controls and reject50 mutants; this
+is not real model capability evidence. Public2/sealed4 cases per task, six finite
+families and15/20/15 declared strata. First/final outcomes and all known fees are
+separate; engineering/unknown evidence has null outcome, not a wrong answer.
+
+Full offline integration passed1,281 tests (75new), Ruff, both existing mocked
+high-route demos and offline sdist/wheel. [Receipt/source/evidence](evidence/sql-model-offline-20261020.json)
+records exact scope and initial fixture/import failures. RG01/old profiles/formal
+gates/old trial reports:77selected files unchanged. No S01-S08 review or new API.
+No actual candidate is approved, no current is activated, no local commit/push.
+
+[Unexecuted API plan](evidence/sql-model-api-plan-20261020.json):4identity probes +
+200first answers + at most200same-model repairs, no Jev classifier/network retries.
+Old-price token scenarioUSD46.2263424; proposed authorizationUSD60, not a supplier
+cap or current permission. Explicit spending authority, fresh exact-ID/price and
+fee/unknown/reserve checks, plus a controlled capture runner are prerequisites.
+The actual model/API evidence, source-use/update owner/review and RG04 guarantees
+remain pending; do not relabel estimated bounds or staged artifacts as qualification.
+
+## Sequential routing + preserved SQL qualification integration — 2026-10-20
+
+The reviewed isolated patch is applied to this main checkout without replacing its state, plan or coordination. The completed SQL-MODEL-01 work, exam/grader, model versions and qualification thresholds remain unchanged. New CloudyFan tasks use hierarchical-sequential-v1 / engine 0.2.0: OSS validation, low/mid generation and validation, then conditional mid/high generation and validation (at most three generations/two classifiers). Baseline modes remain two. The second selector sees the latest failed answer/configuration/diagnostic. Legacy plans are reportable but cannot execute, and legacy manifests refuse resume before POST.
+
+Current combined offline verification: 1,304 tests, Ruff, both mocked high-route demos and sdist/wheel passed. See [combined evidence](evidence/sequential-integration-offline-20261020.json). The first full run had 13 SQL worker/resource failures; all 13 passed unchanged in focused recheck, then the final full run passed independently. The original failed receipt and logs are retained. 132 protected inputs/evidence files are unchanged. No SQL timeout or semantic rule was relaxed.
+
+No real API, host operation, deployment, source push or local commit occurred. All formal gates remain pending. The fixed-high independent control remains paused. The earlier two-generation routing cost estimate is historical; any new sequential experiment needs a new frozen plan and full three-phase reservation. Independent SQL qualification retains its separate two-attempt contract and unexecuted API proposal; it was not run by this integration.
+
+## Sequential integration local commit closure — 2026-10-20
+
+The user now authorizes a local commit; earlier no-commit statements record their capture time. Standards and Spec reviews found no blocking issue, with one nonblocking legacy test-name observation. Full integration source fingerprint and original failed/final receipts remain intact;22 sequential regressions were rerun offline. [Precommit evidence](evidence/sequential-integration-precommit-20261020.json) records selective staged scope, preservation and fresh checks. SQL qualification implementation stays in the same coherent source tree; real API/SQL model qualification is still pending. The independent release-index prose rewrite remains in the working file, outside this commit, with its stale progress paragraph corrected. No API, supplier contact, deployment or push.

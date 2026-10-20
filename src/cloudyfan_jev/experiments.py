@@ -9,7 +9,8 @@ from .routing import _reject_private, VERSION as ROUTING_VERSION
 from .scores.catalog import digest, select_profiles, verify_snapshot, timestamp
 from .scores.qualification import qualified_snapshot
 
-SCHEMA = 'cloudyfan-experiment-plan-v1'
+SCHEMA = 'cloudyfan-experiment-plan-v2'
+ARCHIVE_SCHEMAS = {SCHEMA, 'cloudyfan-experiment-plan-v1'}
 ARMS = ('fixed_high', 'low_first', 'open_source_first', 'cloudyfan', 'open_source_fixed_low')
 
 
@@ -68,9 +69,10 @@ def build_plan(spec, qualification_pack, review, *, now):
         DiagnosticContract(**dc)
         Limits(**spec['limits'])
         decision = spec['decision_profile']
-        if (spec['max_generation_attempts'] != 2
-                or type(spec['max_generation_attempts']) is not int
-                or spec['repair_policy'] != 'one-public-diagnostic-repair-v1'
+        if (spec['max_generation_attempts'] != {arm: 3 if arm == 'cloudyfan' else 2 for arm in spec['arms']}
+                or not isinstance(spec['max_generation_attempts'], dict)
+                or any(type(v) is not int for v in spec['max_generation_attempts'].values())
+                or spec['repair_policy'] != 'sequential-public-diagnostic-repairs-v2'
                 or not isinstance(spec['system'], str) or not spec['system'].strip()
                 or not isinstance(spec['contract_version'], str) or not spec['contract_version'].strip()
                 or decision.get('provider') != 'typesafe'
@@ -123,7 +125,7 @@ def build_plan(spec, qualification_pack, review, *, now):
 
 def verify_plan_integrity(plan):
     """Archive check only; no freshness, approval, or execution permission implied."""
-    if plan.get('schema_version') != SCHEMA or plan.get('plan_id') != digest(
+    if plan.get('schema_version') not in ARCHIVE_SCHEMAS or plan.get('plan_id') != digest(
             {k: v for k, v in plan.items() if k != 'plan_id'}):
         raise ValueError('Experiment plan integrity mismatch')
 
@@ -134,7 +136,7 @@ def verify_plan(plan, *, now, allow_synthetic=False):
         raise ValueError('Synthetic plan cannot authorize a formal experiment')
     if plan['blockers'] or plan['status'] not in ('synthetic_ready', 'reviewed'):
         raise ValueError('Experiment plan is blocked')
-    if plan['routing_version'] != ROUTING_VERSION:
+    if plan['schema_version'] != SCHEMA or plan['routing_version'] != ROUTING_VERSION:
         raise ValueError('Frozen routing implementation version differs')
     verify_snapshot(plan['snapshot'], now=now)
     if timestamp(plan['spec']['budget']['expires_at']) <= timestamp(now):
@@ -163,7 +165,8 @@ def execution_binding(plan, arm, task_id, *, now, allow_synthetic=False):
     return {'plan_id': plan['plan_id'], 'arm': arm, 'task_id': task_id,
             'input_sha256': row['input_sha256'], 'task': deepcopy(row['task']), 'profiles': profiles,
             **{k: deepcopy(spec[k]) for k in ('decision_profile', 'contract_version',
-               'diagnostic_contract', 'limits', 'max_generation_attempts', 'repair_policy', 'budget', 'system')}}
+               'diagnostic_contract', 'limits', 'repair_policy', 'budget', 'system')},
+            'max_generation_attempts': spec['max_generation_attempts'][arm]}
 
 
 def verify_binding(plan, binding, *, now, allow_synthetic=False):

@@ -1,0 +1,207 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "sql-independent-qualification-v2",
+  "base_commit": "c6e53fdec9b403c8dc04e99c1e77d16f3f73d26f",
+  "tested_commit": null,
+  "uncommitted_working_tree": true,
+  "verified_at": "2026-10-20T03:18:19.244683+00:00",
+  "tests_passed": 1281,
+  "new_tests_passed": 75,
+  "source_digest": "69956e4356c78595eb380ca67aee4d6cf5aa54f5ec45300f6366c7d3fdc75335",
+  "check_receipt": {
+    "path": "runtime/checks/2c765bf6e8064a24ae5d9ce84b88505b/checks.json",
+    "sha256": "9ff0f9d90e0a4c6d79215b99369598f38cc2708d7b92acc0a57e7ff1d4ab3721"
+  },
+  "full_checks": [
+    "locked offline dependencies",
+    "project records",
+    "Ruff",
+    "1281 pytest cases",
+    "two existing MockTransport demos",
+    "sdist and wheel offline build"
+  ],
+  "exam": {
+    "tasks": 50,
+    "families": {
+      "filter": 8,
+      "join": 8,
+      "aggregate": 8,
+      "window": 8,
+      "set": 8,
+      "resource": 10
+    },
+    "strata": {
+      "easy": 15,
+      "medium": 20,
+      "hard": 15
+    },
+    "public_cases_per_task": 2,
+    "sealed_cases_per_task": 4,
+    "sqlite_controls_passed": 50,
+    "semantic_mutants_rejected": 50,
+    "real_model_answers": 0,
+    "suite_id": "8a3127cdad4433aeb2aca12f23b059a6959e807889c8da2b5fb23ce6bb397f88",
+    "preparation_path": "runtime/sql-model-qualification-20261020/prepared-final",
+    "preparation_sha256": "755bcf249a0f4dfcf99ee0e8e368b502ce64ef32cfaa23c1ac437b6b91c3db9e",
+    "public_material_sha256": "a73c6077b3c2dc4209208fbe0af90343a04bc759562b710205fa3f62e9464959",
+    "assessor_material_sha256": "72c0057441fdf1d7c08ad7fd84874c6ce7fb74ae27b89f4bf84a89a04e7aa327",
+    "assessor_material_committed": false
+  },
+  "qualification": {
+    "profile": "examples/first-pool-profile-sql-v2.json",
+    "profile_sha256": "6acd5be50101a31a6e527f0f7de86e25c493ba058577055a1b2d0d65e8a0f2f8",
+    "version_table": "examples/sql-model-versions-v1.json",
+    "version_table_sha256": "2cf8cad64c2fdac1593c17238b02ed37f9351c58beb226fe6a00100f48ee9757",
+    "status": "blocked",
+    "real_model_configurations_tested": 0,
+    "formal_qualification": "pending",
+    "current_activated": false
+  },
+  "plan": {
+    "path": "docs/evidence/sql-model-api-plan-20261020.json",
+    "sha256": "91e947a743a5e1a3876158991e4ffc8bda248cb7d3af440df0e35252bceeafe8",
+    "planning_token_scenario_usd": "46.2263424",
+    "proposed_authorization_usd": "60",
+    "enforceable_supplier_upper_bound_usd": null,
+    "execution_authorized": false
+  },
+  "preserved": {
+    "checked_unchanged": 77,
+    "rg01_and_old_profiles_and_experiment_reports_unchanged": true,
+    "paths": [
+      "docs/evidence/first-pool-public-20261020.json",
+      "docs/evidence/fresh50-recovery-20261020.json",
+      "docs/evidence/rg01-bounded-catalog.json",
+      "docs/evidence/rg01-decision-prior-state.json",
+      "docs/evidence/rg01-decision-prior-work-plan.json",
+      "docs/evidence/rg01-delegated-decisions-20261019.json",
+      "docs/evidence/rg01-execution-prior-state.json",
+      "docs/evidence/rg01-execution-prior-work-plan.json",
+      "docs/evidence/rg01-first-scope-policy-v1.json",
+      "docs/evidence/rg01-linux-target-runtime.json",
+      "docs/evidence/rg01-live-fix-offline-20261019.json",
+      "docs/evidence/rg01-live-integration-20261019.json",
+      "docs/evidence/rg01-live-precommit-20261019.json",
+      "docs/evidence/rg01-ready-baseline.json",
+      "docs/evidence/rg01-ready-prior-state.json",
+      "docs/evidence/rg01-ready-prior-work-plan.json",
+      "docs/evidence/rg01-review-precommit-20261019.json",
+      "docs/evidence/rg01-review-prior-state.json",
+      "docs/evidence/rg01-review-prior-work-plan.json",
+      "docs/evidence/rg01-review-ready-offline.json",
+      "docs/evidence/rg01-routing-execution-tests-20261019.json",
+      "docs/evidence/rg01-scout-environment-preparation-20261019.json",
+      "docs/evidence/rg01-scout-prep-prior-state.json",
+      "docs/evidence/rg01-scout-prep-prior-work-plan.json",
+      "docs/evidence/rg01-semantic-baseline.json",
+      "docs/evidence/rg01-semantic-prior-state.json",
+      "docs/evidence/rg01-semantic-prior-work-plan.json",
+      "docs/evidence/rg01-semantic-review-20261019.json",
+      "docs/evidence/rg01-semantic-review-probes-20261019.json",
+      "docs/evidence/rg01-sql-baseline.json",
+      "docs/evidence/rg01-sql-coverage.json",
+      "docs/evidence/rg01-sql-offline.json",
+      "docs/evidence/rg01-sql-prior-state.json",
+      "docs/evidence/rg01-sql-prior-work-plan.json",
+      "docs/evidence/rg01-target-inspection-20261019.json",
+      "docs/evidence/rg01-target-offline-20261019.json",
+      "docs/evidence/rg01-target-precommit-20261019.json",
+      "docs/evidence/rg01-target-prior-state.json",
+      "docs/evidence/rg01-target-prior-work-plan.json",
+      "docs/evidence/rg01-technical-review-20261019.json",
+      "docs/evidence/rg01-ticket-status.json",
+      "docs/evidence/rg01-tickets-offline-20261019.json",
+      "docs/evidence/rg01-tickets-prior-agent-state.json",
+      "docs/evidence/rg01-tickets-prior-work-plan.json",
+      "docs/evidence/rg01-wheel-smoke-20261019.json",
+      "docs/fresh50-recovery-20261020.md",
+      "docs/release-gates.json",
+      "docs/rg01-first-scope-decisions-20261019.md",
+      "docs/rg01-formal-review-checklist-20261019.md",
+      "docs/rg01-implementation-20261019.md",
+      "docs/rg01-live-integration-20261019.md",
+      "docs/rg01-review-ready.md",
+      "docs/rg01-scout-environment-20261019.md",
+      "docs/rg01-scout-target-20261019.md",
+      "docs/rg01-semantic-review-20261019.md",
+      "docs/rg01-technical-review-20261019.md",
+      "docs/rg01-validator-qualification.md",
+      "examples/first-pool-profile-public-20261020.json",
+      "examples/first-pool-profile.json",
+      "src/cloudyfan_jev/sql.py",
+      "src/cloudyfan_jev/sql_catalog.py",
+      "src/cloudyfan_jev/sql_counterexamples.json",
+      "src/cloudyfan_jev/sql_executor.py",
+      "src/cloudyfan_jev/sql_isolation.py",
+      "src/cloudyfan_jev/sql_isolation_entry.py",
+      "src/cloudyfan_jev/sql_policy.py",
+      "src/cloudyfan_jev/sql_process.py",
+      "src/cloudyfan_jev/sql_public_suite.py",
+      "src/cloudyfan_jev/sql_review.py",
+      "src/cloudyfan_jev/sql_worker.py",
+      "tests/test_sql_bounded.py",
+      "tests/test_sql_environment.py",
+      "tests/test_sql_isolation.py",
+      "tests/test_sql_process.py",
+      "tests/test_sql_public_suite.py",
+      "tests/test_sql_qualification.py",
+      "tests/test_sql_review.py"
+    ]
+  },
+  "initial_checks": [
+    {
+      "result": "64 passed, 2 failed",
+      "scope": "initial new-module test run",
+      "cause": "Synthetic fixtures still advertised old tools capability, not six SQL operations; fixed fixture domain/capabilities. The50 SQL controls/mutants passed."
+    },
+    {
+      "result": "system python import failed before preparation",
+      "occurrences": 2,
+      "cause": "Used system Python for a local package import; corrected to locked .venv Python. No API call or paid result."
+    },
+    {
+      "result": "80 passed /50 deselected then91 passed /50 deselected",
+      "scope": "focused regressions prior to final full integration"
+    }
+  ],
+  "real_api_calls": 0,
+  "real_api_usd": "0",
+  "source_api_reads": 0,
+  "supplier_contact": false,
+  "deployment": false,
+  "push": false,
+  "local_commit": false,
+  "limitations": [
+    "No real API version/effort/provider/SQL evidence or measured model latency yet.",
+    "Source rights/update ownership and input-bound reviews remain pending.",
+    "Provider fee guarantees remain independent; token price scenarios are not enforceable bounds.",
+    "API OSS qualification is service-configuration evidence, not immutable deployed weights or local hardware.",
+    "Existing classifier/runtime tree and RG01 inputs are unchanged; no CDR or equal-quality commercial claim.",
+    "Offline grader aggregates SQL and fees; HTTP elapsed time remains in original Client records, not an end-to-end service SLO."
+  ],
+  "final_record_audit": {
+    "source_digest_matches_full_check": true,
+    "v1_saved_report_replay_identical": true,
+    "local_links_checked": 125,
+    "missing_links": [],
+    "new_api_calls": 0,
+    "formal_registry_unchanged": true
+  },
+  "domain_records": [
+    {
+      "path": "CloudyFan/GLOSSARY.md",
+      "sha256": "a8a36537b7319512c4faaaa1c74d0bba3f86e1afe5c930f27a0c2ef309d3c392"
+    },
+    {
+      "path": "CloudyFan/docs/adr/0007-tier-prior-independent-sql-qualification.md",
+      "sha256": "a418b55b968619d72dd426a58c49de03e22a743feafb0c8dfc363988b9d6253f"
+    }
+  ],
+  "final_quick_check": {
+    "path": "runtime/checks/b994249997e449a7b552ea56ef60c960/checks.json",
+    "sha256": "22f0ed35fad5baf967e79154e54abad266892904203ad4ef07a8308b1772b6df",
+    "result": "passed"
+  }
+}

@@ -613,3 +613,50 @@ statement was upgraded to a model qualification. Full 1,206-test result remains
 historical, with unchanged executable digest. RG01 and formal registry stay frozen;
 unknown evidence stays pending. New local Git commit is authorized; no API,
 supplier contact, deployment or source push is authorized or performed.
+
+
+## 2026-10-20 — Independent SQL model qualification v2
+
+User explicitly approves separating source-native family/effort ranking priors from
+exact API configuration SQL qualification. Added opt-in v2 profile policy, isolated
+exam/grader, saved Client evidence normalization, private offline preparation/grading
+scripts, version table and prospective API plan; V1 inputs/rules remain available.
+No RG01 module/data, classifier tree, original experiment or formal registry edit.
+
+Final `./scripts/check --integration`:1,281passed in337.12s, Ruff/dependencies/project
+records, both pre-existing MockTransport demos and offline sdist/wheel passed.
+Receipt: `runtime/checks/2c765bf6e8064a24ae5d9ce84b88505b/checks.json`.
+[Sanitized evidence](evidence/sql-model-offline-20261020.json) binds current uncommitted
+source digest and preserves baseline/state/plan, initial64pass/2fixturefail and
+system-Python import setup failures; the final suite contains75new tests.
+All50 reference controls agree with Python/SQLite and50semantic mutants fail;
+capability/admission tests cover version/effort/provider changes, missing/altered/
+expired/synthetic evidence, unknown costs, unrequested repair, prior-only metadata,
+private preparation/no overwrite and real-fee priority without duplicate accounting.
+
+Prepared actual-clock materials in ignored `runtime/sql-model-qualification-20261020/prepared-final/`.
+Earlier explicit fixture-clock preparation is retained and is not a real model
+execution timestamp. Original77selected RG01/profile/gate/trial artifacts match the
+starting hashes. No paid/public API, contact, deployment, push or commit; real
+model answer count0 and all candidate qualifications remain pending/blocked.
+
+API plan is404maximum generations, classifier0, no automatic retries. Archived-rate
+token scenarioUSD46.2263424 / proposed budgetUSD60 (25%scenario reserve fits);
+unknown/additional fees and enforceable provider caps remain unresolved. Actual
+execution needs new authorization and capture/budget preflight; this plan grants none.
+
+## 2026-10-20 — Main-checkout sequential routing and SQL qualification integration
+
+- Scope: apply reviewed isolated patch with new versions; preserve SQL qualification v2, frozen SQL semantics and original trial evidence. State/plan/coordination updated incrementally, prior main records archived.
+- Full final check: `./scripts/check --integration`, **1,304 passed in 493.59s**, Ruff, dependency/record checks, two mocked high-route demos and sdist/wheel passed. Source digest: `057d6fbc5f15da1082298e651f91a5874ff4476e489d68d4a23d26a37e8f6c27`. Receipt: `runtime/checks/14b5123d5ff740609a6e6cf7c4f876c0/checks.json`.
+- Additional three regressions explicitly check latest diagnostic/configuration, legacy manifest refusal before environment/POST, and archival v1 plan reporting with execution refusal. Dedicated sequential suite:22; preserved SQL qualification suite:75.
+- Retained preliminary failures: mistyped test filename (no tests ran); focused139 passed/1 Q021 SQL worker timeout, isolated unchanged recheck1 passed; first full1291 passed/13 SQL worker/resource failures in794.25s, receipt `runtime/checks/7dcfbf3b30f2466594002d5e66f4e87d/checks.json`; unchanged focused recheck13 passed/100 deselected in37.60s. No SQL rule, resource limit or threshold change. Host swap observation is not proof of cause.
+- Preserved132 protected files, including SQL worker/validator, exam/grader, qualification adapters, candidate profiles and historical evidence; formal registry unchanged. [Sanitized evidence](evidence/sequential-integration-offline-20261020.json); private logs under `runtime/sequential-integration-20261020/`.
+- Real model requests0, API USD0; no hardware, supplier contact, deployment, push, local commit or qualification promotion. Mock results do not establish real-model savings, latency or correctness.
+- Post-record closure: `./scripts/check --quick` passed, receipt `runtime/checks/6d6c4483d388406c89e490380bd36a28/checks.json`; current records report implementation_complete=True and production_qualification_recorded=False. Final scope audit confirms132 protected inputs unchanged,282 local links resolve, source digest matches the full run and Git HEAD is unchanged; `git diff --check` passed.
+
+## 2026-10-20 — Sequential integration local commit review
+
+- User authorizes local commit only; no new API, deployment or push. Baseline c6e53fdec9b403c8dc04e99c1e77d16f3f73d26f. Combined new route/SQL qualification source digest remains `057d6fbc5f15da1082298e651f91a5874ff4476e489d68d4a23d26a37e8f6c27`, matching the full1,304-test integration receipt; this is reuse of verified identical code, not a fresh full run.
+- Two read-only Standards/Spec reviews found no blocking issue; Standards notes one optional test-name mismatch (both_attempts now asserts3), with no behavioral defect. Spec reviewer reran22 sequential tests:22 passed in0.82s.
+- Original failed integration receipt,13-case unchanged recheck log, final integration log/receipt and earlier1,281-test SQL evidence are preserved and hashed. Runtime/private content is not staged. Independent release-readiness prose rewrite is preserved unstaged; only intended SQL-v2/sequential verification updates enter the commit.

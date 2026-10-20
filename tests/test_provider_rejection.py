@@ -58,21 +58,22 @@ def test_cloudyfan_429_uses_existing_binary_tree_once_and_replays_no_posts(tmp_p
     engine = core(tmp_path, api, Limits(max_turns=3))
     result = engine.run('rate', TASK, NoMissingAnswerValidation, contract_version='v1')
     assert result['status'] == 'passed' and result['first_public_pass'] is None
-    assert [a['tier'] for a in result['attempts']] == ['open_source', tier]
+    assert [a['tier'] for a in result['attempts']] == (['open_source', 'mid', tier] if len(choices)==2 else ['open_source', tier])
     first = result['attempts'][0]
     assert first['stop'] == 'provider_rate_limited' and first['final'] == ''
     assert first['public']['checks'] == ['PROVIDER_RATE_LIMITED']
     assert first['calls'][0]['model'] is None  # Do not invent an actual generated model.
     assert first['calls'][0]['requested_model'] == 'example/open_source'
     assert result['selection']['classifier_calls'] == len(choices)
-    assert [p['model'] for p in api.posts] == ['example/open_source'] + ['typesafe/jev-1.13'] * len(choices) + ['example/' + tier]
-    assert len(api.posts) == 2 + len(choices)  # No same-endpoint automatic retry.
-    assert Decimal(result['costs']['api_usd']) == Decimal('.012') + Decimal('.0001') * len(choices)
+    assert [p['model'] for p in api.posts] == (['example/open_source', 'typesafe/jev-1.13', 'example/mid',
+        'typesafe/jev-1.13', 'example/'+tier] if len(choices)==2 else ['example/open_source','typesafe/jev-1.13','example/'+tier])
+    assert len(api.posts) == (5 if len(choices)==2 else 3)  # No same-endpoint automatic retry.
+    assert Decimal(result['costs']['api_usd']) == Decimal('.002') + Decimal('.01')*len(choices) + Decimal('.0001') * len(choices)
     assert summarize(engine.client)['total_api_usd'] == result['costs']['api_usd']
     assert 'private upstream detail' not in json.dumps(api.posts[1:])
     assert engine.run('rate', TASK, NoMissingAnswerValidation, contract_version='v1') == result
     assert engine.read_completed('rate') == result
-    assert len(api.posts) == 2 + len(choices)
+    assert len(api.posts) == (5 if len(choices)==2 else 3)
 
 
 @pytest.mark.parametrize('mode,initial', [('low_first', 'low'), ('open_source_first', 'open_source')])
@@ -115,9 +116,10 @@ def test_generation_get_can_resolve_rejection_then_resume_without_resend(tmp_pat
 def test_second_generation_429_is_terminal_unknown_not_success_or_third_generation(tmp_path, mode):
     api = RateLimitedAPI(rejects=(1, 3) if mode == 'cloudyfan' else (1, 2))
     result = core(tmp_path, api).run('two429', TASK, NoMissingAnswerValidation, contract_version='v1', mode=mode)
-    assert len(result['attempts']) == 2 and result['status'] == 'unverifiable'
-    assert result['final_public_pass'] is None and result['attempts'][1]['stop'] == 'provider_rate_limited'
-    assert len(api.posts) == (3 if mode == 'cloudyfan' else 2)
+    assert len(result['attempts']) == (3 if mode=='cloudyfan' else 2)
+    assert result['status'] == ('passed' if mode=='cloudyfan' else 'unverifiable')
+    assert result['attempts'][1]['stop'] == 'provider_rate_limited'
+    assert len(api.posts) == (5 if mode=='cloudyfan' else 2)
 
 
 def test_fixed_high_rejection_does_not_retry_the_same_configuration(tmp_path):
@@ -236,7 +238,7 @@ def test_budget_keeps_rejected_fee_plus_selector_and_repair_inside_original_rese
     result = app.run('budget429', TASK, NoMissingAnswerValidation, contract_version='v1')
     assert result['status'] == 'passed'
     assert Decimal(result['budget']['run_total_usd']) == Decimal('.0121')
-    assert Decimal(result['budget']['shared']['reservations'][0]['amount']) == Decimal('.062')
+    assert Decimal(result['budget']['shared']['reservations'][0]['amount']) == Decimal('.092')
     assert len(api.posts) == 3
 
 

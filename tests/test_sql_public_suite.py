@@ -116,20 +116,20 @@ def test_public_suite_activates_existing_binary_repair_and_replay_bound(tmp_path
     task = suite()
     result = run_sql(engine, 'qualified-public', task)
     assert result['status'] == 'passed' and result['first_public_pass'] is False
-    assert len(result['attempts']) == 2 and result['selection']['classifier_calls'] == 2
-    assert result['costs']['api_usd'] == '0.0202' and len(api.requests) == 4
-    assert run_sql(engine, 'qualified-public', task) == result and len(api.requests) == 4
+    assert len(result['attempts']) == 2 and result['selection']['classifier_calls'] == 1
+    assert result['costs']['api_usd'] == '0.0201' and len(api.requests) == 3
+    assert run_sql(engine, 'qualified-public', task) == result and len(api.requests) == 3
     public = result['attempts'][0]['public']
     assert public['checks'] == ['SQL_PUBLIC_RESULT_MISMATCH']
     assert set(public) == {'passed', 'checks', 'diagnostic_version', 'diagnostic_source'}
     assert 'relational-edges' not in json.dumps(public)
 
 
-def test_repeated_semantic_failure_still_has_only_one_repair(tmp_path):
+def test_repeated_semantic_failure_stops_after_two_repairs(tmp_path):
     api = API(messages=[answer(BAD_DUP), answer(BAD_ORPHAN)])
     result = run_sql(sql_core(tmp_path, api), 'two-failures', suite())
-    assert result['status'] == 'failed' and len(result['attempts']) == 2
-    assert len(api.requests) == 3 and result['costs']['api_usd'] == '0.0201'
+    assert result['status'] == 'failed' and len(result['attempts']) == 3
+    assert len(api.requests) == 5 and result['costs']['api_usd'] == '0.0302'
 
 
 def test_coverage_does_not_authenticate_the_application_oracles_semantics():

@@ -83,7 +83,8 @@ def demonstrate_pool(output, *, now):
                             answers={stage: {'type': 'choice', 'choice': choice,
                                             'probabilities': {k: .9 if k == choice else .1 for k in pair}}})
         else:
-            value = 1 if active['route'] == 'pass' or body['model'] != 'example/open_source' else 0
+            value = (0 if (active['route'] != 'pass' and body['model'] == 'example/open_source')
+                     or (active['route'] == 'high' and body['model'] == 'example/mid') else 1)
             response.update(provider='Example', usage={'cost': .001, 'prompt_tokens': 1, 'completion_tokens': 1},
                             choices=[{'message': {'role': 'assistant', 'content': json.dumps({'sql': f'SELECT {value} AS value'})},
                                       'finish_reason': 'stop'}])

@@ -1,0 +1,98 @@
+{
+  "schema_version": "sql-model-api-plan-v1",
+  "created_at": "2026-10-20T03:16:52.461388+00:00",
+  "suite_id": "8a3127cdad4433aeb2aca12f23b059a6959e807889c8da2b5fb23ce6bb397f88",
+  "version_table_sha256": "143686ef967ee8d94ffc8956cce3f4d32471493b48708d89feee64fad662fec0",
+  "execution_authorized": false,
+  "identity_calls": 4,
+  "first_answer_calls": 200,
+  "repair_calls_at_most": 200,
+  "total_generation_calls_at_most": 404,
+  "classifier_calls": 0,
+  "automatic_retries": 0,
+  "max_output_tokens_per_attempt": 4096,
+  "max_context_bytes": 32768,
+  "threshold": "All50 final public+sealed checks pass; at most two same-model attempts. Report first pass separately.",
+  "schedule": "Q001..Q050, rotate four roles by task index; no cherry-picking or model replacement.",
+  "repair_rule": "Only frozen public diagnostics; no repair after public pass. Sealed grading after complete capture.",
+  "accounting": "Include smoke, failed/empty answers, repairs, interruptions, unmatched/unknown charges. No estimate substituted for settled API fee.",
+  "price_scenario": [
+    {
+      "role": "open_source",
+      "price_evidence": {
+        "url": "https://openrouter.ai/api/v1/models/openai/gpt-oss-120b/endpoints",
+        "retrieved_at": "2026-10-20T02:20:55.771871+00:00",
+        "raw_sha256": "154a1b9d9d265cb4b6ae99a46ea3483648a78280f6c4126017be0b4c5c267fef",
+        "input_per_token": "0.0000001",
+        "output_per_token": "0.0000005",
+        "rate_is_enforceable_bound": false
+      },
+      "identity_smoke_usd": "0.0001664",
+      "first50_usd": "0.1433600",
+      "maximum50_repairs_usd": "0.1843200",
+      "planning_subtotal_usd": "0.3278464"
+    },
+    {
+      "role": "low",
+      "price_evidence": {
+        "url": "https://openrouter.ai/api/v1/models/openai/gpt-6-sol/endpoints",
+        "retrieved_at": "2026-10-20T02:20:55.532952+00:00",
+        "raw_sha256": "c27d6f4ee559892049fa6d4e8ab9c22a3fa3de4ac7cf341535748bac9dc08804",
+        "input_per_token": "0.000002",
+        "output_per_token": "0.00001",
+        "rate_is_enforceable_bound": false
+      },
+      "identity_smoke_usd": "0.003328",
+      "first50_usd": "2.867200",
+      "maximum50_repairs_usd": "3.686400",
+      "planning_subtotal_usd": "6.556928"
+    },
+    {
+      "role": "mid",
+      "price_evidence": {
+        "url": "https://openrouter.ai/api/v1/models/openai/gpt-6.1-sol/endpoints",
+        "retrieved_at": "2026-10-20T02:20:55.546278+00:00",
+        "raw_sha256": "95bf0541fd5d778551dc1da611ad5a6a3c292cdd0d163896c6bd5a402e5c9ca4",
+        "input_per_token": "0.000002",
+        "output_per_token": "0.00001",
+        "rate_is_enforceable_bound": false
+      },
+      "identity_smoke_usd": "0.003328",
+      "first50_usd": "2.867200",
+      "maximum50_repairs_usd": "3.686400",
+      "planning_subtotal_usd": "6.556928"
+    },
+    {
+      "role": "high",
+      "price_evidence": {
+        "url": "https://openrouter.ai/api/v1/models/openai/gpt-6-astra/endpoints",
+        "retrieved_at": "2026-10-20T02:20:55.765614+00:00",
+        "raw_sha256": "2433bb49dd0135a80b3fc94cd24844f88d043e4c11fc4f808ecccc0a49fd0d45",
+        "input_per_token": "0.00001",
+        "output_per_token": "0.00005",
+        "rate_is_enforceable_bound": false
+      },
+      "identity_smoke_usd": "0.01664",
+      "first50_usd": "14.33600",
+      "maximum50_repairs_usd": "18.43200",
+      "planning_subtotal_usd": "32.78464"
+    }
+  ],
+  "planning_token_scenario_usd": "46.2263424",
+  "with25percent_contingency_usd": "57.782928000",
+  "proposed_authorization_usd": "60",
+  "enforceable_supplier_upper_bound_usd": null,
+  "unpriced_fee_risks": [
+    "cache-write or other separately billed input units",
+    "provider internal attempts/failure/cancellation charges",
+    "price changes and token-accounting differences"
+  ],
+  "warning": "Archived prices and token planning assumptions, not current quote, prediction or enforceable supplier cap. Actual tokenizer/internal/failure charges may differ.",
+  "live_preflight_before_authorization": [
+    "Revalidate free public catalog/prices and exact IDs; do not refresh old records.",
+    "Record explicit spending authorization, cost evidence/limits and complete next-block reserve.",
+    "Unresolved previous charge, unknown current fee, identity mismatch or partial intent stops new POST.",
+    "If a safe executable bound/authorized exposure is unavailable, report before spending; do not invent RG04 qualification."
+  ],
+  "current_gate_status": "Pending real API and separate formal/fee qualification; no current activation."
+}

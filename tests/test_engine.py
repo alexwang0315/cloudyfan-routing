@@ -16,6 +16,8 @@ TASK = {'prompt': 'Return only the integer sum of 1 and 1.'}
 class API:
     def __init__(self, first='3', choices=('low',), messages=None):
         self.first, self.choices, self.messages = first, iter(choices), iter(messages) if messages else None
+        self.two_repairs = len(choices) > 1
+        self.decision_count, self.last_message = 0, None
         self.requests = []
         self.generation_count = 0
 
@@ -25,13 +27,20 @@ class API:
         i = len(self.requests)
         if request.url.path.endswith('/decisions'):
             stage = next(iter(p['questions']))
-            choice = next(self.choices)
+            choice = next(self.choices, 'high' if stage == 'mid_high' else 'low')
+            self.decision_count += 1
             return httpx.Response(200, json={'id': f'gen-test-{i}', 'model': p['model'], 'provider': 'TypeSafe',
                 'usage': {'cost': .0001, 'input_tokens': 10, 'output_tokens': 1},
                 'answers': {stage: {'type': 'choice', 'choice': choice,
                     'probabilities': {k: .8 if k == choice else .2 for k in p['questions'][stage]['criteria']}}}})
         self.generation_count += 1
-        msg = next(self.messages) if self.messages else {'role': 'assistant', 'content': self.first if self.generation_count == 1 else '2'}
+        if self.messages:
+            msg = next(self.messages, self.last_message)
+            self.last_message = msg
+        else:
+            answer = (self.first if self.generation_count == 1 and self.decision_count == 0 else
+                      ('3' if self.two_repairs and self.decision_count == 1 else '2'))
+            msg = {'role': 'assistant', 'content': answer}
         return httpx.Response(200, json={'id': f'gen-test-{i}', 'model': p['model'], 'provider': 'Example',
             'usage': {'cost': .01, 'prompt_tokens': 5, 'completion_tokens': 1},
             'choices': [{'message': msg, 'finish_reason': 'stop'}]})
@@ -43,16 +52,18 @@ def core(tmp_path, api, limits=None):
     return Core(Client(http, 'mock-only-key', tmp_path), profiles, decision, limits=limits)
 
 
-@pytest.mark.parametrize('choices,tier,count', [(('low',), 'low', 3), (('mid', 'mid'), 'mid', 4), (('mid', 'high'), 'high', 4)])
-def test_complete_tree_no_generation_between_decisions(tmp_path, choices, tier, count):
+@pytest.mark.parametrize('choices,tiers,count', [(('low',), ['open_source','low'],3),
+    (('mid',), ['open_source','mid'],3), (('mid','high'), ['open_source','mid','high'],5)])
+def test_complete_tree_generates_and_validates_between_decisions(tmp_path, choices, tiers, count):
     api = API(choices=choices)
     result = core(tmp_path, api).run('tree', TASK, ArithmeticEnvironment, contract_version='v1')
     assert result['status'] == 'passed'
-    assert [a['tier'] for a in result['attempts']] == ['open_source', tier]
+    assert [a['tier'] for a in result['attempts']] == tiers
     assert len(api.requests) == count
-    assert [p['model'] for p in api.requests] == ['example/open_source'] + ['typesafe/jev-1.13'] * len(choices) + ['example/' + tier]
-    assert Decimal(result['costs']['api_usd']) == Decimal('.02') + Decimal('.0001') * len(choices)
-    assert Decimal(result['costs']['hypothetical_open_source_zero_usd']) == Decimal('.01') + Decimal('.0001') * len(choices)
+    expected = ['example/open_source', 'typesafe/jev-1.13', 'example/'+tiers[1]]
+    if len(tiers)==3: expected += ['typesafe/jev-1.13','example/'+tiers[2]]
+    assert [p['model'] for p in api.requests] == expected
+    assert Decimal(result['costs']['api_usd']) == Decimal('.01')*len(tiers)+Decimal('.0001')*len(choices)
     assert result['selection']['classifier_calls'] == len(choices)
 
 
@@ -82,14 +93,14 @@ def test_empty_output_receives_same_bounded_repair(tmp_path, first):
 
 
 @pytest.mark.parametrize('status,expected', [(False, 'failed'), (None, 'unverifiable')])
-def test_final_failure_or_unknown_never_success_or_third_attempt(tmp_path, status, expected):
+def test_final_failure_or_unknown_never_success_or_fourth_attempt(tmp_path, status, expected):
     class Environment(ArithmeticEnvironment):
         def validate(self, text):
             return {'passed': status, 'checks': ['not_established']}
     api = API()
     result = core(tmp_path, api).run('unknown', TASK, Environment, contract_version='v1')
-    assert result['status'] == expected and len(result['attempts']) == 2
-    assert len(api.requests) == 3
+    assert result['status'] == expected and len(result['attempts']) == 3
+    assert len(api.requests) == 5
 
 
 @pytest.mark.parametrize('change', ['task', 'contract', 'config', 'mode'])

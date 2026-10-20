@@ -7,6 +7,7 @@ from .qualification import build_qualification_pack
 
 PROFILE_SCHEMA = 'cloudyfan-first-pool-profile-v1'
 REPORT_SCHEMA = 'cloudyfan-first-pool-report-v1'
+INDEPENDENT_SCHEMA = 'cloudyfan-first-pool-profile-v2'
 
 
 def _evidence(value):
@@ -24,8 +25,11 @@ def prepare_pool(profile, *, now):
     timestamp(now)
     required = {'schema_version', 'synthetic', 'source_choice', 'observations', 'registry', 'policy',
                 'requirements', 'decision', 'review', 'configuration_evidence'}
-    if set(profile) != required or profile['schema_version'] != PROFILE_SCHEMA:
+    independent = profile['schema_version'] == INDEPENDENT_SCHEMA
+    if set(profile) != required or profile['schema_version'] not in (PROFILE_SCHEMA, INDEPENDENT_SCHEMA):
         raise ValueError('Unsupported first-pool profile')
+    if ((profile['policy'].get('score_role') == 'family_effort_prior') is not independent):
+        raise ValueError('Family-prior policy requires explicit v2 profile')
     if type(profile['synthetic']) is not bool:
         raise ValueError('Synthetic status must be explicit boolean')
     from ..routing import _reject_private
@@ -41,19 +45,42 @@ def prepare_pool(profile, *, now):
         bound = proof.get('configuration_sha256') == configuration_digest(entry)
         if not bound:
             reasons.append('configuration_evidence_unbound')
-        mapping = proof.get('mapping', {})
-        if (not bound or mapping.get('status') != 'approved' or not _evidence(mapping.get('evidence'))
-                or (entry is not registry['open_source'] and any(
-                    mapping.get(k) != entry[k] for k in ('source', 'source_version', 'source_model_id')))):
-            reasons.append('mapping_unproven')
-        capabilities = proof.get('capabilities', {})
-        if (not bound or capabilities.get('basis') not in ('independent_calibration', 'public_capability_record')
-                or not _evidence(capabilities.get('evidence'))
-                or not isinstance(capabilities.get('operations'), list)
-                or not set(entry['capabilities']) <= set(capabilities.get('operations', []))
-                or type(capabilities.get('context_tokens')) is not int
-                or capabilities.get('context_tokens', 0) < entry['context_tokens']):
-            reasons.append('capabilities_unproven')
+        if independent:
+            from .sql_capability import evidence_expiry
+            association = proof.get('prior_association', {})
+            if entry is not registry['open_source'] and (
+                    association.get('basis') != 'reviewed_family_effort_prior'
+                    or any(association.get(k) != entry[k] for k in ('source', 'source_version', 'source_model_id'))
+                    or association.get('effort') != entry['profile']['effort']):
+                reasons.append('prior_association_unproven')
+            try:
+                expiry = evidence_expiry(entry, proof, now=now, synthetic=profile['synthetic'])
+                entry['sql_qualification'] = {
+                    'valid_until': expiry, 'report_id': proof['sql_report']['report_id'],
+                    'configuration_sha256': configuration_digest(entry)}
+                report = proof['sql_report']
+                card = entry['profile']['capability_card']
+                card['sql_operations'] = {op: 'supported_in_frozen_exam' for op in entry['capabilities']}
+                card['sql_exam'] = {
+                    'suite_id': report['suite_id'], 'report_id': report['report_id'],
+                    'case_count': 50, 'tested_from': report['tested_from'], 'valid_until': expiry,
+                    'synthetic': report['synthetic'], 'correctness_guaranteed': False}
+            except ValueError as error:
+                reasons.append(str(error))
+        else:
+            mapping = proof.get('mapping', {})
+            if (not bound or mapping.get('status') != 'approved' or not _evidence(mapping.get('evidence'))
+                    or (entry is not registry['open_source'] and any(
+                        mapping.get(k) != entry[k] for k in ('source', 'source_version', 'source_model_id')))):
+                reasons.append('mapping_unproven')
+            capabilities = proof.get('capabilities', {})
+            if (not bound or capabilities.get('basis') not in ('independent_calibration', 'public_capability_record')
+                    or not _evidence(capabilities.get('evidence'))
+                    or not isinstance(capabilities.get('operations'), list)
+                    or not set(entry['capabilities']) <= set(capabilities.get('operations', []))
+                    or type(capabilities.get('context_tokens')) is not int
+                    or capabilities.get('context_tokens', 0) < entry['context_tokens']):
+                reasons.append('capabilities_unproven')
         if reasons:
             entry['approved'] = False
         # Existing input-bound review must cover these NEW qualification inputs

@@ -419,11 +419,8 @@ class BudgetedCore:
             raise BudgetError('Enforceable upper bound unconfirmed; estimates are not caps')
 
     def _admit(self, mode):
-        from .engine import INITIAL
-        if mode not in INITIAL:
-            raise ValueError('Unknown workflow mode')
-        first = self.core.profiles[INITIAL[mode]]
-        remaining = [self.core.profiles[t] for t in ('low', 'mid', 'high')] if mode == 'cloudyfan' else [self.core.profiles['high']]
+        from .engine import generation_tiers
+        phases = generation_tiers(mode)
         def model_cap(profile, key):
             model = profile[key]
             bound = self.model_bounds.get(model)
@@ -431,8 +428,8 @@ class BudgetedCore:
                 raise BudgetError('No confirmed model upper bound')
             self._verify('model', model, profile, bound)
             return money(bound.usd)
-        amount = _exact((model_cap(first, 'model_version'), max(model_cap(p, 'model_version') for p in remaining)),
-                        self.core.limits.max_turns)
+        amount = _exact((max(model_cap(self.core.profiles[t], 'model_version') for t in phase)
+                         for phase in phases), self.core.limits.max_turns)
         if mode == 'cloudyfan':
             amount = _exact((amount, _exact((model_cap(self.core.decision, 'version'),), 2)))
         tool_max = Decimal(0)
@@ -443,7 +440,7 @@ class BudgetedCore:
             tool_max = max(tool_max, money(policy.bound.usd))
         # max_tool_calls is a per-turn bound, not a per-workflow bound.
         amount = _exact((amount, _exact((tool_max,),
-                        2 * self.core.limits.max_turns * self.core.limits.max_tool_calls)))
+                        len(phases) * self.core.limits.max_turns * self.core.limits.max_tool_calls)))
         return amount
 
     def sync_client(self, client):

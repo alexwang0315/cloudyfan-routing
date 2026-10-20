@@ -112,9 +112,9 @@ def test_reviewed_components_reserve_and_account_full_two_stage_tree(tmp_path):
     result = controlled.run('complete', TASK, ArithmeticEnvironment, contract_version='v1')
     assert result['final_public_pass'] is True
     assert result['selection']['classifier_calls'] == 2
-    assert result['budget']['run_total_usd'] == '0.0202'
-    assert result['budget']['shared']['reservations'][0]['amount'] == '0.0458240'
-    assert [p['model'] for p in api.requests] == ['example/open_source', 'typesafe/jev-1.13',
+    assert result['budget']['run_total_usd'] == '0.0302'
+    assert result['budget']['shared']['reservations'][0]['amount'] == '0.0653080'
+    assert [p['model'] for p in api.requests] == ['example/open_source', 'typesafe/jev-1.13', 'example/mid',
                                                 'typesafe/jev-1.13', 'example/high']
     assert controlled.enforcement_descriptor()['version'] == 'qualified-components-v1'
 
@@ -145,9 +145,9 @@ def test_independently_guaranteed_free_decision_output_needs_no_token_cap(tmp_pa
     result = app(verifier).run('free-decision-output', TASK, ArithmeticEnvironment, contract_version='v1')
     assert result['final_public_pass'] is True
     assert result['selection']['classifier_calls'] == 2
-    assert result['budget']['shared']['reservations'][0]['amount'] == '0.0455680'
-    assert result['budget']['run_total_usd'] == '0.0202'
-    assert len(api.requests) == 4
+    assert result['budget']['shared']['reservations'][0]['amount'] == '0.0650520'
+    assert result['budget']['run_total_usd'] == '0.0302'
+    assert len(api.requests) == 5
     assert verifier.descriptor()['version'] == 'qualified-components-v2'
 
 
@@ -288,8 +288,8 @@ def test_mixed_zero_rate_workflow_preserves_exact_reservation_at_low_decimal_pre
     with localcontext() as context:
         context.prec = 3
         result = app(make()).run('exact-zero-mix', TASK, ArithmeticEnvironment, contract_version='v1')
-    assert result['budget']['shared']['reservations'][0]['amount'] == '0.040000000000000000000000000004'
-    assert result['budget']['run_total_usd'] == '0.0202'
+    assert result['budget']['shared']['reservations'][0]['amount'] == '0.050000000000000000000000000005'
+    assert result['budget']['run_total_usd'] == '0.0302'
     assert result['final_public_pass'] is True
 
 
@@ -333,7 +333,7 @@ def test_whole_zero_rate_flow_preserves_accounting_unknowns_and_breach_stops(tmp
         assert result['final_public_pass'] is True and result['selection']['classifier_calls'] == 2
         assert result['budget']['run_total_usd'] == '0'
         assert result['budget']['shared']['reservations'][0]['amount'] == '0'
-        assert attempts == ['POST'] * 4
+        assert attempts == ['POST'] * 5
     else:
         with pytest.raises(RuntimeError):
             controlled.run('all-free', TASK, ArithmeticEnvironment, contract_version='v1')
@@ -384,10 +384,10 @@ def test_workflow_and_account_exposure_ignore_ambient_decimal_rounding(tmp_path)
         context.prec = 3
         result = app(make()).run('precision', TASK, ArithmeticEnvironment, contract_version='v1')
         report = result['budget']['shared']
-        assert report['reservations'][0]['amount'] == '0.0458240'
-        assert report['known_usd'] == '0.0202'
-        assert report['provisional_hold_usd'] == '0.0256240'
-        assert report['available_usd'] == '1.9541760'
+        assert report['reservations'][0]['amount'] == '0.0653080'
+        assert report['known_usd'] == '0.0302'
+        assert report['provisional_hold_usd'] == '0.0351080'
+        assert report['available_usd'] == '1.9346920'
 
 
 def test_withdrawn_review_stays_withdrawn_after_verifier_reconstruction(tmp_path):
@@ -414,7 +414,7 @@ def test_classifier_dispatch_uses_qualified_version_instead_of_unpriced_alias(tm
         tmp_path, classifier_version='typesafe/jev-1.13-20260917')
     result = app(make()).run('pinned-classifier', TASK, ArithmeticEnvironment, contract_version='v1')
     assert result['status'] == 'passed'
-    assert [p['model'] for p in api.requests[1:3]] == ['typesafe/jev-1.13-20260917'] * 2
+    assert [p['model'] for p in api.requests if p['model'].startswith('typesafe/')] == ['typesafe/jev-1.13-20260917'] * 2
 
 
 @pytest.mark.parametrize('problem', ['missing_failure', 'unbounded_failure', 'snapshot', 'expired',
@@ -560,8 +560,8 @@ def test_more_than_28_digits_survive_complete_workflow_reservation(tmp_path):
         schedule['components']['cache_write']['max_units'] = 1
         review['evidence_sha256'] = digest(schedule)
     result = app(make()).run('long-decimal', TASK, ArithmeticEnvironment, contract_version='v1')
-    # Four independently bounded calls, each with the literal fee above.
-    assert result['budget']['shared']['reservations'][0]['amount'] == '0.040000000000000000000000000004'
+    # Five independently bounded calls, each with the literal fee above.
+    assert result['budget']['shared']['reservations'][0]['amount'] == '0.050000000000000000000000000005'
 
 
 @pytest.mark.parametrize('decision_zero_rate', [False, True])
@@ -584,17 +584,17 @@ def test_generation_reconciliation_replaces_provisional_fees_once_for_every_phas
                 qualify_zero_components(schedule, review, ['output', 'reasoning'])
     controlled = app(make())
     result = controlled.run('reconciled', TASK, ArithmeticEnvironment, contract_version='v1')
-    assert result['budget']['run_total_usd'] == '0.0202'
+    assert result['budget']['run_total_usd'] == '0.0302'
     for directory in sorted((engine.client.root / 'calls').iterdir()):
         engine.client.reconcile(directory.name)
         engine.client.reconcile(directory.name)
     controlled.sync_client(engine.client)
     controlled.sync_client(engine.client)
     report = controlled.store.report()
-    assert Decimal(report['verified_usd']) == Decimal('0.02030')
+    assert Decimal(report['verified_usd']) == Decimal('0.03030')
     assert report['provisional_hold_usd'] == '0'
-    assert len(api.requests) == 4 and len(reads) == 4
-    assert len(report['events']) == 4
+    assert len(api.requests) == 5 and len(reads) == 5
+    assert len(report['events']) == 5
 
 
 def test_a_changed_price_artifact_requires_its_own_independent_review(tmp_path):

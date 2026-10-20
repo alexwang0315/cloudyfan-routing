@@ -1,7 +1,7 @@
 # CloudyFan Jev core
 
 - This repository is the standalone extraction of the new open-source-first binary Jev tree, not the older A/B or alpha/beta experiment.
-- Preserve the policy: public pass skips classification; otherwise low/mid, then mid/high only if mid was selected. Generate once after selection. At most two generation attempts.
+- Preserve the sequential policy: OSS first; public failure/unknown triggers low/mid selection AND generation/validation; only another failure/unknown triggers mid/high selection AND final generation/validation. Public pass skips remaining classification. At most three generation attempts for CloudyFan, two for baseline modes. See docs/sequential-routing.md.
 - A model's confidence or external score never establishes task correctness. Validation is an injected, versioned public contract. Unknown is not success.
 - Hidden answers, hidden grader outcomes and another arm's answers must never enter selection or repair.
 - Do not call real APIs as part of tests. Use MockTransport. Paid experiments require a separate authorized plan; repository maintenance does not authorize spending.

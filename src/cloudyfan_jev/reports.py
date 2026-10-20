@@ -23,7 +23,8 @@ def report_binding(plan, arm, task_id, *, cohort='holdout'):
     body = {'plan_id': plan['plan_id'], 'arm': arm, 'task_id': task_id,
             'cohort': cohort, 'input_sha256': row['input_sha256'],
             'contract_version': spec['contract_version'], 'repair_policy': spec['repair_policy'],
-            'limits': spec['limits'], 'max_generation_attempts': spec['max_generation_attempts'],
+            'limits': spec['limits'], 'max_generation_attempts': (spec['max_generation_attempts'][arm]
+                if isinstance(spec['max_generation_attempts'], dict) else spec['max_generation_attempts']),
             'system_sha256': digest(spec['system']), 'diagnostic_contract': spec['diagnostic_contract'],
             'candidates': plan['candidates'], 'baseline': plan['baseline'],
             'decision_profile': spec['decision_profile'], 'routing_version': plan['routing_version']}

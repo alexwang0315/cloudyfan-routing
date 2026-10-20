@@ -64,6 +64,10 @@ def _policy(policy):
         raise ValueError('min_samples must be a nonnegative integer')
     if policy.get('max_evaluation_age_days') is not None:
         _positive(policy['max_evaluation_age_days'])
+    if policy.get('score_role') not in (None, 'exact_configuration', 'family_effort_prior'):
+        raise ValueError('Unknown score evidence role')
+    if policy.get('score_role') == 'family_effort_prior' and policy.get('max_evaluation_age_days') is not None:
+        raise ValueError('Family-prior freshness is separate from SQL evaluation freshness')
     # A native scale is mandatory. Percentiles and cross-source averages are not implicit.
     if policy.get('scale') != 'source_native':
         raise ValueError('Only explicit source_native thresholds are supported')
@@ -101,6 +105,13 @@ def _entry(entry):
 def _catalog_eligible(entry, policy, now):
     if not entry['approved']:
         return 'configuration_not_approved'
+    if policy.get('score_role') == 'family_effort_prior':
+        from .configuration import configuration_digest
+        evidence = entry.get('sql_qualification', {})
+        if (evidence.get('configuration_sha256') != configuration_digest(entry)
+                or not isinstance(evidence.get('report_id'), str) or len(evidence['report_id']) != 64
+                or now >= timestamp(evidence.get('valid_until'))):
+            return 'sql_qualification_missing_or_expired'
     checked = timestamp(entry['catalog_checked_at'])
     if checked > now:
         return 'catalog_timestamp_in_future'
@@ -182,6 +193,8 @@ def compile_snapshot(observations, registry, policy, *, now):
     pools, excluded = {tier: [] for tier in TIERS}, []
     expiries = [instant + timedelta(hours=policy['snapshot_ttl_hours']),
                 timestamp(oss['catalog_checked_at']) + timedelta(hours=policy['max_catalog_age_hours'])]
+    if policy.get('score_role') == 'family_effort_prior':
+        expiries.append(timestamp(oss['sql_qualification']['valid_until']))
     for entry in entries:
         reason = _catalog_eligible(entry, policy, instant)
         if entry['source'] != policy['source'] or entry['source_version'] != policy['source_version']:
@@ -207,9 +220,15 @@ def compile_snapshot(observations, registry, policy, *, now):
             'effort_mapping': 'measured' if obs.get('effort') else 'reviewed_binding',
             'effort_evidence_url': entry.get('effort_evidence_url'),
         }
+        if policy.get('score_role') == 'family_effort_prior':
+            entry['profile']['capability_card']['benchmark_evidence'].update(
+                effort_mapping='source_family_prior', evidence_role='family_effort_prior',
+                api_snapshot_equivalence_proven=False)
         pools[tier].append(entry)
         expiries.extend([timestamp(obs['retrieved_at']) + timedelta(hours=policy['max_source_age_hours']),
                          timestamp(entry['catalog_checked_at']) + timedelta(hours=policy['max_catalog_age_hours'])])
+        if policy.get('score_role') == 'family_effort_prior':
+            expiries.append(timestamp(entry['sql_qualification']['valid_until']))
         if policy.get('max_evaluation_age_days') is not None:
             date = datetime.fromisoformat(obs['evaluated_at'].replace('Z', '+00:00'))
             date = date.replace(tzinfo=timezone.utc) if date.tzinfo is None else date

@@ -1,0 +1,391 @@
+{
+  "schema_version": "cloudyfan-first-pool-profile-v2",
+  "synthetic": false,
+  "source_choice": {
+    "reason": "New public source observations for the SAME three preselected model/effort candidates; no alternate source or best-result selection.",
+    "prior_profile": "examples/first-pool-profile-public-20261020.json",
+    "prior_profile_sha256": "5ed964f013923be3226bb57317ee1e35f68b777919a4ece9704d41d14822302b",
+    "normalized_import_sha256": "54162f4b0a727e0f423388da57623f11874cb281833101b146d424a031e293f0",
+    "observed_at": "2026-10-20T02:23:20.529416+00:00",
+    "archive_manifest": "runtime/pool-public-evidence-20261020/manifest.json",
+    "archive_manifest_sha256": "16e0fa13a5ac7c78ba17645804111ed5b1b08260352e176d98282c999ee65eac",
+    "evidence": "docs/evidence/first-pool-public-20261020.json",
+    "extraction": "Unauthenticated public GET; new score endpoint declared by website catalog and HTTP410 response. No remote JS execution.",
+    "access": "Observed public read success, no account/key/cookie.",
+    "permissions": "robots permits crawling; commercial score-use and redistribution license still pending. Code/model licenses do not license benchmark data.",
+    "limitations": "Codex harness scores; no exact API snapshot/provider/quantization binding or execution dates. latest_graded_at is not evaluated_at. Source reports changed audit population; old scores are not overwritten.",
+    "threshold_basis": "Previously adopted native 80/100 boundary; source/domain applicability still pending",
+    "update_owner": null,
+    "qualification_rule": "Family/effort score is tier prior only; exact API configuration requires independent SQL exam. Original retrieval times retained."
+  },
+  "observations": [
+    {
+      "source": "codexradar",
+      "source_version": "codexradar-public:radar-bench-v2-150:670f3bae8900",
+      "source_model_id": "openai/gpt-6-sol",
+      "metric": "overall",
+      "score": 34.18142158006467,
+      "evaluated_at": null,
+      "retrieved_at": "2026-10-20T02:23:20.529416+00:00",
+      "source_url": "https://deng.codexradar.com/",
+      "raw_sha256": "54162f4b0a727e0f423388da57623f11874cb281833101b146d424a031e293f0",
+      "effort": "low",
+      "sample_count": 80,
+      "channel": "reviewed_import"
+    },
+    {
+      "source": "codexradar",
+      "source_version": "codexradar-public:radar-bench-v2-150:670f3bae8900",
+      "source_model_id": "openai/gpt-6.1-sol",
+      "metric": "overall",
+      "score": 99.07398070679321,
+      "evaluated_at": null,
+      "retrieved_at": "2026-10-20T02:23:20.530416+00:00",
+      "source_url": "https://deng.codexradar.com/",
+      "raw_sha256": "54162f4b0a727e0f423388da57623f11874cb281833101b146d424a031e293f0",
+      "effort": "high",
+      "sample_count": 110,
+      "channel": "reviewed_import"
+    },
+    {
+      "source": "codexradar",
+      "source_version": "codexradar-public:radar-bench-v2-150:670f3bae8900",
+      "source_model_id": "openai/gpt-6-astra",
+      "metric": "overall",
+      "score": 115.03535098973606,
+      "evaluated_at": null,
+      "retrieved_at": "2026-10-20T02:23:20.530739+00:00",
+      "source_url": "https://deng.codexradar.com/",
+      "raw_sha256": "54162f4b0a727e0f423388da57623f11874cb281833101b146d424a031e293f0",
+      "effort": "xhigh",
+      "sample_count": 74,
+      "channel": "reviewed_import"
+    }
+  ],
+  "registry": {
+    "candidates": [
+      {
+        "config_id": "first-low",
+        "profile": {
+          "model": "openai/gpt-6-sol",
+          "model_version": "openai/gpt-6-sol-20260922",
+          "accepted_models": [
+            "openai/gpt-6-sol-20260922"
+          ],
+          "effort": "low",
+          "provider": "openai",
+          "provider_name": "OpenAI",
+          "capability_card": {
+            "domain": "bounded-sqlite-readonly",
+            "sql_operations": {
+              "sql_filter": "unproven",
+              "sql_join": "unproven",
+              "sql_aggregate": "unproven",
+              "sql_window": "unproven",
+              "sql_set_operations": "unproven",
+              "sql_resource_limits": "unproven"
+            },
+            "limits": "Frozen SQL contract governs resources; no SQL model-capability qualification yet.",
+            "evidence_scope": "API catalog declaration only; SQL exam not yet executed. Score is family/effort prior, not an exact benchmarked API version.",
+            "public_catalog": {
+              "evidence": "docs/evidence/first-pool-public-20261020.json#first-low",
+              "checked_at": "2026-10-20T02:20:55.532952+00:00",
+              "declared_context_tokens": 1050000,
+              "effort": "low",
+              "scope": "Public catalog/documentation only; not SQL performance or immutable deployed-weight qualification."
+            }
+          },
+          "external_score": 34.18142158006467,
+          "endpoint": "https://openrouter.ai/api/v1/chat/completions"
+        },
+        "approved": false,
+        "context_tokens": 8192,
+        "capabilities": [
+          "sql_filter",
+          "sql_join",
+          "sql_aggregate",
+          "sql_window",
+          "sql_set_operations",
+          "sql_resource_limits"
+        ],
+        "catalog_checked_at": "2026-10-20T02:20:55.532952+00:00",
+        "estimated_request_usd": null,
+        "estimated_latency_ms": null,
+        "source_model_id": "openai/gpt-6-sol",
+        "source": "codexradar",
+        "source_version": "codexradar-public:radar-bench-v2-150:670f3bae8900",
+        "intended_tier": "low"
+      },
+      {
+        "config_id": "first-mid",
+        "profile": {
+          "model": "openai/gpt-6.1-sol",
+          "model_version": "openai/gpt-6.1-sol-20260929",
+          "accepted_models": [
+            "openai/gpt-6.1-sol-20260929"
+          ],
+          "effort": "high",
+          "provider": "openai",
+          "provider_name": "OpenAI",
+          "capability_card": {
+            "domain": "bounded-sqlite-readonly",
+            "sql_operations": {
+              "sql_filter": "unproven",
+              "sql_join": "unproven",
+              "sql_aggregate": "unproven",
+              "sql_window": "unproven",
+              "sql_set_operations": "unproven",
+              "sql_resource_limits": "unproven"
+            },
+            "limits": "Frozen SQL contract governs resources; no SQL model-capability qualification yet.",
+            "evidence_scope": "API catalog declaration only; SQL exam not yet executed. Score is family/effort prior, not an exact benchmarked API version.",
+            "public_catalog": {
+              "evidence": "docs/evidence/first-pool-public-20261020.json#first-mid",
+              "checked_at": "2026-10-20T02:20:55.546278+00:00",
+              "declared_context_tokens": 1050000,
+              "effort": "high",
+              "scope": "Public catalog/documentation only; not SQL performance or immutable deployed-weight qualification."
+            }
+          },
+          "external_score": 99.07398070679321,
+          "endpoint": "https://openrouter.ai/api/v1/chat/completions"
+        },
+        "approved": false,
+        "context_tokens": 8192,
+        "capabilities": [
+          "sql_filter",
+          "sql_join",
+          "sql_aggregate",
+          "sql_window",
+          "sql_set_operations",
+          "sql_resource_limits"
+        ],
+        "catalog_checked_at": "2026-10-20T02:20:55.546278+00:00",
+        "estimated_request_usd": null,
+        "estimated_latency_ms": null,
+        "source_model_id": "openai/gpt-6.1-sol",
+        "source": "codexradar",
+        "source_version": "codexradar-public:radar-bench-v2-150:670f3bae8900",
+        "intended_tier": "mid"
+      },
+      {
+        "config_id": "first-high",
+        "profile": {
+          "model": "openai/gpt-6-astra",
+          "model_version": "openai/gpt-6-astra-20260903",
+          "accepted_models": [
+            "openai/gpt-6-astra-20260903"
+          ],
+          "effort": "xhigh",
+          "provider": "openai",
+          "provider_name": "OpenAI",
+          "capability_card": {
+            "domain": "bounded-sqlite-readonly",
+            "sql_operations": {
+              "sql_filter": "unproven",
+              "sql_join": "unproven",
+              "sql_aggregate": "unproven",
+              "sql_window": "unproven",
+              "sql_set_operations": "unproven",
+              "sql_resource_limits": "unproven"
+            },
+            "limits": "Frozen SQL contract governs resources; no SQL model-capability qualification yet.",
+            "evidence_scope": "API catalog declaration only; SQL exam not yet executed. Score is family/effort prior, not an exact benchmarked API version.",
+            "public_catalog": {
+              "evidence": "docs/evidence/first-pool-public-20261020.json#first-high",
+              "checked_at": "2026-10-20T02:20:55.765614+00:00",
+              "declared_context_tokens": 1050000,
+              "effort": "xhigh",
+              "scope": "Public catalog/documentation only; not SQL performance or immutable deployed-weight qualification."
+            }
+          },
+          "external_score": 115.03535098973606,
+          "endpoint": "https://openrouter.ai/api/v1/chat/completions"
+        },
+        "approved": false,
+        "context_tokens": 8192,
+        "capabilities": [
+          "sql_filter",
+          "sql_join",
+          "sql_aggregate",
+          "sql_window",
+          "sql_set_operations",
+          "sql_resource_limits"
+        ],
+        "catalog_checked_at": "2026-10-20T02:20:55.765614+00:00",
+        "estimated_request_usd": null,
+        "estimated_latency_ms": null,
+        "source_model_id": "openai/gpt-6-astra",
+        "source": "codexradar",
+        "source_version": "codexradar-public:radar-bench-v2-150:670f3bae8900",
+        "intended_tier": "high"
+      }
+    ],
+    "open_source": {
+      "config_id": "first-open_source",
+      "profile": {
+        "model": "openai/gpt-oss-120b",
+        "model_version": "openai/gpt-oss-120b",
+        "accepted_models": [
+          "openai/gpt-oss-120b"
+        ],
+        "effort": "low",
+        "provider": "baseten/fp4",
+        "provider_name": "BaseTen",
+        "capability_card": {
+          "domain": "bounded-sqlite-readonly",
+          "sql_operations": {
+            "sql_filter": "unproven",
+            "sql_join": "unproven",
+            "sql_aggregate": "unproven",
+            "sql_window": "unproven",
+            "sql_set_operations": "unproven",
+            "sql_resource_limits": "unproven"
+          },
+          "limits": "Frozen SQL contract governs resources; no SQL model-capability qualification yet.",
+          "evidence_scope": "API catalog declaration only; SQL exam not yet executed. Score is family/effort prior, not an exact benchmarked API version.",
+          "public_catalog": {
+            "evidence": "docs/evidence/first-pool-public-20261020.json#first-open_source",
+            "checked_at": "2026-10-20T02:20:55.771871+00:00",
+            "declared_context_tokens": 128072,
+            "effort": "low",
+            "scope": "Public catalog/documentation only; not SQL performance or immutable deployed-weight qualification."
+          }
+        },
+        "external_score": null,
+        "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+        "quantization": "fp4"
+      },
+      "approved": false,
+      "context_tokens": 8192,
+      "capabilities": [
+        "sql_filter",
+        "sql_join",
+        "sql_aggregate",
+        "sql_window",
+        "sql_set_operations",
+        "sql_resource_limits"
+      ],
+      "catalog_checked_at": "2026-10-20T02:20:55.771871+00:00",
+      "estimated_request_usd": null,
+      "estimated_latency_ms": null,
+      "source_model_id": "openai/gpt-oss-120b",
+      "source": "codexradar",
+      "source_version": "codexradar-dom:2026-10-17:bc53a1ade427",
+      "open_weight": true
+    }
+  },
+  "policy": {
+    "id": "first-bounded-sql-family-prior-v2",
+    "domain": "bounded-sqlite-readonly",
+    "source": "codexradar",
+    "source_version": "codexradar-public:radar-bench-v2-150:670f3bae8900",
+    "metric": "overall",
+    "scale": "source_native",
+    "low_mid": 80,
+    "mid_high": 100,
+    "max_source_age_hours": 48,
+    "max_catalog_age_hours": 48,
+    "snapshot_ttl_hours": 24,
+    "min_samples": 1,
+    "max_evaluation_age_days": null,
+    "score_role": "family_effort_prior"
+  },
+  "requirements": {
+    "domain": "bounded-sqlite-readonly",
+    "capabilities": [
+      "sql_filter",
+      "sql_join",
+      "sql_aggregate",
+      "sql_window",
+      "sql_set_operations",
+      "sql_resource_limits"
+    ],
+    "context_tokens": 8192
+  },
+  "decision": {
+    "model": "typesafe/jev-1.13",
+    "version": "typesafe/jev-1.13-20260917",
+    "provider": "typesafe",
+    "provider_name": "TypeSafe"
+  },
+  "review": {},
+  "configuration_evidence": {
+    "first-open_source": {
+      "configuration_sha256": "048fd434a68a1adb73734ea94932261b440cadd37ca571913da2d7274fd0e97a",
+      "api_identity": {
+        "status": "pending",
+        "model_version": "openai/gpt-oss-120b",
+        "provider": "baseten/fp4",
+        "effort": "low",
+        "context_tokens": 128072,
+        "evidence": []
+      },
+      "prior_association": {
+        "basis": "reviewed_family_effort_prior",
+        "source": "codexradar",
+        "source_version": "codexradar-dom:2026-10-17:bc53a1ade427",
+        "source_model_id": "openai/gpt-oss-120b",
+        "effort": "low"
+      },
+      "sql_report": {}
+    },
+    "first-low": {
+      "configuration_sha256": "799778c6f61b64d1f70a44a2fda230572ad0b2d6051cd30ffcb627549f68d14a",
+      "api_identity": {
+        "status": "pending",
+        "model_version": "openai/gpt-6-sol-20260922",
+        "provider": "openai",
+        "effort": "low",
+        "context_tokens": 1050000,
+        "evidence": []
+      },
+      "prior_association": {
+        "basis": "reviewed_family_effort_prior",
+        "source": "codexradar",
+        "source_version": "codexradar-public:radar-bench-v2-150:670f3bae8900",
+        "source_model_id": "openai/gpt-6-sol",
+        "effort": "low"
+      },
+      "sql_report": {}
+    },
+    "first-mid": {
+      "configuration_sha256": "04c9b17e1cd0f047e29ba185e317ff8f62e76f903512b37728798565f819abdd",
+      "api_identity": {
+        "status": "pending",
+        "model_version": "openai/gpt-6.1-sol-20260929",
+        "provider": "openai",
+        "effort": "high",
+        "context_tokens": 1050000,
+        "evidence": []
+      },
+      "prior_association": {
+        "basis": "reviewed_family_effort_prior",
+        "source": "codexradar",
+        "source_version": "codexradar-public:radar-bench-v2-150:670f3bae8900",
+        "source_model_id": "openai/gpt-6.1-sol",
+        "effort": "high"
+      },
+      "sql_report": {}
+    },
+    "first-high": {
+      "configuration_sha256": "bf9d56ae9fd3eb7d7914bb588d1eb587c3794ffbaa155fca9772b717d5693cc8",
+      "api_identity": {
+        "status": "pending",
+        "model_version": "openai/gpt-6-astra-20260903",
+        "provider": "openai",
+        "effort": "xhigh",
+        "context_tokens": 1050000,
+        "evidence": []
+      },
+      "prior_association": {
+        "basis": "reviewed_family_effort_prior",
+        "source": "codexradar",
+        "source_version": "codexradar-public:radar-bench-v2-150:670f3bae8900",
+        "source_model_id": "openai/gpt-6-astra",
+        "effort": "xhigh"
+      },
+      "sql_report": {}
+    }
+  }
+}

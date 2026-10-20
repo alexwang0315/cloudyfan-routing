@@ -165,8 +165,8 @@ def test_http_transport_success_is_not_validation_success(tmp_path, passed, stat
     assert response.status_code == 200 and response.json()['status'] == status
     result = client.get('/v1/tasks/task-1/result').json()
     assert result['final_public_pass'] is passed
-    assert result['costs']['complete_api_usd'] == '0.0201'
-    assert len(api.requests) == 3
+    assert result['costs']['complete_api_usd'] == '0.0302'
+    assert len(api.requests) == 5
 
 
 def test_http_local_only_and_unconfirmed_budget_stop_before_dispatch(tmp_path):
@@ -367,9 +367,9 @@ def test_http_routed_repair_provenance_separates_generation_and_classifiers(tmp_
     assert client.post('/v1/tasks', json=TASK).json()['status'] == 'passed'
     result = client.get('/v1/tasks/task-1/result').json()
     provenance = result['provenance']
-    assert [a['tier'] for a in provenance['attempts']] == ['open_source', 'high']
+    assert [a['tier'] for a in provenance['attempts']] == ['open_source', 'mid', 'high']
     assert [a['calls'][0]['actual_model'] for a in provenance['attempts']] == [
-        'example/open_source', 'example/high']
+        'example/open_source', 'example/mid', 'example/high']
     assert [c['actual_model'] for c in provenance['classifier_calls']] == ['typesafe/jev-1.13'] * 2
     for call in provenance['classifier_calls']:
         assert call['actual_provider'] == 'TypeSafe'
@@ -379,4 +379,4 @@ def test_http_routed_repair_provenance_separates_generation_and_classifiers(tmp_
     assert result['first_public_pass'] is False and result['final_public_pass'] is True
     assert client.post('/v1/tasks/task-1/resume', json={}).status_code == 200
     assert client.get('/v1/tasks/task-1/result').json()['provenance'] == provenance
-    assert len(api.requests) == 4
+    assert len(api.requests) == 5

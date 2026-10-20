@@ -2,6 +2,8 @@
 
 原工作區沒有 Git history，因此用 `provenance.json` 的原檔 SHA-256 固定來源，沒有假造來源 commit。原始實驗檔與舊 A/B、alpha/beta 不修改。
 
+下表記錄初次抽取。後續2026-10-20整合的[順序式路由](sequential-routing.md)明示改變執行順序、最多作答次數及版本；目前程式不再聲稱與表內舊二層流程相同，舊實驗／來源雜湊仍保留。
+
 |新檔案|原始來源|改動|
 |---|---|---|
 |routing.py|hierarchical50-20261018/routing.py|僅套件相對 import；保留原 policy version、tenant、提示、二層規則|

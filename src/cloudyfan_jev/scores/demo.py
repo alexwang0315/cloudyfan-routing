@@ -70,7 +70,8 @@ def main(argv=None):
                 'provider': 'TypeSafe', 'usage': {'cost': .0001, 'input_tokens': 1, 'output_tokens': 1},
                 'answers': {stage: {'type': 'choice', 'choice': choice,
                                    'probabilities': {k: .8 if k == choice else .2 for k in pair}}}})
-        answer = '2' if args.route == 'pass' or body['model'] != 'example/open_source' else '3'
+        answer = ('3' if (args.route != 'pass' and body['model'] == 'example/open_source')
+                  or (args.route == 'high' and body['model'] == 'example/mid') else '2')
         return httpx.Response(200, json={'id': f'gen-score-demo-{len(requests)}', 'model': body['model'],
             'provider': 'Example', 'usage': {'cost': .001, 'prompt_tokens': 1, 'completion_tokens': 1},
             'choices': [{'message': {'role': 'assistant', 'content': answer}, 'finish_reason': 'stop'}]})

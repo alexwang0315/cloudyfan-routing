@@ -32,3 +32,7 @@
 ## 後續公開補證
 
 [2026-10-20 補證](first-pool-public-evidence-20261020.md)已確認公開端點的日期版標籤、指定 effort／供應商及宣告 context，並取得同三個固定候選的新 64/64 題覆蓋分數。新包為 [first-pool-profile-public-20261020.json](../examples/first-pool-profile-public-20261020.json)，舊包／時間／14 筆分數不變。受測日期版與 API 的身份鏈、六項 SQL 操作、完整評測日期與來源使用／owner／review 仍缺證；兩包均 blocked。不是把本檔的缺證全部改成已核定。
+
+## v2的後續資格依據
+
+使用者已明示修訂：榜單僅作家族／強度的分群參考，固定API設定的可用性改由[獨立SQL測試](sql-model-qualification-v2.md)決定。此前「需榜單提供日期版／全體評測日期」是v1的歷史阻擋，不再當作v2的API能力證據要求；未知值仍不補造。真實API身份、SQL結果、來源使用／owner／review及費用保障仍未完成。

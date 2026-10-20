@@ -10,7 +10,7 @@ All fixture approvals are synthetic and cannot become real qualification.
 `cloudyfan_jev.experiments` provides:
 
 - `build_plan(spec, qualification_pack, review, now=...)`: returns a canonical
-  `cloudyfan-experiment-plan-v1` document with `plan_id`, stable blockers, and
+  `cloudyfan-experiment-plan-v2` document with `plan_id`, stable blockers, and
   `status` of `blocked`, `synthetic_ready`, or `reviewed`.
 - `verify_plan(plan, now=..., allow_synthetic=False)`: checks integrity, readiness,
   synthetic restrictions, routing implementation version, snapshot validity and
@@ -43,8 +43,8 @@ or model execution path.
 | `baseline_config_id` | Explicit highest-score eligible model configuration |
 | `decision_profile` | Pinned Jev model, version and provider identity |
 | `system`, `contract_version`, `diagnostic_contract` | Common prompt and versioned public validation/repair inputs |
-| `limits`, `max_generation_attempts` | Frozen Core limits and exactly two generation stages |
-| `repair_policy` | `one-public-diagnostic-repair-v1` |
+| `limits`, `max_generation_attempts` | Frozen Core limits and per-arm generation bounds: CloudyFan 3, baseline modes 2 |
+| `repair_policy` | `sequential-public-diagnostic-repairs-v2`; CloudyFan has up to two repairs, other executable arms one |
 | `arms` | Explicit selected subset of the five supported plan labels; includes fixed-high baseline |
 | `budget` | Decimal-string cap/block upper reserve, authorization ID, expiry, enforcement evidence reference |
 | `quality_gate` | Explicit decimal-string `required_final_pass_rate` |
@@ -87,7 +87,7 @@ paid action. Estimates, tiers and token limits never become caps here.
 | `fixed_high` | Explicit highest baseline | Same baseline, one repair | Existing Core mode |
 | `low_first` | Qualified low candidate | Explicit highest baseline | Existing Core mode |
 | `open_source_first` | Qualified open-source candidate | Explicit highest baseline | Existing Core mode |
-| `cloudyfan` | Same qualified open-source candidate | Low/mid then optional mid/high Jev; one repair | Existing Core mode |
+| `cloudyfan` | Same qualified open-source candidate | Low/mid selection, answer and validation; another failure/unknown permits mid/high selection and final answer | Existing Core mode, at most three generations |
 | `open_source_fixed_low` | Same qualified open-source candidate | Fixed low candidate, no Jev | **Plan only** |
 
 The last arm is listed in `planned_only_arms`; requesting its execution binding
@@ -111,3 +111,7 @@ executed merely because it appears in the plan.
 engineering stop and unknown-accounting stop. These cases prove offline
 orchestration and preflight checks only, not real model qualification, savings,
 accuracy, ambiguity-free human tasks, or production readiness.
+
+## Sequential routing plan v2
+
+The current plan schema is cloudyfan-experiment-plan-v2. max_generation_attempts explicitly maps each planned arm to its bound (cloudyfan: 3, others: 2); repair_policy is sequential-public-diagnostic-repairs-v2. execution_binding projects the arm-specific bound. Old v1 plans remain readable for historical reports, but cannot execute under the new routing implementation. This change does not authorize a new experiment or paid request.

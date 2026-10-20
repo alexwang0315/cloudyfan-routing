@@ -48,18 +48,15 @@ def test_exactly_one_binary_question_and_only_current_profiles(stage, pair, publ
     assert payload["state"]["observations"]["previous_answer"] == public["previous_answer"]
 
 
-@pytest.mark.parametrize("choices,expected", [(["low"], "low"), (["mid", "mid"], "mid"), (["mid", "high"], "high")])
-def test_one_or_two_decisions_without_intermediate_generation(choices, expected, public, profiles):
-    calls = []
-    def decide(stage, context, questions, payload):
-        calls.append(stage)
-        assert payload["state"]["observations"]["previous_answer"] == public["previous_answer"]
-        return response(stage, choices[len(calls) - 1])
-    result = policy.route(False, public, profiles, MODEL, decide)
-    assert result["selected_tier"] == expected
-    assert result["classifier_calls"] == len(choices)
-    assert calls == ["low_mid", "mid_high"][:len(choices)]
-    assert sum(float(d["cost_usd"]) for d in result["decisions"]) == .0001 * len(choices)
+@pytest.mark.parametrize("stage,choice", [('low_mid','low'),('low_mid','mid'),('mid_high','mid'),('mid_high','high')])
+def test_route_selects_exactly_one_stage(stage, choice, public, profiles):
+    calls=[]
+    def decide(current, context, questions, payload):
+        calls.append(current)
+        return response(current, choice)
+    result=policy.route(False, public, profiles, MODEL, decide, stage=stage)
+    assert result['selected_tier']==choice and result['classifier_calls']==1
+    assert calls==[stage] and len(result['decisions'])==1
 
 
 def test_public_pass_skips_all_classification(public, profiles):
@@ -114,15 +111,14 @@ def test_paid_malformed_answer_retains_receipt(public, profiles):
     assert outcome["id"] == "gen-test" and outcome["cost_usd"] == "0.0001"
 
 
-def test_both_parse_failures_follow_two_stage_conservative_path(public, profiles):
-    calls = []
-    def decide(stage, *_):
+def test_parse_failure_falls_back_only_inside_current_stage(public, profiles):
+    calls=[]
+    def decide(stage,*_):
         calls.append(stage)
-        return "not json"
-    result = policy.route(False, public, profiles, MODEL, decide)
-    assert calls == ["low_mid", "mid_high"]
-    assert result["selected_tier"] == "high"
-    assert all(d["fallback"] and d["reported_choice"] is None for d in result["decisions"])
+        return 'not json'
+    result=policy.route(False, public, profiles, MODEL, decide)
+    assert calls==['low_mid'] and result['selected_tier']=='mid'
+    assert result['decisions'][0]['fallback'] and result['decisions'][0]['cost_unknown']
 
 
 def test_root_and_task_whitelist_drops_private_fields(public, profiles):

@@ -29,7 +29,7 @@ result = run_sql(controlled_core, "sql-job-001", contract)
 
 `run_sql` 明確要求核心採用 `SQL_DIAGNOSTICS`（`sql-public-diagnostics-v2`、producer `sql-environment-v2`、4096 bytes），然後透過既有 `Core.run`／`BudgetedCore.run`，綁定 task、fresh environment factory 及版本。直接手動使用 `Core.run` 的可信應用仍須自己正確綁定這三者；此便利介面不防止管理者刻意繞過，也不授權付費。
 
-`SqlEnvironment.tools_schema()` 為空；沒有工具往返，兩階段各最多一個生成請求。首答通過不分類；否則沿用低／中→必要時中／高，只有一次修正。`call()` 一律拒絕，不讓模型建立任意 SQL／檔案工具。一般 Core 的多 turn／工具能力與既有路由規則未改動。
+`SqlEnvironment.tools_schema()` 為空；沒有工具往返，每個作答階段最多一個生成請求。首答通過不分類；目前 CloudyFan 採[順序式路由](sequential-routing.md)：低／中選模後先作答驗收，仍未通過才中／高選模最後作答，最多三次生成。對照模式仍最多兩次；這是執行器版本變更，SQL驗收規則不變。`call()` 一律拒絕，不讓模型建立任意 SQL／檔案工具。
 
 ## 公開契約與執行邊界
 
@@ -47,7 +47,7 @@ Environment 僅返回 `passed` 與 flat string list `checks`；Core 再加入 di
 
 | 分類 | 結果／後續 | 例子 |
 |---|---|---|
-| 公開答案不合格 | `passed=False`；沿用唯一修正，最終仍不合格為 failed。 | 壞 JSON／空答案、unsafe SQL、unknown column、欄名／型別／列不符、確定的 VM 步數或 compound／輸出界限。 |
+| 公開答案不合格 | `passed=False`；依凍結模式作有界修正，最終仍不合格為 failed。 | 壞 JSON／空答案、unsafe SQL、unknown column、欄名／型別／列不符、確定的 VM 步數或 compound／輸出界限。 |
 | 無公開可驗條件 | `passed=None`；核心仍可走同一個有界補救流程，最終未知為 unverifiable。 | 空 samples；未知不當成通過。 |
 | 工程／驗收環境異常 | 拋 `SqlValidationUnavailable`，category=`engineering`；當下停止，不分類、不發出新修正。 | 不相容 build、fixture 載入失敗、runtime 改變、I/O／記憶體／未知 SQLite 問題、驗收 wall timeout。 |
 
@@ -59,7 +59,7 @@ Environment 僅返回 `passed` 與 flat string list `checks`；Core 再加入 di
 
 答案已由 Client 保存後才驗收。工程中斷不寫成功或錯誤答案結論；明確恢復會用原 run／contract 重讀原回應、重建記憶體 DB 並重驗，不重送已付費 POST。BudgetedCore 保留未完成流程的完整預留與已知／未知費用，只有流程完成才依既有規則釋放；API timeout 的未知費用亦不會被這個 adapter 清掉。
 
-[回歸測試](../tests/test_sql_environment.py)以真 SQLite、手算公開期望與 MockTransport 驗證首答、兩層選擇／唯一修正、錯誤分類、資料變更拒絕、診斷上限、無重送及共享預算。實際完整離線結果、來源指紋與原始收據位置見[v2 本輪證據](evidence/rg01-review-ready-offline.json)。沒有模型或供應商 API 呼叫。
+[回歸測試](../tests/test_sql_environment.py)以真 SQLite、手算公開期望與 MockTransport 驗證首答、有界選模／修正、錯誤分類、資料變更拒絕、診斷上限、無重送及共享預算。歷史SQL v2離線結果見[v2 證據](evidence/rg01-review-ready-offline.json)；順序式路由另以[專用回歸](../tests/test_sequential_routing.py)檢查，不把舊證據稱為新流程已驗證。沒有模型或供應商 API 呼叫。
 
 ## 子程序與資源策略
 

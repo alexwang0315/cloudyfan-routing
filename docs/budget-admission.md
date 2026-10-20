@@ -82,9 +82,12 @@ be presented as a lifetime total.
 Before dispatch reserve the entire finite workflow:
 
 - first-stage `max_turns × first-model bound`;
-- second-stage `max_turns × maximum reachable repair-model bound`;
+- CloudyFan low/mid generation: `max_turns × max(low, mid) bound`;
+- CloudyFan conditional mid/high generation: `max_turns × max(mid, high) bound`;
+- baseline modes retain one high-model repair phase;
 - CloudyFan: two classifier bounds (other workflow modes: none);
-- `2 × max_turns × max_tool_calls × maximum allowed tool bound`.
+- `generation phase count × max_turns × max_tool_calls × maximum allowed tool bound`
+  (CloudyFan: three; baseline modes: two).
 
 `max_tool_calls` is per model turn. Tool-free configurations add zero. Every
 advertised tool requires an explicit bound before the first model POST. Bounds

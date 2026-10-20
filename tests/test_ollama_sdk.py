@@ -178,8 +178,8 @@ def test_official_sdk_never_treats_failed_or_unknown_public_validation_as_succes
     assert caught.value.status_code == 422 and caught.value.error == expected_error
     result = system.query(result=True).json()
     assert result['status'] == expected_status and result['final_public_pass'] is passed
-    assert result['costs']['complete_api_usd'] == '0.0201'
-    assert len(system.api.requests) == 3  # generation + classification + repair, all mocked
+    assert result['costs']['complete_api_usd'] == '0.0302'
+    assert len(system.api.requests) == 5  # three generation phases + two classifiers, all mocked
 
 
 def test_official_sdk_surfaces_budget_denial_without_model_dispatch(tmp_path):

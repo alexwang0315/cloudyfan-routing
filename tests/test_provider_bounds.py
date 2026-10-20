@@ -255,9 +255,9 @@ def test_both_jev_stages_and_final_repair_use_same_authenticated_cap_contracts(t
     app = BudgetedCore(engine, store, model_bounds=bounds, tool_bounds={}, verify_bound=make())
     result = app.run('full-tree', TASK, ArithmeticEnvironment, contract_version='v1')
     assert result['final_public_pass'] is True
-    assert [p['model'] for p in api.requests] == ['example/open_source', 'typesafe/jev-1.13',
+    assert [p['model'] for p in api.requests] == ['example/open_source', 'typesafe/jev-1.13', 'example/mid',
                                                 'typesafe/jev-1.13', 'example/high']
-    assert result['budget']['run_total_usd'] == '0.0202'
+    assert result['budget']['run_total_usd'] == '0.0302'
     assert result['selection']['classifier_calls'] == 2
     assert app.enforcement_descriptor()['version'] == 'supplier-ceiling-v1'
 

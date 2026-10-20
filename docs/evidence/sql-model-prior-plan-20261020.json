@@ -1,0 +1,142 @@
+{
+  "schema_version": 1,
+  "integration_branch": "codex/implement-routing-spec-1",
+  "baseline_commit": "5a055f5fca9f408720578ddd1c0f0a73ad49685e",
+  "merger_owner": "root",
+  "shared_interfaces": [
+    {
+      "id": "configuration-digest",
+      "owner": "root",
+      "owned_files": [
+        "src/cloudyfan_jev/scores/configuration.py"
+      ],
+      "provided_by": "POOL-00-binding"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "POOL-00-binding",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/scores/configuration.py"
+      ],
+      "depends_on": [],
+      "consumed_interfaces": []
+    },
+    {
+      "id": "POOL-01",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/scores/first_pool.py",
+        "tests/test_first_pool.py",
+        "examples/first-pool-profile.json",
+        "docs/first-pool-source.md",
+        "examples/first-pool-codexradar-import.json"
+      ],
+      "depends_on": [
+        "POOL-00-binding"
+      ],
+      "consumed_interfaces": [
+        "configuration-digest"
+      ]
+    },
+    {
+      "id": "POOL-02",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/scores/first_pool.py",
+        "tests/test_first_pool.py"
+      ],
+      "depends_on": [
+        "POOL-01"
+      ],
+      "consumed_interfaces": []
+    },
+    {
+      "id": "POOL-03",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/scores/pool_demo.py",
+        "tests/test_first_pool_updates.py"
+      ],
+      "depends_on": [
+        "POOL-02"
+      ],
+      "consumed_interfaces": [
+        "configuration-digest"
+      ]
+    },
+    {
+      "id": "POOL-04",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/scores/fee_readiness.py",
+        "tests/test_fee_readiness.py",
+        "docs/first-pool-fee-gaps.md"
+      ],
+      "depends_on": [
+        "POOL-00-binding"
+      ],
+      "consumed_interfaces": [
+        "configuration-digest"
+      ]
+    },
+    {
+      "id": "POOL-05",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/scores/first_pool.py",
+        "src/cloudyfan_jev/scores/pool_demo.py",
+        "src/cloudyfan_jev/scores/cli.py",
+        "tests/test_first_pool.py",
+        "tests/test_first_pool_updates.py",
+        "docs/first-pool.md",
+        "docs/agent-state.json",
+        "docs/work-plan.json",
+        "docs/handoff.md",
+        "docs/verification.md",
+        "docs/coordination.md",
+        "docs/release-readiness.md",
+        "docs/rg04-evidence-gaps.md",
+        "README.md",
+        "docs/evidence/first-pool-offline-20261020.json",
+        "docs/evidence/first-pool-ticket-status-20261020.json"
+      ],
+      "depends_on": [
+        "POOL-03",
+        "POOL-04"
+      ],
+      "consumed_interfaces": []
+    },
+    {
+      "id": "POOL-PUBLIC-EVIDENCE",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "examples/first-pool-profile-public-20261020.json",
+        "examples/first-pool-codexradar-public-20261020.json",
+        "docs/first-pool-public-evidence-20261020.md",
+        "docs/evidence/first-pool-public-20261020.json",
+        "docs/first-pool.md",
+        "docs/first-pool-source.md",
+        "docs/release-readiness.md",
+        "docs/score-integration.md",
+        "docs/agent-state.json",
+        "docs/work-plan.json",
+        "docs/handoff.md",
+        "docs/verification.md",
+        "docs/evidence/first-pool-public-precommit-20261020.json"
+      ],
+      "depends_on": [
+        "POOL-05"
+      ],
+      "consumed_interfaces": []
+    }
+  ]
+}

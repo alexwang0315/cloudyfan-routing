@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "release-readiness-document-precommit",
+  "base_commit": "ec58e74bf3c25a61acc95f6d5a69e1380f39e16b",
+  "source_digest": "0eeeef7cb03aecb605dfaf40961048ef8bcf0cc6eee847a5fb69f3357c2ed283",
+  "document": {
+    "path": "docs/release-readiness.md",
+    "sha256": "a1cf0c92bbff685784b43f05c59a2bfa902101c07c5f3ccf7094fe4c76ea7b05"
+  },
+  "checks": {
+    "links": {
+      "checked": 42,
+      "missing": []
+    },
+    "gate_rows": {
+      "unique": 10,
+      "matches_registry": true
+    },
+    "current_source_matches_1206_test_evidence": true,
+    "source_and_formal_registry_unchanged": true,
+    "historical_full_receipt_hash_verified": true,
+    "ticket_and_profile_evidence_hashes_verified": true,
+    "reviewed_wording": [
+      "Unverifiable public validation enters the existing selector",
+      "Second selector only after mid selection; no intermediate mid generation",
+      "Historical and current evidence separated; quality gap preserved",
+      "Formal qualification remains pending; optional gates retain applicability"
+    ],
+    "quick_check": {
+      "path": "runtime/checks/54491b29207541f6a3fde771628b2196/checks.json",
+      "sha256": "5835a0500a84c7bf6a7949c09148fd39b9ff9964fb833cc0be381bdd50be2405"
+    },
+    "release_gates": {
+      "valid": true,
+      "production_ready": false,
+      "errors": []
+    },
+    "new_full_pytest_run": false
+  },
+  "reference_full_tests": {
+    "tests_passed": 1206,
+    "new_tests_passed": 19,
+    "evidence": {
+      "path": "docs/evidence/first-pool-offline-20261020.json",
+      "sha256": "8cc714f87177fa3d149f23651ce161962481ff217c66b6bb2ef67db100467c20"
+    },
+    "rerun_this_turn": false
+  },
+  "formal_registry": {
+    "path": "docs/release-gates.json",
+    "sha256": "1e4899eec63930dc9014d0a089d408c5d3bd650a0b64ececfc6893ca6463142b"
+  },
+  "review_actor": "Codex technical document review; not formal qualification",
+  "new_api_calls": 0,
+  "supplier_contact": false,
+  "deployment": false,
+  "push": false,
+  "formal_qualification": "pending",
+  "private_check_log": {
+    "path": "runtime/release-readiness-precommit-20261020/quick.log",
+    "sha256": "e910a95149b1950f6089b0b90806cd66ff0b23f8e9e82de45317f9cb8693b8bb"
+  }
+}

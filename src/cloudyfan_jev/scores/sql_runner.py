@@ -39,6 +39,10 @@ class QualificationRunner:
     callers own spending authority, enforceable bounds, provider qualification and
     credential isolation. A true callback or JSON reference is not supplier proof.
     """
+    roles = ROLES
+    version = VERSION
+    exam_directory = 'exams'
+
     def __init__(self, client, store, table, *, model_bounds, verify_bound, synthetic=False,
                  environment_factory=None, environment_version=None):
         if type(synthetic) is not bool or not callable(verify_bound):
@@ -57,7 +61,7 @@ class QualificationRunner:
         self.environment_version = environment_version or 'frozen-sql-environment'
         configs = self.table.get('configurations', [])
         if (self.table.get('suite_id') != manifest()['suite_id']
-                or [c.get('role') for c in configs] != list(ROLES)):
+                or [c.get('role') for c in configs] != list(self.roles)):
             raise ValueError('Frozen suite and all four ordered settings required')
         self.entries = {c['role']: c['entry'] for c in configs}
         for config in configs:
@@ -69,14 +73,13 @@ class QualificationRunner:
                 raise ValueError('This exam qualifies pinned Chat Completions settings only')
             if p['accepted_models'] != [p['model_version']]:
                 raise ValueError('Exact model identity required, no alias fallback')
-            if p['model_version'] not in self.bounds:
-                raise BudgetError('Missing confirmed model bound')
+            self._bound_for_entry(entry)
         self.diagnostics = DiagnosticContract(version='sql-exam-public-v1', source='frozen-sql-contract')
 
     def _directory(self, run_id, *, create=True):
         if not isinstance(run_id, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,63}', run_id):
             raise ValueError('A short stable exam ID is required')
-        parent = self.client.root / 'exams'
+        parent = self.client.root / self.exam_directory
         directory = parent / run_id
         if parent.is_symlink() or directory.is_symlink():
             raise ValueError('Exam paths cannot be symlinks')
@@ -84,14 +87,29 @@ class QualificationRunner:
             directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         return directory
 
+    def _prefix(self, run_id):
+        return f'exam-{digest(run_id)[:16]}-'
+
+    def _budget_run(self, run_id):
+        return 'sql-exam-' + digest(run_id)[:20]
+
+    def _bound_for_entry(self, entry):
+        try:
+            return self.bounds[entry['profile']['model_version']]
+        except KeyError:
+            raise BudgetError('Missing confirmed model bound') from None
+
+    def _bound_for_payload(self, payload):
+        return self.bounds[payload['model']]
+
     def _cid(self, run_id, role, task, attempt=0):
-        return f'exam-{digest(run_id)[:16]}-{task}-{role}-{attempt}'
+        return f'{self._prefix(run_id)}{task}-{role}-{attempt}'
 
     def _event(self, cid):
         return 'exam:' + digest(str(self.client.root.resolve())) + ':' + cid
 
     def _verify(self, payload, *, post=False):
-        bound = self.bounds[payload['model']]
+        bound = self._bound_for_payload(payload)
         verifier = getattr(self.verify_bound, 'verify_post' if post else 'verify_dispatch', None)
         valid = (verifier(self.client, CHAT, payload, bound) if callable(verifier)
                  else self.verify_bound('model', payload['model'], payload, bound))
@@ -114,7 +132,7 @@ class QualificationRunner:
 
     def _frozen(self):
         descriptor = getattr(self.verify_bound, 'descriptor', None)
-        return {'version': VERSION, 'table': self.table, 'synthetic': self.synthetic,
+        return {'version': self.version, 'table': self.table, 'synthetic': self.synthetic,
                 'root': str(self.client.root.resolve()), 'budget': str(self.store.path.resolve()),
                 'system': SYSTEM, 'max_tokens': 4096, 'max_context_bytes': 32768,
                 'max_attempts': 2, 'classifier_calls': 0,
@@ -126,7 +144,7 @@ class QualificationRunner:
                 'public_contracts': {c.id: c.contract().contract_version for c in cases()}}
 
     def _capture_call(self, run_id, role, cid, payload):
-        if role not in ROLES:
+        if role not in self.roles:
             raise CaptureStopped('unexpected_exam_role')
         p = self.entries[role]['profile']
         if (payload.get('model') != p['model_version']
@@ -143,8 +161,8 @@ class QualificationRunner:
             record = self.client.call(cid, CHAT, payload)
         else:
             self._verify(payload)
-            fresh = self.store.begin_event('sql-exam-' + digest(run_id)[:20], event_id, 'model',
-                money(self.bounds[payload['model']].usd), digest({'url': CHAT, 'payload': payload}))
+            fresh = self.store.begin_event(self._budget_run(run_id), event_id, 'model',
+                money(self._bound_for_payload(payload).usd), digest({'url': CHAT, 'payload': payload}))
             if fresh is not True:
                 raise CaptureStopped('missing_intent_for_existing_event')
             record = self.client.call(cid, CHAT, payload, before_post=lambda: self._verify(payload, post=True))
@@ -183,11 +201,11 @@ class QualificationRunner:
         with _lock(directory / '.lock'):
             _save(directory / 'manifest.json', self._frozen())
             try:
-                for role in ROLES:
+                for role in self.roles:
                     self._verify(self._payload(role, 'Reply OK.'))
                     self._verify(self._payload(role, cases()[0].contract().task()['prompt']))
-                reserve = _exact((money(self.bounds[self.entries[r]['profile']['model_version']].usd) for r in ROLES), 101)
-                budget_run = 'sql-exam-' + digest(run_id)[:20]
+                reserve = _exact((money(self._bound_for_entry(self.entries[r]).usd) for r in self.roles), 101)
+                budget_run = self._budget_run(run_id)
                 # Refresh a saved response into its original event before reserve:
                 # a crash may have occurred between durable response and accounting.
                 self._refresh_billing(run_id)
@@ -197,9 +215,9 @@ class QualificationRunner:
                     self.store.finish(budget_run)
                     self._billing_revision(run_id)
                     return self.inspect(run_id, status='capture_complete')
-                jobs = [(r, None) for r in ROLES]
+                jobs = [(r, None) for r in self.roles]
                 for index, case in enumerate(cases()):
-                    jobs.extend((ROLES[(index+j) % 4], case) for j in range(4))
+                    jobs.extend((self.roles[(index+j) % len(self.roles)], case) for j in range(len(self.roles)))
                 for role, case in jobs:
                     env = None
                     previous = None
@@ -245,7 +263,7 @@ class QualificationRunner:
         """Refresh original ledger events from saved responses; never perform GET/POST."""
         for path in sorted((self.client.root / 'calls').glob('*/intent.json')):
             cid = path.parent.name
-            if not cid.startswith(f'exam-{digest(run_id)[:16]}-') or not (path.parent / 'response.json').exists():
+            if not cid.startswith(self._prefix(run_id)) or not (path.parent / 'response.json').exists():
                 continue
             intent = json.loads(path.read_text())
             self._capture_call(run_id, cid.rsplit('-', 2)[-2], cid, intent['payload'])
@@ -256,7 +274,7 @@ class QualificationRunner:
         originals = {}
         for path in sorted((self.client.root / 'calls').glob('*/intent.json')):
             cid = path.parent.name
-            if not cid.startswith(f'exam-{digest(run_id)[:16]}-'):
+            if not cid.startswith(self._prefix(run_id)):
                 continue
             public = directory / (cid + '-public.json')
             originals[cid] = {'intent': digest(json.loads(path.read_text())),
@@ -271,7 +289,7 @@ class QualificationRunner:
             raise ValueError('Original capture changed after sealing')
 
     def _billing_revision(self, run_id):
-        body = {'records': {r: digest(self.records(run_id, r)) for r in ROLES},
+        body = {'records': {r: digest(self.records(run_id, r)) for r in self.roles},
                 'accounting': self.inspect(run_id), 'synthetic': self.synthetic}
         revision = digest(body)
         _save(self._directory(run_id, create=False) / f'billing-{revision}.json', body)
@@ -279,7 +297,7 @@ class QualificationRunner:
 
     def records(self, run_id, role):
         """Normalize saved answers only; never query the supplier or sealed assessor."""
-        if role not in ROLES:
+        if role not in self.roles:
             raise ValueError('Unknown qualification role')
         rows = []
         for case in cases():
@@ -299,13 +317,13 @@ class QualificationRunner:
         if not (directory / 'manifest.json').is_file():
             raise ValueError('No saved exam')
         events = [e for e in self.store.report()['events']
-                  if e['run'] == 'sql-exam-' + digest(run_id)[:20]]
+                  if e['run'] == self._budget_run(run_id)]
         known = _exact(money(e['cost']) for e in events if e['cost'] is not None)
         unknown = sum(e['cost'] is None for e in events)
         reservation = next((r for r in self.store.report()['reservations']
-                            if r['run'] == 'sql-exam-' + digest(run_id)[:20]), None)
+                            if r['run'] == self._budget_run(run_id)), None)
         completed = (directory / 'capture-complete.json').exists()
-        return {'version': VERSION, 'synthetic': self.synthetic,
+        return {'version': self.version, 'synthetic': self.synthetic,
                 'status': status or ('capture_complete' if completed else 'incomplete'), 'reason': reason,
                 'calls': len(events), 'classifier_calls': 0, 'known_api_usd': str(known),
                 'unknown_cost_count': unknown, 'api_usd': None if unknown else str(known),
@@ -321,7 +339,7 @@ class QualificationRunner:
             self._refresh_billing(run_id)
             billing_revision = self._billing_revision(run_id)
             reports = {}
-            for role in ROLES:
+            for role in self.roles:
                 records = self.records(run_id, role)
                 reports[role] = grade_model(self.entries[role], records, now=now, synthetic=self.synthetic)
             return {'synthetic': self.synthetic, 'models': reports, 'capture': self.inspect(run_id),

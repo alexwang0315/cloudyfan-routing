@@ -1,0 +1,164 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "sql-backup-multicandidate-v1",
+  "verified_at": "2026-10-21T11:17:06.593145+00:00",
+  "observed_head": "55e9484c35738128aae31c2134c65d09f0c278d2",
+  "source_digest": "db37f3ee5587841175766c605428baac9db59c90a5790752a6817aaa61781576",
+  "tests_passed": 1820,
+  "test_scope": "Observed canonical test cases in one unfiltered full-workspace run with JUnit; no test ignore options",
+  "new_tests": {
+    "candidate_projection": 30,
+    "multi_runner": 17,
+    "preparation_bridge": 2
+  },
+  "legacy_runner_and_request_compatibility_tests_passed": 32,
+  "full_workspace_gate_passed": false,
+  "full_workspace_gate": {
+    "passed": 2383,
+    "failed": 70,
+    "canonical_passed": 1820,
+    "canonical_failed": 0,
+    "numbered_copy_passed": 563,
+    "numbered_copy_failed": 70,
+    "same_failure_ids_as_prior": true,
+    "all_failures_in_preserved_numbered_copies": true,
+    "junit_only_addopts": "--junitxml=runtime/sql-backup-multicandidate-20261021/full-suite.xml -o junit_family=xunit1",
+    "integration_stopped_before_demos_and_build": true
+  },
+  "ruff": "passed",
+  "quick": "passed",
+  "mock_demos_and_offline_build_separately": "passed",
+  "candidate_review": {
+    "path": "examples/sql-backup-candidate-review-v1.json",
+    "sha256": "c6aef53fde45e87268ea9aa5812eb9d3c68c77cc3f4e0726ae3607798edc8e24",
+    "counts": {
+      "positions": 12,
+      "unique_preparation_records": 12,
+      "complete_exact_configurations": 5,
+      "historical_research_references": 3,
+      "exact_response_contract_compatible": 3,
+      "runtime_dispatch_enabled": 0,
+      "production_qualified": 0
+    },
+    "low_proposal": "SQL-specific pending proposal; generic original preserved; no holdout answer selection",
+    "archived_aliases_unchanged": true,
+    "provider_default_not_reinterpreted": true,
+    "new_backup_calibration_not_reused": true
+  },
+  "multi_mock_rehearsal": {
+    "classifier_calls": 0,
+    "completed_replay_new_posts": 0,
+    "deployment": false,
+    "explicit_mock_reconciliation_gets": 1,
+    "formal_qualification": "pending",
+    "identity_calls": 5,
+    "interruption_resumed_without_resending": true,
+    "kind": "offline_mock_rehearsal",
+    "known_synthetic_usd": "0.259",
+    "mock_posts": 256,
+    "models": {
+      "c12bc72ec17ac558beb9f0a54": {
+        "final_pass": 50,
+        "first_pass": 50,
+        "known_synthetic_usd": "0.050",
+        "synthetic_exam_pass": true
+      },
+      "c385559832f16dd23eb039250": {
+        "final_pass": 50,
+        "first_pass": 50,
+        "known_synthetic_usd": "0.053",
+        "synthetic_exam_pass": true
+      },
+      "c4df55b0e3ef6cb0da1086528": {
+        "final_pass": 50,
+        "first_pass": 49,
+        "known_synthetic_usd": "0.051",
+        "synthetic_exam_pass": true
+      },
+      "c95764b140c2da46f7301248b": {
+        "final_pass": 50,
+        "first_pass": 50,
+        "known_synthetic_usd": "0.050",
+        "synthetic_exam_pass": true
+      },
+      "ca1e8763c312ada11478f7562": {
+        "final_pass": 50,
+        "first_pass": 50,
+        "known_synthetic_usd": "0.050",
+        "synthetic_exam_pass": true
+      }
+    },
+    "pool_activated": false,
+    "push": false,
+    "real_model_api_cost_usd": "0",
+    "repair_calls": 1,
+    "slot_references": 6,
+    "synthetic": true,
+    "tasks_per_setting": 50,
+    "unique_settings": 5,
+    "unknown_cost_count": 0
+  },
+  "independent_read_only_review": "Candidate worker reviewed root runner; no new blocking issue found. Not authenticated production review.",
+  "initial_issues_retained": [
+    "Worker test expected prior exception types; corrected test to specified CaptureStopped API, not production rules",
+    "One unused test import caught by Ruff and removed",
+    "70 existing numbered-copy failures preserved unchanged",
+    "First closure used a descriptive scope instead of the exact state scope ID; metadata rejected, original retained, ID corrected without executable changes"
+  ],
+  "preservation": {
+    "protected_files": 401,
+    "original_experiment_files": 4119,
+    "all_hashes_unchanged": true,
+    "frozen_sql_source_files": 12,
+    "snapshot": "runtime/sql-backup-multicandidate-20261021/before.json"
+  },
+  "local_document_links": 308,
+  "secret_pattern_scan_matches": 0,
+  "wheel_numbered_source_copies_preserved": 8,
+  "records": {
+    "runtime/sql-backup-multicandidate-20261021/full-suite.xml": "4e5d6125b09da962113f1ddaf390593a163a6365efd31eebebad481146adf357",
+    "runtime/sql-backup-multicandidate-20261021/full-integration.log": "867b5bf3113927bb1386dc237c4742bf051d18b1ca5f36dedec739af0de8afe9",
+    "runtime/checks/f4cd7455df2e4d3d9ab7f6851dae6055/checks.json": "3936155ad4b1494d29e854ae471657c3683a364199df3e96270d680813fa030f",
+    "runtime/checks/882e199744084669bc26f5443910c2a3/checks.json": "50bd9da6d24b22111842599cf1d6d8be70567b4b24f23fb4d0e967eda9034bfe",
+    "runtime/sql-backup-multicandidate-20261021/legacy-runner-tests.log": "0856724e5ee79d4b22f39c660d18817e1bb69154dc9294e1c9eafd255191bef0",
+    "runtime/sql-backup-multicandidate-20261021/preparation-bridge.log": "ba13477a57e98d832df524e53fdc5990059917a8f55edb8950323639a19d0e4d",
+    "runtime/sql-backup-multicandidate-20261021/classified-suite.json": "802f2db86cf5a8d1e2315919e8028fb99abc09a35f92068c3ce2e8ec16390277",
+    "runtime/sql-backup-multicandidate-20261021/core-demo.log": "d3836a48a2fa5c9ca0cf5ff29b7486fb4c70e5f366fab8f7fa7e74221d3c980a",
+    "runtime/sql-backup-multicandidate-20261021/score-demo.log": "170d6d76b5f928af812c346e0a51c7278228235414dc0e2572cd45e83e10edea",
+    "runtime/sql-backup-multicandidate-20261021/build.log": "e956092caf0ee006d98c373b1ff0dd9a99fbb795ab7a13d8006f41212ed06ef8",
+    "runtime/sql-backup-multicandidate-20261021/dist/cloudyfan_jev_core-0.1.0-py3-none-any.whl": "2f2f31f686525f63bf0ee6ceafff0f2fe855af5a00e2d2862e2982a99d2e30e9",
+    "runtime/sql-multi-runner-demo-20261021-worker/summary.json": "9c69347c1e8c8c96604b7c0078daaa385efafd60e88cbc2c8c4d3e88046a6d9f",
+    "runtime/sql-backup-multicandidate-20261021/multi-runner-worker/worker-result.json": "01ff06810428946754c5708404b22a4bad20c576975535ba4a4432fcf99215bb",
+    "runtime/sql-backup-multicandidate-20261021/multi-runner-worker/initial-test-interface-adjustment.json": "99f4f5804c10827daa137877528db9a30ee7ad7803dbf175ed9b1a4583801183",
+    "runtime/sql-backup-candidate-evidence-20261021/pytest-final-30.log": "d14a532b6cdbdc9328d0133fe94bcd7a9136d64ccbb0a35272cedbdcb75905d9",
+    "runtime/sql-backup-multicandidate-20261021/metadata-scope-mismatch.log": "cdbb43ff9545bad7c3fe360bbbe835cf7ca2b5fb76f611bf46a7849db1bb01b9",
+    "runtime/checks/f0b96567205047f89db7ed1fd83b07bf/checks.json": "0721ace8c440769c4b2b40d4b77c0dae7fcdecbed6b0581f9ad9c7ec8b374dbc",
+    "runtime/sql-backup-multicandidate-20261021/verified-quick.log": "1fb7fd307ac55cf1182c1ff9398c97db054b466e7da5af5c26d391954f626558",
+    "runtime/sql-backup-multicandidate-20261021/evidence-before-scope-fix.json": "ac2841899064d289cd4d3a850bc9a6c79c70cd79dec39135c46da9b7dd04018c"
+  },
+  "formal_qualification": "pending",
+  "release_gates_pending": 10,
+  "pool_activated": false,
+  "paid_model_calls": 0,
+  "source_gets": 0,
+  "supplier_contacts": 0,
+  "deployment": false,
+  "push": false,
+  "git_commit": false,
+  "limitations": [
+    "Mock answers do not establish real SQL capability or model savings",
+    "Five complete profiles are not five single-response exam-compatible settings",
+    "Seven incomplete proposal records remain; all twelve positions are unqualified for new backup dispatch",
+    "Real bounds, current health/source operations and full-flow/Jev calibration remain pending",
+    "Whole-workspace standard gate fails preserved legacy copies; build is not a qualified release artifact"
+  ],
+  "scope_description": "SQL backup candidate reconciliation and opt-in multi-setting qualification; canonical test scope, not whole-workspace release",
+  "final_quick": {
+    "path": "runtime/checks/f0b96567205047f89db7ed1fd83b07bf/checks.json",
+    "sha256": "0721ace8c440769c4b2b40d4b77c0dae7fcdecbed6b0581f9ad9c7ec8b374dbc",
+    "passed": true,
+    "scope": "offline_verified records, locked dependencies and Ruff"
+  }
+}

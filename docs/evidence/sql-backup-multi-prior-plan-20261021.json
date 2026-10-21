@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "integration_branch": "codex/implement-routing-spec-1",
+  "baseline_commit": "9d20072b076bb64c3666cd3d1380dcb5e49bb909",
+  "merger_owner": "root",
+  "shared_interfaces": [],
+  "tasks": [
+    {
+      "id": "BACKUP-HEALTH-01",
+      "owner": "health_worker",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/scores/metrics.py",
+        "src/cloudyfan_jev/scores/discovery.py",
+        "src/cloudyfan_jev/scores/health.py",
+        "tests/test_backup_health.py"
+      ],
+      "depends_on": [],
+      "consumed_interfaces": []
+    },
+    {
+      "id": "BACKUP-WIRE-01",
+      "owner": "wire_worker",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/generation_request.py",
+        "src/cloudyfan_jev/scores/configuration.py",
+        "src/cloudyfan_jev/scores/sql_runner.py",
+        "src/cloudyfan_jev/scores/sql_capability.py",
+        "src/cloudyfan_jev/provider_bounds.py",
+        "src/cloudyfan_jev/component_bounds.py",
+        "tests/test_generation_request.py"
+      ],
+      "depends_on": [],
+      "consumed_interfaces": []
+    },
+    {
+      "id": "BACKUP-POOLS-01",
+      "owner": "pool_worker",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/scores/backup_pools.py",
+        "tests/test_backup_pools.py",
+        "examples/category-backup-policy-v1.json",
+        "scripts/prepare_category_backups.py"
+      ],
+      "depends_on": [],
+      "consumed_interfaces": []
+    },
+    {
+      "id": "BACKUP-RUNTIME-01",
+      "owner": "runtime_worker",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/scores/backup_runtime.py",
+        "tests/test_backup_runtime.py"
+      ],
+      "depends_on": [
+        "BACKUP-HEALTH-01",
+        "BACKUP-WIRE-01",
+        "BACKUP-POOLS-01"
+      ],
+      "consumed_interfaces": []
+    },
+    {
+      "id": "BACKUP-INTEGRATION-01",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/engine.py",
+        "src/cloudyfan_jev/budget.py",
+        "src/cloudyfan_jev/scores/__init__.py",
+        "tests/test_backup_budget.py",
+        "scripts/demo_category_backups.py",
+        "README.md",
+        "examples/selected-candidate-set.json",
+        "docs/agent-state.json",
+        "docs/work-plan.json",
+        "docs/coordination.md",
+        "docs/verification.md",
+        "docs/handoff.md",
+        "docs/release-readiness.md",
+        "docs/category-backup-runtime.md",
+        "docs/evidence/category-backup-offline-20261021.json",
+        "src/cloudyfan_jev/routing.py"
+      ],
+      "depends_on": [
+        "BACKUP-RUNTIME-01"
+      ],
+      "consumed_interfaces": []
+    },
+    {
+      "id": "BACKUP-COVERAGE-01",
+      "owner": "coverage_worker",
+      "status": "completed",
+      "owned_files": [
+        "docs/category-backup-coverage-20261021.md",
+        "docs/evidence/category-backup-coverage-20261021.json"
+      ],
+      "depends_on": [
+        "BACKUP-POOLS-01"
+      ],
+      "consumed_interfaces": []
+    },
+    {
+      "id": "BACKUP-PRECOMMIT-01",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/scores/backup_runtime.py",
+        "tests/test_backup_runtime.py",
+        "docs/agent-state.json",
+        "docs/work-plan.json",
+        "docs/evidence/category-backup-tree-precommit-20261021.json",
+        "docs/evidence/category-backup-workspace-precommit-20261021.json"
+      ],
+      "depends_on": [
+        "BACKUP-RUNTIME-01",
+        "BACKUP-INTEGRATION-01"
+      ],
+      "consumed_interfaces": []
+    }
+  ]
+}

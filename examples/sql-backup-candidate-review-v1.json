@@ -1,0 +1,1313 @@
+{
+  "schema_version": "cloudyfan-sql-backup-candidate-review-v1",
+  "category_id": "artificial-analysis:coding_index",
+  "created_at": "2026-10-21T10:58:46.270881+00:00",
+  "purpose": "Offline candidate and evidence reconciliation; not dispatch or qualification",
+  "input_digests": {
+    "coverage": "de78263ea54ecd2d578a39190b2af4af15dcc8dcb2cc094496c74d878628d7cc",
+    "sql_low_proposal": "8fcf37e987e7cfece4fdbafcaa16c679ae55d8cf169570e002afd733aca8cc57",
+    "evidence_index": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "archived_pack": "8b65784c3ff5e31b11602785f24071d0288d2730cb02047625c1af44a51926b5"
+  },
+  "slots": [
+    {
+      "tier": "open_source",
+      "position": "primary",
+      "config_id": "sql-backup-4a9a78c05a410792de1ac344fc24d879ba62fe3074a4cd548f6af7932e4a95ee",
+      "source": "broad_category_inventory",
+      "runtime_dispatch_enabled": false
+    },
+    {
+      "tier": "open_source",
+      "position": "backup_1",
+      "config_id": "sql-backup-e1aa5f3bbb290babd2d723ba2fb77f2efdcd42b83311dc6c13543cadffea714b",
+      "source": "broad_category_inventory",
+      "runtime_dispatch_enabled": false
+    },
+    {
+      "tier": "open_source",
+      "position": "backup_2",
+      "config_id": "sql-backup-9da7462bdbff445611fef7c78a9b95dbd63a4ce3cf14ef357428565adcd85a23",
+      "source": "broad_category_inventory",
+      "runtime_dispatch_enabled": false
+    },
+    {
+      "tier": "low",
+      "position": "primary",
+      "config_id": "sql-backup-4ba392516bcbd12fa02503be18a00977330173a597aa6d5142fe6f01121878de",
+      "source": "sql_specific_low_v1",
+      "runtime_dispatch_enabled": false
+    },
+    {
+      "tier": "low",
+      "position": "backup_1",
+      "config_id": "sql-backup-fa4252e21d95256263956679af4e5d57f106d23b36f93010f8a2c2dbffe72c06",
+      "source": "sql_specific_low_v1",
+      "runtime_dispatch_enabled": false
+    },
+    {
+      "tier": "low",
+      "position": "backup_2",
+      "config_id": "sql-backup-ad0164d719e180a280741b4d5c5e68a912f02b390239a41ee1e5f68a901ca0aa",
+      "source": "sql_specific_low_v1",
+      "runtime_dispatch_enabled": false
+    },
+    {
+      "tier": "mid",
+      "position": "primary",
+      "config_id": "sql-backup-1b8d187ef7d2ddf97be2fc61ed894706019b3c3b0ab25a6f4f1ec4a3c031e32f",
+      "source": "broad_category_inventory",
+      "runtime_dispatch_enabled": false
+    },
+    {
+      "tier": "mid",
+      "position": "backup_1",
+      "config_id": "sql-backup-83dc362b0acbcf692fa6ed305cb972d0280e6e3cf20b0c6648ae9a9f847ec466",
+      "source": "broad_category_inventory",
+      "runtime_dispatch_enabled": false
+    },
+    {
+      "tier": "mid",
+      "position": "backup_2",
+      "config_id": "sql-backup-a67bcd5aba32f8a5f53c9e9535ef792e55383201a922dd66631d0aa6c746a21c",
+      "source": "broad_category_inventory",
+      "runtime_dispatch_enabled": false
+    },
+    {
+      "tier": "high",
+      "position": "primary",
+      "config_id": "sql-backup-29506998720389ef45311f8f23e29c3ae906763bc65e1189ad457e26ac96d192",
+      "source": "broad_category_inventory",
+      "runtime_dispatch_enabled": false
+    },
+    {
+      "tier": "high",
+      "position": "backup_1",
+      "config_id": "sql-backup-a074fafb93d20324c891f0369cafbd1dfe4bdab453fde6e6afea20ed1a5230bc",
+      "source": "broad_category_inventory",
+      "runtime_dispatch_enabled": false
+    },
+    {
+      "tier": "high",
+      "position": "backup_2",
+      "config_id": "sql-backup-58e4e4931f14bc17a44401fb83ab5cff6846c6b48635f3ee4c8f8910b8349105",
+      "source": "broad_category_inventory",
+      "runtime_dispatch_enabled": false
+    }
+  ],
+  "configurations": [
+    {
+      "config_id": "sql-backup-4a9a78c05a410792de1ac344fc24d879ba62fe3074a4cd548f6af7932e4a95ee",
+      "profile": {
+        "model": "qwen/qwen3.8-27b",
+        "model_version": "qwen/qwen3.8-27b-20260814",
+        "accepted_models": [
+          "qwen/qwen3.8-27b-20260814",
+          "qwen/qwen3.8-27b"
+        ],
+        "effort": "medium",
+        "provider": "near-ai/fp8",
+        "provider_name": "Near AI",
+        "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+        "quantization": "fp8"
+      },
+      "exact_configuration_complete": true,
+      "configuration_sha256": "4a9a78c05a410792de1ac344fc24d879ba62fe3074a4cd548f6af7932e4a95ee",
+      "proposal_identity_sha256": "4a9a78c05a410792de1ac344fc24d879ba62fe3074a4cd548f6af7932e4a95ee",
+      "identity_gaps": [],
+      "slots": [
+        {
+          "tier": "open_source",
+          "position": "primary"
+        }
+      ],
+      "exam_compatibility": {
+        "status": "requires_new_explicit_exact_response_contract",
+        "existing_aliases_preserved": true,
+        "new_contract_requires_new_configuration_hash": true,
+        "is_exam_dispatch_authority": false
+      },
+      "source": "broad_category_inventory",
+      "source_freshness": {
+        "status": "fresh",
+        "observed_at": "2026-10-20T22:44:50.786358+00:00",
+        "valid_until": "2026-10-22T22:44:50.786358+00:00",
+        "scope": "inventory freshness only; not model or health qualification"
+      },
+      "historical_source_configuration_sha256": "4a9a78c05a410792de1ac344fc24d879ba62fe3074a4cd548f6af7932e4a95ee",
+      "archived_profile_evidence": {
+        "pack_id": "0a5c87fe4179e8b02ff4e7ab94eaa69d58bdb1de4129394aaa5606efb3c92bca",
+        "matrix_id": "5fa7e0fd9be4eff1cd93d97405d3e636b93a8af0e46c285525e15b3bd0d54525",
+        "source_config_id": "category50-research-oss-qwen38-medium",
+        "configuration_sha256": "4a9a78c05a410792de1ac344fc24d879ba62fe3074a4cd548f6af7932e4a95ee",
+        "parent_report_id": "f2f7a25dbe105cfe3334cbb85c18eb7ae394036dcdcb6638c0d617c09502739b",
+        "research_admission_id": "08e1dff6029bfedff796aa14e1bd6f9030e895bd30dbae33e85c537e69ee363d",
+        "suite_id": "8a3127cdad4433aeb2aca12f23b059a6959e807889c8da2b5fb23ce6bb397f88",
+        "identity_contract_id": "4fd71b3ecef45f288e72efc95fe0cef29ae1537175c218f30c4855acacfa448b",
+        "grader_sha256": null,
+        "public_contract_sha256": null,
+        "valid_until": "2026-10-21T16:31:31.740720+00:00",
+        "retrieved_at": "2026-10-21T04:31:31.740720+00:00",
+        "automatic_reuse": false,
+        "scope": "Exact archived research reference; current suite/grader/public contract and eligibility still require comparison",
+        "freshness": {
+          "status": "fresh",
+          "observed_at": "2026-10-21T04:31:31.740720+00:00",
+          "valid_until": "2026-10-21T16:31:31.740720+00:00",
+          "scope": "inventory freshness only; not model or health qualification"
+        }
+      },
+      "historical_sql_evidence": {
+        "status": "historical_research_reference_only",
+        "source_config_id": "category50-research-oss-qwen38-medium",
+        "source_scope": "fixed category50-sql-v8 measured fallback research only",
+        "freshness": {
+          "status": "fresh",
+          "observed_at": "2026-10-21T08:30:48.071301+00:00",
+          "valid_until": "2026-10-21T16:31:31.740720+00:00",
+          "scope": "inventory freshness only; not model or health qualification"
+        },
+        "automatic_reuse": false,
+        "reason": "Reconcile actual archived report and exact SQL contract before reuse; no answers are read"
+      },
+      "historical_blockers": [],
+      "current_blockers": [],
+      "transport_implementation": {
+        "none_omit_support_implemented": true,
+        "historical_blocker_removed_from_current": false,
+        "provider_default_not_reinterpreted": true
+      },
+      "new_backup_evidence": {
+        "whole_flow_cost_speed": "missing",
+        "classifier_pair_variants": "missing",
+        "current_health": "requires_current_exact_endpoint_observation",
+        "enforceable_fee_guarantee": "not_established",
+        "old_singleton_calibration_reusable": false,
+        "reason": "New pool/flow/classifier hashes require independent applicable evidence"
+      },
+      "free_route_must_be_preserved": false,
+      "data_policy": {
+        "allowed_data_classes": null,
+        "cloud_free_trial_opt_in_required": null
+      },
+      "quoted_scenarios": [],
+      "runtime_dispatch_enabled": false,
+      "production_qualified": false,
+      "sql_evidence_comparison": {
+        "status": "missing",
+        "automatic_reuse": false
+      }
+    },
+    {
+      "config_id": "sql-backup-e1aa5f3bbb290babd2d723ba2fb77f2efdcd42b83311dc6c13543cadffea714b",
+      "profile": {
+        "model": "nvidia/nemotron-3.5-lightning:free",
+        "model_version": null,
+        "effort": null,
+        "provider": "nvidia/nvfp4",
+        "provider_name": "Nvidia",
+        "quantization": "nvfp4"
+      },
+      "exact_configuration_complete": false,
+      "configuration_sha256": null,
+      "proposal_identity_sha256": "e1aa5f3bbb290babd2d723ba2fb77f2efdcd42b83311dc6c13543cadffea714b",
+      "identity_gaps": [
+        "missing_model_version",
+        "missing_endpoint",
+        "unverified_effort",
+        "missing_accepted_response_identities",
+        "free_request_route_not_preserved"
+      ],
+      "slots": [
+        {
+          "tier": "open_source",
+          "position": "backup_1"
+        }
+      ],
+      "exam_compatibility": {
+        "status": "incomplete_identity",
+        "existing_aliases_preserved": true,
+        "new_contract_requires_new_configuration_hash": true,
+        "is_exam_dispatch_authority": false
+      },
+      "source": "broad_category_inventory",
+      "source_freshness": {
+        "status": "fresh",
+        "observed_at": "2026-10-20T22:44:50.786358+00:00",
+        "valid_until": "2026-10-22T22:44:50.786358+00:00",
+        "scope": "inventory freshness only; not model or health qualification"
+      },
+      "historical_source_configuration_sha256": null,
+      "archived_profile_evidence": null,
+      "historical_sql_evidence": {
+        "status": "missing",
+        "source_config_id": null,
+        "source_scope": null,
+        "freshness": {
+          "status": "unknown"
+        },
+        "automatic_reuse": false,
+        "reason": "Reconcile actual archived report and exact SQL contract before reuse; no answers are read"
+      },
+      "historical_blockers": [],
+      "current_blockers": [],
+      "transport_implementation": {
+        "none_omit_support_implemented": true,
+        "historical_blocker_removed_from_current": false,
+        "provider_default_not_reinterpreted": true
+      },
+      "new_backup_evidence": {
+        "whole_flow_cost_speed": "missing",
+        "classifier_pair_variants": "missing",
+        "current_health": "requires_current_exact_endpoint_observation",
+        "enforceable_fee_guarantee": "not_established",
+        "old_singleton_calibration_reusable": false,
+        "reason": "New pool/flow/classifier hashes require independent applicable evidence"
+      },
+      "free_route_must_be_preserved": true,
+      "data_policy": {
+        "allowed_data_classes": null,
+        "cloud_free_trial_opt_in_required": null
+      },
+      "quoted_scenarios": [],
+      "runtime_dispatch_enabled": false,
+      "production_qualified": false,
+      "sql_evidence_comparison": {
+        "status": "incomplete_identity_no_reuse",
+        "automatic_reuse": false
+      }
+    },
+    {
+      "config_id": "sql-backup-9da7462bdbff445611fef7c78a9b95dbd63a4ce3cf14ef357428565adcd85a23",
+      "profile": {
+        "model": "liquid/lfm-2.5-2.6b:free",
+        "model_version": null,
+        "effort": null,
+        "provider": "liquid/fp8",
+        "provider_name": "Liquid",
+        "quantization": "fp8"
+      },
+      "exact_configuration_complete": false,
+      "configuration_sha256": null,
+      "proposal_identity_sha256": "9da7462bdbff445611fef7c78a9b95dbd63a4ce3cf14ef357428565adcd85a23",
+      "identity_gaps": [
+        "missing_model_version",
+        "missing_endpoint",
+        "unverified_effort",
+        "missing_accepted_response_identities",
+        "free_request_route_not_preserved"
+      ],
+      "slots": [
+        {
+          "tier": "open_source",
+          "position": "backup_2"
+        }
+      ],
+      "exam_compatibility": {
+        "status": "incomplete_identity",
+        "existing_aliases_preserved": true,
+        "new_contract_requires_new_configuration_hash": true,
+        "is_exam_dispatch_authority": false
+      },
+      "source": "broad_category_inventory",
+      "source_freshness": {
+        "status": "fresh",
+        "observed_at": "2026-10-20T22:44:50.786358+00:00",
+        "valid_until": "2026-10-22T22:44:50.786358+00:00",
+        "scope": "inventory freshness only; not model or health qualification"
+      },
+      "historical_source_configuration_sha256": null,
+      "archived_profile_evidence": null,
+      "historical_sql_evidence": {
+        "status": "missing",
+        "source_config_id": null,
+        "source_scope": null,
+        "freshness": {
+          "status": "unknown"
+        },
+        "automatic_reuse": false,
+        "reason": "Reconcile actual archived report and exact SQL contract before reuse; no answers are read"
+      },
+      "historical_blockers": [],
+      "current_blockers": [],
+      "transport_implementation": {
+        "none_omit_support_implemented": true,
+        "historical_blocker_removed_from_current": false,
+        "provider_default_not_reinterpreted": true
+      },
+      "new_backup_evidence": {
+        "whole_flow_cost_speed": "missing",
+        "classifier_pair_variants": "missing",
+        "current_health": "requires_current_exact_endpoint_observation",
+        "enforceable_fee_guarantee": "not_established",
+        "old_singleton_calibration_reusable": false,
+        "reason": "New pool/flow/classifier hashes require independent applicable evidence"
+      },
+      "free_route_must_be_preserved": true,
+      "data_policy": {
+        "allowed_data_classes": null,
+        "cloud_free_trial_opt_in_required": null
+      },
+      "quoted_scenarios": [],
+      "runtime_dispatch_enabled": false,
+      "production_qualified": false,
+      "sql_evidence_comparison": {
+        "status": "incomplete_identity_no_reuse",
+        "automatic_reuse": false
+      }
+    },
+    {
+      "config_id": "sql-backup-4ba392516bcbd12fa02503be18a00977330173a597aa6d5142fe6f01121878de",
+      "profile": {
+        "model": "meta-llama/llama-3.1-8b-instruct",
+        "model_version": "meta-llama/llama-3.1-8b-instruct",
+        "accepted_models": [
+          "meta-llama/llama-3.1-8b-instruct"
+        ],
+        "effort": "none",
+        "provider": "deepinfra/fp8",
+        "provider_name": "DeepInfra",
+        "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+        "quantization": "fp8",
+        "reasoning_parameter": "omit"
+      },
+      "exact_configuration_complete": true,
+      "configuration_sha256": "4ba392516bcbd12fa02503be18a00977330173a597aa6d5142fe6f01121878de",
+      "proposal_identity_sha256": "4ba392516bcbd12fa02503be18a00977330173a597aa6d5142fe6f01121878de",
+      "identity_gaps": [],
+      "slots": [
+        {
+          "tier": "low",
+          "position": "primary"
+        }
+      ],
+      "exam_compatibility": {
+        "status": "exact_response_contract_compatible_only",
+        "existing_aliases_preserved": true,
+        "new_contract_requires_new_configuration_hash": true,
+        "is_exam_dispatch_authority": false
+      },
+      "source": "sql_specific_low_v1",
+      "source_freshness": {
+        "status": "fresh",
+        "observed_at": "2026-10-21T07:57:59.932507+00:00",
+        "valid_until": "2026-10-23T07:57:59.932507+00:00",
+        "scope": "inventory freshness only; not model or health qualification"
+      },
+      "historical_source_configuration_sha256": "77321e633575502e57539483bf854e30796a1b2b72caa3d95e92595c7a87a641",
+      "archived_profile_evidence": null,
+      "historical_sql_evidence": {
+        "status": "missing",
+        "source_config_id": null,
+        "source_scope": null,
+        "freshness": {
+          "status": "unknown"
+        },
+        "automatic_reuse": false,
+        "reason": "Reconcile actual archived report and exact SQL contract before reuse; no answers are read"
+      },
+      "historical_blockers": [
+        "independent_fixed_configuration_sql_measurement_missing",
+        "actual_response_identity_and_provider_not_verified",
+        "full_workflow_cost_speed_and_escalation_calibration_missing",
+        "enforceable_all_component_fee_bounds_unconfirmed",
+        "omit_reasoning_transport_contract_not_integrated",
+        "no_immutable_dated_revision_declared"
+      ],
+      "current_blockers": [
+        "independent_fixed_configuration_sql_measurement_missing",
+        "actual_response_identity_and_provider_not_verified",
+        "full_workflow_cost_speed_and_escalation_calibration_missing",
+        "enforceable_all_component_fee_bounds_unconfirmed",
+        "no_immutable_dated_revision_declared"
+      ],
+      "transport_implementation": {
+        "none_omit_support_implemented": true,
+        "historical_blocker_removed_from_current": true,
+        "provider_default_not_reinterpreted": true
+      },
+      "new_backup_evidence": {
+        "whole_flow_cost_speed": "missing",
+        "classifier_pair_variants": "missing",
+        "current_health": "requires_current_exact_endpoint_observation",
+        "enforceable_fee_guarantee": "not_established",
+        "old_singleton_calibration_reusable": false,
+        "reason": "New pool/flow/classifier hashes require independent applicable evidence"
+      },
+      "free_route_must_be_preserved": false,
+      "data_policy": {
+        "allowed_data_classes": null,
+        "cloud_free_trial_opt_in_required": false
+      },
+      "quoted_scenarios": [
+        {
+          "input_tokens": 2000,
+          "output_tokens": 1000,
+          "candidate_token_quote_usd": "0.00008000",
+          "mid_token_quote_usd": "0.00021000",
+          "saving_fraction": "0.6190476190476190476190476190",
+          "meets_20_percent_gap": true
+        },
+        {
+          "input_tokens": 6000,
+          "output_tokens": 200,
+          "candidate_token_quote_usd": "0.00012800",
+          "mid_token_quote_usd": "0.00021000",
+          "saving_fraction": "0.3904761904761904761904761905",
+          "meets_20_percent_gap": true
+        }
+      ],
+      "runtime_dispatch_enabled": false,
+      "production_qualified": false,
+      "sql_evidence_comparison": {
+        "status": "missing",
+        "automatic_reuse": false
+      }
+    },
+    {
+      "config_id": "sql-backup-fa4252e21d95256263956679af4e5d57f106d23b36f93010f8a2c2dbffe72c06",
+      "profile": {
+        "model": "google/gemma-3-4b-it",
+        "model_version": "google/gemma-3-4b-it",
+        "accepted_models": [
+          "google/gemma-3-4b-it"
+        ],
+        "effort": "none",
+        "provider": "parasail/bf16",
+        "provider_name": "Parasail",
+        "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+        "quantization": "bf16",
+        "reasoning_parameter": "omit"
+      },
+      "exact_configuration_complete": true,
+      "configuration_sha256": "fa4252e21d95256263956679af4e5d57f106d23b36f93010f8a2c2dbffe72c06",
+      "proposal_identity_sha256": "fa4252e21d95256263956679af4e5d57f106d23b36f93010f8a2c2dbffe72c06",
+      "identity_gaps": [],
+      "slots": [
+        {
+          "tier": "low",
+          "position": "backup_1"
+        }
+      ],
+      "exam_compatibility": {
+        "status": "exact_response_contract_compatible_only",
+        "existing_aliases_preserved": true,
+        "new_contract_requires_new_configuration_hash": true,
+        "is_exam_dispatch_authority": false
+      },
+      "source": "sql_specific_low_v1",
+      "source_freshness": {
+        "status": "fresh",
+        "observed_at": "2026-10-21T07:58:00.192352+00:00",
+        "valid_until": "2026-10-23T07:58:00.192352+00:00",
+        "scope": "inventory freshness only; not model or health qualification"
+      },
+      "historical_source_configuration_sha256": "47d1f0e3c7ec15500e029dce13d6ce1dd14042bfdf81c48611229180d1fee9f2",
+      "archived_profile_evidence": null,
+      "historical_sql_evidence": {
+        "status": "missing",
+        "source_config_id": null,
+        "source_scope": null,
+        "freshness": {
+          "status": "unknown"
+        },
+        "automatic_reuse": false,
+        "reason": "Reconcile actual archived report and exact SQL contract before reuse; no answers are read"
+      },
+      "historical_blockers": [
+        "independent_fixed_configuration_sql_measurement_missing",
+        "actual_response_identity_and_provider_not_verified",
+        "full_workflow_cost_speed_and_escalation_calibration_missing",
+        "enforceable_all_component_fee_bounds_unconfirmed",
+        "omit_reasoning_transport_contract_not_integrated",
+        "no_immutable_dated_revision_declared"
+      ],
+      "current_blockers": [
+        "independent_fixed_configuration_sql_measurement_missing",
+        "actual_response_identity_and_provider_not_verified",
+        "full_workflow_cost_speed_and_escalation_calibration_missing",
+        "enforceable_all_component_fee_bounds_unconfirmed",
+        "no_immutable_dated_revision_declared"
+      ],
+      "transport_implementation": {
+        "none_omit_support_implemented": true,
+        "historical_blocker_removed_from_current": true,
+        "provider_default_not_reinterpreted": true
+      },
+      "new_backup_evidence": {
+        "whole_flow_cost_speed": "missing",
+        "classifier_pair_variants": "missing",
+        "current_health": "requires_current_exact_endpoint_observation",
+        "enforceable_fee_guarantee": "not_established",
+        "old_singleton_calibration_reusable": false,
+        "reason": "New pool/flow/classifier hashes require independent applicable evidence"
+      },
+      "free_route_must_be_preserved": false,
+      "data_policy": {
+        "allowed_data_classes": null,
+        "cloud_free_trial_opt_in_required": false
+      },
+      "quoted_scenarios": [
+        {
+          "input_tokens": 2000,
+          "output_tokens": 1000,
+          "candidate_token_quote_usd": "0.00013000",
+          "mid_token_quote_usd": "0.00021000",
+          "saving_fraction": "0.3809523809523809523809523810",
+          "meets_20_percent_gap": true
+        },
+        {
+          "input_tokens": 6000,
+          "output_tokens": 200,
+          "candidate_token_quote_usd": "0.00025000",
+          "mid_token_quote_usd": "0.00021000",
+          "saving_fraction": "-0.190476190476190476190476190",
+          "meets_20_percent_gap": false
+        }
+      ],
+      "runtime_dispatch_enabled": false,
+      "production_qualified": false,
+      "sql_evidence_comparison": {
+        "status": "missing",
+        "automatic_reuse": false
+      }
+    },
+    {
+      "config_id": "sql-backup-ad0164d719e180a280741b4d5c5e68a912f02b390239a41ee1e5f68a901ca0aa",
+      "profile": {
+        "model": "nvidia/nemotron-3.5-lightning:free",
+        "model_version": "nvidia/nemotron-3.5-lightning:free",
+        "accepted_models": [
+          "nvidia/nemotron-3.5-lightning-20260807",
+          "nvidia/nemotron-3.5-lightning:free"
+        ],
+        "effort": "provider_default",
+        "provider": "nvidia/nvfp4",
+        "provider_name": "Nvidia",
+        "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+        "quantization": "nvfp4",
+        "reasoning_parameter": "omit"
+      },
+      "exact_configuration_complete": false,
+      "configuration_sha256": null,
+      "proposal_identity_sha256": "ad0164d719e180a280741b4d5c5e68a912f02b390239a41ee1e5f68a901ca0aa",
+      "identity_gaps": [
+        "unverified_effort",
+        "omit_requires_explicit_none_effort"
+      ],
+      "slots": [
+        {
+          "tier": "low",
+          "position": "backup_2"
+        }
+      ],
+      "exam_compatibility": {
+        "status": "incomplete_identity",
+        "existing_aliases_preserved": true,
+        "new_contract_requires_new_configuration_hash": true,
+        "is_exam_dispatch_authority": false
+      },
+      "source": "sql_specific_low_v1",
+      "source_freshness": {
+        "status": "fresh",
+        "observed_at": "2026-10-21T07:58:00.262731+00:00",
+        "valid_until": "2026-10-23T07:58:00.262731+00:00",
+        "scope": "inventory freshness only; not model or health qualification"
+      },
+      "historical_source_configuration_sha256": "d488b9834de2a33b5b78b46220de054b1d3d3909a6ed5ce4e67c5f687a4f90b1",
+      "archived_profile_evidence": null,
+      "historical_sql_evidence": {
+        "status": "missing",
+        "source_config_id": null,
+        "source_scope": null,
+        "freshness": {
+          "status": "unknown"
+        },
+        "automatic_reuse": false,
+        "reason": "Reconcile actual archived report and exact SQL contract before reuse; no answers are read"
+      },
+      "historical_blockers": [
+        "independent_fixed_configuration_sql_measurement_missing",
+        "actual_response_identity_and_provider_not_verified",
+        "full_workflow_cost_speed_and_escalation_calibration_missing",
+        "enforceable_all_component_fee_bounds_unconfirmed",
+        "omit_reasoning_transport_contract_not_integrated",
+        "cloud_free_quota_and_data_policy_opt_in_required",
+        "free_route_actual_canonical_and_default_effort_not_verified"
+      ],
+      "current_blockers": [
+        "independent_fixed_configuration_sql_measurement_missing",
+        "actual_response_identity_and_provider_not_verified",
+        "full_workflow_cost_speed_and_escalation_calibration_missing",
+        "enforceable_all_component_fee_bounds_unconfirmed",
+        "cloud_free_quota_and_data_policy_opt_in_required",
+        "free_route_actual_canonical_and_default_effort_not_verified"
+      ],
+      "transport_implementation": {
+        "none_omit_support_implemented": true,
+        "historical_blocker_removed_from_current": true,
+        "provider_default_not_reinterpreted": true
+      },
+      "new_backup_evidence": {
+        "whole_flow_cost_speed": "missing",
+        "classifier_pair_variants": "missing",
+        "current_health": "requires_current_exact_endpoint_observation",
+        "enforceable_fee_guarantee": "not_established",
+        "old_singleton_calibration_reusable": false,
+        "reason": "New pool/flow/classifier hashes require independent applicable evidence"
+      },
+      "free_route_must_be_preserved": true,
+      "data_policy": {
+        "allowed_data_classes": [
+          "synthetic_public",
+          "public"
+        ],
+        "cloud_free_trial_opt_in_required": true
+      },
+      "quoted_scenarios": [
+        {
+          "input_tokens": 2000,
+          "output_tokens": 1000,
+          "candidate_token_quote_usd": "0",
+          "mid_token_quote_usd": "0.00021000",
+          "saving_fraction": "1",
+          "meets_20_percent_gap": true
+        },
+        {
+          "input_tokens": 6000,
+          "output_tokens": 200,
+          "candidate_token_quote_usd": "0",
+          "mid_token_quote_usd": "0.00021000",
+          "saving_fraction": "1",
+          "meets_20_percent_gap": true
+        }
+      ],
+      "runtime_dispatch_enabled": false,
+      "production_qualified": false,
+      "sql_evidence_comparison": {
+        "status": "incomplete_identity_no_reuse",
+        "automatic_reuse": false
+      }
+    },
+    {
+      "config_id": "sql-backup-1b8d187ef7d2ddf97be2fc61ed894706019b3c3b0ab25a6f4f1ec4a3c031e32f",
+      "profile": {
+        "model": "openai/gpt-oss-120b",
+        "model_version": "openai/gpt-oss-120b",
+        "accepted_models": [
+          "openai/gpt-oss-120b"
+        ],
+        "effort": "high",
+        "provider": "near-ai/fp4",
+        "provider_name": "Near AI",
+        "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+        "quantization": "fp4"
+      },
+      "exact_configuration_complete": true,
+      "configuration_sha256": "1b8d187ef7d2ddf97be2fc61ed894706019b3c3b0ab25a6f4f1ec4a3c031e32f",
+      "proposal_identity_sha256": "1b8d187ef7d2ddf97be2fc61ed894706019b3c3b0ab25a6f4f1ec4a3c031e32f",
+      "identity_gaps": [],
+      "slots": [
+        {
+          "tier": "mid",
+          "position": "primary"
+        }
+      ],
+      "exam_compatibility": {
+        "status": "exact_response_contract_compatible_only",
+        "existing_aliases_preserved": true,
+        "new_contract_requires_new_configuration_hash": true,
+        "is_exam_dispatch_authority": false
+      },
+      "source": "broad_category_inventory",
+      "source_freshness": {
+        "status": "fresh",
+        "observed_at": "2026-10-20T22:44:50.786358+00:00",
+        "valid_until": "2026-10-22T22:44:50.786358+00:00",
+        "scope": "inventory freshness only; not model or health qualification"
+      },
+      "historical_source_configuration_sha256": "1b8d187ef7d2ddf97be2fc61ed894706019b3c3b0ab25a6f4f1ec4a3c031e32f",
+      "archived_profile_evidence": {
+        "pack_id": "0a5c87fe4179e8b02ff4e7ab94eaa69d58bdb1de4129394aaa5606efb3c92bca",
+        "matrix_id": "5fa7e0fd9be4eff1cd93d97405d3e636b93a8af0e46c285525e15b3bd0d54525",
+        "source_config_id": "category50-research-mid-gptoss-high",
+        "configuration_sha256": "1b8d187ef7d2ddf97be2fc61ed894706019b3c3b0ab25a6f4f1ec4a3c031e32f",
+        "parent_report_id": "8636595ba722dbbde5b2af51c8e5d1ea641272c45b7ceb7f76353fec17274624",
+        "research_admission_id": "06db1f5d7826664e22efd8d1fcafb341812d4763319cffa0d47ca9b29c95ae97",
+        "suite_id": "8a3127cdad4433aeb2aca12f23b059a6959e807889c8da2b5fb23ce6bb397f88",
+        "identity_contract_id": "4fd71b3ecef45f288e72efc95fe0cef29ae1537175c218f30c4855acacfa448b",
+        "grader_sha256": null,
+        "public_contract_sha256": null,
+        "valid_until": "2026-10-21T16:31:31.740720+00:00",
+        "retrieved_at": "2026-10-21T04:31:31.740720+00:00",
+        "automatic_reuse": false,
+        "scope": "Exact archived research reference; current suite/grader/public contract and eligibility still require comparison",
+        "freshness": {
+          "status": "fresh",
+          "observed_at": "2026-10-21T04:31:31.740720+00:00",
+          "valid_until": "2026-10-21T16:31:31.740720+00:00",
+          "scope": "inventory freshness only; not model or health qualification"
+        }
+      },
+      "historical_sql_evidence": {
+        "status": "historical_research_reference_only",
+        "source_config_id": "category50-research-mid-gptoss-high",
+        "source_scope": "fixed category50-sql-v8 measured fallback research only",
+        "freshness": {
+          "status": "fresh",
+          "observed_at": "2026-10-21T08:30:48.071301+00:00",
+          "valid_until": "2026-10-21T16:31:31.740720+00:00",
+          "scope": "inventory freshness only; not model or health qualification"
+        },
+        "automatic_reuse": false,
+        "reason": "Reconcile actual archived report and exact SQL contract before reuse; no answers are read"
+      },
+      "historical_blockers": [],
+      "current_blockers": [],
+      "transport_implementation": {
+        "none_omit_support_implemented": true,
+        "historical_blocker_removed_from_current": false,
+        "provider_default_not_reinterpreted": true
+      },
+      "new_backup_evidence": {
+        "whole_flow_cost_speed": "missing",
+        "classifier_pair_variants": "missing",
+        "current_health": "requires_current_exact_endpoint_observation",
+        "enforceable_fee_guarantee": "not_established",
+        "old_singleton_calibration_reusable": false,
+        "reason": "New pool/flow/classifier hashes require independent applicable evidence"
+      },
+      "free_route_must_be_preserved": false,
+      "data_policy": {
+        "allowed_data_classes": null,
+        "cloud_free_trial_opt_in_required": null
+      },
+      "quoted_scenarios": [],
+      "runtime_dispatch_enabled": false,
+      "production_qualified": false,
+      "sql_evidence_comparison": {
+        "status": "missing",
+        "automatic_reuse": false
+      }
+    },
+    {
+      "config_id": "sql-backup-83dc362b0acbcf692fa6ed305cb972d0280e6e3cf20b0c6648ae9a9f847ec466",
+      "profile": {
+        "model": "cohere/north-mini-code:free",
+        "model_version": null,
+        "effort": null,
+        "provider": "cohere",
+        "provider_name": "Cohere",
+        "quantization": "unknown"
+      },
+      "exact_configuration_complete": false,
+      "configuration_sha256": null,
+      "proposal_identity_sha256": "83dc362b0acbcf692fa6ed305cb972d0280e6e3cf20b0c6648ae9a9f847ec466",
+      "identity_gaps": [
+        "missing_model_version",
+        "missing_endpoint",
+        "missing_quantization",
+        "unverified_effort",
+        "missing_accepted_response_identities",
+        "free_request_route_not_preserved"
+      ],
+      "slots": [
+        {
+          "tier": "mid",
+          "position": "backup_1"
+        }
+      ],
+      "exam_compatibility": {
+        "status": "incomplete_identity",
+        "existing_aliases_preserved": true,
+        "new_contract_requires_new_configuration_hash": true,
+        "is_exam_dispatch_authority": false
+      },
+      "source": "broad_category_inventory",
+      "source_freshness": {
+        "status": "fresh",
+        "observed_at": "2026-10-20T22:44:50.786358+00:00",
+        "valid_until": "2026-10-22T22:44:50.786358+00:00",
+        "scope": "inventory freshness only; not model or health qualification"
+      },
+      "historical_source_configuration_sha256": null,
+      "archived_profile_evidence": null,
+      "historical_sql_evidence": {
+        "status": "missing",
+        "source_config_id": null,
+        "source_scope": null,
+        "freshness": {
+          "status": "unknown"
+        },
+        "automatic_reuse": false,
+        "reason": "Reconcile actual archived report and exact SQL contract before reuse; no answers are read"
+      },
+      "historical_blockers": [],
+      "current_blockers": [],
+      "transport_implementation": {
+        "none_omit_support_implemented": true,
+        "historical_blocker_removed_from_current": false,
+        "provider_default_not_reinterpreted": true
+      },
+      "new_backup_evidence": {
+        "whole_flow_cost_speed": "missing",
+        "classifier_pair_variants": "missing",
+        "current_health": "requires_current_exact_endpoint_observation",
+        "enforceable_fee_guarantee": "not_established",
+        "old_singleton_calibration_reusable": false,
+        "reason": "New pool/flow/classifier hashes require independent applicable evidence"
+      },
+      "free_route_must_be_preserved": true,
+      "data_policy": {
+        "allowed_data_classes": null,
+        "cloud_free_trial_opt_in_required": null
+      },
+      "quoted_scenarios": [],
+      "runtime_dispatch_enabled": false,
+      "production_qualified": false,
+      "sql_evidence_comparison": {
+        "status": "incomplete_identity_no_reuse",
+        "automatic_reuse": false
+      }
+    },
+    {
+      "config_id": "sql-backup-a67bcd5aba32f8a5f53c9e9535ef792e55383201a922dd66631d0aa6c746a21c",
+      "profile": {
+        "model": "google/gemma-4-26b-a4b-it:free",
+        "model_version": null,
+        "effort": null,
+        "provider": "google-ai-studio",
+        "provider_name": "Google AI Studio",
+        "quantization": "unknown"
+      },
+      "exact_configuration_complete": false,
+      "configuration_sha256": null,
+      "proposal_identity_sha256": "a67bcd5aba32f8a5f53c9e9535ef792e55383201a922dd66631d0aa6c746a21c",
+      "identity_gaps": [
+        "missing_model_version",
+        "missing_endpoint",
+        "missing_quantization",
+        "unverified_effort",
+        "missing_accepted_response_identities",
+        "free_request_route_not_preserved"
+      ],
+      "slots": [
+        {
+          "tier": "mid",
+          "position": "backup_2"
+        }
+      ],
+      "exam_compatibility": {
+        "status": "incomplete_identity",
+        "existing_aliases_preserved": true,
+        "new_contract_requires_new_configuration_hash": true,
+        "is_exam_dispatch_authority": false
+      },
+      "source": "broad_category_inventory",
+      "source_freshness": {
+        "status": "fresh",
+        "observed_at": "2026-10-20T22:44:50.786358+00:00",
+        "valid_until": "2026-10-22T22:44:50.786358+00:00",
+        "scope": "inventory freshness only; not model or health qualification"
+      },
+      "historical_source_configuration_sha256": null,
+      "archived_profile_evidence": null,
+      "historical_sql_evidence": {
+        "status": "missing",
+        "source_config_id": null,
+        "source_scope": null,
+        "freshness": {
+          "status": "unknown"
+        },
+        "automatic_reuse": false,
+        "reason": "Reconcile actual archived report and exact SQL contract before reuse; no answers are read"
+      },
+      "historical_blockers": [],
+      "current_blockers": [],
+      "transport_implementation": {
+        "none_omit_support_implemented": true,
+        "historical_blocker_removed_from_current": false,
+        "provider_default_not_reinterpreted": true
+      },
+      "new_backup_evidence": {
+        "whole_flow_cost_speed": "missing",
+        "classifier_pair_variants": "missing",
+        "current_health": "requires_current_exact_endpoint_observation",
+        "enforceable_fee_guarantee": "not_established",
+        "old_singleton_calibration_reusable": false,
+        "reason": "New pool/flow/classifier hashes require independent applicable evidence"
+      },
+      "free_route_must_be_preserved": true,
+      "data_policy": {
+        "allowed_data_classes": null,
+        "cloud_free_trial_opt_in_required": null
+      },
+      "quoted_scenarios": [],
+      "runtime_dispatch_enabled": false,
+      "production_qualified": false,
+      "sql_evidence_comparison": {
+        "status": "incomplete_identity_no_reuse",
+        "automatic_reuse": false
+      }
+    },
+    {
+      "config_id": "sql-backup-29506998720389ef45311f8f23e29c3ae906763bc65e1189ad457e26ac96d192",
+      "profile": {
+        "model": "z-ai/glm-5.3-flash",
+        "model_version": "z-ai/glm-5.3-flash-20260826",
+        "accepted_models": [
+          "z-ai/glm-5.3-flash-20260826",
+          "z-ai/glm-5.3-flash"
+        ],
+        "effort": "low",
+        "provider": "wafer/nvfp4",
+        "provider_name": "Wafer",
+        "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+        "quantization": "nvfp4"
+      },
+      "exact_configuration_complete": true,
+      "configuration_sha256": "29506998720389ef45311f8f23e29c3ae906763bc65e1189ad457e26ac96d192",
+      "proposal_identity_sha256": "29506998720389ef45311f8f23e29c3ae906763bc65e1189ad457e26ac96d192",
+      "identity_gaps": [],
+      "slots": [
+        {
+          "tier": "high",
+          "position": "primary"
+        }
+      ],
+      "exam_compatibility": {
+        "status": "requires_new_explicit_exact_response_contract",
+        "existing_aliases_preserved": true,
+        "new_contract_requires_new_configuration_hash": true,
+        "is_exam_dispatch_authority": false
+      },
+      "source": "broad_category_inventory",
+      "source_freshness": {
+        "status": "fresh",
+        "observed_at": "2026-10-20T22:44:50.786358+00:00",
+        "valid_until": "2026-10-22T22:44:50.786358+00:00",
+        "scope": "inventory freshness only; not model or health qualification"
+      },
+      "historical_source_configuration_sha256": "29506998720389ef45311f8f23e29c3ae906763bc65e1189ad457e26ac96d192",
+      "archived_profile_evidence": {
+        "pack_id": "0a5c87fe4179e8b02ff4e7ab94eaa69d58bdb1de4129394aaa5606efb3c92bca",
+        "matrix_id": "5fa7e0fd9be4eff1cd93d97405d3e636b93a8af0e46c285525e15b3bd0d54525",
+        "source_config_id": "category50-research-high",
+        "configuration_sha256": "29506998720389ef45311f8f23e29c3ae906763bc65e1189ad457e26ac96d192",
+        "parent_report_id": "9af1a1e0cdcbbaef75d34ec58e82c7c79f99233a84a825765c2e421506610c69",
+        "research_admission_id": "7ce13774b9e8c2eb01549836086002ca6357315af8cba0d9f46c1e06444bd5a5",
+        "suite_id": "8a3127cdad4433aeb2aca12f23b059a6959e807889c8da2b5fb23ce6bb397f88",
+        "identity_contract_id": "4fd71b3ecef45f288e72efc95fe0cef29ae1537175c218f30c4855acacfa448b",
+        "grader_sha256": null,
+        "public_contract_sha256": null,
+        "valid_until": "2026-10-21T16:31:31.740720+00:00",
+        "retrieved_at": "2026-10-21T04:31:31.740720+00:00",
+        "automatic_reuse": false,
+        "scope": "Exact archived research reference; current suite/grader/public contract and eligibility still require comparison",
+        "freshness": {
+          "status": "fresh",
+          "observed_at": "2026-10-21T04:31:31.740720+00:00",
+          "valid_until": "2026-10-21T16:31:31.740720+00:00",
+          "scope": "inventory freshness only; not model or health qualification"
+        }
+      },
+      "historical_sql_evidence": {
+        "status": "historical_research_reference_only",
+        "source_config_id": "category50-research-high",
+        "source_scope": "fixed category50-sql-v8 measured fallback research only",
+        "freshness": {
+          "status": "fresh",
+          "observed_at": "2026-10-21T08:30:48.071301+00:00",
+          "valid_until": "2026-10-21T16:31:31.740720+00:00",
+          "scope": "inventory freshness only; not model or health qualification"
+        },
+        "automatic_reuse": false,
+        "reason": "Reconcile actual archived report and exact SQL contract before reuse; no answers are read"
+      },
+      "historical_blockers": [],
+      "current_blockers": [],
+      "transport_implementation": {
+        "none_omit_support_implemented": true,
+        "historical_blocker_removed_from_current": false,
+        "provider_default_not_reinterpreted": true
+      },
+      "new_backup_evidence": {
+        "whole_flow_cost_speed": "missing",
+        "classifier_pair_variants": "missing",
+        "current_health": "requires_current_exact_endpoint_observation",
+        "enforceable_fee_guarantee": "not_established",
+        "old_singleton_calibration_reusable": false,
+        "reason": "New pool/flow/classifier hashes require independent applicable evidence"
+      },
+      "free_route_must_be_preserved": false,
+      "data_policy": {
+        "allowed_data_classes": null,
+        "cloud_free_trial_opt_in_required": null
+      },
+      "quoted_scenarios": [],
+      "runtime_dispatch_enabled": false,
+      "production_qualified": false,
+      "sql_evidence_comparison": {
+        "status": "missing",
+        "automatic_reuse": false
+      }
+    },
+    {
+      "config_id": "sql-backup-a074fafb93d20324c891f0369cafbd1dfe4bdab453fde6e6afea20ed1a5230bc",
+      "profile": {
+        "model": "deepseek/deepseek-v4-flash-0731",
+        "model_version": null,
+        "effort": null,
+        "provider": "relace/fp4",
+        "provider_name": "Relace",
+        "quantization": "fp4"
+      },
+      "exact_configuration_complete": false,
+      "configuration_sha256": null,
+      "proposal_identity_sha256": "a074fafb93d20324c891f0369cafbd1dfe4bdab453fde6e6afea20ed1a5230bc",
+      "identity_gaps": [
+        "missing_model_version",
+        "missing_endpoint",
+        "unverified_effort",
+        "missing_accepted_response_identities"
+      ],
+      "slots": [
+        {
+          "tier": "high",
+          "position": "backup_1"
+        }
+      ],
+      "exam_compatibility": {
+        "status": "incomplete_identity",
+        "existing_aliases_preserved": true,
+        "new_contract_requires_new_configuration_hash": true,
+        "is_exam_dispatch_authority": false
+      },
+      "source": "broad_category_inventory",
+      "source_freshness": {
+        "status": "fresh",
+        "observed_at": "2026-10-20T22:44:50.786358+00:00",
+        "valid_until": "2026-10-22T22:44:50.786358+00:00",
+        "scope": "inventory freshness only; not model or health qualification"
+      },
+      "historical_source_configuration_sha256": null,
+      "archived_profile_evidence": null,
+      "historical_sql_evidence": {
+        "status": "missing",
+        "source_config_id": null,
+        "source_scope": null,
+        "freshness": {
+          "status": "unknown"
+        },
+        "automatic_reuse": false,
+        "reason": "Reconcile actual archived report and exact SQL contract before reuse; no answers are read"
+      },
+      "historical_blockers": [],
+      "current_blockers": [],
+      "transport_implementation": {
+        "none_omit_support_implemented": true,
+        "historical_blocker_removed_from_current": false,
+        "provider_default_not_reinterpreted": true
+      },
+      "new_backup_evidence": {
+        "whole_flow_cost_speed": "missing",
+        "classifier_pair_variants": "missing",
+        "current_health": "requires_current_exact_endpoint_observation",
+        "enforceable_fee_guarantee": "not_established",
+        "old_singleton_calibration_reusable": false,
+        "reason": "New pool/flow/classifier hashes require independent applicable evidence"
+      },
+      "free_route_must_be_preserved": false,
+      "data_policy": {
+        "allowed_data_classes": null,
+        "cloud_free_trial_opt_in_required": null
+      },
+      "quoted_scenarios": [],
+      "runtime_dispatch_enabled": false,
+      "production_qualified": false,
+      "sql_evidence_comparison": {
+        "status": "incomplete_identity_no_reuse",
+        "automatic_reuse": false
+      }
+    },
+    {
+      "config_id": "sql-backup-58e4e4931f14bc17a44401fb83ab5cff6846c6b48635f3ee4c8f8910b8349105",
+      "profile": {
+        "model": "deepseek/deepseek-v4-pro-0813",
+        "model_version": null,
+        "effort": null,
+        "provider": "baidu/fp8",
+        "provider_name": "Baidu",
+        "quantization": "fp8"
+      },
+      "exact_configuration_complete": false,
+      "configuration_sha256": null,
+      "proposal_identity_sha256": "58e4e4931f14bc17a44401fb83ab5cff6846c6b48635f3ee4c8f8910b8349105",
+      "identity_gaps": [
+        "missing_model_version",
+        "missing_endpoint",
+        "unverified_effort",
+        "missing_accepted_response_identities"
+      ],
+      "slots": [
+        {
+          "tier": "high",
+          "position": "backup_2"
+        }
+      ],
+      "exam_compatibility": {
+        "status": "incomplete_identity",
+        "existing_aliases_preserved": true,
+        "new_contract_requires_new_configuration_hash": true,
+        "is_exam_dispatch_authority": false
+      },
+      "source": "broad_category_inventory",
+      "source_freshness": {
+        "status": "fresh",
+        "observed_at": "2026-10-20T22:44:50.786358+00:00",
+        "valid_until": "2026-10-22T22:44:50.786358+00:00",
+        "scope": "inventory freshness only; not model or health qualification"
+      },
+      "historical_source_configuration_sha256": null,
+      "archived_profile_evidence": null,
+      "historical_sql_evidence": {
+        "status": "missing",
+        "source_config_id": null,
+        "source_scope": null,
+        "freshness": {
+          "status": "unknown"
+        },
+        "automatic_reuse": false,
+        "reason": "Reconcile actual archived report and exact SQL contract before reuse; no answers are read"
+      },
+      "historical_blockers": [],
+      "current_blockers": [],
+      "transport_implementation": {
+        "none_omit_support_implemented": true,
+        "historical_blocker_removed_from_current": false,
+        "provider_default_not_reinterpreted": true
+      },
+      "new_backup_evidence": {
+        "whole_flow_cost_speed": "missing",
+        "classifier_pair_variants": "missing",
+        "current_health": "requires_current_exact_endpoint_observation",
+        "enforceable_fee_guarantee": "not_established",
+        "old_singleton_calibration_reusable": false,
+        "reason": "New pool/flow/classifier hashes require independent applicable evidence"
+      },
+      "free_route_must_be_preserved": false,
+      "data_policy": {
+        "allowed_data_classes": null,
+        "cloud_free_trial_opt_in_required": null
+      },
+      "quoted_scenarios": [],
+      "runtime_dispatch_enabled": false,
+      "production_qualified": false,
+      "sql_evidence_comparison": {
+        "status": "incomplete_identity_no_reuse",
+        "automatic_reuse": false
+      }
+    }
+  ],
+  "low_proposal_comparison": {
+    "selected_proposal": "sql_specific_low_v1",
+    "selection_basis": "Explicit SQL configuration and request contracts take priority over generic quoted-price inventory; not measured answer performance",
+    "generic_original_order": [
+      {
+        "model": "nvidia/nemotron-3.5-lightning:free",
+        "model_version": null,
+        "effort": null,
+        "provider": "nvidia/nvfp4",
+        "provider_name": "Nvidia",
+        "quantization": "nvfp4"
+      },
+      {
+        "model": "liquid/lfm-2.5-2.6b:free",
+        "model_version": null,
+        "effort": null,
+        "provider": "liquid/fp8",
+        "provider_name": "Liquid",
+        "quantization": "fp8"
+      },
+      {
+        "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+        "model_version": null,
+        "effort": null,
+        "provider": "nvidia",
+        "provider_name": "Nvidia",
+        "quantization": "unknown"
+      }
+    ],
+    "sql_specific_original_order": [
+      {
+        "model": "meta-llama/llama-3.1-8b-instruct",
+        "model_version": "meta-llama/llama-3.1-8b-instruct",
+        "accepted_models": [
+          "meta-llama/llama-3.1-8b-instruct"
+        ],
+        "effort": "none",
+        "provider": "deepinfra/fp8",
+        "provider_name": "DeepInfra",
+        "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+        "quantization": "fp8",
+        "reasoning_parameter": "omit"
+      },
+      {
+        "model": "google/gemma-3-4b-it",
+        "model_version": "google/gemma-3-4b-it",
+        "accepted_models": [
+          "google/gemma-3-4b-it"
+        ],
+        "effort": "none",
+        "provider": "parasail/bf16",
+        "provider_name": "Parasail",
+        "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+        "quantization": "bf16",
+        "reasoning_parameter": "omit"
+      },
+      {
+        "model": "nvidia/nemotron-3.5-lightning:free",
+        "model_version": "nvidia/nemotron-3.5-lightning:free",
+        "accepted_models": [
+          "nvidia/nemotron-3.5-lightning-20260807",
+          "nvidia/nemotron-3.5-lightning:free"
+        ],
+        "effort": "provider_default",
+        "provider": "nvidia/nvfp4",
+        "provider_name": "Nvidia",
+        "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+        "quantization": "nvfp4",
+        "reasoning_parameter": "omit"
+      }
+    ],
+    "unselected_generic_proposal_reason": "Preserved alternative; missing exact runtime version/effort and independent SQL evidence; quoted zero does not establish full cost",
+    "minimum_price_gap_fraction": "0.20",
+    "price_gap_basis": "quoted_same_token_scenario_not_full_cost_or_guarantee",
+    "quote_gap_does_not_establish_classifier_saving": true,
+    "proposal_freshness": {
+      "status": "fresh",
+      "observed_at": "2026-10-21T08:01:50.391033+00:00",
+      "valid_until": "2026-10-22T08:01:50.391033+00:00",
+      "scope": "inventory freshness only; not model or health qualification"
+    }
+  },
+  "counts": {
+    "positions": 12,
+    "unique_preparation_records": 12,
+    "complete_exact_configurations": 5,
+    "historical_research_references": 3,
+    "exact_response_contract_compatible": 3,
+    "runtime_dispatch_enabled": 0,
+    "production_qualified": 0
+  },
+  "rg01_rules_changed": false,
+  "historical_packs_changed": false,
+  "formal_qualification": "pending",
+  "runtime_dispatch_enabled": false,
+  "production_qualified": false,
+  "model_api_calls": 0,
+  "source_gets": 0,
+  "answers_read": false,
+  "automatic_evidence_reuse": false,
+  "review_id": "232aeeb59dfa2723a5703e4119698fe7ff0252b7ee02cb42a64b9907514d9d29"
+}

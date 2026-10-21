@@ -579,3 +579,21 @@ The user now authorizes review and local Git commit; earlier no-commit statement
 實際提交內容匯出至獨立目錄，`./scripts/check --integration` **1754項全部通過**、Ruff、兩個既有Mock示範與離線sdist/wheel通過；未設定測試忽略，也未將舊副本納入提交。另跑原工作區現行檔案1771項，1770項先通過、1項工作依賴紀錄失敗；只補工作計畫依賴後，51項狀態／依賴回歸全部通過，沒有再改程式或掩蓋原始失敗。舊副本及先前70項失敗的原始紀錄保留。新版23類Mock備援46個生成請求，重播新增0；不是實際模型／速度／降本證據。
 
 [提交內容驗證](evidence/category-backup-tree-precommit-20261021.json)與[原工作區驗證](evidence/category-backup-workspace-precommit-20261021.json)分開綁定各自來源指紋與狀態索引。SQL資格工作、研究版family-only規則、舊副本及1,944份原始實驗檔案保持原樣；研究資料與收據不入Git。正式資格保持pending；無模型API、來源GET、供應商聯絡、部署或推送。
+
+
+## SQL backup candidates and multi-setting exam — 2026-10-21
+
+The [candidate review](sql-backup-candidate-evidence-20261021.md) reconciles the two low-pool proposals and twelve positions without modifying source packs or formal results. It preserves archived aliases and provider-default effort; five profiles are complete metadata and three meet the existing single-response exam format, none is activated. The [opt-in multi-setting runner](sql-multi-model-runner.md) deduplicates exact settings across slots, binds fees by configuration SHA256, and keeps original capture/accounting/repair/resume boundaries. Legacy four-role defaults, SQL suite, validator and grader are unchanged.
+
+Current scope includes candidate preparation, runner compatibility and MockTransport tests only. Remaining fee guarantees, health/source freshness, incomplete identities, alias contract decisions and independent backup/Jev calibration are not supplied by this work. Original frozen exams cannot be converted or resent. Actual validation, preserved failures and source fingerprint are in [the scope evidence](evidence/sql-backup-multicandidate-offline-20261021.json); consult project-state for final status. No live model/source network, supplier contact, hardware, deployment, push or local commit.
+
+
+### 2026-10-21 SQL主備候選本機提交前檢查
+
+使用者已授權檢查與本機提交；上段「未提交」描述當時的擷取狀態。本次審閱修正1項P2：不同模型標籤若共用相同請求版本，不能在同池計作兩個備援；跨池或不同供應商仍可獨立考試。新增2項回歸，相關83項及狀態／依賴51項通過。完整實作共51項新增回歸。原始重現保留。
+
+實際提交的程式／測試／建置內容匯出至獨立目錄，`./scripts/check --integration` **1,805項全部通過**，包含鎖定離線依賴、紀錄檢查、Ruff、兩個既有Mock示範與sdist／wheel。不是把工作區舊副本設為忽略；舊70項失敗與原始紀錄保留，沒有宣稱整個dirty工作區全通過。
+
+第一次提交前檢查因尾端空白更正在pytest前段主動中斷；下一次保留1804 passed／1 failed，其中唯一失敗來自工作計畫責任移交與舊已完成任務的依賴衝突。已封存原實作計畫，當前計畫只列後續審閱，再從完整入口重跑通過；沒有修改檢查器、SQL驗收或資格規則。另保留一次console-script不能import scripts的收集失敗，改用既定python -m pytest入口後51項通過。
+
+[提交內容驗證](evidence/sql-backup-multi-tree-precommit-20261021.json)與[原工作區相關回歸](evidence/sql-backup-multi-workspace-precommit-20261021.json)分開綁定來源指紋。404個非本輪檔案及4119個原始實驗檔案核對未變；SQL資格工作、舊副本、原始中斷／答案／收據保留，不入本次提交。RG-01凍結，十項正式資格仍pending；沒有模型API、來源GET、供應商聯絡、部署或推送。

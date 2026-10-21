@@ -723,3 +723,27 @@ The user now authorizes review and local Git commit; earlier no-commit statement
 只納入本次進度更正、SQL主備工作清單及其檢查證據；較早SQL資格／來源整理及編號副本留在原工作區。修正工作清單指向未追蹤研究文件的連結，改引已追蹤盤點；原研究文件與原始答案／收據不入提交。原文件證據保留其當時工作區hash，不冒充本次暫存內容；[提交前證據](evidence/release-readiness-sql-plan-precommit-20261021.json)另列兩種檔案指紋、引用檢查與保存結果。
 
 本次是文件提交，不重新宣稱完整pytest／integration通過；離線quick、專案紀錄與放行結構檢查依實際收據記錄。十項資格保持pending，P0／P1／P2僅為待辦，未執行模型API、來源GET、供應商聯絡、部署或推送。
+
+
+## SQL主備候選與多設定資格接入 — 2026-10-21
+
+已完成[候選與證據對照](sql-backup-candidate-evidence-20261021.md)及[明示選用的新執行器](sql-multi-model-runner.md)。SQL專用低池作待驗提案，廣泛提案原序／來源保留；12位置共5個完整profile，僅3個符合單一回應身分格式。原Qwen／GLM aliases與Lightning provider-default不改寫、不冒充可派送；3個原研究設定核對原包metadata，但不沿用新備援流程／Jev校準。正式資格pending、派送／current啟用0。
+
+新增49項回歸（候選30、多設定17、跨模組2）；舊runner／reasoning相容性32項另已通過，與完整套件數不相加。實際無忽略的`./scripts/check --integration`為2383 passed／70 failed；JUnit按檔案分類後，現行檔案1820 passed／0 failed，保留的編號副本563 passed／70 failed，70個失敗ID與既有紀錄完全相同。標準入口在pytest失敗處停止，不能稱全工作區integration通過；兩個既有Mock示範與離線sdist／wheel另行執行通過。只加JUnit輸出，沒有刪副本或加測試忽略。
+
+完整新Mock演練5個唯一設定、6個slot、各50題，最終250/250控制答案通過；256次Mock POST含5次身分確認及1次公開補答。驗收中斷接續不重送，完成重播新增POST 0；1次明確Mock GET核帳後合成費用US$0.259，未知0，真實模型API費0。答案映射只在Mock考官／上游側，不進capture；合成成績不是真實模型能力。原始中斷、回應與判分保存在`runtime/sql-multi-runner-demo-20261021-worker/`，本輪彙整在`runtime/sql-backup-multicandidate-20261021/`。
+
+原始檢查曾有測試預期舊例外類型及一個未用import；原始說明／紀錄保留，按新API更正測試與移除未用import後通過，沒有因此改驗收或資格規則。根據[本輪證據](evidence/sql-backup-multicandidate-offline-20261021.json)核對來源指紋、SQL凍結檔案、原始實驗、狀態與文件。這次沒有模型API、來源GET、供應商聯絡、硬體、部署、推送或本機Git提交。
+
+收尾時狀態檢查拒絕描述文字型scope，已保留原始失敗與更正前證據，將scope改為與狀態相同的sql-backup-multicandidate-v1；只改metadata，沒有改程式／SQL規則或重跑模型。
+
+
+### 2026-10-21 SQL主備候選本機提交前檢查
+
+使用者已授權檢查與本機提交；上段「未提交」描述當時的擷取狀態。本次審閱修正1項P2：不同模型標籤若共用相同請求版本，不能在同池計作兩個備援；跨池或不同供應商仍可獨立考試。新增2項回歸，相關83項及狀態／依賴51項通過。完整實作共51項新增回歸。原始重現保留。
+
+實際提交的程式／測試／建置內容匯出至獨立目錄，`./scripts/check --integration` **1,805項全部通過**，包含鎖定離線依賴、紀錄檢查、Ruff、兩個既有Mock示範與sdist／wheel。不是把工作區舊副本設為忽略；舊70項失敗與原始紀錄保留，沒有宣稱整個dirty工作區全通過。
+
+第一次提交前檢查因尾端空白更正在pytest前段主動中斷；下一次保留1804 passed／1 failed，其中唯一失敗來自工作計畫責任移交與舊已完成任務的依賴衝突。已封存原實作計畫，當前計畫只列後續審閱，再從完整入口重跑通過；沒有修改檢查器、SQL驗收或資格規則。另保留一次console-script不能import scripts的收集失敗，改用既定python -m pytest入口後51項通過。
+
+[提交內容驗證](evidence/sql-backup-multi-tree-precommit-20261021.json)與[原工作區相關回歸](evidence/sql-backup-multi-workspace-precommit-20261021.json)分開綁定來源指紋。404個非本輪檔案及4119個原始實驗檔案核對未變；SQL資格工作、舊副本、原始中斷／答案／收據保留，不入本次提交。RG-01凍結，十項正式資格仍pending；沒有模型API、來源GET、供應商聯絡、部署或推送。

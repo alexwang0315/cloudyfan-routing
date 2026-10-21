@@ -1,0 +1,154 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "sql-backup-multicandidate-v1",
+  "verified_at": "2026-10-21T12:13:42.730849+00:00",
+  "baseline_commit": "55e9484c35738128aae31c2134c65d09f0c278d2",
+  "source_digest": "72a091530e979b02c2689fd36b9f07a7dfbcdf1561dec9d6b4a2c1282ef1257d",
+  "tests_passed": 1805,
+  "pytest_seconds": 505.56,
+  "test_scope": "Exact intended staged executable/test/build inputs exported to a fresh directory; no pytest ignore, selector, deletion or source edits in that export.",
+  "verification_command": "./scripts/check --integration",
+  "integration_gate_passed": true,
+  "all_check_steps": [
+    {
+      "command": [
+        "/Users/alexwang0315/.local/bin/uv",
+        "sync",
+        "--project",
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/runtime/sql-backup-multi-precommit-20261021/tree-v3",
+        "--locked",
+        "--offline",
+        "--extra",
+        "dev",
+        "--no-python-downloads"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/Users/alexwang0315/.local/bin/uv",
+        "pip",
+        "check",
+        "--python",
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/runtime/sql-backup-multi-precommit-20261021/tree-v3/.venv/bin/python"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/runtime/sql-backup-multi-precommit-20261021/tree-v3/.venv/bin/python",
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/runtime/sql-backup-multi-precommit-20261021/tree-v3/scripts/project_state.py",
+        "check"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/runtime/sql-backup-multi-precommit-20261021/tree-v3/.venv/bin/python",
+        "-m",
+        "ruff",
+        "check",
+        "."
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/runtime/sql-backup-multi-precommit-20261021/tree-v3/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-q"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/runtime/sql-backup-multi-precommit-20261021/tree-v3/.venv/bin/cloudyfan-jev-demo",
+        "--route",
+        "high",
+        "--output",
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/runtime/sql-backup-multi-precommit-20261021/tree-v3/runtime/checks/500cbd95f3544553af3bece40d08d529/core"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/runtime/sql-backup-multi-precommit-20261021/tree-v3/.venv/bin/cloudyfan-score-demo",
+        "--route",
+        "high",
+        "--output",
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/runtime/sql-backup-multi-precommit-20261021/tree-v3/runtime/checks/500cbd95f3544553af3bece40d08d529/scores"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/Users/alexwang0315/.local/bin/uv",
+        "build",
+        "--offline",
+        "--no-python-downloads",
+        "--python",
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/runtime/sql-backup-multi-precommit-20261021/tree-v3/.venv/bin/python",
+        "--out-dir",
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/runtime/sql-backup-multi-precommit-20261021/tree-v3/runtime/checks/500cbd95f3544553af3bece40d08d529/dist"
+      ],
+      "returncode": 0
+    }
+  ],
+  "receipt": "runtime/sql-backup-multi-precommit-20261021/tree-v3/runtime/checks/500cbd95f3544553af3bece40d08d529/checks.json",
+  "receipt_sha256": "0d8a2f754a8603c87f15ad7ea70e4c396e79fed6a94f99c35ff7105ae3c333cd",
+  "p2_fix": "Model labels or aliases cannot fill separate pool backups if their exact request model_version is identical. Provider-specific exams across pools remain allowed.",
+  "new_tests": {
+    "candidate_projection": 31,
+    "multi_runner": 18,
+    "preparation_bridge": 2
+  },
+  "targeted_tests_passed": 83,
+  "state_and_plan_regressions_passed": 51,
+  "scope_records": "Current completed-task plan is archived; current review plan retains one accountable provider without retroactive dependency changes.",
+  "prior_workspace_gate": {
+    "passed": 2383,
+    "failed": 70,
+    "new_full_workspace_run": false,
+    "preserved_failures_not_ignored_or_deleted": true
+  },
+  "original_scope_evidence": {
+    "path": "docs/evidence/sql-backup-multicandidate-offline-20261021.json",
+    "sha256": "780b1bfb1d54e337fa43cf90dff59b6273fba7b2ed294033e2ea8c20ffadaf9f"
+  },
+  "original_receipts_rehashed": 19,
+  "original_multi_mock_demo": "Historical pre-review 5-setting/250-case rehearsal remains unchanged; not recaptured or relabeled as a new real API result.",
+  "preserved_precommit_attempts": [
+    "runtime/sql-backup-multi-precommit-20261021/tree-integration.log",
+    "runtime/sql-backup-multi-precommit-20261021/tree-v2-integration.log",
+    "runtime/sql-backup-multi-precommit-20261021/tree-v2-state-reproduction.log",
+    "runtime/sql-backup-multi-precommit-20261021/state-regressions.log"
+  ],
+  "preservation": {
+    "unrelated_files": 404,
+    "unrelated_unchanged": true,
+    "original_experiment_files": 4119,
+    "original_experiments_unchanged": true,
+    "rg01_and_formal_registry_unchanged": true
+  },
+  "reviewed_fixture_hashes": {
+    "examples/sql-backup-candidate-review-v1.json": "c6aef53fde45e87268ea9aa5812eb9d3c68c77cc3f4e0726ae3607798edc8e24"
+  },
+  "reviewed_executable_hashes": {
+    "scripts/demo_sql_multi_runner.py": "c7c0191ef71433fd9b1341014044ea51234a6888b71b671d6da59da112a8996d",
+    "scripts/prepare_sql_backup_candidates.py": "74bd26d5a993b0ca7b8a26239729190dd996c450cec0712bea23157f744e2416",
+    "src/cloudyfan_jev/scores/sql_backup_candidates.py": "a8cd8043b99e7507a550ac5c51f3f1c5a2725e30f69b04016b93a990b3bc88f9",
+    "src/cloudyfan_jev/scores/sql_multi_runner.py": "0a39458a6c08f1b9b92595e67f937d4583f80cb66f9a85ab3cc70a82a3a3a8df",
+    "src/cloudyfan_jev/scores/sql_runner.py": "ce985c114f95a352b53b52d8feac97e76e8cce4bea94d5ca170afcc62b4129cf",
+    "tests/test_sql_backup_candidates.py": "fc5694d5fa13b313bf0a5f692dc3eabb72a7f6c449676ba5e13b7cd7a54034ab",
+    "tests/test_sql_backup_preparation.py": "ca3df11fead785f1811a98d0ad91c4d800180524354ff14f0544a6e33cf87cb4",
+    "tests/test_sql_multi_runner.py": "88cce19244049e3765d4787ba9ce00e23519347dfff86e75b1093007a84e602a"
+  },
+  "model_api_calls": 0,
+  "source_gets": 0,
+  "formal_qualification": "pending",
+  "deployment": false,
+  "push": false
+}

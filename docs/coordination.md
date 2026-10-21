@@ -320,3 +320,17 @@ The user now authorizes review and local Git commit; earlier no-commit statement
 實際提交內容匯出至獨立目錄，`./scripts/check --integration` **1754項全部通過**、Ruff、兩個既有Mock示範與離線sdist/wheel通過；未設定測試忽略，也未將舊副本納入提交。另跑原工作區現行檔案1771項，1770項先通過、1項工作依賴紀錄失敗；只補工作計畫依賴後，51項狀態／依賴回歸全部通過，沒有再改程式或掩蓋原始失敗。舊副本及先前70項失敗的原始紀錄保留。新版23類Mock備援46個生成請求，重播新增0；不是實際模型／速度／降本證據。
 
 [提交內容驗證](evidence/category-backup-tree-precommit-20261021.json)與[原工作區驗證](evidence/category-backup-workspace-precommit-20261021.json)分開綁定各自來源指紋與狀態索引。SQL資格工作、研究版family-only規則、舊副本及1,944份原始實驗檔案保持原樣；研究資料與收據不入Git。正式資格保持pending；無模型API、來源GET、供應商聯絡、部署或推送。
+
+
+## SQL backup candidate and multi-setting qualification scope — 2026-10-21
+
+Candidate worker owns only the new offline candidate/evidence projection, its CLI, fixture and tests. Root owns the opt-in multi-setting runner and compatibility hooks in sql_runner.py, then integration and metadata. Client, BudgetStore, SQL suite, validator and grader contracts are unchanged. Workers preserve unrelated dirty research, old copies and all original paid records. No model/source network, supplier contact, deployment, push or local commit is authorized in this implementation scope.
+
+Test worker owns only tests/test_sql_multi_runner.py and scripts/demo_sql_multi_runner.py, consuming the new opt-in runner contract after the producer; root retains sql_runner.py/sql_multi_runner.py. No worker edits current metadata or frozen SQL semantics.
+
+
+## SQL backup precommit review — 2026-10-21
+
+Root owns alias/model-version pool uniqueness fixes and regression files after the completed candidate, runner and integration tasks. A separate agent reviews read-only. Exact staged content is verified separately from preserved dirty research/old copies. Original failing evidence and SQL/experimental records remain; local commit only, no network, deployment or push.
+
+Completed implementation ownership is archived in docs/evidence/sql-backup-multi-implementation-plan-20261021.json. The current plan contains only the subsequent root precommit task and its explicit interface bindings; historical producer/consumer edges are not reassigned retroactively.

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "scope": "category-pool-backup-v1",
+  "scope": "sql-backup-multicandidate-v1",
   "phase": "offline_verified",
   "baseline_commit": "9d20072b076bb64c3666cd3d1380dcb5e49bb909",
   "integration_branch": "codex/implement-routing-spec-1",
@@ -289,27 +289,43 @@
     {
       "path": "docs/evidence/category-routing-workspace-precommit-20261021.json",
       "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/sql-backup-multi-prior-state-20261021.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/sql-backup-multi-prior-plan-20261021.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/sql-backup-multicandidate-offline-20261021.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/sql-backup-multi-implementation-plan-20261021.json",
+      "record_kind": "historical"
     }
   ],
   "next_steps": [
     {
       "gate": "RG-02",
-      "action": "Category-specific exact configuration qualification and QCS evidence required for real candidates. 23-category compiler/CategoryCore offline complete; SQL/RG01 exam and old evidence remain frozen. No model POST authority in current scope.",
+      "action": "SQL candidate review and multi-setting exam are offline complete. Resolve incomplete/alias identities under explicit new contracts, retain original qualification evidence, and plan only missing real measurements. RG01 remains frozen; no model POST authority.",
       "requires_authorization": true
     },
     {
       "gate": "RG-03",
-      "action": "23 independent native policies/four-pool compiler and explicit-category runtime now implemented. Per-category real source identity/effort/provider, source use, freshness, whole-task cost/speed and classifier-conditional calibration remain pending; no production current activated. Preserved old-copy gate still fails.",
+      "action": "Confirm adopted-source use/freshness responsibility and current exact-endpoint health; no automatic polling or production current activated.",
       "requires_authorization": true
     },
     {
       "gate": "RG-04",
-      "action": "Real all-component/all-path/account/in-flight fee bounds remain null. Current QCS forecasts only decide economics, never enforce ceilings; reachable generation and any paid classifier still need effective verified bounds, current authorization and known billing before dispatch. No supplier contact/account/model API authorized in this offline scope.",
+      "action": "Supply real complete component bounds and scoped authorization before any paid exam; synthetic bounds, posted prices and historical spending do not qualify providers.",
       "requires_authorization": true
     }
   ],
   "current_verification": {
-    "path": "docs/evidence/category-backup-tree-precommit-20261021.json",
-    "sha256": "9de0209d267ff571eb6da9d8277fd0cbc12640b8e9375c5ba9ba736d3e148b1f"
+    "path": "docs/evidence/sql-backup-multi-tree-precommit-20261021.json",
+    "sha256": "5283d8a12cd885ffd2cff67e223d08871a2ed5788515d729ed2b8ca75c3e7db6"
   }
 }

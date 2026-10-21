@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "integration_branch": "codex/implement-routing-spec-1",
+  "baseline_commit": "9d20072b076bb64c3666cd3d1380dcb5e49bb909",
+  "merger_owner": "root",
+  "shared_interfaces": [
+    {
+      "id": "sql-backup-candidates",
+      "owner": "candidate_worker",
+      "owned_files": [
+        "src/cloudyfan_jev/scores/sql_backup_candidates.py"
+      ],
+      "provided_by": "SQL-BACKUP-CANDIDATES"
+    },
+    {
+      "id": "sql-multi-exam",
+      "owner": "root",
+      "owned_files": [
+        "src/cloudyfan_jev/scores/sql_multi_runner.py"
+      ],
+      "provided_by": "SQL-BACKUP-RUNNER"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "SQL-BACKUP-CANDIDATES",
+      "owner": "candidate_worker",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/scores/sql_backup_candidates.py",
+        "tests/test_sql_backup_candidates.py",
+        "scripts/prepare_sql_backup_candidates.py",
+        "docs/sql-backup-candidate-evidence-20261021.md",
+        "examples/sql-backup-candidate-review-v1.json"
+      ],
+      "depends_on": [],
+      "consumed_interfaces": []
+    },
+    {
+      "id": "SQL-BACKUP-RUNNER",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/scores/sql_runner.py",
+        "src/cloudyfan_jev/scores/sql_multi_runner.py",
+        "docs/sql-multi-model-runner.md"
+      ],
+      "depends_on": [],
+      "consumed_interfaces": []
+    },
+    {
+      "id": "SQL-BACKUP-MOCK",
+      "owner": "test_worker",
+      "status": "completed",
+      "owned_files": [
+        "tests/test_sql_multi_runner.py",
+        "scripts/demo_sql_multi_runner.py"
+      ],
+      "depends_on": [
+        "SQL-BACKUP-RUNNER"
+      ],
+      "consumed_interfaces": [
+        "sql-multi-exam"
+      ]
+    },
+    {
+      "id": "SQL-BACKUP-INTEGRATION",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "docs/agent-state.json",
+        "docs/work-plan.json",
+        "docs/coordination.md",
+        "docs/handoff.md",
+        "docs/verification.md",
+        "docs/release-readiness.md",
+        "docs/sql-backup-pool-readiness-plan-20261021.md",
+        "docs/evidence/sql-backup-multicandidate-offline-20261021.json",
+        "tests/test_sql_backup_preparation.py"
+      ],
+      "depends_on": [
+        "SQL-BACKUP-CANDIDATES",
+        "SQL-BACKUP-RUNNER",
+        "SQL-BACKUP-MOCK"
+      ],
+      "consumed_interfaces": [
+        "sql-backup-candidates",
+        "sql-multi-exam"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "sql-backup-multicandidate-v1",
+  "verified_at": "2026-10-21T12:01:38.950134+00:00",
+  "baseline_commit": "55e9484c35738128aae31c2134c65d09f0c278d2",
+  "source_digest": "3739d14ddcb46cda231d56aae947fa34e3e2e9b73c026b77231ac881e9e5566e",
+  "tests_passed": 83,
+  "test_scope": "Scoped current-workspace candidate/multi-runner/legacy compatibility tests only; not a new full-workspace gate",
+  "targeted_command": "uv run --locked --offline pytest -q tests/test_sql_multi_runner.py tests/test_sql_backup_candidates.py tests/test_sql_backup_preparation.py tests/test_sql_model_runner.py tests/test_generation_request.py",
+  "new_regressions": 2,
+  "final_source_regressions_passed": 2,
+  "formatting_after_targeted_run": "Removed one extra blank EOF line only; final two P2 regressions reran on final bytes. Full exact-index integration is recorded separately.",
+  "p2_fix": "Reject model label aliases that share one request model_version within a pool; independent cross-pool/provider examinations remain allowed.",
+  "workspace_quick_receipt": "runtime/checks/c8cdb7700d974a649288a0f6e240eb6b/checks.json",
+  "original_scope_evidence": "docs/evidence/sql-backup-multicandidate-offline-20261021.json",
+  "prior_workspace_gate": {
+    "passed": 2383,
+    "failed": 70,
+    "all_failures_in_preserved_numbered_copies": true,
+    "new_full_workspace_run": false
+  },
+  "private_review_directory": "runtime/sql-backup-multi-precommit-20261021",
+  "original_reproduction": "runtime/sql-backup-multi-precommit-20261021/p2-reproduction.json",
+  "preservation": {
+    "protected_files": 404,
+    "unchanged": true,
+    "original_experiment_files": 4119,
+    "original_results_retained": true
+  },
+  "formal_qualification": "pending",
+  "rg01_frozen": true,
+  "model_api_calls": 0,
+  "source_gets": 0,
+  "deployment": false,
+  "push": false,
+  "state_and_work_plan_regressions_passed": 51,
+  "state_regression_command": ".venv/bin/python -m pytest -q tests/test_project_state.py tests/test_work_plan.py",
+  "preserved_review_failures": [
+    "runtime/sql-backup-multi-precommit-20261021/tree-integration.log (interrupted to fix extra EOF whitespace before final source freeze)",
+    "runtime/sql-backup-multi-precommit-20261021/tree-v2-state-reproduction.log (completed-task/interface ownership conflict)",
+    "runtime/sql-backup-multi-precommit-20261021/state-regressions.log (console-script entry could not import scripts; rerun with python -m pytest)"
+  ],
+  "ownership_fix": "Archived completed implementation plan; current single review task owns current interfaces, without retroactively rewriting producer/consumer dependencies."
+}

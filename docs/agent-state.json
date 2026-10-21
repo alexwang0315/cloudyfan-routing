@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "scope": "sql-backup-multicandidate-v1",
+  "scope": "sql-low-two-candidate-preparation-v1",
   "phase": "offline_verified",
   "baseline_commit": "9d20072b076bb64c3666cd3d1380dcb5e49bb909",
   "integration_branch": "codex/implement-routing-spec-1",
@@ -305,27 +305,39 @@
     {
       "path": "docs/evidence/sql-backup-multi-implementation-plan-20261021.json",
       "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/sql-low-two-prior-state-20261021.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/sql-low-two-prior-plan-20261021.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/sql-backup-multi-tree-precommit-20261021.json",
+      "record_kind": "historical"
     }
   ],
   "next_steps": [
     {
       "gate": "RG-02",
-      "action": "SQL candidate review and multi-setting exam are offline complete. Resolve incomplete/alias identities under explicit new contracts, retain original qualification evidence, and plan only missing real measurements. RG01 remains frozen; no model POST authority.",
+      "action": "Two low-candidate identity/measurement/admission preparation frozen; real identity and 50-task capability measurements remain absent. Conditional runtime admission adapter and independent whole-flow evidence still required; preserve strict legacy qualification and RG01.",
       "requires_authorization": true
     },
     {
       "gate": "RG-03",
-      "action": "Confirm adopted-source use/freshness responsibility and current exact-endpoint health; no automatic polling or production current activated.",
+      "action": "Recheck exact source/price/data-policy and current endpoint health without rewriting old snapshots before proposed launch. No automatic source refresh or current activation.",
       "requires_authorization": true
     },
     {
       "gate": "RG-04",
-      "action": "Supply real complete component bounds and scoped authorization before any paid exam; synthetic bounds, posted prices and historical spending do not qualify providers.",
+      "action": "USD1 is an unapproved research target; all112 guarantee cells and complete bounds remain unknown. Require new spending authority and effective full-batch reservation, or separately reviewed explicit research-risk design; no verifier bypass.",
       "requires_authorization": true
     }
   ],
   "current_verification": {
-    "path": "docs/evidence/sql-backup-multi-tree-precommit-20261021.json",
-    "sha256": "5283d8a12cd885ffd2cff67e223d08871a2ed5788515d729ed2b8ca75c3e7db6"
+    "path": "docs/evidence/sql-low-two-precommit-20261022.json",
+    "sha256": "ee43842dad0f6523004c5760d435e93ce1aae03910dbceaa8afe213d1930d2e1"
   }
 }

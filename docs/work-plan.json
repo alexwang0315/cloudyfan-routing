@@ -3,49 +3,51 @@
   "integration_branch": "codex/implement-routing-spec-1",
   "baseline_commit": "9d20072b076bb64c3666cd3d1380dcb5e49bb909",
   "merger_owner": "root",
-  "shared_interfaces": [
-    {
-      "id": "sql-backup-candidates",
-      "owner": "root",
-      "owned_files": [
-        "src/cloudyfan_jev/scores/sql_backup_candidates.py"
-      ],
-      "provided_by": "SQL-BACKUP-PRECOMMIT"
-    },
-    {
-      "id": "sql-multi-exam",
-      "owner": "root",
-      "owned_files": [
-        "src/cloudyfan_jev/scores/sql_multi_runner.py"
-      ],
-      "provided_by": "SQL-BACKUP-PRECOMMIT"
-    }
-  ],
+  "shared_interfaces": [],
   "tasks": [
     {
-      "id": "SQL-BACKUP-PRECOMMIT",
+      "id": "SQL-LOW-TWO-PREPARE",
       "owner": "root",
       "status": "completed",
       "owned_files": [
-        "src/cloudyfan_jev/scores/sql_multi_runner.py",
-        "src/cloudyfan_jev/scores/sql_backup_candidates.py",
-        "tests/test_sql_multi_runner.py",
-        "tests/test_sql_backup_candidates.py",
+        "src/cloudyfan_jev/scores/sql_low_preparation.py",
+        "scripts/prepare_sql_low_trial.py",
+        "tests/test_sql_low_preparation.py",
+        "examples/sql-low-two-candidate-input-v1.json",
+        "examples/sql-low-two-candidate-plan-v1.json",
+        "docs/sql-low-two-candidate-plan-20261021.md",
         "docs/agent-state.json",
         "docs/work-plan.json",
         "docs/coordination.md",
         "docs/handoff.md",
         "docs/verification.md",
         "docs/release-readiness.md",
-        "docs/evidence/sql-backup-multi-tree-precommit-20261021.json",
-        "docs/evidence/sql-backup-multi-workspace-precommit-20261021.json",
-        "docs/evidence/sql-backup-multi-implementation-plan-20261021.json"
+        "docs/sql-backup-pool-readiness-plan-20261021.md",
+        "docs/evidence/sql-low-two-preparation-offline-20261021.json",
+        "docs/evidence/sql-low-two-preparation-tree-20261021.json",
+        "docs/evidence/sql-low-two-prior-state-20261021.json",
+        "docs/evidence/sql-low-two-prior-plan-20261021.json"
       ],
       "depends_on": [],
-      "consumed_interfaces": [
-        "sql-multi-exam",
-        "sql-backup-candidates"
-      ]
+      "consumed_interfaces": []
+    },
+    {
+      "id": "SQL-LOW-TWO-REVIEW",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "docs/agent-state.json",
+        "docs/work-plan.json",
+        "docs/coordination.md",
+        "docs/handoff.md",
+        "docs/verification.md",
+        "docs/release-readiness.md",
+        "docs/evidence/sql-low-two-precommit-20261022.json"
+      ],
+      "depends_on": [
+        "SQL-LOW-TWO-PREPARE"
+      ],
+      "consumed_interfaces": []
     }
   ]
 }

@@ -18,6 +18,12 @@
 
 新增[多候選資格執行器](sql-multi-model-runner.md)，以精確設定去重、分別預留費用及保存答案，支援公開修正、封存、核帳與中斷續跑；舊四role版本與SQL規則保留。[工作清單](sql-backup-pool-readiness-plan-20261021.md)區分本輪P0-1／P0-2交付與其餘待辦。這是離線實作，沒有新增真實模型能力／費用／備援效果，正式資格與派送啟用仍0，詳見[本輪證據](evidence/sql-backup-multicandidate-offline-20261021.json)。
 
+## 2026-10-21 新增：低池兩候選離線測試準備
+
+[新計畫](sql-low-two-candidate-plan-20261021.md)與[凍結JSON](../examples/sql-low-two-candidate-plan-v1.json)固定Llama／DeepInfra fp8及Gemma／Parasail bf16、none/omit、各50題、至多202次生成與零Jev。單模型量測容許保留錯題；日後整批路由holdout仍須全對。舊嚴格SQL資格、RG-01及既有准入邏輯不變；新的條件式runtime准入adapter尚未接入，不從準備表啟用模型。
+
+費用矩陣112格均pending／null；US$1僅研究目標、並未授權模型POST。精確回應身分／不可變版本、當前來源／健康、完整費用保障、全批預留及獨立完整流程證據仍缺；詳見計畫的啟動前清單。這次凍結不等於可以付費執行或正式核定，沒有重審S01～S08。
+
 ## 先看結論
 
 🟢 **路由、模型池、費用控管與接入功能已有實作，也留下了離線測試紀錄。** 「待核定」不代表這些程式全部還沒寫。
@@ -333,3 +339,8 @@ Python API `validate_gates(data, root, *, now=None)` 回傳錯誤列表，不改
 第一次提交前檢查因尾端空白更正在pytest前段主動中斷；下一次保留1804 passed／1 failed，其中唯一失敗來自工作計畫責任移交與舊已完成任務的依賴衝突。已封存原實作計畫，當前計畫只列後續審閱，再從完整入口重跑通過；沒有修改檢查器、SQL驗收或資格規則。另保留一次console-script不能import scripts的收集失敗，改用既定python -m pytest入口後51項通過。
 
 [提交內容驗證](evidence/sql-backup-multi-tree-precommit-20261021.json)與[原工作區相關回歸](evidence/sql-backup-multi-workspace-precommit-20261021.json)分開綁定來源指紋。404個非本輪檔案及4119個原始實驗檔案核對未變；SQL資格工作、舊副本、原始中斷／答案／收據保留，不入本次提交。RG-01凍結，十項正式資格仍pending；沒有模型API、來源GET、供應商聯絡、部署或推送。
+
+
+## 2026-10-22：本機提交審閱補記
+
+低池兩候選準備已完成本機提交前審閱，[證據](evidence/sql-low-two-precommit-20261022.json)區分本輪回歸與沿用的完整整合結果。本次沒有增加真實模型、SQL能力、供應商保障或新路由成效證據；112格費用缺證及正式資格pending維持原狀。RG-01凍結；不放行模型POST、部署或推送。

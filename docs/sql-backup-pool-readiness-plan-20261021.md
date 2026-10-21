@@ -69,3 +69,8 @@ SQL使用`artificial-analysis:coding_index`作分群參考，能力資格只涵�
 ## 本次文件交付與驗證
 
 前一輪只修正[放行索引](release-readiness.md)過時的50題進度與歸因並新增清單，沒有建立真實主備資格包或執行P0／P1／P2。[原始文件檢查](evidence/release-readiness-sql-plan-20261021.json)綁定當時完整工作區；[提交前檢查](evidence/release-readiness-sql-plan-precommit-20261021.json)另綁定當時暫存文件並記錄引用修正，保留作歷史。後續本輪離線實作只推進上述候選對照與多候選執行器；沒有真實資格考試或模型池啟用。正式狀態仍以[放行記錄](release-gates.json)為準。
+
+
+## 2026-10-21：低池兩候選的下一階段準備
+
+已完成[宣告身分、分層准入契約與費用矩陣](sql-low-two-candidate-plan-20261021.md)，另凍結各50題、最多202次生成、零Jev與US$1研究目標的[機器可讀計畫](../examples/sql-low-two-candidate-plan-v1.json)。這只補P0的離線準備：112格費用保障仍未知，真實身分、時效／健康與支出授權仍缺。條件式候選契約不要求每個模型全對，但沒有改舊嚴格資格或實作新准入adapter；整批路由全對仍須獨立holdout另驗。P1尚未執行，沒有直接把整個P0或正式包標為完成。

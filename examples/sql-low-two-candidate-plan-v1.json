@@ -1,0 +1,1639 @@
+{
+  "schema_version": "cloudyfan-sql-low-two-plan-v1",
+  "created_at": "2026-10-21T12:36:34.598795+00:00",
+  "valid_until": "2026-10-22T08:01:50.391033+00:00",
+  "input_id": "d0639e3af7224ade13f5887cff153c817065c43fd30c13212c3915559e1a68f8",
+  "sources": [
+    {
+      "path": "examples/sql-low-pool-candidates-v1.json",
+      "sha256": "a43c3047487c45e491722d0f48429df70b3eb91293eaa22117b8dd3cbed6eca2"
+    },
+    {
+      "path": "examples/sql-backup-candidate-review-v1.json",
+      "sha256": "c6aef53fde45e87268ea9aa5812eb9d3c68c77cc3f4e0726ae3607798edc8e24"
+    }
+  ],
+  "source_bindings": {
+    "sql.py": "f8e037a71f4dca206bd8de231043e3bb802fa9d72b4ffc19f2564b659d9ac504",
+    "sql_catalog.py": "fd861ec13e79c8eb54b086e47f1b8050b34406fa52d86046e9fed2b9d65ba2d6",
+    "sql_policy.py": "11d8a5c2edfcbdcbfc99b6e76f6384cf66c8e25dc1ace4f1bbfb4ce1836831ec",
+    "sql_worker.py": "39bf49d049933809d4c328a49ce4c1c805f23ec6d666c45495e4c7c47f2dcbe0",
+    "sql_executor.py": "8133a36dba4d6170371a6ce304ed82a5ec4a9e3145b89bded385eb21c360d206",
+    "sql_process.py": "e24b2eb0e4f475a6c8df9f89dc6fd562088f52fc860af30a199b60abbbd347cd",
+    "sql_isolation.py": "a5f582f5bdb7bb1349039a2cebdf7bdc89f9d2d7cfbcbe83f2acb8446a2d9bd7",
+    "sql_isolation_entry.py": "5cdee63bd172b74bbee702c55c9ec6af9f35f13c1c354c6dbc1f043e3b56c51c",
+    "sql_public_suite.py": "6e31898280570458e3bdcc51a82568c10883d3fa2ce92fcb659e65c1df399905",
+    "sql_counterexamples.json": "e7044ba3cf3afc58b8d315b4bc1d6fcf34bedbcc563b32ef1d8e92e5866f0a92",
+    "scores/sql_exam.py": "b6e6689b683e390312086e17e4c0b860d5a3d23249894537d3427c9e1b8b4302",
+    "scores/sql_capability.py": "c6a0a533047947828eb376732bc20627b6f2a42bdbf4cc0d57864f75b5208c62",
+    "scores/sql_runner.py": "ce985c114f95a352b53b52d8feac97e76e8cce4bea94d5ca170afcc62b4129cf",
+    "scores/sql_multi_runner.py": "0a39458a6c08f1b9b92595e67f937d4583f80cb66f9a85ab3cc70a82a3a3a8df",
+    "generation_request.py": "c061984a69875cea211eed472aa6bbdcad78990ce14fecc72887bd2da4caf29c",
+    "diagnostics.py": "f9df8ad2685c590474efaee5126485754867ae2b24e15baf73bdb46805b51b0d",
+    "scores/sql_low_preparation.py": "0c9ebce5defcc07057fae084075618cdaac99f3972f5b7e79329c3f682383399"
+  },
+  "suite_id": "8a3127cdad4433aeb2aca12f23b059a6959e807889c8da2b5fb23ce6bb397f88",
+  "runtime": {
+    "python_version": "3.13.13",
+    "sqlite_version": "3.50.4"
+  },
+  "preparer_cli_sha256": "6d569021675e7f588fcdb646697890318a061a60e3a6c3b15d30551d1853b96c",
+  "public_tasks_sha256": "2257ca788f156cc188dc8d6ee8a96dae324f9cc8687daece81bcdd759e195313",
+  "system_prompt": "Answer the public task with one JSON object containing a sql string. No tools are available.",
+  "table": {
+    "schema_version": "sql-multi-candidate-exam-v1",
+    "suite_id": "8a3127cdad4433aeb2aca12f23b059a6959e807889c8da2b5fb23ce6bb397f88",
+    "configurations": [
+      {
+        "role": "c4ba392516bcbd12fa02503be",
+        "entry": {
+          "config_id": "low-two-primary",
+          "profile": {
+            "model": "meta-llama/llama-3.1-8b-instruct",
+            "model_version": "meta-llama/llama-3.1-8b-instruct",
+            "accepted_models": [
+              "meta-llama/llama-3.1-8b-instruct"
+            ],
+            "effort": "none",
+            "provider": "deepinfra/fp8",
+            "provider_name": "DeepInfra",
+            "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+            "quantization": "fp8",
+            "reasoning_parameter": "omit"
+          }
+        },
+        "configuration_sha256": "4ba392516bcbd12fa02503be18a00977330173a597aa6d5142fe6f01121878de"
+      },
+      {
+        "role": "cfa4252e21d95256263956679",
+        "entry": {
+          "config_id": "low-two-backup_1",
+          "profile": {
+            "model": "google/gemma-3-4b-it",
+            "model_version": "google/gemma-3-4b-it",
+            "accepted_models": [
+              "google/gemma-3-4b-it"
+            ],
+            "effort": "none",
+            "provider": "parasail/bf16",
+            "provider_name": "Parasail",
+            "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+            "quantization": "bf16",
+            "reasoning_parameter": "omit"
+          }
+        },
+        "configuration_sha256": "fa4252e21d95256263956679af4e5d57f106d23b36f93010f8a2c2dbffe72c06"
+      }
+    ],
+    "slots": {
+      "low": [
+        "4ba392516bcbd12fa02503be18a00977330173a597aa6d5142fe6f01121878de",
+        "fa4252e21d95256263956679af4e5d57f106d23b36f93010f8a2c2dbffe72c06"
+      ]
+    }
+  },
+  "identities": [
+    {
+      "position": "primary",
+      "configuration_sha256": "4ba392516bcbd12fa02503be18a00977330173a597aa6d5142fe6f01121878de",
+      "declared_request_identity": {
+        "model": "meta-llama/llama-3.1-8b-instruct",
+        "model_version": "meta-llama/llama-3.1-8b-instruct",
+        "accepted_models": [
+          "meta-llama/llama-3.1-8b-instruct"
+        ],
+        "provider": "deepinfra/fp8",
+        "provider_name": "DeepInfra",
+        "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+        "quantization": "fp8",
+        "effort": "none",
+        "reasoning_parameter": "omit"
+      },
+      "runtime_identity_verified": false,
+      "immutable_revision_verified": false,
+      "provider_quantization_runtime_verified": false,
+      "identity_smoke_required": true,
+      "formal_qualification": "pending"
+    },
+    {
+      "position": "backup_1",
+      "configuration_sha256": "fa4252e21d95256263956679af4e5d57f106d23b36f93010f8a2c2dbffe72c06",
+      "declared_request_identity": {
+        "model": "google/gemma-3-4b-it",
+        "model_version": "google/gemma-3-4b-it",
+        "accepted_models": [
+          "google/gemma-3-4b-it"
+        ],
+        "provider": "parasail/bf16",
+        "provider_name": "Parasail",
+        "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+        "quantization": "bf16",
+        "effort": "none",
+        "reasoning_parameter": "omit"
+      },
+      "runtime_identity_verified": false,
+      "immutable_revision_verified": false,
+      "provider_quantization_runtime_verified": false,
+      "identity_smoke_required": true,
+      "formal_qualification": "pending"
+    }
+  ],
+  "admission_contract": {
+    "version": "sql-measurement-and-workflow-admission-draft-v1",
+    "status": "offline_contract_only_not_runtime_admission",
+    "single_model_measurement": {
+      "questions": 50,
+      "max_same_model_attempts_per_question": 2,
+      "required": [
+        "exact_identity",
+        "all_50_records_present",
+        "public_and_sealed_outcomes",
+        "operation_strata_counts",
+        "all_attempt_costs",
+        "engineering_and_unknown_counts"
+      ],
+      "perfect_accuracy_required_to_record_measurement": false,
+      "model_errors_are_preserved_not_global_candidate_failure": true,
+      "measurement_does_not_grant_dispatch": true,
+      "legacy_strict_qualified_semantics": "All50 final pass and no unknown fee; unchanged"
+    },
+    "conditional_candidate_proposal": {
+      "model_errors_may_be_measured": true,
+      "requires": [
+        "exact_applicable_measurement",
+        "task_operation_scope",
+        "independent_escalation_risk_and_complete_cost_speed_evidence",
+        "explicit_source_data_and_fee_eligibility"
+      ],
+      "unknown_or_engineering_error_is_success": false,
+      "new_runtime_admission_adapter_implemented": false,
+      "legacy_qualification_or_research_flags_reusable_as_new_approval": false
+    },
+    "workflow_quality": {
+      "require_all_frozen_holdout_tasks_correct": true,
+      "count_failed_and_unpaired_flow_costs": true,
+      "allow_hidden_answers_in_selection_or_repair": false,
+      "calibration_and_holdout_separate": true,
+      "quality_mismatch_label": "spend_difference_only_not_equal_quality_saving",
+      "model_measurement_is_workflow_evidence": false
+    },
+    "production_qualification": "pending",
+    "runtime_dispatch_enabled": false,
+    "rg01_changed": false,
+    "contract_id": "73db21a9b9761f379e229c27f76bfef2719a58375111ec1b0bcd3ac7045a59f1"
+  },
+  "fee_gap_matrix": {
+    "components": [
+      "cache_read",
+      "cache_write",
+      "classification",
+      "failure",
+      "input",
+      "output",
+      "reasoning",
+      "request"
+    ],
+    "paths": [
+      "success",
+      "rejection",
+      "failure",
+      "cancellation",
+      "disconnect",
+      "upstream_retry_or_child",
+      "price_change_or_inflight"
+    ],
+    "candidates": [
+      {
+        "configuration_sha256": "4ba392516bcbd12fa02503be18a00977330173a597aa6d5142fe6f01121878de",
+        "complete_bound_usd": null,
+        "account_scope": null,
+        "valid_until": null,
+        "settlement_finality": "unknown",
+        "cells": [
+          {
+            "component": "cache_read",
+            "path": "success",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "cache_read",
+            "path": "rejection",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "cache_read",
+            "path": "failure",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "cache_read",
+            "path": "cancellation",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "cache_read",
+            "path": "disconnect",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "cache_read",
+            "path": "upstream_retry_or_child",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "cache_read",
+            "path": "price_change_or_inflight",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "cache_write",
+            "path": "success",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "cache_write",
+            "path": "rejection",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "cache_write",
+            "path": "failure",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "cache_write",
+            "path": "cancellation",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "cache_write",
+            "path": "disconnect",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "cache_write",
+            "path": "upstream_retry_or_child",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "cache_write",
+            "path": "price_change_or_inflight",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "classification",
+            "path": "success",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "classification",
+            "path": "rejection",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "classification",
+            "path": "failure",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "classification",
+            "path": "cancellation",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "classification",
+            "path": "disconnect",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "classification",
+            "path": "upstream_retry_or_child",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "classification",
+            "path": "price_change_or_inflight",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "failure",
+            "path": "success",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "failure",
+            "path": "rejection",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "failure",
+            "path": "failure",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "failure",
+            "path": "cancellation",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "failure",
+            "path": "disconnect",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "failure",
+            "path": "upstream_retry_or_child",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "failure",
+            "path": "price_change_or_inflight",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "input",
+            "path": "success",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "input",
+            "path": "rejection",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "input",
+            "path": "failure",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "input",
+            "path": "cancellation",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "input",
+            "path": "disconnect",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "input",
+            "path": "upstream_retry_or_child",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "input",
+            "path": "price_change_or_inflight",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "output",
+            "path": "success",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "output",
+            "path": "rejection",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "output",
+            "path": "failure",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "output",
+            "path": "cancellation",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "output",
+            "path": "disconnect",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "output",
+            "path": "upstream_retry_or_child",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "output",
+            "path": "price_change_or_inflight",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "reasoning",
+            "path": "success",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "reasoning",
+            "path": "rejection",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "reasoning",
+            "path": "failure",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "reasoning",
+            "path": "cancellation",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "reasoning",
+            "path": "disconnect",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "reasoning",
+            "path": "upstream_retry_or_child",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "reasoning",
+            "path": "price_change_or_inflight",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "request",
+            "path": "success",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "request",
+            "path": "rejection",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "request",
+            "path": "failure",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "request",
+            "path": "cancellation",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "request",
+            "path": "disconnect",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "request",
+            "path": "upstream_retry_or_child",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "request",
+            "path": "price_change_or_inflight",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          }
+        ]
+      },
+      {
+        "configuration_sha256": "fa4252e21d95256263956679af4e5d57f106d23b36f93010f8a2c2dbffe72c06",
+        "complete_bound_usd": null,
+        "account_scope": null,
+        "valid_until": null,
+        "settlement_finality": "unknown",
+        "cells": [
+          {
+            "component": "cache_read",
+            "path": "success",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "cache_read",
+            "path": "rejection",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "cache_read",
+            "path": "failure",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "cache_read",
+            "path": "cancellation",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "cache_read",
+            "path": "disconnect",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "cache_read",
+            "path": "upstream_retry_or_child",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "cache_read",
+            "path": "price_change_or_inflight",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "cache_write",
+            "path": "success",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "cache_write",
+            "path": "rejection",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "cache_write",
+            "path": "failure",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "cache_write",
+            "path": "cancellation",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "cache_write",
+            "path": "disconnect",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "cache_write",
+            "path": "upstream_retry_or_child",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "cache_write",
+            "path": "price_change_or_inflight",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "classification",
+            "path": "success",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "classification",
+            "path": "rejection",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "classification",
+            "path": "failure",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "classification",
+            "path": "cancellation",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "classification",
+            "path": "disconnect",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "classification",
+            "path": "upstream_retry_or_child",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "classification",
+            "path": "price_change_or_inflight",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "failure",
+            "path": "success",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "failure",
+            "path": "rejection",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "failure",
+            "path": "failure",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "failure",
+            "path": "cancellation",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "failure",
+            "path": "disconnect",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "failure",
+            "path": "upstream_retry_or_child",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "failure",
+            "path": "price_change_or_inflight",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "input",
+            "path": "success",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "input",
+            "path": "rejection",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "input",
+            "path": "failure",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "input",
+            "path": "cancellation",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "input",
+            "path": "disconnect",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "input",
+            "path": "upstream_retry_or_child",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "input",
+            "path": "price_change_or_inflight",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "output",
+            "path": "success",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "output",
+            "path": "rejection",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "output",
+            "path": "failure",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "output",
+            "path": "cancellation",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "output",
+            "path": "disconnect",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "output",
+            "path": "upstream_retry_or_child",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "output",
+            "path": "price_change_or_inflight",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "reasoning",
+            "path": "success",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "reasoning",
+            "path": "rejection",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "reasoning",
+            "path": "failure",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "reasoning",
+            "path": "cancellation",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "reasoning",
+            "path": "disconnect",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "reasoning",
+            "path": "upstream_retry_or_child",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "reasoning",
+            "path": "price_change_or_inflight",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "request",
+            "path": "success",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "request",
+            "path": "rejection",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "request",
+            "path": "failure",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "request",
+            "path": "cancellation",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "request",
+            "path": "disconnect",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "request",
+            "path": "upstream_retry_or_child",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          },
+          {
+            "component": "request",
+            "path": "price_change_or_inflight",
+            "status": "pending_supplier_evidence",
+            "enforced_units": null,
+            "guaranteed_rate_usd": null,
+            "evidence_ref": null
+          }
+        ]
+      }
+    ],
+    "guarantee_cell_count": 112,
+    "no_reasoning_or_classifier_dispatch_does_not_prove_no_separately_billed_component": true,
+    "formal_fee_qualification": "pending",
+    "matrix_id": "b2ca03e7b3a4ef53090f69314d76bc7a73c1d1eb08c90b934dd5f11817b5ff9e"
+  },
+  "measurement_protocol": {
+    "task_ids": [
+      "Q001",
+      "Q002",
+      "Q003",
+      "Q004",
+      "Q005",
+      "Q006",
+      "Q007",
+      "Q008",
+      "Q009",
+      "Q010",
+      "Q011",
+      "Q012",
+      "Q013",
+      "Q014",
+      "Q015",
+      "Q016",
+      "Q017",
+      "Q018",
+      "Q019",
+      "Q020",
+      "Q021",
+      "Q022",
+      "Q023",
+      "Q024",
+      "Q025",
+      "Q026",
+      "Q027",
+      "Q028",
+      "Q029",
+      "Q030",
+      "Q031",
+      "Q032",
+      "Q033",
+      "Q034",
+      "Q035",
+      "Q036",
+      "Q037",
+      "Q038",
+      "Q039",
+      "Q040",
+      "Q041",
+      "Q042",
+      "Q043",
+      "Q044",
+      "Q045",
+      "Q046",
+      "Q047",
+      "Q048",
+      "Q049",
+      "Q050"
+    ],
+    "order": [
+      {
+        "task_id": "Q001",
+        "candidates": [
+          "c4ba392516bcbd12fa02503be",
+          "cfa4252e21d95256263956679"
+        ]
+      },
+      {
+        "task_id": "Q002",
+        "candidates": [
+          "cfa4252e21d95256263956679",
+          "c4ba392516bcbd12fa02503be"
+        ]
+      },
+      {
+        "task_id": "Q003",
+        "candidates": [
+          "c4ba392516bcbd12fa02503be",
+          "cfa4252e21d95256263956679"
+        ]
+      },
+      {
+        "task_id": "Q004",
+        "candidates": [
+          "cfa4252e21d95256263956679",
+          "c4ba392516bcbd12fa02503be"
+        ]
+      },
+      {
+        "task_id": "Q005",
+        "candidates": [
+          "c4ba392516bcbd12fa02503be",
+          "cfa4252e21d95256263956679"
+        ]
+      },
+      {
+        "task_id": "Q006",
+        "candidates": [
+          "cfa4252e21d95256263956679",
+          "c4ba392516bcbd12fa02503be"
+        ]
+      },
+      {
+        "task_id": "Q007",
+        "candidates": [
+          "c4ba392516bcbd12fa02503be",
+          "cfa4252e21d95256263956679"
+        ]
+      },
+      {
+        "task_id": "Q008",
+        "candidates": [
+          "cfa4252e21d95256263956679",
+          "c4ba392516bcbd12fa02503be"
+        ]
+      },
+      {
+        "task_id": "Q009",
+        "candidates": [
+          "c4ba392516bcbd12fa02503be",
+          "cfa4252e21d95256263956679"
+        ]
+      },
+      {
+        "task_id": "Q010",
+        "candidates": [
+          "cfa4252e21d95256263956679",
+          "c4ba392516bcbd12fa02503be"
+        ]
+      },
+      {
+        "task_id": "Q011",
+        "candidates": [
+          "c4ba392516bcbd12fa02503be",
+          "cfa4252e21d95256263956679"
+        ]
+      },
+      {
+        "task_id": "Q012",
+        "candidates": [
+          "cfa4252e21d95256263956679",
+          "c4ba392516bcbd12fa02503be"
+        ]
+      },
+      {
+        "task_id": "Q013",
+        "candidates": [
+          "c4ba392516bcbd12fa02503be",
+          "cfa4252e21d95256263956679"
+        ]
+      },
+      {
+        "task_id": "Q014",
+        "candidates": [
+          "cfa4252e21d95256263956679",
+          "c4ba392516bcbd12fa02503be"
+        ]
+      },
+      {
+        "task_id": "Q015",
+        "candidates": [
+          "c4ba392516bcbd12fa02503be",
+          "cfa4252e21d95256263956679"
+        ]
+      },
+      {
+        "task_id": "Q016",
+        "candidates": [
+          "cfa4252e21d95256263956679",
+          "c4ba392516bcbd12fa02503be"
+        ]
+      },
+      {
+        "task_id": "Q017",
+        "candidates": [
+          "c4ba392516bcbd12fa02503be",
+          "cfa4252e21d95256263956679"
+        ]
+      },
+      {
+        "task_id": "Q018",
+        "candidates": [
+          "cfa4252e21d95256263956679",
+          "c4ba392516bcbd12fa02503be"
+        ]
+      },
+      {
+        "task_id": "Q019",
+        "candidates": [
+          "c4ba392516bcbd12fa02503be",
+          "cfa4252e21d95256263956679"
+        ]
+      },
+      {
+        "task_id": "Q020",
+        "candidates": [
+          "cfa4252e21d95256263956679",
+          "c4ba392516bcbd12fa02503be"
+        ]
+      },
+      {
+        "task_id": "Q021",
+        "candidates": [
+          "c4ba392516bcbd12fa02503be",
+          "cfa4252e21d95256263956679"
+        ]
+      },
+      {
+        "task_id": "Q022",
+        "candidates": [
+          "cfa4252e21d95256263956679",
+          "c4ba392516bcbd12fa02503be"
+        ]
+      },
+      {
+        "task_id": "Q023",
+        "candidates": [
+          "c4ba392516bcbd12fa02503be",
+          "cfa4252e21d95256263956679"
+        ]
+      },
+      {
+        "task_id": "Q024",
+        "candidates": [
+          "cfa4252e21d95256263956679",
+          "c4ba392516bcbd12fa02503be"
+        ]
+      },
+      {
+        "task_id": "Q025",
+        "candidates": [
+          "c4ba392516bcbd12fa02503be",
+          "cfa4252e21d95256263956679"
+        ]
+      },
+      {
+        "task_id": "Q026",
+        "candidates": [
+          "cfa4252e21d95256263956679",
+          "c4ba392516bcbd12fa02503be"
+        ]
+      },
+      {
+        "task_id": "Q027",
+        "candidates": [
+          "c4ba392516bcbd12fa02503be",
+          "cfa4252e21d95256263956679"
+        ]
+      },
+      {
+        "task_id": "Q028",
+        "candidates": [
+          "cfa4252e21d95256263956679",
+          "c4ba392516bcbd12fa02503be"
+        ]
+      },
+      {
+        "task_id": "Q029",
+        "candidates": [
+          "c4ba392516bcbd12fa02503be",
+          "cfa4252e21d95256263956679"
+        ]
+      },
+      {
+        "task_id": "Q030",
+        "candidates": [
+          "cfa4252e21d95256263956679",
+          "c4ba392516bcbd12fa02503be"
+        ]
+      },
+      {
+        "task_id": "Q031",
+        "candidates": [
+          "c4ba392516bcbd12fa02503be",
+          "cfa4252e21d95256263956679"
+        ]
+      },
+      {
+        "task_id": "Q032",
+        "candidates": [
+          "cfa4252e21d95256263956679",
+          "c4ba392516bcbd12fa02503be"
+        ]
+      },
+      {
+        "task_id": "Q033",
+        "candidates": [
+          "c4ba392516bcbd12fa02503be",
+          "cfa4252e21d95256263956679"
+        ]
+      },
+      {
+        "task_id": "Q034",
+        "candidates": [
+          "cfa4252e21d95256263956679",
+          "c4ba392516bcbd12fa02503be"
+        ]
+      },
+      {
+        "task_id": "Q035",
+        "candidates": [
+          "c4ba392516bcbd12fa02503be",
+          "cfa4252e21d95256263956679"
+        ]
+      },
+      {
+        "task_id": "Q036",
+        "candidates": [
+          "cfa4252e21d95256263956679",
+          "c4ba392516bcbd12fa02503be"
+        ]
+      },
+      {
+        "task_id": "Q037",
+        "candidates": [
+          "c4ba392516bcbd12fa02503be",
+          "cfa4252e21d95256263956679"
+        ]
+      },
+      {
+        "task_id": "Q038",
+        "candidates": [
+          "cfa4252e21d95256263956679",
+          "c4ba392516bcbd12fa02503be"
+        ]
+      },
+      {
+        "task_id": "Q039",
+        "candidates": [
+          "c4ba392516bcbd12fa02503be",
+          "cfa4252e21d95256263956679"
+        ]
+      },
+      {
+        "task_id": "Q040",
+        "candidates": [
+          "cfa4252e21d95256263956679",
+          "c4ba392516bcbd12fa02503be"
+        ]
+      },
+      {
+        "task_id": "Q041",
+        "candidates": [
+          "c4ba392516bcbd12fa02503be",
+          "cfa4252e21d95256263956679"
+        ]
+      },
+      {
+        "task_id": "Q042",
+        "candidates": [
+          "cfa4252e21d95256263956679",
+          "c4ba392516bcbd12fa02503be"
+        ]
+      },
+      {
+        "task_id": "Q043",
+        "candidates": [
+          "c4ba392516bcbd12fa02503be",
+          "cfa4252e21d95256263956679"
+        ]
+      },
+      {
+        "task_id": "Q044",
+        "candidates": [
+          "cfa4252e21d95256263956679",
+          "c4ba392516bcbd12fa02503be"
+        ]
+      },
+      {
+        "task_id": "Q045",
+        "candidates": [
+          "c4ba392516bcbd12fa02503be",
+          "cfa4252e21d95256263956679"
+        ]
+      },
+      {
+        "task_id": "Q046",
+        "candidates": [
+          "cfa4252e21d95256263956679",
+          "c4ba392516bcbd12fa02503be"
+        ]
+      },
+      {
+        "task_id": "Q047",
+        "candidates": [
+          "c4ba392516bcbd12fa02503be",
+          "cfa4252e21d95256263956679"
+        ]
+      },
+      {
+        "task_id": "Q048",
+        "candidates": [
+          "cfa4252e21d95256263956679",
+          "c4ba392516bcbd12fa02503be"
+        ]
+      },
+      {
+        "task_id": "Q049",
+        "candidates": [
+          "c4ba392516bcbd12fa02503be",
+          "cfa4252e21d95256263956679"
+        ]
+      },
+      {
+        "task_id": "Q050",
+        "candidates": [
+          "cfa4252e21d95256263956679",
+          "c4ba392516bcbd12fa02503be"
+        ]
+      }
+    ],
+    "identity_order": [
+      "c4ba392516bcbd12fa02503be",
+      "cfa4252e21d95256263956679"
+    ],
+    "max_tasks_per_candidate": 50,
+    "identity_calls": 2,
+    "first_answer_calls": 100,
+    "repair_calls_at_most": 100,
+    "generation_posts_at_most": 202,
+    "classification_calls": 0,
+    "automatic_retries": 0,
+    "max_context_bytes": 32768,
+    "identity_max_output_tokens": 128,
+    "answer_max_output_tokens": 4096,
+    "max_same_model_attempts": 2,
+    "repair": "Only own previous answer and frozen public diagnostic; never hidden grader results",
+    "sealed_grading": "Only after complete capture and immutable seal; no feedback to capture",
+    "failure": "Preserve all model failures; no candidate replacement or cherry-picked rerun",
+    "stop": [
+      "unknown_fee",
+      "identity_mismatch",
+      "unresolved_intent",
+      "provider_failure",
+      "engineering_interruption",
+      "expired_input_or_plan",
+      "missing_authority_or_fee_bound"
+    ],
+    "resumption": "Same manifest and original receipt checkpoints; never resend paid/uncertain requests",
+    "connection_checkpoint": "After exactly two identity probes (max_new_requests=2); pause, reconcile, then resume same50",
+    "future_model_evidence_reuse": "Only identical questions, settings, contracts and applicable validity; link saved records, no resend",
+    "claim_scope": "Two low-candidate measurements only; not a routing/backup/Jev savings study"
+  },
+  "budget": {
+    "research_target_usd": "1",
+    "currency": "USD",
+    "spend_authorized": false,
+    "prior_study_budget_carried_over": false,
+    "true_supplier_upper_bound_usd": null,
+    "research_overrun_risk_accepted": false,
+    "unknown_fee_action": "stop_all_new_posts",
+    "reservation_for_existing_runner": "101 * sum(verified complete per-configuration bounds)",
+    "full_batch_reservation_required": true,
+    "bounds_by_configuration_sha256": {
+      "4ba392516bcbd12fa02503be18a00977330173a597aa6d5142fe6f01121878de": null,
+      "fa4252e21d95256263956679af4e5d57f106d23b36f93010f8a2c2dbffe72c06": null
+    },
+    "known_plus_unsettled_plus_required_reserve_must_fit_target": true,
+    "price_scenarios": [
+      {
+        "configuration_sha256": "4ba392516bcbd12fa02503be18a00977330173a597aa6d5142fe6f01121878de",
+        "archived_price_evidence": {
+          "input_usd_per_token": "0.00000002",
+          "output_usd_per_token": "0.00000004",
+          "observed_at": "2026-10-21T07:57:59.932507+00:00",
+          "endpoint_raw_sha256": "29dd8dd60bd4f0711f39500d3ea34d6c2dec130ebae875c09f451ed0466c3a3b"
+        },
+        "token_scenario_usd": "0.04098560"
+      },
+      {
+        "configuration_sha256": "fa4252e21d95256263956679af4e5d57f106d23b36f93010f8a2c2dbffe72c06",
+        "archived_price_evidence": {
+          "input_usd_per_token": "0.00000004",
+          "output_usd_per_token": "0.00000005",
+          "observed_at": "2026-10-21T07:58:00.192352+00:00",
+          "endpoint_raw_sha256": "5907924daec63e4e1fcb9d13f25961a9440753718778c70e5f3d5c837d4b0e13"
+        },
+        "token_scenario_usd": "0.06967936"
+      }
+    ],
+    "planning_token_scenario_total_usd": "0.11066496",
+    "planning_input_tokens": {
+      "identity": 1024,
+      "first": 8192,
+      "repair": 16384
+    },
+    "input_scenario_is_enforced_cap": false,
+    "cache_read_or_write_discount_assumed": false,
+    "unpriced_risks": [
+      "billed_input_and_tokenization",
+      "cache_write_or_other_input_fees",
+      "reasoning_and_other_components",
+      "internal_retry_failure_cancel_inflight",
+      "rate_or_account_changes"
+    ],
+    "risk_exception_changes_existing_bound_verifier": false
+  },
+  "launch": {
+    "ready": false,
+    "model_post_authorized": false,
+    "production_qualified": false,
+    "required": [
+      "explicit_new_spending_authorization",
+      "current_exact_identity_price_and_source_checks",
+      "current_exact_endpoint_health",
+      "applicable_data_policy_public_synthetic_only",
+      "all_previous_unknown_fees_resolved_or_explicitly_isolated",
+      "effective_complete_bounds_and_full_batch_reserve_fit_1usd",
+      "same_frozen_manifest_and_source_hashes"
+    ],
+    "research_exception": "Separate explicit risk authorization and reviewed versioned execution design required; this plan cannot bypass the current runner/verifier.",
+    "classifier_or_tool_or_provider_fallback_enabled": false
+  },
+  "runtime_dispatch_enabled": false,
+  "formal_qualification": "pending",
+  "rg01_changed": false,
+  "model_api_calls": 0,
+  "source_gets": 0,
+  "plan_id": "5f9679f049a748b1c5ca8ceeaec1bb31649e85bc2e85d8dd97f81e7820286fdf"
+}

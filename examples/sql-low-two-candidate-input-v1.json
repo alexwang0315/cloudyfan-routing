@@ -1,0 +1,70 @@
+{
+  "schema_version": "cloudyfan-sql-low-two-input-v1",
+  "created_at": "2026-10-21T08:01:50.391033+00:00",
+  "review_before": "2026-10-22T08:01:50.391033+00:00",
+  "sources": [
+    {
+      "path": "examples/sql-low-pool-candidates-v1.json",
+      "sha256": "a43c3047487c45e491722d0f48429df70b3eb91293eaa22117b8dd3cbed6eca2"
+    },
+    {
+      "path": "examples/sql-backup-candidate-review-v1.json",
+      "sha256": "c6aef53fde45e87268ea9aa5812eb9d3c68c77cc3f4e0726ae3607798edc8e24"
+    }
+  ],
+  "candidates": [
+    {
+      "position": "primary",
+      "entry": {
+        "config_id": "low-two-primary",
+        "profile": {
+          "model": "meta-llama/llama-3.1-8b-instruct",
+          "model_version": "meta-llama/llama-3.1-8b-instruct",
+          "accepted_models": [
+            "meta-llama/llama-3.1-8b-instruct"
+          ],
+          "effort": "none",
+          "provider": "deepinfra/fp8",
+          "provider_name": "DeepInfra",
+          "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+          "quantization": "fp8",
+          "reasoning_parameter": "omit"
+        }
+      },
+      "configuration_sha256": "4ba392516bcbd12fa02503be18a00977330173a597aa6d5142fe6f01121878de",
+      "price_evidence": {
+        "input_usd_per_token": "0.00000002",
+        "output_usd_per_token": "0.00000004",
+        "observed_at": "2026-10-21T07:57:59.932507+00:00",
+        "endpoint_raw_sha256": "29dd8dd60bd4f0711f39500d3ea34d6c2dec130ebae875c09f451ed0466c3a3b"
+      }
+    },
+    {
+      "position": "backup_1",
+      "entry": {
+        "config_id": "low-two-backup_1",
+        "profile": {
+          "model": "google/gemma-3-4b-it",
+          "model_version": "google/gemma-3-4b-it",
+          "accepted_models": [
+            "google/gemma-3-4b-it"
+          ],
+          "effort": "none",
+          "provider": "parasail/bf16",
+          "provider_name": "Parasail",
+          "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+          "quantization": "bf16",
+          "reasoning_parameter": "omit"
+        }
+      },
+      "configuration_sha256": "fa4252e21d95256263956679af4e5d57f106d23b36f93010f8a2c2dbffe72c06",
+      "price_evidence": {
+        "input_usd_per_token": "0.00000004",
+        "output_usd_per_token": "0.00000005",
+        "observed_at": "2026-10-21T07:58:00.192352+00:00",
+        "endpoint_raw_sha256": "5907924daec63e4e1fcb9d13f25961a9440753718778c70e5f3d5c837d4b0e13"
+      }
+    }
+  ],
+  "input_id": "d0639e3af7224ade13f5887cff153c817065c43fd30c13212c3915559e1a68f8"
+}

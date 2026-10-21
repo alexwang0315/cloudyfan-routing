@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "sql-low-two-candidate-preparation-v1",
+  "verified_at": "2026-10-21T22:07:01.032220+00:00",
+  "observed_head": "1889acad22a74ba626dd5d7b0d89e11e213658ce",
+  "source_digest": "7e11728f73c0b94311e9d603d60c6d5bce071c975c60e582c01a67fab0c47d3f",
+  "tests_passed": 1831,
+  "full_integration": {
+    "executed_this_review": false,
+    "reused_only_after_exact_input_match": true,
+    "matched_code_build_example_data_files": 164,
+    "proof": "docs/evidence/sql-low-two-preparation-tree-20261021.json",
+    "proof_sha256": "89eac888a31fbeec9a14a940d186d3cf9bf2b1c663bf770757f57342d7add5cf",
+    "receipt": "runtime/sql-low-two-preparation-20261021/delivery-tree/runtime/checks/d5ea12a4a5a143109801b65c7bb809d5/checks.json",
+    "receipt_sha256": "4407f2ab29f0cbae35b4c0c5baf86a928f836ed2aa5eda543342f94a00b04abb",
+    "command": "./scripts/check --integration",
+    "tests_passed": 1831
+  },
+  "fresh_review": {
+    "root_focused_tests_passed": 26,
+    "indexed_focused_tests_passed": 26,
+    "quick_checks": {
+      "root": {
+        "path": "runtime/checks/d031ed242fc74ecab5d404106bc3c6c8/checks.json",
+        "sha256": "9944edce5398c4c49c0d9669d0b3f4f0d31d7ba21bc388f335c1626e38cdb12d"
+      },
+      "index": {
+        "path": "runtime/sql-low-two-precommit-20261022/index-tree/runtime/checks/4bddccd4f6574d778d6e53a391e7fdb4/checks.json",
+        "sha256": "e3b92586b71188aeb134db86f859123e786f99579cddb6cb6afc7e4e2f406acf"
+      }
+    },
+    "json_and_staged_whitespace_checks": "passed",
+    "new_plan_local_links_checked": 5,
+    "executable_changes_during_review": false,
+    "remaining_actionable_findings": 0
+  },
+  "preservation": {
+    "unrelated_files_unchanged": 418,
+    "original_experiment_files_unchanged": 4119,
+    "original_receipts_failures_drafts_unchanged": 14,
+    "private_audit_directory": "runtime/sql-low-two-precommit-20261022"
+  },
+  "plan_sha256": "0c99abf96391fde7d80488cae3d3ffbd3a904b27bd410d3431b5f3a4b1cf79c4",
+  "input_sha256": "1952484c727800843ccc114407886b291aad4fb11dc6db6f14bc4dc4ab6cd941",
+  "staged_paths_before_this_receipt": [
+    "docs/agent-state.json",
+    "docs/coordination.md",
+    "docs/evidence/sql-low-two-preparation-offline-20261021.json",
+    "docs/evidence/sql-low-two-preparation-tree-20261021.json",
+    "docs/evidence/sql-low-two-prior-plan-20261021.json",
+    "docs/evidence/sql-low-two-prior-state-20261021.json",
+    "docs/handoff.md",
+    "docs/release-readiness.md",
+    "docs/sql-backup-pool-readiness-plan-20261021.md",
+    "docs/sql-low-two-candidate-plan-20261021.md",
+    "docs/verification.md",
+    "docs/work-plan.json",
+    "examples/sql-low-two-candidate-input-v1.json",
+    "examples/sql-low-two-candidate-plan-v1.json",
+    "scripts/prepare_sql_low_trial.py",
+    "src/cloudyfan_jev/scores/sql_low_preparation.py",
+    "tests/test_sql_low_preparation.py"
+  ],
+  "review_audit_interruptions": [
+    "Private importlib audit lacked scripts on sys.path; corrected audit only, original retained.",
+    "Repeated checkout-index refused already-exported files; verified original export without overwrite.",
+    "An audit command used the exported-tree cwd for root-relative paths; no project file was changed; retried from correct cwd."
+  ],
+  "rg01_frozen": true,
+  "formal_qualification": "pending",
+  "fee_guarantee_cells_pending": 112,
+  "complete_supplier_bounds_known": 0,
+  "spend_authorized": false,
+  "risk_exception_accepted": false,
+  "model_api_calls": 0,
+  "source_gets": 0,
+  "supplier_contacts": 0,
+  "deployment": false,
+  "push": false,
+  "local_commit_authorized": true,
+  "limitations": [
+    "No new real model identity, capability, health, fees or routed-workflow savings evidence.",
+    "No runtime conditional-admission adapter or pool activation.",
+    "Historical 1831-test full result was reused, not rerun in this review.",
+    "Whole dirty workspace and old numbered copies are outside the indexed delivery proof; preserved prior failures remain.",
+    "USD1 is a proposed research target, not spending authorization or a supplier cap."
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "integration_branch": "codex/implement-routing-spec-1",
+  "baseline_commit": "9d20072b076bb64c3666cd3d1380dcb5e49bb909",
+  "merger_owner": "root",
+  "shared_interfaces": [
+    {
+      "id": "sql-backup-candidates",
+      "owner": "root",
+      "owned_files": [
+        "src/cloudyfan_jev/scores/sql_backup_candidates.py"
+      ],
+      "provided_by": "SQL-BACKUP-PRECOMMIT"
+    },
+    {
+      "id": "sql-multi-exam",
+      "owner": "root",
+      "owned_files": [
+        "src/cloudyfan_jev/scores/sql_multi_runner.py"
+      ],
+      "provided_by": "SQL-BACKUP-PRECOMMIT"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "SQL-BACKUP-PRECOMMIT",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/scores/sql_multi_runner.py",
+        "src/cloudyfan_jev/scores/sql_backup_candidates.py",
+        "tests/test_sql_multi_runner.py",
+        "tests/test_sql_backup_candidates.py",
+        "docs/agent-state.json",
+        "docs/work-plan.json",
+        "docs/coordination.md",
+        "docs/handoff.md",
+        "docs/verification.md",
+        "docs/release-readiness.md",
+        "docs/evidence/sql-backup-multi-tree-precommit-20261021.json",
+        "docs/evidence/sql-backup-multi-workspace-precommit-20261021.json",
+        "docs/evidence/sql-backup-multi-implementation-plan-20261021.json"
+      ],
+      "depends_on": [],
+      "consumed_interfaces": [
+        "sql-multi-exam",
+        "sql-backup-candidates"
+      ]
+    }
+  ]
+}

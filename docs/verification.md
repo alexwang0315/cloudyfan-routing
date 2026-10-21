@@ -747,3 +747,19 @@ The user now authorizes review and local Git commit; earlier no-commit statement
 第一次提交前檢查因尾端空白更正在pytest前段主動中斷；下一次保留1804 passed／1 failed，其中唯一失敗來自工作計畫責任移交與舊已完成任務的依賴衝突。已封存原實作計畫，當前計畫只列後續審閱，再從完整入口重跑通過；沒有修改檢查器、SQL驗收或資格規則。另保留一次console-script不能import scripts的收集失敗，改用既定python -m pytest入口後51項通過。
 
 [提交內容驗證](evidence/sql-backup-multi-tree-precommit-20261021.json)與[原工作區相關回歸](evidence/sql-backup-multi-workspace-precommit-20261021.json)分開綁定來源指紋。404個非本輪檔案及4119個原始實驗檔案核對未變；SQL資格工作、舊副本、原始中斷／答案／收據保留，不入本次提交。RG-01凍結，十項正式資格仍pending；沒有模型API、來源GET、供應商聯絡、部署或推送。
+
+
+## 2026-10-21：低池兩候選離線準備與凍結
+
+已備妥[宣告身分、分層准入契約、112格費用缺證與測試計畫](sql-low-two-candidate-plan-20261021.md)。兩候選各50題、最多202次生成／零Jev，US$1為研究目標；實際回應身分、供應商完整上界及新的支出授權仍缺，未啟用模型池或條件式runtime准入adapter。單一模型量測可以保留錯題，整批路由holdout仍要求全對；舊嚴格資格與RG-01不變。
+
+原工作區審閱前77項相容性回歸通過；精度修正後26項專屬回歸通過，獨立審閱複驗無剩餘P1／P2。當前交付內容獨立匯出後，完整`./scripts/check --integration`為 **1,831項通過**，包括Ruff、兩個既有Mock示範及離線sdist／wheel；沒有刪副本或設測試忽略。這不是整個dirty工作區通過；既有70項舊副本失敗紀錄仍保留。
+
+初次系統Python／SQLite契約錯配、數值字串斷言差異、Decimal context可重現性P2及審核命令誤用base Python的失敗均保留；固定鎖定環境、數值比較及獨立Decimal Context後通過，沒有改SQL規則或保障門檻。[工作區證據](evidence/sql-low-two-preparation-offline-20261021.json)與[交付內容證據](evidence/sql-low-two-preparation-tree-20261021.json)分開綁定來源。418個非本輪檔案、4119個原始實驗檔案及19份先前驗證／失敗收據核對不變。
+
+本輪模型API、來源GET、供應商聯絡、部署、推送及Git提交均0，正式資格維持pending。
+
+
+## 2026-10-22：低池兩候選本機提交審閱
+
+[本輪證據](evidence/sql-low-two-precommit-20261022.json)分開記錄重新執行的26項專屬回歸／紀錄檢查，以及逐檔核對後沿用的1,831項完整離線整合結果，沒有宣稱本輪重跑完整套件或整個dirty工作區全通過。程式、凍結計畫、SQL規則與正式資格均不變；原始失敗及實驗紀錄保留。本次僅本機提交，沒有模型／來源API、供應商聯絡、部署或推送。

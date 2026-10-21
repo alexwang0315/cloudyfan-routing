@@ -1,0 +1,170 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "sql-low-two-candidate-preparation-v1",
+  "verified_at": "2026-10-21T12:49:04.029481+00:00",
+  "observed_head": "1889acad22a74ba626dd5d7b0d89e11e213658ce",
+  "plan_id": "5f9679f049a748b1c5ca8ceeaec1bb31649e85bc2e85d8dd97f81e7820286fdf",
+  "plan_file": "examples/sql-low-two-candidate-plan-v1.json",
+  "plan_sha256": "0c99abf96391fde7d80488cae3d3ffbd3a904b27bd410d3431b5f3a4b1cf79c4",
+  "input_sha256": "1952484c727800843ccc114407886b291aad4fb11dc6db6f14bc4dc4ab6cd941",
+  "model_count": 2,
+  "questions_each": 50,
+  "max_generation_posts": 202,
+  "classifier_calls": 0,
+  "fee_guarantee_cells": 112,
+  "known_complete_supplier_bounds": 0,
+  "research_target_usd": "1",
+  "planning_token_scenario_usd": "0.11066496",
+  "true_supplier_upper_bound_usd": null,
+  "spend_authorized": false,
+  "risk_exception_accepted": false,
+  "runtime_admission_adapter_implemented": false,
+  "single_model_measurement_requires_perfect_accuracy": false,
+  "workflow_holdout_requires_all_correct": true,
+  "legacy_strict_qualification_unchanged": true,
+  "formal_qualification": "pending",
+  "rg01_frozen": true,
+  "model_api_calls": 0,
+  "source_gets": 0,
+  "supplier_contacts": 0,
+  "deployment": false,
+  "push": false,
+  "git_commit": false,
+  "independent_review": {
+    "read_only": true,
+    "remaining_p1_p2": 0,
+    "fixed_p2": "Caller Decimal context changed frozen costs/plan identity; independent Context(prec=64) now used for each quote and total.",
+    "independently_reproduced": true,
+    "model_api_calls": 0,
+    "source_gets": 0,
+    "limitations": [
+      "source hashes not supplier signatures",
+      "runtime conditional admission adapter not implemented",
+      "true identity/SQL/health/fee guarantees pending"
+    ]
+  },
+  "preservation": {
+    "unrelated_files_unchanged": 418,
+    "original_experiment_files_unchanged": 4119,
+    "original_prior_failure_demo_receipt_hashes_checked": 19
+  },
+  "original_failures": [
+    "new-tests-initial.log: system Python/SQLite produced different contracts; original frozen draft retained",
+    "new-tests-v2.log: one test compared equal Decimal costs as different string padding; changed assertion to numeric equality",
+    "independent-review.json: pre-fix caller-precision P2; fixed with independent Decimal Context and verified regression",
+    "cli-final-verification.json: audit incorrectly resolved venv Python symlink to base interpreter; correct venv invocation passed"
+  ],
+  "private_original_directory": "runtime/sql-low-two-preparation-20261021",
+  "prior_whole_workspace_legacy_gate": {
+    "failed_numbered_copies": 70,
+    "new_whole_workspace_run": false,
+    "copies_preserved_not_globally_ignored": true
+  },
+  "limitations": [
+    "No real identity, SQL capability, fee guarantee, current health or new whole-workflow/Jev cost-speed result",
+    "Archived prices and source hashes do not establish current supplier/account guarantees",
+    "Candidate admission contract is preparation only; no current/production activation"
+  ],
+  "source_digest": "7e11728f73c0b94311e9d603d60c6d5bce071c975c60e582c01a67fab0c47d3f",
+  "tests_passed": 1831,
+  "test_scope": "Exact HEAD plus intended new executable/test/fixture inputs in an isolated delivery snapshot; no ignored/deleted tests",
+  "verification_command": "./scripts/check --integration",
+  "integration_gate_passed": true,
+  "receipt": "runtime/sql-low-two-preparation-20261021/delivery-tree/runtime/checks/d5ea12a4a5a143109801b65c7bb809d5/checks.json",
+  "receipt_sha256": "4407f2ab29f0cbae35b4c0c5baf86a928f836ed2aa5eda543342f94a00b04abb",
+  "steps": [
+    {
+      "command": [
+        "/Users/alexwang0315/.local/bin/uv",
+        "sync",
+        "--project",
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/runtime/sql-low-two-preparation-20261021/delivery-tree",
+        "--locked",
+        "--offline",
+        "--extra",
+        "dev",
+        "--no-python-downloads"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/Users/alexwang0315/.local/bin/uv",
+        "pip",
+        "check",
+        "--python",
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/runtime/sql-low-two-preparation-20261021/delivery-tree/.venv/bin/python"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/runtime/sql-low-two-preparation-20261021/delivery-tree/.venv/bin/python",
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/runtime/sql-low-two-preparation-20261021/delivery-tree/scripts/project_state.py",
+        "check"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/runtime/sql-low-two-preparation-20261021/delivery-tree/.venv/bin/python",
+        "-m",
+        "ruff",
+        "check",
+        "."
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/runtime/sql-low-two-preparation-20261021/delivery-tree/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-q"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/runtime/sql-low-two-preparation-20261021/delivery-tree/.venv/bin/cloudyfan-jev-demo",
+        "--route",
+        "high",
+        "--output",
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/runtime/sql-low-two-preparation-20261021/delivery-tree/runtime/checks/d5ea12a4a5a143109801b65c7bb809d5/core"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/runtime/sql-low-two-preparation-20261021/delivery-tree/.venv/bin/cloudyfan-score-demo",
+        "--route",
+        "high",
+        "--output",
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/runtime/sql-low-two-preparation-20261021/delivery-tree/runtime/checks/d5ea12a4a5a143109801b65c7bb809d5/scores"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/Users/alexwang0315/.local/bin/uv",
+        "build",
+        "--offline",
+        "--no-python-downloads",
+        "--python",
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/runtime/sql-low-two-preparation-20261021/delivery-tree/.venv/bin/python",
+        "--out-dir",
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/runtime/sql-low-two-preparation-20261021/delivery-tree/runtime/checks/d5ea12a4a5a143109801b65c7bb809d5/dist"
+      ],
+      "returncode": 0
+    }
+  ],
+  "metadata_closure_records": {
+    "runtime/checks/79cd35527b764e8584f98b0395db3fea/checks.json": "b03472fbc5844933cfe68e5f0bcbbdb1dee802bfde6dacfd9b7bd27afca4d75c",
+    "runtime/sql-low-two-preparation-20261021/delivery-tree/runtime/checks/bf7424cac10c46a183282a56e2873027/checks.json": "0e2564079684a38f16ae905e1046bc0bd86caafec92ed288f3d7c2a208dda996",
+    "runtime/sql-low-two-preparation-20261021/closure-preservation-links.json": "924078d02e178127637d5175ff903a77fbc35dc1b8b3bf7c85312dc6b7e363d8",
+    "runtime/sql-low-two-preparation-20261021/cli-final-verification-locked-python.json": "a4324807bd2f0b5f6397e082d6cf2cc8c07eaca2ccbb475e09d16f44b3c2b220",
+    "runtime/sql-low-two-preparation-20261021/independent-review.json": "b17e43cb12df1a277ad37d88cd110635e8c14127ab36ab059cdb874a7182799f"
+  }
+}

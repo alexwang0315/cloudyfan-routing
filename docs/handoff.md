@@ -597,3 +597,15 @@ Current scope includes candidate preparation, runner compatibility and MockTrans
 第一次提交前檢查因尾端空白更正在pytest前段主動中斷；下一次保留1804 passed／1 failed，其中唯一失敗來自工作計畫責任移交與舊已完成任務的依賴衝突。已封存原實作計畫，當前計畫只列後續審閱，再從完整入口重跑通過；沒有修改檢查器、SQL驗收或資格規則。另保留一次console-script不能import scripts的收集失敗，改用既定python -m pytest入口後51項通過。
 
 [提交內容驗證](evidence/sql-backup-multi-tree-precommit-20261021.json)與[原工作區相關回歸](evidence/sql-backup-multi-workspace-precommit-20261021.json)分開綁定來源指紋。404個非本輪檔案及4119個原始實驗檔案核對未變；SQL資格工作、舊副本、原始中斷／答案／收據保留，不入本次提交。RG-01凍結，十項正式資格仍pending；沒有模型API、來源GET、供應商聯絡、部署或推送。
+
+
+## Low-pool two-candidate preparation — 2026-10-21
+
+The new offline-only module/CLI and [frozen study plan](sql-low-two-candidate-plan-20261021.md) bind Llama/DeepInfra fp8 and Gemma/Parasail bf16, exact none/omit settings, Q001..Q050 and at most202 generationPOSTs/zero classifiers. The metadata-only admission draft separates measured single-model errors, unchanged legacy strict qualification and future all-correct workflow holdout. No runtime admission adapter or pool activation is supplied. All112 fee-guarantee cells and complete dollar bounds remain unknown. USD1 is a proposed research target, not authorization or an enforced supplier cap.
+
+Use the locked Python/SQLite runtime; a system-Python freeze failed reproducibility and is retained, not normalized by changing SQL contracts. No API/sourceGET, supplier contact, deployment, push or commit. Prior dirty research, original receipts/results and RG01 remain unchanged. Offline checks and limitations will be recorded in [scope evidence](evidence/sql-low-two-preparation-offline-20261021.json).
+
+
+## 2026-10-22：低池兩候選本機提交審閱
+
+本次使用者授權本機提交；前述「未提交」是先前擷取狀態。沒有改程式、凍結計畫或SQL規則。核對提交內容與先前完整驗證的程式及example/data逐檔一致後，沿用1,831項整合證據；本輪另跑26項專屬回歸與紀錄檢查，見[提交審閱證據](evidence/sql-low-two-precommit-20261022.json)。原始失敗、舊副本、SQL資格工作及實驗結果保留。RG-01凍結，正式資格pending；無模型API、來源GET、供應商聯絡、部署或推送。

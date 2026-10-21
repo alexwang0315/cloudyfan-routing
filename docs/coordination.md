@@ -334,3 +334,13 @@ Test worker owns only tests/test_sql_multi_runner.py and scripts/demo_sql_multi_
 Root owns alias/model-version pool uniqueness fixes and regression files after the completed candidate, runner and integration tasks. A separate agent reviews read-only. Exact staged content is verified separately from preserved dirty research/old copies. Original failing evidence and SQL/experimental records remain; local commit only, no network, deployment or push.
 
 Completed implementation ownership is archived in docs/evidence/sql-backup-multi-implementation-plan-20261021.json. The current plan contains only the subsequent root precommit task and its explicit interface bindings; historical producer/consumer edges are not reassigned retroactively.
+
+
+## SQL low two-candidate offline preparation — 2026-10-21
+
+Root owns only the new offline preparation module/CLI, input/frozen plan, tests and current-scope docs. No changes to SQL validators, suite, grader, runners, catalog/category research, provider enforcement or historical plans/results. One owner; read-only review may follow. No model/source API, supplier contact, deployment, push or commit in this scope.
+
+
+## Low-two preparation local precommit review — 2026-10-22
+
+Root reviewed only the frozen low-candidate preparation and its indexed Git subset. No executable changes in this review. Full 1,831-test integration evidence is reused only after exact source and example/data comparison; fresh focused and metadata checks are separately recorded. Original failures, SQL qualification and experimental receipts are preserved. Local commit authorized; no model/source API, supplier contact, deployment or push.

@@ -1,38 +1,56 @@
 {
   "schema_version": 1,
   "integration_branch": "codex/implement-routing-spec-1",
-  "baseline_commit": "c2993bb9d902bc79ea0f161cc2596dc4d52125f5",
+  "baseline_commit": "9d20072b076bb64c3666cd3d1380dcb5e49bb909",
   "merger_owner": "root",
   "shared_interfaces": [],
   "tasks": [
     {
-      "id": "SQL-RUNNER-01",
+      "id": "CATEGORY-POOL-01",
+      "owner": "category_pools",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/scores/categories.py",
+        "tests/test_categories.py",
+        "examples/category-policies-v1.json",
+        "src/cloudyfan_jev/scores/catalog.py"
+      ],
+      "depends_on": [],
+      "consumed_interfaces": []
+    },
+    {
+      "id": "CATEGORY-ROUTING-01",
       "owner": "root",
       "status": "completed",
       "owned_files": [
-        "src/cloudyfan_jev/scores/sql_runner.py",
-        "tests/test_sql_model_runner.py",
-        "scripts/demo_sql_model_runner.py",
-        "docs/sql-model-runner.md",
-        "docs/score-source-manual-operations.md",
-        "docs/score-update-operations.md",
-        "docs/sql-model-qualification-v2.md",
-        "docs/release-readiness.md",
-        "docs/handoff.md",
-        "docs/verification.md",
-        "docs/coordination.md",
-        "docs/agent-state.json",
-        "docs/work-plan.json",
-        "docs/evidence/sql-runner-offline-20261020.json",
-        "src/cloudyfan_jev/scores/sql_capability.py",
-        "tests/test_sql_model_qualification.py",
-        "docs/evidence/sql-runner-baseline-20261020.json",
-        "docs/evidence/sql-runner-prior-agent-state-20261020.json",
-        "docs/evidence/sql-runner-prior-work-plan-20261020.json",
-        "docs/evidence/sql-runner-mock-20261020.json",
-        "docs/evidence/sql-runner-precommit-20261020.json"
+        "src/cloudyfan_jev/scores/category_routing.py",
+        "src/cloudyfan_jev/scores/qcs.py",
+        "src/cloudyfan_jev/scores/__init__.py",
+        "tests/test_category_routing.py",
+        "scripts/demo_category_routing.py",
+        "docs",
+        "README.md",
+        "examples/selected-candidate-set.json"
       ],
-      "depends_on": [],
+      "depends_on": [
+        "CATEGORY-POOL-01"
+      ],
+      "consumed_interfaces": []
+    },
+    {
+      "id": "CATEGORY-PRECOMMIT-01",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/scores/catalog.py",
+        "src/cloudyfan_jev/scores/qcs.py",
+        "tests/test_categories.py",
+        "tests/test_category_routing.py",
+        "docs"
+      ],
+      "depends_on": [
+        "CATEGORY-ROUTING-01"
+      ],
       "consumed_interfaces": []
     }
   ]

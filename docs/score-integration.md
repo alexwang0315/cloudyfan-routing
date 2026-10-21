@@ -124,3 +124,7 @@ result = engine.run("job-001", task, make_fresh_isolated_environment,
 ## v2分群參考模式
 
 首版新增明示的family_effort_prior模式，必須由first-pool-profile-v2啟用；v1投影保留。榜單仍使用單一來源／原生80／100分群，評分不證明精確API版本或SQL正確。只有通過[獨立SQL資格](sql-model-qualification-v2.md)的固定API設定，才可在有效資格與review下使用該分群；快照同時受來源、catalog、SQL資格及snapshot效期限制。未知榜單評測日期不填值，API測試日期另存，不以重抓榜單續命。
+
+## 各類四池的可選接入
+
+[category-qcs-v1](category-four-pool-routing.md)新增明確類別 → 該類原生品質四池 → 獨立完整成本／速度 QCS → Core.run。舊 ScoreCore 及 SQL 資格流程保留；新接入不自動辨識任務、不以來源分數核定能力、不在舊凍結任務換規則。

@@ -97,8 +97,10 @@ def _lock(path):
             fcntl.flock(stream, fcntl.LOCK_UN)
 
 
-def _profiles_valid(profiles, decision):
-    for tier in ("high", "mid", "low", "open_source"):
+def _profiles_valid(profiles, decision, *, required_tiers=("high", "mid", "low", "open_source")):
+    if not set(required_tiers) <= set(profiles):
+        raise ValueError('Reachable profiles are required')
+    for tier in profiles:
         p = profiles[tier]
         fields = ('model', 'model_version', 'effort') if p.get('backend') == 'local' else ("model", "model_version", "effort", "provider", "provider_name")
         for field in fields:
@@ -127,11 +129,18 @@ class Core:
     enforceable spending limits, validation correctness and tool sandboxing.
     """
     def __init__(self, client, profiles, decision_profile, *, limits=None, system=SYSTEM,
-                 local_backend=None, diagnostic_contract=None, execution_policy=None):
+                 local_backend=None, diagnostic_contract=None, execution_policy=None, selection_policy=None):
         self.client = client
         self.profiles = deepcopy(profiles)
         self.decision = deepcopy(decision_profile)
-        _profiles_valid(self.profiles, self.decision)
+        self.selection_policy = deepcopy(selection_policy)
+        required = ("high", "mid", "low", "open_source")
+        if self.selection_policy is not None:
+            required = {t for phase in self.selection_policy.reservation_plan()['phases'] for t in phase}
+            version = self.selection_policy.plan['policy'].get('classifier_version')
+            if version is not None and version != self.decision['version']:
+                raise ValueError('Calibrated classifier version differs from Core')
+        _profiles_valid(self.profiles, self.decision, required_tiers=required)
         self.limits = limits or Limits()
         self.system = system
         self.local_backend = local_backend
@@ -150,6 +159,8 @@ class Core:
                     raise ValueError('Quantized score requires explicit configuration qualification')
         self.diagnostic_contract = diagnostic_contract or DiagnosticContract()
         self.execution_policy = deepcopy(execution_policy)
+        if self.selection_policy is not None and self.selection_policy.plan['profiles'] != self.profiles:
+            raise ValueError('Selection policy profiles differ from Core')
 
     def configuration_descriptor(self):
         """Snapshot all behavior-defining Core configuration, without runtime state.
@@ -167,10 +178,25 @@ class Core:
             descriptor['local_backend'] = self.local_backend.descriptor()
         if self.execution_policy is not None:
             descriptor['execution_policy'] = self.execution_policy.to_dict()
+        if self.selection_policy is not None:
+            descriptor.update(engine_version='0.3.0', routing_version=self.selection_policy.plan['schema_version'],
+                              selection_policy=self.selection_policy.descriptor())
         rejection_policy = getattr(self.client, 'rejection_fee_policy', None)
         if rejection_policy is not None:
             descriptor['rejection_fee_policy'] = rejection_policy.descriptor()
         return deepcopy(descriptor)
+
+    def execution_contract_descriptor(self, contract_version):
+        """Execution/validation inputs calibrated with a QCS whole-task forecast.
+
+        Candidate/classifier identity and routing version are bound separately.
+        Applications must version tools, workspace and validator in their public
+        contract just as for original Core manifests.
+        """
+        excluded = {'profiles', 'decision', 'selection_policy', 'engine_version',
+                    'routing_version', 'generation_attempt_limits'}
+        return {'core': {k: v for k, v in self.configuration_descriptor().items() if k not in excluded},
+                'validation_contract': contract_version}
 
     def _checked(self, cid, url, payload, accepted, provider, *, allow_rejection=False):
         record = self.client.call(cid, url, payload)
@@ -190,6 +216,17 @@ class Core:
         return record, {"call_id": cid, **info}
 
     def _select(self, prefix, task, first, actions, *, stage):
+        if self.selection_policy is not None:
+            economic = self.selection_policy.decide(stage, first['tier'])
+            # Freeze the free decision and the latest public inputs too. Resuming
+            # a paid answer must not silently change the branch or classifier use.
+            directory = Path(self.client.root) / 'runs' / prefix.removeprefix('run-')
+            _save(directory / ('economics-' + stage + '.json'),
+                  {'outcome': economic, 'previous_tier': first['tier'],
+                   'previous_answer': first['final'], 'public_diagnostics': first['public']})
+            if economic['action'] == 'direct':
+                return {'selected_tier': economic['selected_tier'], 'decisions': [economic],
+                        'classifier_calls': 0, 'calls': []}
         if self.execution_policy:
             location = self.execution_policy.classifier
             self.execution_policy.require('classifier', location)
@@ -214,7 +251,9 @@ class Core:
 
         selected = routing.route(False, state, self.profiles, self.decision['version'], decide,
                                  model_version=self.decision['version'],
-                                 allowed_response_models=(self.decision['version'],), stage=stage)
+                                 allowed_response_models=(self.decision['version'],), stage=stage,
+                                 policy_version=self.selection_policy.plan['schema_version']
+                                 if self.selection_policy is not None else None)
         return {**selected, "calls": calls}
 
     def _attempt(self, env, messages, tier, prefix, index, actions, directory):
@@ -397,6 +436,12 @@ class Core:
             raise ValueError("Task requires a public prompt")
         if not isinstance(contract_version, str) or not contract_version.strip():
             raise ValueError("An explicit public contract version is required")
+        if self.selection_policy is not None and (mode != 'cloudyfan' or
+                task.get('workload_id') != self.selection_policy.plan['policy']['workload_id']):
+            raise ValueError('QCS requires its bound CloudyFan workload')
+        if self.selection_policy is not None and self.execution_contract_descriptor(contract_version) != (
+                self.selection_policy.plan['policy']['execution_contract']):
+            raise ValueError('QCS calibrated execution contract differs from actual Core')
         directory = Path(self.client.root) / 'runs' / run_id
         if directory.is_symlink():
             raise ValueError("Run directory cannot be a symlink")

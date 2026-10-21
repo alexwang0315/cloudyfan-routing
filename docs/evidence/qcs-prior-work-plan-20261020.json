@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "integration_branch": "codex/implement-routing-spec-1",
+  "baseline_commit": "c2993bb9d902bc79ea0f161cc2596dc4d52125f5",
+  "merger_owner": "root",
+  "shared_interfaces": [],
+  "tasks": [
+    {
+      "id": "SQL-RUNNER-01",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/scores/sql_runner.py",
+        "tests/test_sql_model_runner.py",
+        "scripts/demo_sql_model_runner.py",
+        "docs/sql-model-runner.md",
+        "docs/score-source-manual-operations.md",
+        "docs/score-update-operations.md",
+        "docs/sql-model-qualification-v2.md",
+        "docs/release-readiness.md",
+        "docs/handoff.md",
+        "docs/verification.md",
+        "docs/coordination.md",
+        "docs/agent-state.json",
+        "docs/work-plan.json",
+        "docs/evidence/sql-runner-offline-20261020.json",
+        "src/cloudyfan_jev/scores/sql_capability.py",
+        "tests/test_sql_model_qualification.py",
+        "docs/evidence/sql-runner-baseline-20261020.json",
+        "docs/evidence/sql-runner-prior-agent-state-20261020.json",
+        "docs/evidence/sql-runner-prior-work-plan-20261020.json",
+        "docs/evidence/sql-runner-mock-20261020.json",
+        "docs/evidence/sql-runner-precommit-20261020.json"
+      ],
+      "depends_on": [],
+      "consumed_interfaces": []
+    },
+    {
+      "id": "RG02-PUBLIC-PREFLIGHT-01",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "docs/sql-model-qualification-v2.md",
+        "docs/first-pool-fee-gaps.md",
+        "docs/rg04-evidence-gaps.md",
+        "docs/handoff.md",
+        "docs/coordination.md",
+        "docs/verification.md",
+        "docs/release-readiness.md",
+        "docs/agent-state.json",
+        "docs/work-plan.json",
+        "docs/rg02-public-preflight-20261020.md",
+        "docs/evidence/rg02-public-preflight-20261020.json",
+        "docs/evidence/sql-model-api-plan-public-20261020.json"
+      ],
+      "depends_on": [
+        "SQL-RUNNER-01"
+      ],
+      "consumed_interfaces": []
+    },
+    {
+      "id": "QCS-DESIGN-01",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "docs/score-integration.md",
+        "docs/sql-model-qualification-v2.md",
+        "docs/handoff.md",
+        "docs/coordination.md",
+        "docs/verification.md",
+        "docs/release-readiness.md",
+        "docs/agent-state.json",
+        "docs/work-plan.json",
+        "docs/quality-cost-speed-selection.md",
+        "docs/evidence/sql-model-api-plan-public-20261020.json",
+        "docs/evidence/quality-cost-speed-design-20261020.json"
+      ],
+      "depends_on": [
+        "RG02-PUBLIC-PREFLIGHT-01"
+      ],
+      "consumed_interfaces": []
+    }
+  ]
+}

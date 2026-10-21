@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "scope": "sql-model-capture-runner-and-manual-source-operations",
+  "scope": "category-four-pool-routing-v1",
   "phase": "offline_verified",
-  "baseline_commit": "c2993bb9d902bc79ea0f161cc2596dc4d52125f5",
+  "baseline_commit": "9d20072b076bb64c3666cd3d1380dcb5e49bb909",
   "integration_branch": "codex/implement-routing-spec-1",
   "constraints": {
     "paid_api": false,
@@ -14,8 +14,8 @@
   "release_registry": "docs/release-gates.json",
   "work_plan": "docs/work-plan.json",
   "last_verified": {
-    "path": "docs/evidence/sql-runner-baseline-20261020.json",
-    "sha256": "323632b37fc27db96495cb742fbaff2a7d7d83d8f103858d52d67d95f4f7cbcf"
+    "path": "docs/evidence/qcs-baseline-20261020.json",
+    "sha256": "ae88d44eee93a3a1be3f27d6c20afba3031b717f1748d7db40f8545125fa176e"
   },
   "history": [
     {
@@ -225,27 +225,91 @@
     {
       "path": "docs/evidence/sql-runner-prior-work-plan-20261020.json",
       "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/qcs-prior-agent-state-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/qcs-prior-work-plan-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/qcs-pool-reselection-prior-agent-state-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/qcs-pool-reselection-prior-work-plan-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/qcs-offline-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/discovery-prior-agent-state-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/discovery-prior-work-plan-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/authenticated-category-prior-agent-state-20261021.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/authenticated-category-prior-work-plan-20261021.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/category-routing-prior-agent-state-20261021.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/category-routing-prior-work-plan-20261021.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/category-precommit-prior-agent-state-20261021.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/category-precommit-prior-work-plan-20261021.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/category-routing-offline-20261021.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/category-routing-tree-precommit-20261021.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/category-routing-workspace-precommit-20261021.json",
+      "record_kind": "historical"
     }
   ],
   "next_steps": [
     {
       "gate": "RG-02",
-      "action": "Capture runner, private Client-bound records, public-only same-model repair, post-capture grading and mock50x4 rehearsal are implemented/offline verified. Next obtain separate authority, fresh exact API identity/prices and RG04 enforceable full bounds before running real independent SQL qualification. No API spend is authorized now; RG01 and old experiments remain frozen; fixed-high standalone routing control remains paused.",
+      "action": "Category-specific exact configuration qualification and QCS evidence required for real candidates. 23-category compiler/CategoryCore offline complete; SQL/RG01 exam and old evidence remain frozen. No model POST authority in current scope.",
       "requires_authorization": true
     },
     {
       "gate": "RG-03",
-      "action": "Manual source-use/update runbook is documented. Actual source-use grounds, named update/review responsibility and fresh retrieval/catalog evidence remain pending. Use existing native family/effort tiers and independently dated SQL qualification; do not fabricate benchmark/API equivalence, refresh archived dates or activate a real current.",
+      "action": "23 independent native policies/four-pool compiler and explicit-category runtime now implemented. Per-category real source identity/effort/provider, source use, freshness, whole-task cost/speed and classifier-conditional calibration remain pending; no production current activated. Preserved old-copy gate still fails.",
       "requires_authorization": true
     },
     {
       "gate": "RG-04",
-      "action": "Candidate-specific eight-component/seven-path gap matrix remains pending. Obtain pinned Decisions cumulative input and all-role binding rates/bounds, settlement and in-flight guarantees; no supplier contact or paid test in this scope.",
+      "action": "Real all-component/all-path/account/in-flight fee bounds remain null. Current QCS forecasts only decide economics, never enforce ceilings; reachable generation and any paid classifier still need effective verified bounds, current authorization and known billing before dispatch. No supplier contact/account/model API authorized in this offline scope.",
       "requires_authorization": true
     }
   ],
   "current_verification": {
-    "path": "docs/evidence/sql-runner-offline-20261020.json",
-    "sha256": "ac33f4eb0c8c4799a90f2ec8076d19726e77cb1becd8d31261c0110820cf5fd4"
+    "path": "docs/evidence/category-routing-tree-precommit-20261021.json",
+    "sha256": "19cc326cd15a27ee6205b1c99f0fa9d2fa75f385fc65db884facecc71ed84103"
   }
 }

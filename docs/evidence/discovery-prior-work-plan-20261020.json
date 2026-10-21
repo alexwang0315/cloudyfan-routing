@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "integration_branch": "codex/implement-routing-spec-1",
+  "baseline_commit": "9d20072b076bb64c3666cd3d1380dcb5e49bb909",
+  "merger_owner": "root",
+  "shared_interfaces": [],
+  "tasks": [
+    {
+      "id": "QCS-POOL-01",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "examples/first-pool-profile-qcs-v1.json",
+        "examples/sql-model-versions-qcs-v1.json",
+        "examples/qcs-candidate-review-v1.json",
+        "docs",
+        "examples/selected-candidate-set.json",
+        "README.md"
+      ],
+      "depends_on": [],
+      "consumed_interfaces": []
+    }
+  ]
+}

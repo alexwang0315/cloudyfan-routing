@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "integration_branch": "codex/implement-routing-spec-1",
+  "baseline_commit": "9d20072b076bb64c3666cd3d1380dcb5e49bb909",
+  "merger_owner": "root",
+  "shared_interfaces": [],
+  "tasks": [
+    {
+      "id": "CATEGORY-SOURCE-01",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/scores/metrics.py",
+        "src/cloudyfan_jev/scores/discovery.py",
+        "tests/test_score_metrics.py",
+        "tests/test_score_discovery.py",
+        "docs",
+        "README.md",
+        "examples/selected-candidate-set.json"
+      ],
+      "depends_on": [],
+      "consumed_interfaces": []
+    }
+  ]
+}

@@ -1,0 +1,259 @@
+{
+  "schema_version": 1,
+  "scope": "quality-cost-speed-routing-v1",
+  "phase": "offline_verified",
+  "baseline_commit": "9d20072b076bb64c3666cd3d1380dcb5e49bb909",
+  "integration_branch": "codex/implement-routing-spec-1",
+  "constraints": {
+    "paid_api": false,
+    "deployment": false,
+    "source_push": false,
+    "hardware": false,
+    "model_downloads": false
+  },
+  "release_registry": "docs/release-gates.json",
+  "work_plan": "docs/work-plan.json",
+  "last_verified": {
+    "path": "docs/evidence/qcs-baseline-20261020.json",
+    "sha256": "ae88d44eee93a3a1be3f27d6c20afba3031b717f1748d7db40f8545125fa176e"
+  },
+  "history": [
+    {
+      "path": "docs/implementation-spec1.md",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/verification.md",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg04-components-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg04-components-initial-pass.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg04-zero-rate-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg04-zero-rate-offline.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-sql-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-sql-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg04-zero-rate-precommit.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/release-preparation-precommit-20261019.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-ready-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-ready-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-semantic-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-semantic-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-decision-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-decision-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-tickets-prior-agent-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-tickets-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-tickets-offline-20261019.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-scout-prep-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-scout-prep-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-scout-environment-preparation-20261019.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-target-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-target-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-linux-target-runtime.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-target-offline-20261019.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-review-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-review-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-technical-review-20261019.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-execution-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-execution-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-live-integration-20261019.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rate-limit-prior-agent-state-20261019.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rate-limit-prior-work-plan-20261019.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/fee-policy-prior-agent-state-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/fee-policy-prior-work-plan-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/fresh50-recovery-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/public-suite-prior-agent-state-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/public-suite-prior-work-plan-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/sql-public-suite-precommit-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/sql-public-suite-offline-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/first-pool-prior-agent-state-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/first-pool-prior-work-plan-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/fee-report-precommit-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/sql-model-prior-state-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/sql-model-prior-plan-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/first-pool-public-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/sql-model-offline-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/sequential-integration-prior-agent-state-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/sequential-integration-prior-work-plan-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/sql-runner-prior-agent-state-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/sql-runner-prior-work-plan-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/qcs-prior-agent-state-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/qcs-prior-work-plan-20261020.json",
+      "record_kind": "historical"
+    }
+  ],
+  "next_steps": [
+    {
+      "gate": "RG-02",
+      "action": "Opt-in QCS implementation is offline verified. Redesign economically meaningful exact candidate configurations before any new plan; obtain independent live identity/SQL and workload-specific complete-cost/whole-flow/conditional classifier calibration under separate authorization. Old four-candidate/US60 proposal remains held; RG01 and fixed-high pause preserved. No model pool activated.",
+      "requires_authorization": true
+    },
+    {
+      "gate": "RG-03",
+      "action": "Pure three-dimensional normalization and per-candidate source binding are implemented. Obtain reviewed applicable real source/pricing/speed data and source-use/update ownership, retaining native quality scales and missing observations; frozen QCS inputs must match actual execution/validation settings. No automatic remote activation or source rights established.",
+      "requires_authorization": true
+    },
+    {
+      "gate": "RG-04",
+      "action": "Real all-component/all-path/account/in-flight fee bounds remain null. Current QCS forecasts only decide economics, never enforce ceilings; reachable generation and any paid classifier still need effective verified bounds, current authorization and known billing before dispatch. No supplier contact/account/model API authorized in this offline scope.",
+      "requires_authorization": true
+    }
+  ],
+  "current_verification": {
+    "path": "docs/evidence/qcs-offline-20261020.json",
+    "sha256": "0776f2434beea7f68d471a2fd965b7b69cb4d96c91c5ab539ef83389ec7e5b4a"
+  }
+}

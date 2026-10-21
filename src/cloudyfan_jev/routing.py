@@ -61,7 +61,7 @@ def project_public(public_state):
     return state
 
 
-def build_request(stage, public_state, profiles, model, model_version=None):
+def build_request(stage, public_state, profiles, model, model_version=None, *, policy_version=None):
     """Return (context, one binary question, payload); this never calls an API."""
     if stage not in STAGES:
         raise ValueError("Unknown decision stage")
@@ -85,8 +85,11 @@ def build_request(stage, public_state, profiles, model, model_version=None):
                      "failed_phase": "open_source" if stage == "low_mid" else "low_mid",
                      "external_scores_are_correctness_probabilities": False,
                      "option_distributions_are_correctness_probabilities": False}
+    version = policy_version or VERSION
+    if policy_version is not None:
+        state['step']['policy_version'] = version
     context = DecisionContext(tenant_id="cloudyfan-hierarchical50", state=state,
-        state_version=VERSION, policy_version=VERSION, skill_version=VERSION,
+        state_version=version, policy_version=version, skill_version=version,
         model_version=model_version or model, required_fields=("task", "candidates", "step"),
         max_state_bytes=65536)
     instructions = (
@@ -100,7 +103,7 @@ def build_request(stage, public_state, profiles, model, model_version=None):
         + ("Generate the selected low or mid answer next. Only a failed public validation of that answer may trigger mid-versus-high."
            if stage == "low_mid" else "The preceding low-or-mid answer failed public validation. Select mid or high for the final repair using that answer and its diagnostics.")
     )
-    questions = [DecisionQuestion(question_id=stage, type="choice", version=VERSION,
+    questions = [DecisionQuestion(question_id=stage, type="choice", version=version,
         instructions=instructions, criteria={
             lower: "Lower candidate has sufficient demonstrated capability for this repair",
             upper: "Higher candidate is needed or lower candidate sufficiency cannot be established"})]
@@ -150,7 +153,7 @@ def parse_choice(raw, context, questions, model, allowed_response_models=()):
 
 
 def route(public_passed, public_state, profiles, model, decide, *, model_version=None,
-          allowed_response_models=(), stage="low_mid"):
+          allowed_response_models=(), stage="low_mid", policy_version=None):
     """Select ONE stage; the runner generates and validates before a later stage.
 
     True public validation terminates with zero calls. False/None means fail or
@@ -161,7 +164,8 @@ def route(public_passed, public_state, profiles, model, decide, *, model_version
         raise ValueError("Public pass status must be True, False or None")
     if public_passed is True:
         return {"selected_tier": "open_source", "decisions": [], "classifier_calls": 0}
-    context, questions, payload = build_request(stage, public_state, profiles, model, model_version)
+    context, questions, payload = build_request(stage, public_state, profiles, model, model_version,
+                                               policy_version=policy_version)
     raw = decide(stage, context, questions, payload)
     outcome = parse_choice(raw, context, questions, model, allowed_response_models)
     return {"selected_tier": outcome["selected_tier"], "decisions": [outcome],

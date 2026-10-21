@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "tested_commit": "9d20072b076bb64c3666cd3d1380dcb5e49bb909",
+  "source_digest": "dad094a8af7536bb704f199f5fbca4802ae30631e0d7caa722e0f49407547363",
+  "tests_passed": 1322,
+  "source_evidence": "docs/evidence/sql-runner-offline-20261020.json",
+  "note": "Baseline exact executable/test/build inputs, no new full run"
+}

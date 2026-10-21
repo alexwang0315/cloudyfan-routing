@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "integration_branch": "codex/implement-routing-spec-1",
+  "baseline_commit": "9d20072b076bb64c3666cd3d1380dcb5e49bb909",
+  "merger_owner": "root",
+  "shared_interfaces": [],
+  "tasks": [
+    {
+      "id": "QCS-DISCOVERY-01",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/scores/discovery.py",
+        "scripts/refresh_openrouter_pools.py",
+        "tests/test_score_discovery.py",
+        "examples/openrouter-discovery-policy-v1.json",
+        "docs",
+        "README.md",
+        "examples/selected-candidate-set.json"
+      ],
+      "depends_on": [],
+      "consumed_interfaces": []
+    }
+  ]
+}

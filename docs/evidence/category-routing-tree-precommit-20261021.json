@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "category-four-pool-routing-v1",
+  "verified_at": "2026-10-21T00:43:55.358103+00:00",
+  "source_digest": "c336b4c2e5aedd33bbfa08156430b77eaf130075e1d543cf45e2561dcd160e4d",
+  "tests_passed": 1538,
+  "test_scope": "Exact staged index export: all collected tests; no ignore flags and no inherited untracked files.",
+  "command": "./scripts/check --integration",
+  "review_fix": "Reject non-object optional SQL qualifications per candidate; require nonempty source-model identities for unranked OSS metrics.",
+  "focused_workspace_tests_passed": 230,
+  "ruff": "passed",
+  "mock_core_score_demos": "passed",
+  "sdist_and_wheel": "passed",
+  "original_full_workspace_gate": "70 known numbered-copy failures retained; not relabeled green.",
+  "formal_qualification_changed": false,
+  "model_api_usd": "0",
+  "deployment": false,
+  "push": false,
+  "artifacts": [
+    {
+      "path": "runtime/category-precommit-20261021/staged-final-check.log",
+      "sha256": "402c51c0c29912adab44d0e0234599cb51b8ae0d525780313a38def2c39c293b"
+    },
+    {
+      "path": "runtime/category-precommit-20261021/staged-check.log",
+      "sha256": "8116845306da152bd15bc2ea081e435b393b01f8448ad8ac3039238088053364"
+    },
+    {
+      "path": "runtime/category-precommit-20261021/focused-green.log",
+      "sha256": "16f045ce0c92207ec0ed7c0d39f65ec2bdc4e942c45557c8e10909b8a5b8fbb6"
+    },
+    {
+      "path": "runtime/category-precommit-20261021/focused-final.log",
+      "sha256": "9bd02e68d0947415e15fea4fa4bd5d591a7cf719a6e7fdccd0f46b64520956e0"
+    },
+    {
+      "path": "runtime/category-precommit-20261021/malformed-sql-red.log",
+      "sha256": "89b7af3708b63261a181d88c8cd7ab752896b5752e14714ece0820f8a2f95f23"
+    },
+    {
+      "path": "runtime/category-precommit-20261021/missing-source-id-red.log",
+      "sha256": "45a0192eaa72a25ac9b223f678ae6b1d0da92695142b0869b007bd7686d4a0cd"
+    },
+    {
+      "path": "runtime/category-precommit-20261021/staged-safety.json",
+      "sha256": "90a9a723339cc096c5e069419a772c4e27616e7e078d3ff7deb19b3fe9f6b44b"
+    }
+  ],
+  "preserved_unrelated_paths": [
+    "docs/sql-model-qualification-v2.md",
+    "docs/first-pool-fee-gaps.md",
+    "docs/rg04-evidence-gaps.md",
+    "examples/selected-candidate-set.json",
+    "src/cloudyfan_jev/scores/discovery.py",
+    "scripts/refresh_openrouter_pools.py",
+    "tests/test_score_discovery.py"
+  ],
+  "precommit_scope_note": "Required QCS/core/budget/metrics dependencies included. SQL plans, broad discovery work and numbered copies remain unstaged."
+}

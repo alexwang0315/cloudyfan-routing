@@ -281,3 +281,20 @@ Completion: root retained sole edit ownership. The read-only technical reviewer 
 ## SQL qualification runner local commit review — 2026-10-20
 
 The user now authorizes review and local Git commit; earlier no-commit statements describe their capture time. Direct review found no new blocking issue. The current executable/test/build fingerprint exactly matches the preserved1,322-test full integration result; this review reuses that result, not a fresh full run. A fresh offline quick check passed. All621 files from the original failed mock and the original failure/fix receipts remain intact;136 of137 protected inputs are unchanged, with only the declared RG02 Client-encoding fixture correction. [Precommit evidence](evidence/sql-runner-precommit-20261020.json) records the checks and preservation. RG01 and formal gates remain unchanged/pending. Raw answers, prompts and receipts remain in ignored runtime; no API, supplier contact, deployment or push.
+
+### 2026-10-21 category-qcs-v1 離線接入
+
+23 類各自四池、類別資格、完整成本／速度 QCS 與 CategoryCore 已完成；類別由呼叫端明確指定。SQL 資格與 RG-01 保留；非 SQL 類別不要求通過 SQL 考試。開源候選可憑該類獨立資格入池，不偽造排行榜分數。價差不足不呼叫或預留 Jev；類別／矩陣／政策／驗收契約凍結，既有回答不重送。
+
+最終現行測試 1,561 passed（明確排除保留的 `* 2.py` 舊副本，沒有新增全域忽略）；相關 226 項、Ruff、Git diff whitespace、23 類 mock 演練、既有 core/score 及兩種 QCS 示範、最終 sdist/wheel 皆通過。標準整體檢查診斷為 2,082 passed／70 failed，70 項皆是同批既有舊副本衝突；該診斷早於最後測試增補，與最終現行測試分列，不宣稱整體 gate 通過。原始收據、初次收集失敗與開源候選回歸 red/green 都保留。
+
+[實作與使用](category-four-pool-routing.md)；[本輪證據](evidence/category-routing-offline-20261021.json)。沒有網路、模型 API、部署、推送、提交或刪除。正式模型／來源／完整成本與速度資格仍 pending；合成結果不是實測降本。
+
+
+### 2026-10-21 本機提交前審查
+
+審查補正候選隔離與身分核對邊界：非物件 SQL 資格資料只排除該候選，不中斷全矩陣或 QCS 接入／重播；未上榜開源候選的來源觀測不得用空模型 ID 通過身分核對。原始失敗及修正後 230 項回歸保留。
+
+暫存內容匯出成獨立目錄，`./scripts/check --integration` 全部 1,538 項通過，Ruff、兩個既有 mock 示範與離線 sdist/wheel 通過；未設測試忽略，也未將原工作區的未追蹤舊副本搬入提交。先前 1,561 項、70 項舊副本失敗及所有原始資料保持原紀錄。
+
+[提交內容驗證](evidence/category-routing-tree-precommit-20261021.json)與[原工作區回歸](evidence/category-routing-workspace-precommit-20261021.json)分列；兩者來源指紋不同，工作區狀態索引與提交索引分別指向各自證據。必要 QCS／費用預留／來源正規化相依項目納入；SQL 計畫、廣泛來源工作及舊副本留在工作區，原始 runtime 不入 Git。正式資格 pending；本輪無模型 API、部署或推送。

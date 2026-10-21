@@ -1,0 +1,230 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "quality-cost-speed-routing-v1",
+  "observed_at": "2026-10-20T08:00:41.544114+00:00",
+  "base_commit": "9d20072b076bb64c3666cd3d1380dcb5e49bb909",
+  "tested_tree": "Uncommitted opt-in QCS implementation; default sequential/SQL qualification preserved",
+  "source_digest": "07dfd85331b24588e635c4b2ced404124e8c05279c419d6ea0472f6b6bac9ea7",
+  "tests_passed": 1383,
+  "pytest_seconds": 375.6,
+  "new_focused_tests": 61,
+  "focused_log": {
+    "path": "runtime/qcs-implementation-20261020T072104Z/execution-binding-focused.log",
+    "sha256": "355864bc5da6b67a28a3d3f880d97b01040372e39fe9899df86c1d1e2e00a91a"
+  },
+  "check_receipt": {
+    "path": "runtime/checks/0d1d577f43f047919af5bb420cd7dcbb/checks.json",
+    "sha256": "cfb0ea5845a9962936a0519f6b9e2d68db13fb6b379fdf1d79f157004eb2bde8"
+  },
+  "integration_log": {
+    "path": "runtime/qcs-implementation-20261020T072104Z/final-contract-integration.log",
+    "sha256": "190e740b2351c112bf79a18be4cd511edfcbaf4de87f3a51b0ac86883a6a4d62"
+  },
+  "check_steps": [
+    {
+      "command": [
+        "/Users/alexwang0315/.local/bin/uv",
+        "sync",
+        "--project",
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core",
+        "--locked",
+        "--offline",
+        "--extra",
+        "dev",
+        "--no-python-downloads"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/Users/alexwang0315/.local/bin/uv",
+        "pip",
+        "check",
+        "--python",
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/.venv/bin/python"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/.venv/bin/python",
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/scripts/project_state.py",
+        "check"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/.venv/bin/python",
+        "-m",
+        "ruff",
+        "check",
+        "."
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-q"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/.venv/bin/cloudyfan-jev-demo",
+        "--route",
+        "high",
+        "--output",
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/runtime/checks/0d1d577f43f047919af5bb420cd7dcbb/core"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/.venv/bin/cloudyfan-score-demo",
+        "--route",
+        "high",
+        "--output",
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/runtime/checks/0d1d577f43f047919af5bb420cd7dcbb/scores"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/Users/alexwang0315/.local/bin/uv",
+        "build",
+        "--offline",
+        "--no-python-downloads",
+        "--python",
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/.venv/bin/python",
+        "--out-dir",
+        "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/runtime/checks/0d1d577f43f047919af5bb420cd7dcbb/dist"
+      ],
+      "returncode": 0
+    }
+  ],
+  "versions": {
+    "opt_in_routing": "hierarchical-qcs-v1",
+    "opt_in_engine_descriptor": "0.3.0",
+    "default_routing": "hierarchical-sequential-v1",
+    "default_engine_descriptor": "0.2.0",
+    "package_release_version_changed": false
+  },
+  "implemented": [
+    "Pure benchmark and endpoint quality/pricing/speed normalization with unknowns and source scope",
+    "Per-candidate capability/context/provider/quality/freshness/full-cost/speed filtering",
+    "Cheapest conservative direct continuation; preference only breaks cost/speed ties",
+    "Independent conditional classifier full-cost and fallback-aware probability evidence binding",
+    "OSS-inclusive whole-task flow forecast bound to frozen input/policy and actual execution/validation contract",
+    "Zero-Decisions direct path, reachable full reservation, immutable manifest/checkpoints and replay"
+  ],
+  "mock_demonstrations": {
+    "direct": {
+      "classifier_calls": 0,
+      "mock_posts": 2,
+      "production_qualified": false,
+      "real_api_cost_usd": "0",
+      "replay_new_posts": 0,
+      "scenario": "direct",
+      "simulated_api_usd": "0.02",
+      "simulated_reserved_usd": "0.3",
+      "status": "passed",
+      "synthetic": true,
+      "tiers": [
+        "open_source",
+        "mid"
+      ]
+    },
+    "classify": {
+      "classifier_calls": 1,
+      "mock_posts": 3,
+      "production_qualified": false,
+      "real_api_cost_usd": "0",
+      "replay_new_posts": 0,
+      "scenario": "classify",
+      "simulated_api_usd": "0.021",
+      "simulated_reserved_usd": "0.4",
+      "status": "passed",
+      "synthetic": true,
+      "tiers": [
+        "open_source",
+        "low"
+      ]
+    }
+  },
+  "packaging": {
+    "wheel": {
+      "path": "runtime/checks/0d1d577f43f047919af5bb420cd7dcbb/dist/cloudyfan_jev_core-0.1.0-py3-none-any.whl",
+      "sha256": "90b6584eb4beac67c52be52a3710403aa7ffd8737f3eefb58d952ab8b91d2fd0"
+    },
+    "contains_metrics_qcs_and_unchanged_sql_runner": true
+  },
+  "preservation": {
+    "tracked_baseline_files_checked": 301,
+    "unchanged": 290,
+    "expected_changes": [
+      "docs/agent-state.json",
+      "docs/coordination.md",
+      "docs/handoff.md",
+      "docs/release-readiness.md",
+      "docs/score-integration.md",
+      "docs/verification.md",
+      "docs/work-plan.json",
+      "src/cloudyfan_jev/budget.py",
+      "src/cloudyfan_jev/engine.py",
+      "src/cloudyfan_jev/routing.py",
+      "src/cloudyfan_jev/scores/integration.py"
+    ],
+    "unexpected_changes": [],
+    "rg01_sql_validator_exam_profiles_formal_registry_and_historical_tracked_evidence_unchanged": true,
+    "preexisting_public_preflight_work_preserved": true,
+    "raw_receipts": "Private ignored runtime only"
+  },
+  "review": {
+    "path": "runtime/qcs-implementation-20261020T072104Z/review-resolution.json",
+    "sha256": "9ba6791092803fb88d61f75fa43f9573fd22b6a95fe5aa9d942ce1e897999da7"
+  },
+  "earlier_iterations": {
+    "inventory": {
+      "path": "runtime/qcs-implementation-20261020T072104Z/preserved-review-iterations.json",
+      "sha256": "39903986fc29a2264c606df06e6c154eb08041257b0e2705517bfe558a3c65dd"
+    },
+    "first_full_pass": {
+      "path": "runtime/qcs-implementation-20261020T072104Z/full-integration.log",
+      "sha256": "5f62f140856cdde0269e7b8ed9af7a6f322b56ec09733bf0addd5aa621c3d2bc"
+    },
+    "intermediate_full_interrupted": {
+      "path": "runtime/qcs-implementation-20261020T072104Z/final-integration.log",
+      "sha256": "52b0830909606268f58ecb6268e275bf9309f536e14fa59b6efe59997cf4f276"
+    },
+    "interruption_reason": "Stopped intermediate pytest at1352 passes to bind execution/validation settings; not a final pass",
+    "red_regressions": [
+      "5 review cases",
+      "1 whole-flow case",
+      "3 execution-contract cases"
+    ],
+    "initial_mock_fixture_issue": "String classifier usage.cost caused parser fallback; retained original source/observation/receipts, final fixture uses number"
+  },
+  "real_model_requests": 0,
+  "source_network_requests_this_implementation": 0,
+  "api_cost_usd": "0",
+  "supplier_contact": false,
+  "deployment": false,
+  "push": false,
+  "local_commit": false,
+  "fixed_high_independent_experiment": false,
+  "production_qualification_recorded": false,
+  "limitations": [
+    "All new model/fee/authorization/calibration evidence is synthetic; no real savings or latency claim",
+    "True model identity/SQL capability, independent cost/flow/conditional calibration and source-use evidence pending",
+    "Forecasts are not enforceable spending caps or per-request latency guarantees",
+    "Application must honestly version tool/validator/workspace changes via contract_version",
+    "Old four-candidate/US60 proposal remains held; no old paid request replay or RG01 rule change",
+    "Optional pure normalization is implemented; no automatic remote three-dimensional update or activation"
+  ]
+}

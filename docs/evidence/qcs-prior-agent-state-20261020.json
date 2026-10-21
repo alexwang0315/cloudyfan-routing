@@ -1,0 +1,251 @@
+{
+  "schema_version": 1,
+  "scope": "sql-model-capture-runner-and-manual-source-operations",
+  "phase": "offline_verified",
+  "baseline_commit": "c2993bb9d902bc79ea0f161cc2596dc4d52125f5",
+  "integration_branch": "codex/implement-routing-spec-1",
+  "constraints": {
+    "paid_api": false,
+    "deployment": false,
+    "source_push": false,
+    "hardware": false,
+    "model_downloads": false
+  },
+  "release_registry": "docs/release-gates.json",
+  "work_plan": "docs/work-plan.json",
+  "last_verified": {
+    "path": "docs/evidence/sql-runner-baseline-20261020.json",
+    "sha256": "323632b37fc27db96495cb742fbaff2a7d7d83d8f103858d52d67d95f4f7cbcf"
+  },
+  "history": [
+    {
+      "path": "docs/implementation-spec1.md",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/verification.md",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg04-components-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg04-components-initial-pass.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg04-zero-rate-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg04-zero-rate-offline.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-sql-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-sql-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg04-zero-rate-precommit.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/release-preparation-precommit-20261019.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-ready-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-ready-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-semantic-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-semantic-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-decision-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-decision-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-tickets-prior-agent-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-tickets-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-tickets-offline-20261019.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-scout-prep-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-scout-prep-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-scout-environment-preparation-20261019.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-target-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-target-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-linux-target-runtime.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-target-offline-20261019.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-review-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-review-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-technical-review-20261019.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-execution-prior-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-execution-prior-work-plan.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rg01-live-integration-20261019.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rate-limit-prior-agent-state-20261019.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/rate-limit-prior-work-plan-20261019.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/fee-policy-prior-agent-state-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/fee-policy-prior-work-plan-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/fresh50-recovery-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/public-suite-prior-agent-state-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/public-suite-prior-work-plan-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/sql-public-suite-precommit-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/sql-public-suite-offline-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/first-pool-prior-agent-state-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/first-pool-prior-work-plan-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/fee-report-precommit-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/sql-model-prior-state-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/sql-model-prior-plan-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/first-pool-public-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/sql-model-offline-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/sequential-integration-prior-agent-state-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/sequential-integration-prior-work-plan-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/sql-runner-prior-agent-state-20261020.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/sql-runner-prior-work-plan-20261020.json",
+      "record_kind": "historical"
+    }
+  ],
+  "next_steps": [
+    {
+      "gate": "RG-02",
+      "action": "First implement the quality/cost/speed candidate and classifier-break-even contract in docs/quality-cost-speed-selection.md: current score-only tiers and optional intra-pool estimates are insufficient. Preserve the four archived candidates/US60 proposal as held, not an executable plan. Then refreeze economically meaningful candidates and obtain real identity/SQL and full fee evidence under separate authority. RG01 frozen; no fixed-high control or paid execution.",
+      "requires_authorization": true
+    },
+    {
+      "gate": "RG-03",
+      "action": "Implement normalized source fields for task-relevant quality, value-as-cost and applicable speed without fabricating missing data or combining different provider prices/speeds. Official benchmark schema is checked; authenticated dataset and appropriate current speed evidence are not. Native quality scales, per-dimension freshness and source-use/update ownership remain required; no automatic activation.",
+      "requires_authorization": true
+    },
+    {
+      "gate": "RG-04",
+      "action": "Public max_price, key/workspace caps, in-flight token estimates and conditional zero-completion insurance documented, but exact all-component/all-path/account/in-flight complete bounds remain null. Cache-write fees are explicit; price-filter/cache-off adapters not implemented. Prioritize four generation settings for the separate zero-classifier SQL exam; Decisions remains required for full routing activation. No account API, supplier contact or paid execution authorized.",
+      "requires_authorization": true
+    }
+  ],
+  "current_verification": {
+    "path": "docs/evidence/sql-runner-offline-20261020.json",
+    "sha256": "ac33f4eb0c8c4799a90f2ec8076d19726e77cb1becd8d31261c0110820cf5fd4"
+  }
+}

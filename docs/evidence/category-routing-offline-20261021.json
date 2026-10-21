@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "category-four-pool-routing-v1",
+  "verified_at": "2026-10-20T23:23:57.314433+00:00",
+  "source_digest": "04ad63223c39a3a50ce28e5471689ab6ed5efe9ed40a822fdafd1e058b0e653a",
+  "tests_passed": 1561,
+  "focused_tests_passed": 226,
+  "test_scope": "Final canonical suite excluding preserved '* 2.py' legacy copies, no global ignore added",
+  "tests_command": "uv run --locked --offline python -m pytest -q --ignore-glob='* 2.py' --junitxml=runtime/category-routing-20261021/canonical-final.xml",
+  "category_count": 23,
+  "new_category_tests": 94,
+  "new_runtime_tests": 40,
+  "mock_category_tasks_passed": 23,
+  "mock_category_posts": 46,
+  "mock_category_classifier_calls": 0,
+  "replay_new_posts": 0,
+  "budgeted_mock_paths": {
+    "direct": {
+      "reserve_usd": ".3",
+      "billed_usd": ".02",
+      "classifier_calls": 0
+    },
+    "classify": {
+      "reserve_usd": ".4",
+      "billed_usd": ".021",
+      "classifier_calls": 1
+    }
+  },
+  "ruff": "passed",
+  "diff_check": "passed",
+  "core_score_qcs_and_category_mock_demos": "passed",
+  "sdist_and_wheel": "passed offline after final executable change",
+  "full_workspace_gate": {
+    "result": "failed",
+    "failed": 70,
+    "passed": 2082,
+    "all_failures_in_preserved_numbered_copies": true,
+    "same_failure_ids_as_prior": true,
+    "scope": "Whole workspace diagnostic started before final test additions; final canonical suite above covers final executable inputs."
+  },
+  "preserved_failures": [
+    "initial missing module red test",
+    "unknown unranked source identity red regression",
+    "initial pytest launcher scripts import collection failure",
+    "known numbered-copy gate failures"
+  ],
+  "limitations": [
+    "Synthetic arithmetic validates plumbing, not real capabilities across 23 domains.",
+    "Task category is supplied explicitly; no automatic task classifier implemented.",
+    "Source thresholds exploratory; real category qualification/cost/speed/source-use evidence pending.",
+    "No new real model qualification or savings result."
+  ],
+  "model_api_usd": "0",
+  "network_calls": 0,
+  "sql_rules_modified": false,
+  "formal_qualification_changed": false,
+  "deployment": false,
+  "push": false,
+  "git_commit": false,
+  "artifacts": [
+    {
+      "path": "runtime/category-routing-20261021/canonical-final.xml",
+      "sha256": "29d1447fd0c352f279a13315c2e3bd6d005843c06e07cf5f7bce1926801160e5"
+    },
+    {
+      "path": "runtime/category-routing-20261021/canonical-final.log",
+      "sha256": "f040deb2a1cf88fe65a5f19e1eacac637c7ebc184d9084f738642dfb51a01600"
+    },
+    {
+      "path": "runtime/category-routing-20261021/focused-final.log",
+      "sha256": "d09d86255f93ff35c1539a69182b9943210ff0340f57273af1b7fdb01a587f8d"
+    },
+    {
+      "path": "runtime/category-routing-20261021/unranked-red.log",
+      "sha256": "80d8e6657763bbead41aa73b730b78dda467b6e3a20fbd6b0b7e00f4e207de33"
+    },
+    {
+      "path": "runtime/category-routing-20261021/unranked-green.log",
+      "sha256": "d69e7cb9fa68b2251c61f5b4cc69dc1735ebdc131bd297f05d9711e2427e2e5b"
+    },
+    {
+      "path": "runtime/category-routing-20261021/canonical-collection-failure.log",
+      "sha256": "66dd4007248be9ac6d3b25aac048fa0994d49585584ab00cdf707ff7f7f370c5"
+    },
+    {
+      "path": "runtime/category-routing-20261021/canonical-collection-failure.xml",
+      "sha256": "e015cf0496329390e28ef3cfca9e3d4414ab14723e40fd385e71e6eceb00f698"
+    },
+    {
+      "path": "runtime/category-routing-20261021/demo/summary.json",
+      "sha256": "05e80522765dd923ebd29301bdea8ca0de4556fb2ce084e160f031de3807941b"
+    },
+    {
+      "path": "runtime/category-routing-20261021/demo/synthetic-matrix.json",
+      "sha256": "0ffbb4df7c4753d5cfd2783e52dd4bc3b9a62be6d8a2367482b88e1f71dc31d5"
+    },
+    {
+      "path": "runtime/category-routing-20261021/qcs-direct/summary.json",
+      "sha256": "c4e6ebda88c31a409d7d91607b5eb3af7f39921d2a1e86b14164caf473e02721"
+    },
+    {
+      "path": "runtime/category-routing-20261021/qcs-classify/summary.json",
+      "sha256": "9723bf757df7757ffc3df07745a95a1473c85f12b750ed3b511420495b7acb9b"
+    },
+    {
+      "path": "runtime/category-routing-20261021/build-final.log",
+      "sha256": "4aa747ae1f72919d0d3da5e55076e012f405636f4eddf267bb6991333cb146eb"
+    },
+    {
+      "path": "runtime/category-routing-20261021/full-workspace-failures.json",
+      "sha256": "ece7e49fad1f5458bc05e33595e65ed07819afc05ac0378c86181b439b43804d"
+    },
+    {
+      "path": "runtime/category-routing-20261021/full-workspace-initial.log",
+      "sha256": "1556e3dc1b9753d194cb5dd41d4c710ff805bb298221c4858db5a64095d5bb7b"
+    }
+  ]
+}

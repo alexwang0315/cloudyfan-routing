@@ -259,3 +259,7 @@ Python API `validate_gates(data, root, *, now=None)` 回傳錯誤列表，不改
 [資格執行器](sql-model-runner.md)已接既有Client、共享預算與固定考試；[人工來源流程](score-source-manual-operations.md)明列資料使用、責任、期限及故障處理。[完整模擬](evidence/sql-runner-mock-20261020.json)完成50題×4設定、公開補答、中斷續跑、零POST重播及核帳後判分，200/200為合成控制答案，不是真實模型資格。候選包、來源使用／具名審閱及正式registry仍待核定；未啟用current，RG-01不變。
 
 本輪[完整離線驗證](evidence/sql-runner-offline-20261020.json)為1,322項（新執行器18項）、Ruff、兩個既有mock示範及sdist／wheel。原本機SDK相依套件的收集錯誤、離線快取恢復證據與最終成功收據分開保留；不把環境修復或合成模型結果當成正式資格。
+
+## 2026-10-21：23 類獨立四池與選模接入
+
+[離線實作](category-four-pool-routing.md)已接入類別限定的候選編譯、QCS 與 Core.run；各類分別使用品質、完整成本與整段速度，價差不足時不呼叫 Jev。這是程式實作與模擬上游驗證，沒有新真實模型測試或新節費率，也沒有啟用 current。23 類的真實模型／強度／供應商對照、獨立任務能力、完整成本／速度校準與來源使用仍須各自補證；SQL 資格與 RG-01 維持凍結。原始來源、失敗與帳務不變。

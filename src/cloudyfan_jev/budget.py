@@ -421,6 +421,10 @@ class BudgetedCore:
     def _admit(self, mode):
         from .engine import generation_tiers
         phases = generation_tiers(mode)
+        qcs = getattr(self.core, 'selection_policy', None) if mode == 'cloudyfan' else None
+        reachable = qcs.reservation_plan() if qcs is not None else None
+        if reachable is not None:
+            phases = reachable['phases']
         def model_cap(profile, key):
             model = profile[key]
             bound = self.model_bounds.get(model)
@@ -431,7 +435,9 @@ class BudgetedCore:
         amount = _exact((max(model_cap(self.core.profiles[t], 'model_version') for t in phase)
                          for phase in phases), self.core.limits.max_turns)
         if mode == 'cloudyfan':
-            amount = _exact((amount, _exact((model_cap(self.core.decision, 'version'),), 2)))
+            count = reachable['classifier_calls'] if reachable is not None else 2
+            if count:
+                amount = _exact((amount, _exact((model_cap(self.core.decision, 'version'),), count)))
         tool_max = Decimal(0)
         for name, policy in self.tool_bounds.items():
             self._verify('tool', name, {'external': policy.external}, policy.bound)

@@ -14,6 +14,7 @@ from time import time
 import uuid
 
 from .budget import EnforcedBound, money
+from .generation_request import reasoning_fields, reasoning_matches
 from .client import CHAT, DECISIONS, Client
 from .provider_bounds import credential_fingerprint
 from .receipt_store import ReceiptStore, _encoded, _immutable, _read
@@ -246,6 +247,8 @@ class ComponentBoundVerifier:
                 or not _instant(review['reviewed_at']) <= now < _instant(review['expires_at'])):
             raise ValueError('Invalid or expired review')
         config = self._configurations[identity]
+        if s.get('endpoint') == CHAT:
+            reasoning_fields(config)
         version = s.get('schema_version')
         if (set(s) != _FIELDS or type(version) is not int or version not in (1, 2)
                 or s['mechanism'] != f'qualified_components_v{version}'
@@ -337,11 +340,11 @@ class ComponentBoundVerifier:
             if endpoint == CHAT:
                 provider['require_parameters'] = True
                 output_cap = s['components']['output'].get('max_units')
-                if (set(payload) - {'session_id'} != {'model', 'provider', 'messages', 'max_tokens', 'reasoning'}
+                if (set(payload) - {'session_id'} != {'model', 'provider', 'messages', 'max_tokens'} | set(reasoning_fields(config))
                         or type(payload.get('max_tokens')) is not int
                         or not 0 < payload['max_tokens'] <= 2 ** 31
                         or (output_cap is not None and payload['max_tokens'] > output_cap)
-                        or payload['reasoning'] != {'effort': config['effort']}
+                        or not reasoning_matches(config, payload)
                         or ('session_id' in payload and not isinstance(payload['session_id'], str))
                         or not isinstance(payload['messages'], list) or not payload['messages']
                         or any(not isinstance(m, dict) or set(m) != {'role', 'content'}

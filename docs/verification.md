@@ -689,3 +689,24 @@ The user now authorizes review and local Git commit; earlier no-commit statement
 暫存內容匯出成獨立目錄，`./scripts/check --integration` 全部 1,538 項通過，Ruff、兩個既有 mock 示範與離線 sdist/wheel 通過；未設測試忽略，也未將原工作區的未追蹤舊副本搬入提交。先前 1,561 項、70 項舊副本失敗及所有原始資料保持原紀錄。
 
 [提交內容驗證](evidence/category-routing-tree-precommit-20261021.json)與[原工作區回歸](evidence/category-routing-workspace-precommit-20261021.json)分列；兩者來源指紋不同，工作區狀態索引與提交索引分別指向各自證據。必要 QCS／費用預留／來源正規化相依項目納入；SQL 計畫、廣泛來源工作及舊副本留在工作區，原始 runtime 不入 Git。正式資格 pending；本輪無模型 API、部署或推送。
+
+## 各類三候選備援離線實作 — 2026-10-21
+
+已完成明示選用`qcs-backup-policy-v1`／`BackupCategoryCore`：23類各自四池、主1備2準備與缺額、status/uptime/latency健康資料、持久冷卻及受控恢復、同池429/5xx故障切換、全域生成／分類／工具限制、涵蓋所有可達模型的費用預留、原始期限與不重送續跑、實際profile核帳。非推理模型明示none/omit的transport與資格／費用契約已接入；原低池v1候選包與舊研究不直接改版或啟用。
+
+**最終現行檔案1,769項通過，187項新增相關回歸通過，Ruff與Git diff whitespace通過。** 現行測試明示只在該次命令排除保留的`* 2.py`舊副本，沒有新增全域ignore或刪除。標準`./scripts/check --integration`仍是2,332 passed／70 failed；70個失敗ID與前次完全相同，皆在保留的舊副本，不能稱整體gate通過。兩個既有Mock示範、新23類主503→備援成功示範、離線sdist/wheel皆通過；新示範46個Mock生成POST、回讀新增POST 0。wheel含新模組，但仍保留8份舊source副本，不是整理完畢的正式發行artifact。
+
+原始整合檢查曾因iCloud回收native pydantic_core檔而有2項collection error；核對安裝RECORD後，從既有離線uv快取補回缺失檔，沒有下載或刪除。兩項審閱P1的Mock重現原檔、修正與獨立複驗均保留；不合格／竄改候選與到期資格／校準會在新增POST前拒絕，既有已付費結果仍能離線重播。
+
+[23類92池具名主備表](category-backup-coverage-20261021.md)完整列出276位置：3個有限SQL研究准入、132待核提案、15來源逾期待核、126明示缺額。新備援政策可啟用及production合格位置都仍0；來源同名、零報價、已有單例研究不能替代新版本完整路徑證據。雲端開源提案不是Mac Studio128GB硬體資格清單。
+
+[使用與限制](category-backup-runtime.md)；[最終來源指紋與證據](evidence/category-backup-offline-20261021.json)。151份整合前程式／測試／腳本、3份狀態記錄雜湊均核對，12份SQL驗收／題庫相關來源保持不變。既有SQL資格工作、凍結50題原始答案與費用記錄保留；不沿舊manifest換規則。真實模型API、來源GET、供應商聯絡、部署、推送、本機Git提交、刪除均0。
+
+
+### 2026-10-21 三候選備援本機提交前檢查
+
+使用者已授權檢查與本機提交；先前「未提交」描述當時的擷取狀態。本次審閱另修正兩項P2：共用健康紀錄的事件身分加入收據根目錄，避免不同實際故障被誤判成重播；每次新分類派送前重新檢查候選健康，避免已知故障仍收分類費。新增2項回歸及獨立複驗通過，runtime／budget73項通過；原始重現保留。
+
+實際提交內容匯出至獨立目錄，`./scripts/check --integration` **1754項全部通過**、Ruff、兩個既有Mock示範與離線sdist/wheel通過；未設定測試忽略，也未將舊副本納入提交。另跑原工作區現行檔案1771項，1770項先通過、1項工作依賴紀錄失敗；只補工作計畫依賴後，51項狀態／依賴回歸全部通過，沒有再改程式或掩蓋原始失敗。舊副本及先前70項失敗的原始紀錄保留。新版23類Mock備援46個生成請求，重播新增0；不是實際模型／速度／降本證據。
+
+[提交內容驗證](evidence/category-backup-tree-precommit-20261021.json)與[原工作區驗證](evidence/category-backup-workspace-precommit-20261021.json)分開綁定各自來源指紋與狀態索引。SQL資格工作、研究版family-only規則、舊副本及1,944份原始實驗檔案保持原樣；研究資料與收據不入Git。正式資格保持pending；無模型API、來源GET、供應商聯絡、部署或推送。

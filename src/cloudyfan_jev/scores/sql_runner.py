@@ -17,6 +17,7 @@ from ..budget import BudgetError, _exact, money
 from ..client import CHAT, not_dispatched, usage
 from ..diagnostics import DiagnosticContract
 from ..engine import _lock, _save
+from ..generation_request import reasoning_fields, reasoning_matches, request_model
 from .catalog import digest
 from .configuration import configuration_digest
 from .sql_capability import captured_attempt, grade_model
@@ -107,7 +108,7 @@ class QualificationRunner:
                           + json.dumps(previous['diagnostic'], ensure_ascii=False, sort_keys=True)}]
         if len(json.dumps(messages, ensure_ascii=False).encode()) > 32768:
             raise CaptureStopped('public_context_limit')
-        return {'model': p['model_version'], 'reasoning': {'effort': p['effort']},
+        return {'model': request_model(p), **reasoning_fields(p),
                 'provider': {'only': [p['provider']], 'allow_fallbacks': False, 'require_parameters': True},
                 'messages': messages, 'max_tokens': 128 if prompt == 'Reply OK.' else 4096}
 
@@ -129,7 +130,7 @@ class QualificationRunner:
             raise CaptureStopped('unexpected_exam_role')
         p = self.entries[role]['profile']
         if (payload.get('model') != p['model_version']
-                or payload.get('reasoning') != {'effort': p['effort']}
+                or not reasoning_matches(p, payload)
                 or payload.get('provider') != {'only': [p['provider']], 'allow_fallbacks': False,
                                                'require_parameters': True}):
             raise CaptureStopped('frozen_request_identity_changed')

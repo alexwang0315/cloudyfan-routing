@@ -10,6 +10,7 @@ from decimal import Decimal, InvalidOperation
 from collections import Counter
 
 from ..sql import SqlValidationUnavailable
+from ..generation_request import reasoning_matches
 from .catalog import digest, timestamp
 from .configuration import configuration_digest
 from .sql_exam import cases, manifest, OPERATIONS
@@ -85,7 +86,7 @@ def grade_model(entry, records, *, now, synthetic=False):
                 if (digest(request) != attempt['request_sha256']
                         or digest(response) != attempt['response_sha256']
                         or request.get('model') != entry['profile']['model_version']
-                        or request.get('reasoning') != {'effort': entry['profile']['effort']}
+                        or not reasoning_matches(entry['profile'], request)
                         or request.get('provider') != expected_provider
                         or attempt.get('request_url') != entry['profile'].get('endpoint', 'https://openrouter.ai/api/v1/chat/completions')
                         or not any(m.get('role') == 'user' and m.get('content') == case.contract().task()['prompt'] for m in request.get('messages', []))
@@ -152,6 +153,9 @@ def evidence_expiry(entry, proof, *, now, synthetic):
             or identity.get('model_version') != entry['profile']['model_version']
             or identity.get('provider') != entry['profile']['provider']
             or identity.get('effort') != entry['profile']['effort']
+            or identity.get('reasoning_parameter', 'effort') != entry['profile'].get('reasoning_parameter', 'effort')
+            or ('reasoning_parameter' in entry['profile']
+                and identity.get('reasoning_parameter') != entry['profile']['reasoning_parameter'])
             or type(identity.get('context_tokens')) is not int
             or identity['context_tokens'] < entry['context_tokens']):
         raise ValueError('api_identity_unproven')
@@ -202,6 +206,9 @@ def captured_attempt(entry, case, intent, record):
             or record.get('request_sha256') != intent.get('request_sha256')
             or record.get('call_id') != intent.get('call_id')):
         raise ValueError('Client intent/response binding mismatch')
+    if (intent['payload'].get('model') != entry['profile']['model_version']
+            or not reasoning_matches(entry['profile'], intent['payload'])):
+        raise ValueError('Captured generation configuration mismatch')
     info = usage(record)
     try:
         response = json.loads(record['raw'])

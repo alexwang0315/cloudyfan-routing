@@ -18,7 +18,7 @@ TASK_FIELDS = ("prompt", "public_schema", "public_sample", "public_samples", "ex
 STATE_FIELDS = ("task", "prompt", "requirements", "constraints", "requested_output", "sources", "tools",
                 "previous_answer", "prior_answer", "previous_tier", "previous_configuration", "tool_results", "public_diagnostics")
 PROFILE_FIELDS = ("model", "model_version", "effort", "capability_card", "external_score")
-OPTIONAL_IDENTITY_FIELDS = ("provider", "provider_name")
+OPTIONAL_IDENTITY_FIELDS = ("provider", "provider_name", "reasoning_parameter", "quantization", "backend")
 
 
 def _reject_private(value):

@@ -20,6 +20,7 @@ from typing import Protocol
 from . import client as transport
 from . import routing
 from .diagnostics import DiagnosticContract
+from .generation_request import reasoning_fields, request_model
 from .privacy import PolicyDenied
 
 INITIAL = {"fixed_high": "high", "low_first": "low", "open_source_first": "open_source",
@@ -106,6 +107,7 @@ def _profiles_valid(profiles, decision, *, required_tiers=("high", "mid", "low",
         for field in fields:
             if not isinstance(p.get(field), str) or not p[field].strip():
                 raise ValueError("Profile requires explicit " + field)
+        reasoning_fields(p)
         accepted = p.get("accepted_models")
         if not isinstance(accepted, list) or not accepted or any(not isinstance(x, str) or not x for x in accepted):
             raise ValueError("Profile requires explicit accepted_models")
@@ -272,8 +274,8 @@ class Core:
             if len(_encoded(messages)) > self.limits.max_context_bytes:
                 raise ValueError("Public conversation exceeds context byte limit")
             tools = env.tools_schema()
-            payload = {"model": profile['model_version'], "messages": messages,
-                       "max_tokens": self.limits.max_tokens, "reasoning": {"effort": profile['effort']},
+            payload = {"model": request_model(profile), "messages": messages,
+                       "max_tokens": self.limits.max_tokens, **reasoning_fields(profile),
                        "session_id": prefix}
             if profile.get('backend') != 'local':
                 payload['provider'] = {"only": [profile['provider']], "allow_fallbacks": False,
@@ -291,7 +293,8 @@ class Core:
             if info.get('provider_rejected'):
                 # This consumes the current attempt. Do not retry the endpoint or
                 # ask the task validator to judge an answer that does not exist.
-                stop = 'provider_rate_limited'
+                stop = ('provider_unavailable' if info.get('provider_unavailable')
+                        else 'provider_rate_limited')
                 break
             choice = json.loads(record['raw'])['choices'][0]
             msg = choice['message']
@@ -355,8 +358,9 @@ class Core:
                 messages.append({'role': 'tool', 'tool_call_id': tc['id'],
                                  'content': _encoded(result).decode()})
         started = perf_counter()
-        public = (PROVIDER_DIAGNOSTICS.project({'passed': None, 'checks': ['PROVIDER_RATE_LIMITED']})
-                  if stop == 'provider_rate_limited'
+        public = (PROVIDER_DIAGNOSTICS.project({'passed': None, 'checks': [
+                      'PROVIDER_UNAVAILABLE' if stop == 'provider_unavailable' else 'PROVIDER_RATE_LIMITED']})
+                  if stop in ('provider_rate_limited', 'provider_unavailable')
                   else self.diagnostic_contract.project(env.validate(final)))
         checkpoint = directory / f'validation-a{index}.json'
         _save(checkpoint, public)

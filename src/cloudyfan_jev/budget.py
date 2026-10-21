@@ -421,6 +421,8 @@ class BudgetedCore:
     def _admit(self, mode):
         from .engine import generation_tiers
         phases = generation_tiers(mode)
+        backup_hook = getattr(self.core, 'budget_reservation_plan', None)
+        backup = backup_hook(mode) if callable(backup_hook) else None
         qcs = getattr(self.core, 'selection_policy', None) if mode == 'cloudyfan' else None
         reachable = qcs.reservation_plan() if qcs is not None else None
         if reachable is not None:
@@ -432,21 +434,45 @@ class BudgetedCore:
                 raise BudgetError('No confirmed model upper bound')
             self._verify('model', model, profile, bound)
             return money(bound.usd)
-        amount = _exact((max(model_cap(self.core.profiles[t], 'model_version') for t in phase)
-                         for phase in phases), self.core.limits.max_turns)
-        if mode == 'cloudyfan':
-            count = reachable['classifier_calls'] if reachable is not None else 2
-            if count:
-                amount = _exact((amount, _exact((model_cap(self.core.decision, 'version'),), count)))
+        if backup is not None:
+            profiles = backup.get('generation_profiles')
+            generation_count = backup.get('max_generation_calls')
+            classifier_count = backup.get('classifier_calls')
+            tool_count = backup.get('max_tool_calls')
+            maximum = 3 if mode == 'cloudyfan' else 2
+            if (not isinstance(profiles, list) or not profiles
+                    or any(not isinstance(p, dict) for p in profiles)
+                    or type(generation_count) is not int or not 1 <= generation_count <= maximum
+                    or type(classifier_count) is not int
+                    or not 0 <= classifier_count <= (2 if mode == 'cloudyfan' else 0)
+                    or type(tool_count) is not int or tool_count < 0
+                    or tool_count > generation_count * self.core.limits.max_tool_calls):
+                raise BudgetError('Invalid globally bounded backup reservation plan')
+            # Every reachable backup is verified, not only the cheapest primary.
+            # A conservative maximum covers any ordering of the global calls.
+            amount = _exact((max(model_cap(p, 'model_version') for p in profiles),), generation_count)
+            if classifier_count:
+                decision = backup.get('classifier_profile')
+                if not isinstance(decision, dict) or decision != self.core.decision:
+                    raise BudgetError('Frozen classifier profile required')
+                amount = _exact((amount, _exact((model_cap(decision, 'version'),), classifier_count)))
+        else:
+            amount = _exact((max(model_cap(self.core.profiles[t], 'model_version') for t in phase)
+                             for phase in phases), self.core.limits.max_turns)
+            if mode == 'cloudyfan':
+                count = reachable['classifier_calls'] if reachable is not None else 2
+                if count:
+                    amount = _exact((amount, _exact((model_cap(self.core.decision, 'version'),), count)))
+            tool_count = len(phases) * self.core.limits.max_turns * self.core.limits.max_tool_calls
         tool_max = Decimal(0)
         for name, policy in self.tool_bounds.items():
             self._verify('tool', name, {'external': policy.external}, policy.bound)
             if not policy.external and money(policy.bound.usd) != 0:
                 raise BudgetError('Local deterministic tools need confirmed zero API fee')
             tool_max = max(tool_max, money(policy.bound.usd))
-        # max_tool_calls is a per-turn bound, not a per-workflow bound.
-        amount = _exact((amount, _exact((tool_max,),
-                        len(phases) * self.core.limits.max_turns * self.core.limits.max_tool_calls)))
+        # Legacy Core uses per-turn tool limits; backup runtime supplies its
+        # independently enforced global tool envelope above.
+        amount = _exact((amount, _exact((tool_max,), tool_count)))
         return amount
 
     def sync_client(self, client):

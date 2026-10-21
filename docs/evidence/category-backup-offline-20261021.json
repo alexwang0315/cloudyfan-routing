@@ -1,0 +1,177 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "category-pool-backup-v1",
+  "verified_at": "2026-10-21T09:24:03.818980+00:00",
+  "source_digest": "a2cfeb35ffe3823397b5768237e211478173cd20e9e333f1ee9e07b4e7be620e",
+  "tests_passed": 1769,
+  "test_scope": "Canonical current files; explicit per-command --ignore-glob='* 2.py'; no permanent ignore or deletion",
+  "canonical_junit": {
+    "tests": 1769,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "focused_tests_passed": 187,
+  "focused_junit": {
+    "tests": 187,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "commands": {
+    "full_workspace": "./scripts/check --integration",
+    "canonical": ".venv/bin/python -m pytest -q --ignore-glob='* 2.py' --junitxml=runtime/pool-backup-v1-20261021/canonical.xml",
+    "focused": "uv run --locked --offline pytest -q tests/test_backup_health.py tests/test_backup_pools.py tests/test_backup_runtime.py tests/test_backup_budget.py tests/test_generation_request.py",
+    "demo": "uv run --locked --offline python scripts/demo_category_backups.py --output runtime/pool-backup-v1-20261021/demo-final-v2"
+  },
+  "full_workspace_gate": {
+    "failed": 70,
+    "passed": 2332,
+    "all_in_preserved_numbered_copies": true,
+    "same_failure_ids_as_prior": true,
+    "new_failure_ids": [],
+    "no_longer_failing_prior_ids": []
+  },
+  "full_workspace_gate_passed": false,
+  "ruff": "passed all workspace files",
+  "diff_check": "passed",
+  "mock_demos": {
+    "existing_core": "passed",
+    "existing_scores": "passed",
+    "new_backup_categories": 23,
+    "pools_per_category": 4,
+    "distinct_synthetic_models_per_pool": 3,
+    "mock_generation_posts": 46,
+    "replay_new_posts": 0,
+    "purpose": "Synthetic availability/dispatch/replay only, not 23-domain capability evidence"
+  },
+  "build": {
+    "sdist": "passed offline",
+    "wheel": "passed offline",
+    "new_modules_present": true,
+    "release_artifact_qualified": false,
+    "numbered_source_copies_preserved": 8
+  },
+  "coverage": {
+    "categories": 23,
+    "pools": 92,
+    "target_positions": 276,
+    "research_admitted_only": 3,
+    "pending_unqualified": 132,
+    "pending_unqualified_stale_source": 15,
+    "missing": 126,
+    "new_backup_runtime_qualified_positions": 0,
+    "production_qualified_positions": 0
+  },
+  "review": {
+    "original_p1_reproductions": "runtime/backup-runtime-readonly-review-f06a850a8c",
+    "independent_fix_confirmation": "runtime/backup-review-fix-confirm-ccaa9e0ff5",
+    "p1s_fixed": [
+      "saved candidate/economic checkpoint tamper blocked before dispatch",
+      "expired candidate/whole-flow evidence blocked before new dispatch"
+    ],
+    "preserved_failures": [
+      "Initial project-state preparation errors, corrected without changing qualification",
+      "Incorrect targeted test filename; no tests collected; correct 178-test regression passed",
+      "Initial fixture context key and fixture provenance expiry corrections retained in worker history",
+      "Initial full integration: iCloud-evicted native module caused 2 collection errors; restored absent file from verified existing offline cache",
+      "Coverage audit initially resolved paths against wrong base; correct core-relative audit verified all 10 hashes",
+      "Known 70 numbered-copy test failures remain unchanged"
+    ]
+  },
+  "preserved_sql_sources": {
+    "src/cloudyfan_jev/sql_public_suite.py": {
+      "unchanged": true,
+      "sha256": "6e31898280570458e3bdcc51a82568c10883d3fa2ce92fcb659e65c1df399905"
+    },
+    "src/cloudyfan_jev/sql_executor.py": {
+      "unchanged": true,
+      "sha256": "8133a36dba4d6170371a6ce304ed82a5ec4a9e3145b89bded385eb21c360d206"
+    },
+    "src/cloudyfan_jev/sql_review.py": {
+      "unchanged": true,
+      "sha256": "9cb294055a0aa534cf981737a4cabde1601a8e642e7dc80e174cde6d37c69f06"
+    },
+    "src/cloudyfan_jev/sql_policy.py": {
+      "unchanged": true,
+      "sha256": "11d8a5c2edfcbdcbfc99b6e76f6384cf66c8e25dc1ace4f1bbfb4ce1836831ec"
+    },
+    "src/cloudyfan_jev/sql_process.py": {
+      "unchanged": true,
+      "sha256": "e24b2eb0e4f475a6c8df9f89dc6fd562088f52fc860af30a199b60abbbd347cd"
+    },
+    "src/cloudyfan_jev/sql_worker.py": {
+      "unchanged": true,
+      "sha256": "39bf49d049933809d4c328a49ce4c1c805f23ec6d666c45495e4c7c47f2dcbe0"
+    },
+    "src/cloudyfan_jev/sql_isolation_entry.py": {
+      "unchanged": true,
+      "sha256": "5cdee63bd172b74bbee702c55c9ec6af9f35f13c1c354c6dbc1f043e3b56c51c"
+    },
+    "src/cloudyfan_jev/sql_counterexamples.json": {
+      "unchanged": true,
+      "sha256": "e7044ba3cf3afc58b8d315b4bc1d6fcf34bedbcc563b32ef1d8e92e5866f0a92"
+    },
+    "src/cloudyfan_jev/sql.py": {
+      "unchanged": true,
+      "sha256": "f8e037a71f4dca206bd8de231043e3bb802fa9d72b4ffc19f2564b659d9ac504"
+    },
+    "src/cloudyfan_jev/sql_catalog.py": {
+      "unchanged": true,
+      "sha256": "fd861ec13e79c8eb54b086e47f1b8050b34406fa52d86046e9fed2b9d65ba2d6"
+    },
+    "src/cloudyfan_jev/sql_isolation.py": {
+      "unchanged": true,
+      "sha256": "a5f582f5bdb7bb1349039a2cebdf7bdc89f9d2d7cfbcbe83f2acb8446a2d9bd7"
+    },
+    "src/cloudyfan_jev/scores/sql_exam.py": {
+      "unchanged": true,
+      "sha256": "b6e6689b683e390312086e17e4c0b860d5a3d23249894537d3427c9e1b8b4302"
+    }
+  },
+  "records": {
+    "runtime/pool-backup-v1-20261021/canonical.xml": "48ee7817021d8e8d468d4df25538fd99ca5f5bc109d46166f7fa9d5c5a2aa7e0",
+    "runtime/pool-backup-v1-20261021/focused.xml": "50b8f4ee69fc03fa26c3b24685181fee8d35573f12a278fd85229c642daa539b",
+    "runtime/pool-backup-v1-20261021/archive-check.json": "ea2fa1f1c40538f2a0cc1f9b7bdeb5a7b974c8c594253233cc75661d00e50c0e",
+    "runtime/pool-backup-v1-20261021/coverage-source-check.json": "7e14a0670f32acb8e6620c807e31b7b9727c82e428816a7ecfcbdb813feec5bf",
+    "runtime/pool-backup-v1-20261021/dependency-restoration.json": "2b995d0ddfe7c189787634dd323087d4d69521f40aa1c704731a88be38431750",
+    "runtime/pool-backup-v1-20261021/full-workspace-failures.json": "dfc1e40da754a3fe6edc44d77a1d2cd731f9186f094bfb5bab767cf19361e752",
+    "runtime/pool-backup-v1-20261021/demo-final-v2/report.json": "29cba27e6e4c9a086ae50d21f0fc9aec733ab8ea3731e47b5e9218970b38939c",
+    "runtime/pool-backup-v1-20261021/wheel-inspection.json": "33570b5ddcac5f984c95ba5dcdca20fa2ef7fef38d6032bb7a29938fb740ca31",
+    "docs/evidence/category-backup-coverage-20261021.json": "55b8b9d18ae5e5c04ad4571073f1b5f226bdc4ce8a5e2fc9cd72449a175549f7",
+    "runtime/pool-backup-v1-20261021/documentation-check.json": "afe7f4d3302a075de1bb69eb1b8d3d5df805767ad11156a79591822d0e24bdeb",
+    "runtime/pool-backup-v1-20261021/quick-final.log": "142c52c8833fddde0897ff77c0b0b5b95081f29eb5539fcff9413ff390fc9583",
+    "runtime/checks/27c419a3c15e45dea7e1cea2c371a555/checks.json": "8e1e100de5fe34d30bb1eceea887eeee76a665e3e939dab73c48f6437d9c8982"
+  },
+  "archive": {
+    "source_files": 151,
+    "prior_records": 3,
+    "all_hashes_verified": true
+  },
+  "external_actions": {
+    "model_api_calls": 0,
+    "source_gets": 0,
+    "supplier_contact": false,
+    "deployment": false,
+    "push": false,
+    "local_git_commit": false,
+    "deletion": false
+  },
+  "paid_study_results_modified": false,
+  "formal_qualification": "pending",
+  "limitations": [
+    "No new real API, latency, cost reduction or backup effectiveness measurements.",
+    "23 categories with three synthetic models per pool prove interfaces, not real capability.",
+    "Actual new backup policy needs independent per-category exact-profile/full-flow evidence; old singleton calibration is incompatible.",
+    "Health refresh is caller-fed; no background polling or paid probes.",
+    "One matching registered local backend; different providers do not prove physical fault independence.",
+    "Full workspace integration gate remains failed due to preserved legacy copies; build is not a curated release artifact."
+  ],
+  "final_quick_gate": "passed",
+  "project_state": {
+    "implementation_complete": true,
+    "production_qualification_recorded": false
+  }
+}

@@ -13,6 +13,35 @@ from .catalog import digest, number, timestamp
 from ..routing import _reject_private
 
 BENCHMARK_URL = 'https://openrouter.ai/api/v1/benchmarks'
+UPTIME_FIELDS = ('uptime_last_5m', 'uptime_last_30m', 'uptime_last_1d')
+
+
+def normalize_provider_health(endpoint):
+    """Retain the three native percent windows; absent status remains unknown.
+
+    The documented status contract only distinguishes integer zero from nonzero.
+    No undocumented mapping of particular degraded codes is inferred.
+    """
+    if not isinstance(endpoint, dict):
+        raise ValueError('Provider health requires an object')
+    status = endpoint.get('status')
+    if status is not None and type(status) is not int:
+        raise ValueError('Provider status must be an integer or unknown')
+    if endpoint.get('uptime_unit', 'percent') != 'percent':
+        raise ValueError('Provider uptime unit must be percent')
+    units = endpoint.get('units', {})
+    if not isinstance(units, dict) or any(units.get(k, 'percent') != 'percent' for k in UPTIME_FIELDS):
+        raise ValueError('Provider uptime units must be percent')
+    values = {}
+    for field in UPTIME_FIELDS:
+        value = endpoint.get(field)
+        if value is not None and not 0 <= number(value) <= 100:
+            raise ValueError('Provider uptime must be within 0 to 100 percent')
+        values[field] = value
+    return {'status': status,
+            'status_meaning': 'unknown' if status is None else 'operational' if status == 0 else 'degraded',
+            **values, 'uptime_unit': 'percent', 'units': dict.fromkeys(UPTIME_FIELDS, 'percent'),
+            'scope': 'provider_rolling_availability'}
 
 
 def _amount(value):
@@ -214,6 +243,7 @@ def normalize_endpoints(raw, *, retrieved_at):
             'provider_name': endpoint.get('provider_name'), 'service_tier': endpoint.get('service_tier'),
             'quantization': endpoint.get('quantization'), 'pricing': _pricing(endpoint.get('pricing')),
             'price_unit': 'USD/token; request fields USD/request', 'quality': None,
+            'health': normalize_provider_health(endpoint),
             'speed': {**speed, 'units': {'latency_last_30m': speed['latency_unit'],
                                                         'throughput_last_30m': 'tokens/second'}},
             'live_identity_verified': False})

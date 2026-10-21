@@ -1,0 +1,28 @@
+{
+  "schema_version": "cloudyfan-category-backup-preparation-policy-v1",
+  "status": "offline_preparation_only",
+  "runtime_enabled": false,
+  "target_size": 3,
+  "tiers": ["open_source", "low", "mid", "high"],
+  "positions": ["primary", "backup_1", "backup_2"],
+  "primary_order": ["complete_cost_usd.upper", "flow_ms.upper", "config_id"],
+  "backup_order": ["explicit_new_provider_and_family", "explicit_new_provider", "explicit_new_family", "complete_cost_usd.upper", "flow_ms.upper", "config_id"],
+  "distinct_models_required": true,
+  "provider_endpoints_of_same_model_count_as_distinct_models": false,
+  "different_providers_prove_physical_failure_independence": false,
+  "missing_evidence_action": "exclude_candidate_and_report_shortage",
+  "cross_category_borrowing": false,
+  "approval_action": "preserve_explicit_existing_approval_only",
+  "runtime_qcs_variant_calibration_required": true,
+  "price_only_inventory_scenario": {
+    "minimum_price_difference_fraction": "0.20",
+    "status": "scenario_only_not_candidate_admission_or_complete_cost_saving",
+    "cache_input_reasoning_and_failure_costs_must_remain_explicit": true
+  },
+  "cli": {
+    "script": "scripts/prepare_category_backups.py",
+    "inputs": ["--matrix", "--requirements", "--evidence", "--qcs-policies", "--now"],
+    "category_keyed_inputs": ["requirements", "evidence", "qcs-policies"],
+    "output": "All 23 native categories with admitted candidate pools, exclusions and shortages. No real candidate data is fabricated by this example."
+  }
+}

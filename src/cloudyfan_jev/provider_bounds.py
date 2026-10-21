@@ -11,6 +11,7 @@ import hmac
 import math
 from time import time
 
+from .generation_request import reasoning_fields, reasoning_matches
 from .client import Client, CHAT, DECISIONS, _strict_json
 from .budget import money
 from .receipt_store import _encoded
@@ -141,6 +142,8 @@ class OpenRouterBoundVerifier:
             if set(body) != fields or type(body['schema_version']) is not int or body['schema_version'] != 1:
                 raise ValueError('Supplier contract shape invalid')
             now = _instant(self.clock())
+            if body.get('endpoint') == CHAT:
+                reasoning_fields(self._configurations[identity])
             if (not isinstance(body['id'], str) or not body['id'].strip()
                     or body['credential_sha256'] != self._credential
                     or body['configuration_sha256'] != _sha(self._configurations[identity])
@@ -226,7 +229,7 @@ class OpenRouterBoundVerifier:
                         or type(payload.get('max_tokens')) is not int
                         or type(policy['max_tokens']) is not int
                         or not 0 < payload['max_tokens'] <= policy['max_tokens']
-                        or payload.get('reasoning') != {'effort': config['effort']}
+                        or not reasoning_matches(config, payload)
                         or payload.get('tools', []) != policy['tools']
                         or ('tool_choice' in payload and payload['tool_choice'] != 'auto')
                         or not isinstance(payload.get('messages'), list)):

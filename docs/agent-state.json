@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "scope": "category-four-pool-routing-v1",
+  "scope": "category-pool-backup-v1",
   "phase": "offline_verified",
   "baseline_commit": "9d20072b076bb64c3666cd3d1380dcb5e49bb909",
   "integration_branch": "codex/implement-routing-spec-1",
@@ -309,7 +309,7 @@
     }
   ],
   "current_verification": {
-    "path": "docs/evidence/category-routing-tree-precommit-20261021.json",
-    "sha256": "19cc326cd15a27ee6205b1c99f0fa9d2fa75f385fc65db884facecc71ed84103"
+    "path": "docs/evidence/category-backup-tree-precommit-20261021.json",
+    "sha256": "9de0209d267ff571eb6da9d8277fd0cbc12640b8e9375c5ba9ba736d3e148b1f"
   }
 }

@@ -1,0 +1,22 @@
+{
+  "schema_version": "cloudyfan-selected-candidate-set-v1",
+  "production_activated": false,
+  "execution_authorized": false,
+  "category_backups": {
+    "version": "qcs-backup-policy-v1",
+    "category_count": 23,
+    "pool_count": 92,
+    "target_distinct_models_per_pool": 3,
+    "runtime": "cloudyfan_jev.scores.BackupCategoryCore",
+    "preparation_policy": "examples/category-backup-policy-v1.json",
+    "documentation": "docs/category-backup-runtime.md",
+    "named_positions": "docs/category-backup-coverage-20261021.md",
+    "coverage_evidence": "docs/evidence/category-backup-coverage-20261021.json",
+    "production_activated": false,
+    "execution_authorized": false,
+    "new_backup_runtime_qualified_positions": 0,
+    "historical_sql_research_admitted_positions": 3,
+    "qualification_status": "pending_exact_category_profile_and_whole_backup_flow_evidence",
+    "old_frozen_study_changed": false
+  }
+}

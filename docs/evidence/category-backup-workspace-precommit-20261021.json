@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "category-pool-backup-v1",
+  "verified_at": "2026-10-21T10:04:18.492422+00:00",
+  "baseline_commit": "0c346644492da78adaee905bf9945a527c43d339",
+  "formal_qualification": "pending",
+  "paid_model_calls": 0,
+  "source_gets": 0,
+  "deployment": false,
+  "push": false,
+  "preservation": {
+    "unrelated_files": 58,
+    "unrelated_files_unchanged": true,
+    "numbered_copies": 29,
+    "original_experiment_files": 1944,
+    "original_experiment_files_unchanged": true,
+    "sql_family_source_and_qualification_docs_excluded_from_index": true,
+    "release_gates_unchanged": true
+  },
+  "p2_fixes": [
+    "Health event identity includes receipt root, run, attempt and exact configuration; independent failures count separately while replay remains idempotent.",
+    "Every new classifier POST rechecks current health of both candidates; known degraded pair cannot consume a new classification fee."
+  ],
+  "new_regression_tests": 2,
+  "targeted_runtime_and_budget_tests_passed": 73,
+  "independent_review": "Both new regressions passed independent read-only review; no new P1 found in changed paths.",
+  "original_review_evidence": "runtime/backup-precommit-review-c857e9cf16",
+  "earlier_p1_evidence_retained": "runtime/backup-runtime-readonly-review-f06a850a8c",
+  "model_inventory": {
+    "categories": 23,
+    "pools": 92,
+    "positions": 276,
+    "research_admitted_only": 3,
+    "pending": 132,
+    "stale_pending": 15,
+    "missing": 126,
+    "new_runtime_qualified": 0
+  },
+  "new_backup_demo": {
+    "offline": true,
+    "real_api_cost_usd": "0",
+    "categories": 23,
+    "models_per_pool": 3,
+    "mock_posts": 46,
+    "replay_added_posts": 0,
+    "passed": true,
+    "report": "runtime/precommit-backup-demo/report.json"
+  },
+  "secret_scan": "pre-commit scan returned0; no findings",
+  "historical_workspace_gate": "Prior original workspace2,332 passed/70 preserved-copy failures retained. This commit does not delete copies or claim that historical whole-workspace gate passed.",
+  "source_digest": "dafd1bf4669230fd3b484d78a6200fa47385db2cb2659e6b648bbff4140a06b8",
+  "tests_passed": 124,
+  "test_scope": "Current workspace:73 runtime/budget tests plus corrected ownership-record regression; original full canonical diagnostic is separately retained",
+  "original_full_canonical": {
+    "tests": 1771,
+    "passed": 1770,
+    "failed": 1,
+    "failure": "New review task lacked explicit integration dependency; docs-only plan correction followed by complete ownership regression"
+  },
+  "final_metadata_tests_passed": 51,
+  "all_original_failures_resolved_by_document_only_change": true,
+  "verification_command": "uv run --locked --offline python -m pytest -q --ignore-glob='* 2.py' --junitxml=runtime/backup-precommit-20261021/workspace-canonical.xml",
+  "records": {
+    "runtime/backup-precommit-20261021/workspace-canonical.xml": "e37cd2b3a393e532786af1474f1270072432f365fe91afc3820ed5013698492c",
+    "runtime/backup-precommit-20261021/workspace-records-final.xml": "c25553a61da7a1e7c34362469090405cf273a2ca2e5c142ba94e6f06bd26d972",
+    "runtime/backup-precommit-20261021/preservation-final.json": "2c527cf115997d375ec32f47d8b9e580f526ef11b1f10c27b06eeeaa288a8aca"
+  },
+  "full_workspace_gate_passed": false,
+  "prior_worktree_evidence": "docs/evidence/category-backup-offline-20261021.json"
+}

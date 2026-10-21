@@ -152,3 +152,7 @@ Runtime receipts 含使用者 prompt／答案，預設寫入 private permissions
 [RG-01 新版有界 SQL／隔離接入](docs/rg01-implementation-20261019.md)記錄新資料域、13 個已知反例補強與 Linux 嚴格 launcher；實作與離線回歸、實環境取證及正式核定分列，後續限定 Linux 取證見[目標測試紀錄](docs/rg01-scout-target-20261019.md)，探針與真 worker 的證據界線保留；具名正式資格仍待核定，不阻擋開發／測試。
 
 - [23 類獨立四池與選模接入（離線）](docs/category-four-pool-routing.md)：依各類 quality／完整 cost／speed 選候選，價差不足略過 Jev，保留 SQL 與歷史凍結流程。
+
+### 各類主選＋兩備援（明示選用）
+
+新版 `qcs-backup-policy-v1` 支援23類各自四池、每池最多三個不同模型、健康快照與故障切換。[使用與限制](docs/category-backup-runtime.md)、[23類92池具名主備清單](docs/category-backup-coverage-20261021.md)。候選不足明列缺額；離線模擬不代表所有真實模型已合格，舊任務不自動更換規則。

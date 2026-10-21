@@ -298,3 +298,25 @@ The user now authorizes review and local Git commit; earlier no-commit statement
 暫存內容匯出成獨立目錄，`./scripts/check --integration` 全部 1,538 項通過，Ruff、兩個既有 mock 示範與離線 sdist/wheel 通過；未設測試忽略，也未將原工作區的未追蹤舊副本搬入提交。先前 1,561 項、70 項舊副本失敗及所有原始資料保持原紀錄。
 
 [提交內容驗證](evidence/category-routing-tree-precommit-20261021.json)與[原工作區回歸](evidence/category-routing-workspace-precommit-20261021.json)分列；兩者來源指紋不同，工作區狀態索引與提交索引分別指向各自證據。必要 QCS／費用預留／來源正規化相依項目納入；SQL 計畫、廣泛來源工作及舊副本留在工作區，原始 runtime 不入 Git。正式資格 pending；本輪無模型 API、部署或推送。
+
+## 2026-10-21 各類三候選備援整合
+
+使用者授權實作根目錄延遲／備援設計。health_worker擁有健康正規化及獨立健康／冷卻儲存；wire_worker擁有明示省略推理參數契約與資格／費用核對；pool_worker擁有23類各池三候選準備／不足報告；root擁有新版opt-in執行、全路徑預留、整合與文件。精確檔案與依賴以work-plan為準，所有工作不得改其他人的dirty修改。修改前原source／state／plan在runtime/pool-backup-v1-20261021留存。RG01及原始50題結果、資格與付費請求不變；無模型API、供應商聯絡、部署、推送或提交授權。
+
+
+## 三候選備援整合與審閱修正 — 2026-10-21
+
+本輪範圍為`category-pool-backup-v1`，僅離線本地實作。健康、候選準備、請求參數及新版執行器分工已完成，由root整合預算與公開入口。23類92池具名表另列研究准入、待核、來源逾期及缺額；未批准任何新真實設定。
+
+審閱曾重現兩項P1：改寫已存候選後可先派送、未完成流程續跑可在資格過期後新增請求。原Mock證據在`runtime/backup-runtime-readonly-review-f06a850a8c/`保留；修正後候選／經濟決策核對及逐新派送時效檢查均在POST前阻擋，獨立複驗在`runtime/backup-review-fix-confirm-ccaa9e0ff5/`。已有付費收據仍可過期後離線重播。
+
+原始SQL/RG01、既有50題與所有付費答案／收據不變。151份整合前原始程式／測試／腳本及3份狀態記錄完整保留於`runtime/pool-backup-v1-20261021/`並核對雜湊；不修改原凍結研究的來源清單，也不以新版續跑。既有未追蹤舊副本保留、不刪除；標準檢查70個失敗與先前相同，另列現行測試結果。
+
+
+### 2026-10-21 三候選備援本機提交前檢查
+
+使用者已授權檢查與本機提交；先前「未提交」描述當時的擷取狀態。本次審閱另修正兩項P2：共用健康紀錄的事件身分加入收據根目錄，避免不同實際故障被誤判成重播；每次新分類派送前重新檢查候選健康，避免已知故障仍收分類費。新增2項回歸及獨立複驗通過，runtime／budget73項通過；原始重現保留。
+
+實際提交內容匯出至獨立目錄，`./scripts/check --integration` **1754項全部通過**、Ruff、兩個既有Mock示範與離線sdist/wheel通過；未設定測試忽略，也未將舊副本納入提交。另跑原工作區現行檔案1771項，1770項先通過、1項工作依賴紀錄失敗；只補工作計畫依賴後，51項狀態／依賴回歸全部通過，沒有再改程式或掩蓋原始失敗。舊副本及先前70項失敗的原始紀錄保留。新版23類Mock備援46個生成請求，重播新增0；不是實際模型／速度／降本證據。
+
+[提交內容驗證](evidence/category-backup-tree-precommit-20261021.json)與[原工作區驗證](evidence/category-backup-workspace-precommit-20261021.json)分開綁定各自來源指紋與狀態索引。SQL資格工作、研究版family-only規則、舊副本及1,944份原始實驗檔案保持原樣；研究資料與收據不入Git。正式資格保持pending；無模型API、來源GET、供應商聯絡、部署或推送。

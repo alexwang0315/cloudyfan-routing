@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "kind": "documentation_precommit_review",
+  "result": "passed",
+  "verified_at": "2026-10-21T10:43:52.498847+00:00",
+  "baseline_commit": "e17c752d83df38e46b53d4a0e5faabd18e8abca3",
+  "scope": "Staged documentation only; original SQL research and executable inputs excluded; no qualification or activation",
+  "staged_document_sha256": {
+    "docs/release-readiness.md": "bd86fe4b99d6981a6446fd60e9b1500f2a0564047efbbe4d71bd4b43acd46985",
+    "docs/sql-backup-pool-readiness-plan-20261021.md": "15562552359c3c0c41f3b9fc023e5d07efac9e8920ade68b628921358ae18e3f",
+    "docs/verification.md": "7cfbcedb288d353380826bc3ef6d20be5f60a46dbd3ee08fe2475dbdbe7d6c05"
+  },
+  "worktree_document_sha256": {
+    "docs/release-readiness.md": "42d2a0d38380a529164c7e35a89d700304a5e8de299aa793565ea2051ef17545",
+    "docs/sql-backup-pool-readiness-plan-20261021.md": "15562552359c3c0c41f3b9fc023e5d07efac9e8920ade68b628921358ae18e3f",
+    "docs/verification.md": "6a38e053905194c528f91cf1def6a124f7562c5df8ee3c68a24964b618bcd850"
+  },
+  "staged_and_worktree_are_distinct": true,
+  "original_document_review": {
+    "path": "docs/evidence/release-readiness-sql-plan-20261021.json",
+    "sha256": "402cdcc09f7627c3752ef99a3ebc440ee3dfeaf511ead68f2c8714aba8523c59",
+    "scope": "Historical full-worktree review before precommit reference fix; preserved unchanged"
+  },
+  "review_findings": [
+    {
+      "priority": "P2",
+      "problem": "SQL worklist linked an untracked research document",
+      "resolution": "Reference tracked candidate coverage without staging SQL research files",
+      "status": "resolved"
+    }
+  ],
+  "checks": {
+    "staged_diff_reviewed": true,
+    "staged_whitespace": "passed",
+    "metrics_and_cost_arithmetic": "passed",
+    "secret_pattern_scan_matches": 0,
+    "internal_staged_links": 159,
+    "controlled_external_links": 3,
+    "protected_worktree_files_unchanged": 405,
+    "original_experiment_files_unchanged": 4119,
+    "quick_receipt": "runtime/checks/0781b4226d9b493f8a247c2180898a47/checks.json",
+    "quick_receipt_sha256": "9861c222a779052a1e34055d5d5367dddb218087d292c03a4e926c56e37c9376",
+    "quick_passed": true,
+    "new_full_test_run": false,
+    "new_integration_run": false
+  },
+  "controlled_external_references": [
+    {
+      "from": "docs/release-readiness.md",
+      "target": "../../artifacts/category-four-pool50-20261021/actual-metrics-v8r2/final-summary.md",
+      "scope": "controlled workspace evidence; not included in this commit"
+    },
+    {
+      "from": "docs/release-readiness.md",
+      "target": "../../artifacts/category-four-pool50-20261021/actual-metrics-v8r2/final-summary.md",
+      "scope": "controlled workspace evidence; not included in this commit"
+    },
+    {
+      "from": "docs/sql-backup-pool-readiness-plan-20261021.md",
+      "target": "../../artifacts/category-four-pool50-20261021/actual-metrics-v8r2/final-summary.md",
+      "scope": "controlled workspace evidence; not included in this commit"
+    }
+  ],
+  "release_gates_pending": 10,
+  "production_qualified": false,
+  "pool_activated": false,
+  "executable_inputs_in_commit": false,
+  "paid_model_calls": 0,
+  "source_gets": 0,
+  "supplier_contacts": 0,
+  "deployment": false,
+  "push": false,
+  "local_commit_authorized": true,
+  "review_phase": "before_local_commit",
+  "private_preservation_snapshot": "runtime/readiness-sql-plan-precommit-20261021/before.json",
+  "private_audit_script": "runtime/readiness-sql-plan-precommit-20261021/audit.py"
+}

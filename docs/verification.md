@@ -710,3 +710,16 @@ The user now authorizes review and local Git commit; earlier no-commit statement
 實際提交內容匯出至獨立目錄，`./scripts/check --integration` **1754項全部通過**、Ruff、兩個既有Mock示範與離線sdist/wheel通過；未設定測試忽略，也未將舊副本納入提交。另跑原工作區現行檔案1771項，1770項先通過、1項工作依賴紀錄失敗；只補工作計畫依賴後，51項狀態／依賴回歸全部通過，沒有再改程式或掩蓋原始失敗。舊副本及先前70項失敗的原始紀錄保留。新版23類Mock備援46個生成請求，重播新增0；不是實際模型／速度／降本證據。
 
 [提交內容驗證](evidence/category-backup-tree-precommit-20261021.json)與[原工作區驗證](evidence/category-backup-workspace-precommit-20261021.json)分開綁定各自來源指紋與狀態索引。SQL資格工作、研究版family-only規則、舊副本及1,944份原始實驗檔案保持原樣；研究資料與收據不入Git。正式資格保持pending；無模型API、來源GET、供應商聯絡、部署或推送。
+
+### 2026-10-21：完成進度更正與SQL主備包工作順序
+
+本次依已完成研究的最終報告及機器可讀統計，修正RG-07與下一步清單仍稱50題「進行中」的文字；較早48/50批次及工作區原有23/150歷史快照分開保留，不改原始成績。新增[SQL主備包清單](sql-backup-pool-readiness-plan-20261021.md)，明列離線前置、多候選資格接入、費用保障、真實量測／校準及最終啟用的依賴；未執行清單內的開發或模型測試。
+
+僅做文件及既有證據離線核對；`./scripts/check --quick`通過，不宣稱新一輪完整pytest／整合或真實備援驗證。金額、連結、正式狀態與檔案保存結果見[本次文件證據](evidence/release-readiness-sql-plan-20261021.json)。SQL規則、資格工作、舊副本、原始結果及十項pending維持原樣；沒有模型API、來源GET、供應商聯絡、本機提交、部署或推送。
+
+
+### 2026-10-21：放行索引與SQL主備包文件提交前審閱
+
+只納入本次進度更正、SQL主備工作清單及其檢查證據；較早SQL資格／來源整理及編號副本留在原工作區。修正工作清單指向未追蹤研究文件的連結，改引已追蹤盤點；原研究文件與原始答案／收據不入提交。原文件證據保留其當時工作區hash，不冒充本次暫存內容；[提交前證據](evidence/release-readiness-sql-plan-precommit-20261021.json)另列兩種檔案指紋、引用檢查與保存結果。
+
+本次是文件提交，不重新宣稱完整pytest／integration通過；離線quick、專案紀錄與放行結構檢查依實際收據記錄。十項資格保持pending，P0／P1／P2僅為待辦，未執行模型API、來源GET、供應商聯絡、部署或推送。

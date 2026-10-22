@@ -1,0 +1,1287 @@
+{
+  "schema_version": "cloudyfan-monitor-issue20-final-v1",
+  "recorded_at": "2026-10-22T07:11:34.759526+00:00",
+  "spec_issue": "https://github.com/alexwang0315/cloudyfan-routing/issues/20",
+  "ticket": "https://github.com/alexwang0315/cloudyfan-routing/issues/23",
+  "integration_base_commit": "b849e4677e40f513730c5668bd704fc0c022d891",
+  "integration_branch": "codex/monitor-issue20-integration",
+  "ticket_branch": "codex/monitor-final-acceptance",
+  "completion_status": "incomplete",
+  "incomplete_conditions": [
+    "Mandatory original unfiltered core integration gate failed: 71 failed, 2483 passed.",
+    "One failure is in a current project-state test; preserved numbered-copy tests account for 70 failures. Follow-up acceptance scope requires explicit decision.",
+    "Core agent-state metadata changed during the full gate; an unchanged executable source digest does not establish metadata stability.",
+    "Final original preview sync must preserve the product hashes measured by the passing fresh 18767 smoke, or repeat the smoke if product inputs change."
+  ],
+  "mobile": "stopped_by_user",
+  "test_seams": [
+    "actual loopback HTTP with dedicated socket allowlist",
+    "real desktop Chrome 1280x800",
+    "MockTransport only for model and metadata upstreams"
+  ],
+  "monitor_gate": {
+    "status": "passed",
+    "tests_passed": 88,
+    "receipt": "runtime/checks/782d2e51cec4/checks.json",
+    "steps": [
+      {
+        "command": [
+          "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/.venv/bin/python",
+          "-m",
+          "ruff",
+          "check",
+          "--no-cache",
+          "."
+        ],
+        "exit_code": 0,
+        "log": "runtime/checks/782d2e51cec4/step-1.log",
+        "started_at": "2026-10-22T07:00:08.988500+00:00",
+        "seconds": 0.627891
+      },
+      {
+        "command": [
+          "node",
+          "--check",
+          "src/cloudyfan_monitor/static/app.js"
+        ],
+        "exit_code": 0,
+        "log": "runtime/checks/782d2e51cec4/step-2.log",
+        "started_at": "2026-10-22T07:00:09.643020+00:00",
+        "seconds": 0.14499
+      },
+      {
+        "command": [
+          "node",
+          "--check",
+          "scripts/qa_identity_desktop.cjs"
+        ],
+        "exit_code": 0,
+        "log": "runtime/checks/782d2e51cec4/step-3.log",
+        "started_at": "2026-10-22T07:00:09.810688+00:00",
+        "seconds": 0.537126
+      },
+      {
+        "command": [
+          "node",
+          "--check",
+          "scripts/qa_integration_desktop.cjs"
+        ],
+        "exit_code": 0,
+        "log": "runtime/checks/782d2e51cec4/step-4.log",
+        "started_at": "2026-10-22T07:00:10.372586+00:00",
+        "seconds": 0.164266
+      },
+      {
+        "command": [
+          "node",
+          "--check",
+          "scripts/qa_mode_desktop.cjs"
+        ],
+        "exit_code": 0,
+        "log": "runtime/checks/782d2e51cec4/step-5.log",
+        "started_at": "2026-10-22T07:00:10.558672+00:00",
+        "seconds": 0.109429
+      },
+      {
+        "command": [
+          "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/.venv/bin/python",
+          "-m",
+          "pytest",
+          "-q",
+          "-p",
+          "no:cacheprovider",
+          "tests"
+        ],
+        "exit_code": 0,
+        "log": "runtime/checks/782d2e51cec4/step-6.log",
+        "started_at": "2026-10-22T07:00:10.691783+00:00",
+        "seconds": 36.763056
+      },
+      {
+        "command": [
+          "uv",
+          "build",
+          "--offline",
+          "--out-dir",
+          "/Users/alexwang0315/Documents/CloudyFan/.scratch/cloudyfan-monitor-issue-20/worktrees/final/runtime/checks/782d2e51cec4/build"
+        ],
+        "exit_code": 0,
+        "log": "runtime/checks/782d2e51cec4/step-7.log",
+        "started_at": "2026-10-22T07:00:47.480940+00:00",
+        "seconds": 3.334339
+      }
+    ],
+    "monitor_inputs_unchanged": true,
+    "core_source_unchanged": true,
+    "source_and_qa_sha256": {
+      "pyproject.toml": "4daec1b53c1e9fd0e9f8fd11b7196467d290dd7f057b53ab63e80435a96db777",
+      "scripts/check": "ff2f23d8c00155862b9e465a075a69e0064aa48fe93d477b8363d7d108eb3943",
+      "scripts/preview": "ca29c2add2c1746c63c0ba2f895029fccede59f7f5be775bd53b316c748b6755",
+      "scripts/qa_identity_desktop.cjs": "32feb00c9b715a830d64557d7d0639a01fa6ffe49378475fb9c6f14e82a3ea5e",
+      "scripts/qa_identity_http.py": "c619bb249fc7404c006f5b0ac65622172ceb131d74a8eb71b0da0f24aa5e94fa",
+      "scripts/qa_integration_desktop.cjs": "edeb9a069a119fc686e2f80ccd0773022619f30d2b305466210d6ec34aa3b0de",
+      "scripts/qa_integration_http.py": "ee38cba8e2fd3ec6f128c15b5e2a6e0af020583cb7d5860f88af0157ee13216d",
+      "scripts/qa_mode_desktop.cjs": "fc37f38d790c1c493293920aef3c85d261d3698565ee2b2a2fb696ce8b8662ca",
+      "scripts/qa_mode_http.py": "d6faa5a2fc1363f360e1bfd63cb14dfed7f7375fc1642b628975ee0487fbb060",
+      "src/cloudyfan_monitor/__init__.py": "704695191ca04a65bcb495c4db9dc6a235866a05ab9a81a1c1c13aaffbf10600",
+      "src/cloudyfan_monitor/__main__.py": "c621cfbae281b7979d13de735da5ad704384429d5ae981c9cda22b99a77a97ee",
+      "src/cloudyfan_monitor/admission.py": "e43d118cfce6cbe671d1d2881cee1437f369c2f94ce0274a08c01f4e5a853afd",
+      "src/cloudyfan_monitor/app.py": "c0bc1ab90b4f84f9f5c68bccf0f8ebcdd5477e9feb8fcfd00b56a2f081b03863",
+      "src/cloudyfan_monitor/demo.py": "f3f62db3d30fc1ff07fa7237e6dc5bdb319812dc59f4824acc470df3f5134f6f",
+      "src/cloudyfan_monitor/gateway.py": "59bfcb6cbbf2486b733537b103a5011f06dee39084fb59adf895c7e0cd577a11",
+      "src/cloudyfan_monitor/integration.py": "dbe025bbc0b56925bc11758b0c4eb16db8116742953f7dd1c2d8af5a73cc64e2",
+      "src/cloudyfan_monitor/pools.py": "010aad96639a5732ad57a72e57fa4c8ea16f81b70a7d59d51c0a9ac544f5f216",
+      "src/cloudyfan_monitor/retention_policy.py": "1144805fad8f5acd0962bdfe882093e2c4233cb627a868a1db7c7a862efd5c28",
+      "src/cloudyfan_monitor/static/app.js": "be2d28c2c8952625b907d8a2c860b980a505376b945df9d9013f12837e8a3057",
+      "src/cloudyfan_monitor/static/index.html": "f5d386a356b823309c5e03fb7012c0ff2807fa2a58f4d12d30ea4123ec19cfb9",
+      "src/cloudyfan_monitor/static/style.css": "8feb3f9eebd70226ec33741dff8dd48319ce7bb4a2391c68e68c1bb7240762cb",
+      "src/cloudyfan_monitor/store.py": "55ebf64a9a33152c69e9fc8655ad373b44613e282af78976733259c13f2989ce",
+      "tests/conftest.py": "2796ef7454e60e4a5b68164b65f34ecdcca84ebf093482bce968539c566d5e9a",
+      "tests/test_app_identity.py": "335df1cef1c67d78b0b4c8486f0fc72dd86d4042908d11c13c4e3c15269e2b6b",
+      "tests/test_category_host_integration.py": "b70ed65543bd96377eda5a8ef243a8c124f2d4cc7a68df93bc8397d531a7e88e",
+      "tests/test_http_identity_acceptance.py": "92022b28bacef599412492be8c2abf13705fa47915205360f6a2e12f2a2b27d1",
+      "tests/test_http_mode_acceptance.py": "d74c743ef8d9a13cd90d149d93fedb6e303bc86ebfe3e965cdd0909e72c3d403",
+      "tests/test_integration_composition.py": "a504479664f49fd1e0aec4e7dbe2f75398bbdc1f5c096506b5950b7a9383323f",
+      "tests/test_local_http_integration.py": "11d1eeac73b6261bff4e2e17334eba4d13403f6e70ad1e007878c0869107d9b6",
+      "tests/test_monitor.py": "75e317b921683cda4bc4868e1ff41d4042733878a41255201d28a9cd8799f10d",
+      "tests/test_monitor_integration_backend.py": "a8e94f2a1eeb1bd0688512210d656b14b9ba0037b168a377d404e1d99b9357f2",
+      "tests/test_source_completeness.py": "b9ffad5dd5f966b950156d8d4ed90c06258f40f6474a77045803cd52d575e2cd",
+      "tests/test_sources.py": "573d71b5dd9179f1190bec0d21f0cb1c6046ceee111cc5319a3885b03aad0bd5"
+    },
+    "injected_core_source_sha256": {
+      "src/cloudyfan_jev/__init__.py": "04a08d02b9afb3c22ca4be3de8c310b2bea6216d2c9c4822408992a54bf2a138",
+      "src/cloudyfan_jev/__main__.py": "5bb72cb66b28fc9c3abcb6c4c4773c3fe0aad5e5e4b97a7e872f5f7463610be9",
+      "src/cloudyfan_jev/benchmarking.py": "1a8df5262f4fe6bf991ef29897457afe40ed8b58ec3a2eacd6f6ac9df7998290",
+      "src/cloudyfan_jev/budget.py": "e872d17d315487a1ec3d41c80f0516e8584b9ffc2228683bbb4479909fa17ee9",
+      "src/cloudyfan_jev/client.py": "850e4ac8566f396f0acc14744d9b6589b6f34ae9414ce01f052a1f854dcfe69b",
+      "src/cloudyfan_jev/component_bounds.py": "10700cc0375660780d5348844aa11e95664df7aeffe1dd9135e94ac2b78509ce",
+      "src/cloudyfan_jev/decisions.py": "fdb0e7389a2ab4673042c1fa5c5b62b7768a07310b597f4c300dfad976bb2587",
+      "src/cloudyfan_jev/demo.py": "09c10e4ab1b40bc16437ef2d02c6dabd4cb494a7926671cc96a890bb204149e1",
+      "src/cloudyfan_jev/diagnostics.py": "f9df8ad2685c590474efaee5126485754867ae2b24e15baf73bdb46805b51b0d",
+      "src/cloudyfan_jev/engine.py": "af84067fc25c6a94caa519df974f1305bccd10d4a18f8cb5f2eb858b591a4e0d",
+      "src/cloudyfan_jev/errors.py": "8c00bc095575e9397ba28002e4da962f45e603291bec4a5e6a0b92c2246efaa7",
+      "src/cloudyfan_jev/experiments.py": "98dec7665737a2240def9eeff9e0f2e6d79d634eabdd0f04a8d8b113f5b4f520",
+      "src/cloudyfan_jev/generation_request.py": "c061984a69875cea211eed472aa6bbdcad78990ce14fecc72887bd2da4caf29c",
+      "src/cloudyfan_jev/http_api.py": "31d577eb1ae7258dcd2de60bb624e8c1d9d1bcb0b8b26f62989f739212bfec09",
+      "src/cloudyfan_jev/identity.py": "67d2e7861020a0c6c016d393025ea72da78bd358cb50baedc260a12f6b5e55c2",
+      "src/cloudyfan_jev/ledger.py": "58fadf0455ff072a0d52e677381fe7e6097d6e8caa1d94e83f6f24e1f00c3209",
+      "src/cloudyfan_jev/local.py": "cdb51073b7f5affe22e57e7b986cfb67295d6c11def8b5b493873af13fec7bac",
+      "src/cloudyfan_jev/ollama_api.py": "b7e6eb56a5feff5f21f95128dc030b2cdd4fb4d7673c8f4cfae0d83490e05527",
+      "src/cloudyfan_jev/privacy.py": "159a8d530f99316624f51e76aeb7d70117d84ba9d010dee28b66133d0b2fc548",
+      "src/cloudyfan_jev/provider_bounds.py": "69fc18de602a0f76222b5f16a8e1c23a4574fd751a94d739178a3beccf30b72d",
+      "src/cloudyfan_jev/receipt_store.py": "8134c13826a2d41c9ea250596502381b8cb8e8bc8904b3809aee55c7f499221a",
+      "src/cloudyfan_jev/recovery_prompts.py": "d6b031a26b12f08151d101d1c15099a341980e0626a138a8e036c990a19bca6a",
+      "src/cloudyfan_jev/rejection_fees.py": "0c48bda821ccdf7daa5c274f5568645da73601d9928b7cfa3603f03c17502a0a",
+      "src/cloudyfan_jev/reports.py": "5f621d8f5a3d4836b909ef89a32aa226a2418e78fecd4d70e2305efd496306d9",
+      "src/cloudyfan_jev/retention.py": "c58144d620cec964a396af11c220600a7c327443668ded120e50969f798592b1",
+      "src/cloudyfan_jev/routing.py": "ae326b63b795e2bc4cf5af195f8abfd3597cfa5a430fabd875b435729d47936d",
+      "src/cloudyfan_jev/scheduler.py": "8e3aed9a30c14fef348888324c2c9254e4a560f0c903de4c72e5feb98d24c964",
+      "src/cloudyfan_jev/scores/__init__.py": "f30a448855aaeb9fb5c016c962c166387bf8c9656a11ec26e26d8ce9f63f968a",
+      "src/cloudyfan_jev/scores/adapters.py": "026932b779a1f423d954b7f0a6a3ab5880242ac6f3e613c72931f8fb00ef56f3",
+      "src/cloudyfan_jev/scores/backup_pools.py": "e7567c7c90ce26548a64b566ea1b8b9ab6cebaa6a80ad7e89c2ce9d0c0623f7b",
+      "src/cloudyfan_jev/scores/backup_runtime.py": "fdb952aff8b8ea78b7d683f16c5b61dc9574b0e7b97db47a5921ebe2b90c165c",
+      "src/cloudyfan_jev/scores/catalog.py": "fa1e0dc99f11cfb0ecc4df524f6179caacb8595c47e333c9dbfa0765cbb3b282",
+      "src/cloudyfan_jev/scores/categories.py": "e7f12e82fe2b3abd6e28db7836242466cbd13dcba4c37a5ee5003c3b0baef45f",
+      "src/cloudyfan_jev/scores/category_routing.py": "36ced8e9d1a9206e3d160004685dbca4ef8c0e21d592c70e8c3b12390a54054f",
+      "src/cloudyfan_jev/scores/cli.py": "25452a29387ca365dbcdeb7aac3653ab05a96867dad115fdada21e027a54cf01",
+      "src/cloudyfan_jev/scores/configuration.py": "a73050a6c1843a58b994bde4055e14d8a137b9a71da89ba878ceb14bc97b4320",
+      "src/cloudyfan_jev/scores/demo.py": "368399fa0917ef0ee65f3f7cf5690f7f5a3c90818c0ef0680cfef1565018c209",
+      "src/cloudyfan_jev/scores/discovery.py": "740a6ba73df56c6315651668f0f89ad6890e1115c033bba575bcc3453e682954",
+      "src/cloudyfan_jev/scores/fee_readiness.py": "3d4168c778b6ca1ad1673ab549dc22a62472f95e68943d6ccb15d5e1e0a64883",
+      "src/cloudyfan_jev/scores/first_pool.py": "a9d82a7fdfddaf261c8e44d23e1acc62f9b647758066f0f1433e43e5938ef68a",
+      "src/cloudyfan_jev/scores/health.py": "18ebe1d5ca14096ff8a93d8ab775755bcaa949085e621981371b06fb5a958ccd",
+      "src/cloudyfan_jev/scores/integration.py": "55de7454d230f4bfc14e14b397d402373dfd37ca8e16d1e7397d45a9cbb1bd99",
+      "src/cloudyfan_jev/scores/metrics.py": "466eac37ea86219aa26ac2437b593eb5c70f4ad8f5d47dcc7561f29ac1aacae0",
+      "src/cloudyfan_jev/scores/pool_demo.py": "ca4750b8a5e3c8ea182c7ffc4655d1c1cefe8b6181c8095fa7a3a0b273b90697",
+      "src/cloudyfan_jev/scores/qcs.py": "670cab7dae11d96a44ce65cdd014eaa4ad20020dd609feb6ac6bdcb29ee5a3e5",
+      "src/cloudyfan_jev/scores/qualification.py": "8b97c7037fb952525dabb3e6aebee3d826bb2cd5536dc50dafad549b864d9479",
+      "src/cloudyfan_jev/scores/snapshots.py": "304f972e6ef7f99a2320c57584a77df38b8c134f7cc06475a0ecb7a31b95517d",
+      "src/cloudyfan_jev/scores/sql_backup_candidates.py": "a8cd8043b99e7507a550ac5c51f3f1c5a2725e30f69b04016b93a990b3bc88f9",
+      "src/cloudyfan_jev/scores/sql_capability.py": "c6a0a533047947828eb376732bc20627b6f2a42bdbf4cc0d57864f75b5208c62",
+      "src/cloudyfan_jev/scores/sql_exam.py": "b6e6689b683e390312086e17e4c0b860d5a3d23249894537d3427c9e1b8b4302",
+      "src/cloudyfan_jev/scores/sql_low_preparation.py": "0c9ebce5defcc07057fae084075618cdaac99f3972f5b7e79329c3f682383399",
+      "src/cloudyfan_jev/scores/sql_low_research.py": "cd590261167cccb138defc925953214dba8e3afce8e0e88a358efeb2b3e707d5",
+      "src/cloudyfan_jev/scores/sql_multi_runner.py": "0a39458a6c08f1b9b92595e67f937d4583f80cb66f9a85ab3cc70a82a3a3a8df",
+      "src/cloudyfan_jev/scores/sql_runner.py": "ce985c114f95a352b53b52d8feac97e76e8cce4bea94d5ca170afcc62b4129cf",
+      "src/cloudyfan_jev/scores/updates.py": "8325eaa2c705e12f1f6911e6fb74adae60486488b411cec9b0f9c57128941520",
+      "src/cloudyfan_jev/scores/workflow_research.py": "2e4e78c569241592c272ebf646be434d2933d2f37c8d65f9099c2014f7baac68",
+      "src/cloudyfan_jev/sql.py": "f8e037a71f4dca206bd8de231043e3bb802fa9d72b4ffc19f2564b659d9ac504",
+      "src/cloudyfan_jev/sql_catalog.py": "fd861ec13e79c8eb54b086e47f1b8050b34406fa52d86046e9fed2b9d65ba2d6",
+      "src/cloudyfan_jev/sql_executor.py": "8133a36dba4d6170371a6ce304ed82a5ec4a9e3145b89bded385eb21c360d206",
+      "src/cloudyfan_jev/sql_isolation.py": "a5f582f5bdb7bb1349039a2cebdf7bdc89f9d2d7cfbcbe83f2acb8446a2d9bd7",
+      "src/cloudyfan_jev/sql_isolation_entry.py": "5cdee63bd172b74bbee702c55c9ec6af9f35f13c1c354c6dbc1f043e3b56c51c",
+      "src/cloudyfan_jev/sql_policy.py": "11d8a5c2edfcbdcbfc99b6e76f6384cf66c8e25dc1ace4f1bbfb4ce1836831ec",
+      "src/cloudyfan_jev/sql_process.py": "e24b2eb0e4f475a6c8df9f89dc6fd562088f52fc860af30a199b60abbbd347cd",
+      "src/cloudyfan_jev/sql_public_suite.py": "6e31898280570458e3bdcc51a82568c10883d3fa2ce92fcb659e65c1df399905",
+      "src/cloudyfan_jev/sql_review.py": "9cb294055a0aa534cf981737a4cabde1601a8e642e7dc80e174cde6d37c69f06",
+      "src/cloudyfan_jev/sql_worker.py": "39bf49d049933809d4c328a49ce4c1c805f23ec6d666c45495e4c7c47f2dcbe0"
+    }
+  },
+  "real_http": {
+    "status": "passed",
+    "socket_cases": 19,
+    "http_responses": 177,
+    "groups": {
+      "original": 7,
+      "identity": 4,
+      "mode_contracts": 8
+    },
+    "parent_observed_mock_call_count": 25,
+    "separately_observed_worker_mock_call_count": 1,
+    "cases": [
+      {
+        "test": "test_disconnected_http_client_does_not_cancel_task_or_release_execution_slot",
+        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_disconnected_http_client_does_not_cancel_task_or_release_execution_slot.json",
+        "http_response_count": 8,
+        "parent_observed_mock_call_count": 1,
+        "additional_workers": [],
+        "blocked_socket_attempts": []
+      },
+      {
+        "test": "test_http_category_tasks_bind_each_client_identity_and_server_workload",
+        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_http_category_tasks_bind_each_client_identity_and_server_workload.json",
+        "http_response_count": 11,
+        "parent_observed_mock_call_count": 2,
+        "additional_workers": [],
+        "blocked_socket_attempts": []
+      },
+      {
+        "test": "test_http_clients_and_scopes_cannot_read_resume_or_manage_each_other",
+        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_http_clients_and_scopes_cannot_read_resume_or_manage_each_other.json",
+        "http_response_count": 25,
+        "parent_observed_mock_call_count": 2,
+        "additional_workers": [],
+        "blocked_socket_attempts": []
+      },
+      {
+        "test": "test_http_disabled_client_keeps_operator_history_and_revalidates_originals[response.json]",
+        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_http_disabled_client_keeps_operator_history_and_revalidates_originals[response.json].json",
+        "http_response_count": 10,
+        "parent_observed_mock_call_count": 1,
+        "additional_workers": [],
+        "blocked_socket_attempts": []
+      },
+      {
+        "test": "test_http_disabled_client_keeps_operator_history_and_revalidates_originals[result.json]",
+        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_http_disabled_client_keeps_operator_history_and_revalidates_originals[result.json].json",
+        "http_response_count": 10,
+        "parent_observed_mock_call_count": 1,
+        "additional_workers": [],
+        "blocked_socket_attempts": []
+      },
+      {
+        "test": "test_http_expiry_boundary_and_reopened_service_preserve_history_without_resending",
+        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_http_expiry_boundary_and_reopened_service_preserve_history_without_resending.json",
+        "http_response_count": 10,
+        "parent_observed_mock_call_count": 1,
+        "additional_workers": [
+          {
+            "kind": "reopened_application",
+            "pid": 25817,
+            "mock_upstream_call_count": 0
+          }
+        ],
+        "blocked_socket_attempts": []
+      },
+      {
+        "test": "test_http_four_modes_dispatch_registered_runners_on_one_budget[cloudyfan]",
+        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_http_four_modes_dispatch_registered_runners_on_one_budget[cloudyfan].json",
+        "http_response_count": 5,
+        "parent_observed_mock_call_count": 1,
+        "additional_workers": [],
+        "blocked_socket_attempts": []
+      },
+      {
+        "test": "test_http_four_modes_dispatch_registered_runners_on_one_budget[fixed_high]",
+        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_http_four_modes_dispatch_registered_runners_on_one_budget[fixed_high].json",
+        "http_response_count": 5,
+        "parent_observed_mock_call_count": 1,
+        "additional_workers": [],
+        "blocked_socket_attempts": []
+      },
+      {
+        "test": "test_http_four_modes_dispatch_registered_runners_on_one_budget[low_first]",
+        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_http_four_modes_dispatch_registered_runners_on_one_budget[low_first].json",
+        "http_response_count": 5,
+        "parent_observed_mock_call_count": 1,
+        "additional_workers": [],
+        "blocked_socket_attempts": []
+      },
+      {
+        "test": "test_http_four_modes_dispatch_registered_runners_on_one_budget[open_source_first]",
+        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_http_four_modes_dispatch_registered_runners_on_one_budget[open_source_first].json",
+        "http_response_count": 5,
+        "parent_observed_mock_call_count": 1,
+        "additional_workers": [],
+        "blocked_socket_attempts": []
+      },
+      {
+        "test": "test_http_interrupted_category_resumes_original_contract_and_keeps_original_expiry",
+        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_http_interrupted_category_resumes_original_contract_and_keeps_original_expiry.json",
+        "http_response_count": 15,
+        "parent_observed_mock_call_count": 1,
+        "additional_workers": [],
+        "blocked_socket_attempts": []
+      },
+      {
+        "test": "test_http_missing_original_and_unregistered_category_reject_before_dispatch",
+        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_http_missing_original_and_unregistered_category_reject_before_dispatch.json",
+        "http_response_count": 9,
+        "parent_observed_mock_call_count": 2,
+        "additional_workers": [],
+        "blocked_socket_attempts": []
+      },
+      {
+        "test": "test_http_rotated_credential_keeps_principal_task_statistics_and_cost",
+        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_http_rotated_credential_keeps_principal_task_statistics_and_cost.json",
+        "http_response_count": 9,
+        "parent_observed_mock_call_count": 1,
+        "additional_workers": [],
+        "blocked_socket_attempts": []
+      },
+      {
+        "test": "test_http_switches_and_reopen_preserve_original_binding_receipts_and_deadline",
+        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_http_switches_and_reopen_preserve_original_binding_receipts_and_deadline.json",
+        "http_response_count": 24,
+        "parent_observed_mock_call_count": 5,
+        "additional_workers": [],
+        "blocked_socket_attempts": []
+      },
+      {
+        "test": "test_interrupted_http_submission_only_continues_after_explicit_resume",
+        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_interrupted_http_submission_only_continues_after_explicit_resume.json",
+        "http_response_count": 5,
+        "parent_observed_mock_call_count": 1,
+        "additional_workers": [],
+        "blocked_socket_attempts": []
+      },
+      {
+        "test": "test_killed_worker_is_not_automatically_resumed_or_rebilled_after_reopen",
+        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_killed_worker_is_not_automatically_resumed_or_rebilled_after_reopen.json",
+        "http_response_count": 4,
+        "parent_observed_mock_call_count": 0,
+        "additional_workers": [
+          {
+            "entered": true,
+            "pid": 25847,
+            "port": 53073,
+            "phase": "mock_request_before_response",
+            "mock_upstream_call_count": 1,
+            "blocked_socket_attempts": [],
+            "exitcode": -15
+          },
+          {
+            "kind": "reopened_application",
+            "pid": 25817,
+            "mock_upstream_call_count": 0
+          }
+        ],
+        "blocked_socket_attempts": []
+      },
+      {
+        "test": "test_running_http_task_keeps_reads_responsive_and_rejects_another_client",
+        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_running_http_task_keeps_reads_responsive_and_rejects_another_client.json",
+        "http_response_count": 9,
+        "parent_observed_mock_call_count": 1,
+        "additional_workers": [],
+        "blocked_socket_attempts": []
+      },
+      {
+        "test": "test_separate_http_worker_shares_one_service_slot_and_does_not_queue",
+        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_separate_http_worker_shares_one_service_slot_and_does_not_queue.json",
+        "http_response_count": 3,
+        "parent_observed_mock_call_count": 1,
+        "additional_workers": [
+          {
+            "pid": 25846,
+            "port": 53056,
+            "mock_upstream_call_count": 0,
+            "blocked_socket_attempts": [],
+            "socket_attempt_count": 0
+          }
+        ],
+        "blocked_socket_attempts": []
+      },
+      {
+        "test": "test_unknown_model_fee_blocks_other_client_over_real_http",
+        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_unknown_model_fee_blocks_other_client_over_real_http.json",
+        "http_response_count": 5,
+        "parent_observed_mock_call_count": 1,
+        "additional_workers": [],
+        "blocked_socket_attempts": []
+      }
+    ],
+    "identity_safe_response_sidecars": [
+      "runtime/checks/782d2e51cec4/http-evidence/test_http_clients_and_scopes_cannot_read_resume_or_manage_each_other-identity.json",
+      "runtime/checks/782d2e51cec4/http-evidence/test_http_disabled_client_keeps_operator_history_and_revalidates_originals[response.json]-identity.json",
+      "runtime/checks/782d2e51cec4/http-evidence/test_http_disabled_client_keeps_operator_history_and_revalidates_originals[result.json]-identity.json",
+      "runtime/checks/782d2e51cec4/http-evidence/test_http_rotated_credential_keeps_principal_task_statistics_and_cost-identity.json"
+    ]
+  },
+  "desktop": {
+    "status": "passed",
+    "viewport": {
+      "width": 1280,
+      "height": 800
+    },
+    "checks_passed": 20,
+    "baseline": {
+      "report": "runtime/integration-desktop/75d86630-a3d/desktop-report.json",
+      "http_receipt": "runtime/integration-desktop/75d86630-a3d/http-receipt.json",
+      "checks_passed": 8,
+      "observed_model_mock_calls": 6,
+      "observed_metadata_mock_attempts": 6,
+      "page_errors": [],
+      "expected_console_resource_errors": [
+        {
+          "kind": "error",
+          "message": "Failed to load resource: the server responded with a status of 503 (Service Unavailable)"
+        }
+      ],
+      "blocked_browser_requests": [],
+      "fixture_exit": {
+        "code": 0,
+        "signal": null
+      }
+    },
+    "identity": {
+      "report": "runtime/identity-desktop/48010ccc8056/report.json",
+      "browser_report": "runtime/identity-desktop/48010ccc8056/browser-report.json",
+      "checks_passed": 4,
+      "observed_model_mock_calls": 2,
+      "page_errors": [],
+      "blocked_browser_requests": []
+    },
+    "mode_contracts": {
+      "report": "runtime/mode-desktop/92dae824-3be/desktop-report.json",
+      "http_receipt": "runtime/mode-desktop/92dae824-3be/http-receipt.json",
+      "checks_passed": 8,
+      "observed_model_mock_calls": 7,
+      "page_errors": [],
+      "blocked_browser_requests": [],
+      "fixture_exit": {
+        "code": 0,
+        "signal": null
+      }
+    },
+    "qa_source_hashes_match_gate": true,
+    "preview_status": "passed_fresh_before_final_sync_product_hashes_match_gate",
+    "fixtures_are_stopped": true,
+    "original_preview": {
+      "report": "runtime/final-preview-smoke/0bee0d3e/report.json",
+      "status": "passed",
+      "summary": {
+        "complete_api_usd": "0.0319",
+        "complete_task_api_usd": "0.0319",
+        "completed": 12,
+        "escalated": 4,
+        "expired": 0,
+        "failed": 0,
+        "final_rate": 1,
+        "first_passed": 8,
+        "first_rate": 0.6666666666666666,
+        "in_progress": 0,
+        "jev_once": 0,
+        "jev_twice": 2,
+        "known_api_usd": "0.0319",
+        "known_task_api_usd": "0.0319",
+        "latency_p50": 0.18770159599080216,
+        "latency_p95": 0.3763810620002914,
+        "latency_samples": 12,
+        "passed": 12,
+        "tasks": 12,
+        "unknown": 0
+      },
+      "page_errors": [],
+      "blocked_requests": [],
+      "requests_get_only": true,
+      "product_sha256": {
+        "src/cloudyfan_monitor/__init__.py": "704695191ca04a65bcb495c4db9dc6a235866a05ab9a81a1c1c13aaffbf10600",
+        "src/cloudyfan_monitor/__main__.py": "c621cfbae281b7979d13de735da5ad704384429d5ae981c9cda22b99a77a97ee",
+        "src/cloudyfan_monitor/admission.py": "e43d118cfce6cbe671d1d2881cee1437f369c2f94ce0274a08c01f4e5a853afd",
+        "src/cloudyfan_monitor/app.py": "c0bc1ab90b4f84f9f5c68bccf0f8ebcdd5477e9feb8fcfd00b56a2f081b03863",
+        "src/cloudyfan_monitor/demo.py": "f3f62db3d30fc1ff07fa7237e6dc5bdb319812dc59f4824acc470df3f5134f6f",
+        "src/cloudyfan_monitor/gateway.py": "59bfcb6cbbf2486b733537b103a5011f06dee39084fb59adf895c7e0cd577a11",
+        "src/cloudyfan_monitor/integration.py": "dbe025bbc0b56925bc11758b0c4eb16db8116742953f7dd1c2d8af5a73cc64e2",
+        "src/cloudyfan_monitor/pools.py": "010aad96639a5732ad57a72e57fa4c8ea16f81b70a7d59d51c0a9ac544f5f216",
+        "src/cloudyfan_monitor/retention_policy.py": "1144805fad8f5acd0962bdfe882093e2c4233cb627a868a1db7c7a862efd5c28",
+        "src/cloudyfan_monitor/static/app.js": "be2d28c2c8952625b907d8a2c860b980a505376b945df9d9013f12837e8a3057",
+        "src/cloudyfan_monitor/static/index.html": "f5d386a356b823309c5e03fb7012c0ff2807fa2a58f4d12d30ea4123ec19cfb9",
+        "src/cloudyfan_monitor/static/style.css": "8feb3f9eebd70226ec33741dff8dd48319ce7bb4a2391c68e68c1bb7240762cb",
+        "src/cloudyfan_monitor/store.py": "55ebf64a9a33152c69e9fc8655ad373b44613e282af78976733259c13f2989ce"
+      },
+      "final_sync_product_hash_check": "pending_root_sync"
+    }
+  },
+  "historical_core_affected": {
+    "status": "historical_passed_selected_scope",
+    "tests_passed": 119,
+    "receipt": "runtime/final-acceptance/historical-119-checks.json",
+    "scope": "runtime/final-acceptance/historical-119-scope.json",
+    "full_core_pass_asserted": false
+  },
+  "required_core_integration": {
+    "status": "failed",
+    "command": [
+      "./scripts/check",
+      "--integration"
+    ],
+    "test_filters": [],
+    "pytest_addopts_present": false,
+    "preserved_legacy_copies": true,
+    "receipt": "runtime/final-acceptance/core-full-receipt.json",
+    "official_receipt": "runtime/final-acceptance/core-full-checks.json",
+    "full_log": "runtime/final-acceptance/core-full.log",
+    "started_at": "2026-10-22T06:33:39.563892+00:00",
+    "finished_at": "2026-10-22T06:52:47.207785+00:00",
+    "exit_code": 1,
+    "pytest": {
+      "passed": 2483,
+      "failed": 71,
+      "seconds": 1144.99,
+      "preserved_snapshot_failed_count": 70,
+      "current_file_failed_tests": [
+        "tests/test_project_state.py::test_historical_pass_and_closed_work_never_imply_current_or_production_completion"
+      ]
+    },
+    "changed_inputs": [
+      "docs/agent-state.json"
+    ],
+    "post_pytest_demos_and_build": "not_run_after_failure",
+    "official_passed": false,
+    "approved_one_field_metadata_repair": "runtime/final-acceptance/approved-records-repair.json",
+    "followup_scope": "pending_direct_user_decision"
+  },
+  "historical_sql_reproduction": {
+    "status": "three_current_nodes_passed_individually_historical_cause_unknown",
+    "receipt": "runtime/final-acceptance/core-narrow-receipt.json",
+    "logs": [
+      "runtime/final-acceptance/core-narrow-bounded.log",
+      "runtime/final-acceptance/core-narrow-compound.log",
+      "runtime/final-acceptance/core-narrow-low-research.log"
+    ],
+    "historical_pre_reboot_logs": [
+      "runtime/final-acceptance/historical-pre-reboot-required-integration.log",
+      "runtime/final-acceptance/historical-pre-reboot-canonical-integration.log"
+    ],
+    "attribution": "No historical final traceback; individual current passes and static call-path differences do not prove a fix or unrelatedness."
+  },
+  "historical_live_source": {
+    "status": "reused_original_partial_window",
+    "report": "runtime/final-acceptance/source-get/report.json",
+    "observed_attempts": "runtime/final-acceptance/source-get/observed-requests.json",
+    "report_sha256": "9ff5e4c13b2110af7b3842a408954da7bd5e7b1b28263423376103fff6c9d7fd",
+    "original_started_at": "2026-10-22T04:52:50.637633+00:00",
+    "seconds": 30.62158,
+    "attempted": 15,
+    "succeeded": 15,
+    "deferred_endpoints": 24,
+    "completeness_status": "partial",
+    "categories": 23,
+    "occupied_positions": 143,
+    "raw_body_sizes_and_hashes_verified": true,
+    "policy_status": "exploratory_unvalidated",
+    "published": false,
+    "activated": false,
+    "new_source_window_performed": false
+  },
+  "boundaries": {
+    "model_and_metadata_regression": "Observed MockTransport calls plus Python socket allowlist and browser origin routing; no real model capability or spend claim.",
+    "production_qualification": false,
+    "deployment": false,
+    "code_push": false,
+    "data_erasure": false,
+    "local_commits": "authorized for isolated implement-spec integration; ignored runtime artifacts are not committed",
+    "research_changes": "Only the root-approved one-field RG04 metadata repair; no fixture repair or canonical acceptance run is authorized by this report."
+  },
+  "artifact_sha256": [
+    {
+      "path": "runtime/checks/782d2e51cec4/checks.json",
+      "sha256": "1432e49d7d2929d418c993e0614f9f6c7e16d1d0387c49399d5ce10422b9bd2b",
+      "bytes": 16491
+    },
+    {
+      "path": "runtime/checks/782d2e51cec4/http-evidence/test_disconnected_http_client_does_not_cancel_task_or_release_execution_slot.json",
+      "sha256": "043751b92006b2309cebc29256eb0144880d249d895f519173b438c5a3436c42",
+      "bytes": 1961
+    },
+    {
+      "path": "runtime/checks/782d2e51cec4/http-evidence/test_http_category_tasks_bind_each_client_identity_and_server_workload.json",
+      "sha256": "553e651106732a0e7e428da45412eb3d43d5bd576a3c655311a4da53f36b611c",
+      "bytes": 3663
+    },
+    {
+      "path": "runtime/checks/782d2e51cec4/http-evidence/test_http_clients_and_scopes_cannot_read_resume_or_manage_each_other-identity.json",
+      "sha256": "d70913968b968202e0ac32bb3b83c52ebc11fb3cc09aa97ff3726581e8d84c2a",
+      "bytes": 12994
+    },
+    {
+      "path": "runtime/checks/782d2e51cec4/http-evidence/test_http_clients_and_scopes_cannot_read_resume_or_manage_each_other.json",
+      "sha256": "4242139dc7bb430b6bfe40f6b1ede333e69d25906218e7c5b9d250b40ae8e22e",
+      "bytes": 4987
+    },
+    {
+      "path": "runtime/checks/782d2e51cec4/http-evidence/test_http_disabled_client_keeps_operator_history_and_revalidates_originals[response.json]-identity.json",
+      "sha256": "882288038d60851c17db6587750a4dc14dd113f496437365f1d9ff9b24523e3c",
+      "bytes": 18320
+    },
+    {
+      "path": "runtime/checks/782d2e51cec4/http-evidence/test_http_disabled_client_keeps_operator_history_and_revalidates_originals[response.json].json",
+      "sha256": "49cce568d9845d479e3dc27ecc45b53722fcf04dae556c89d510e7f2c2af07dc",
+      "bytes": 2306
+    },
+    {
+      "path": "runtime/checks/782d2e51cec4/http-evidence/test_http_disabled_client_keeps_operator_history_and_revalidates_originals[result.json]-identity.json",
+      "sha256": "e64b65e862aaf5f57cc8836bd7ef87b57abce44429451f316e1bb09d61f51970",
+      "bytes": 18334
+    },
+    {
+      "path": "runtime/checks/782d2e51cec4/http-evidence/test_http_disabled_client_keeps_operator_history_and_revalidates_originals[result.json].json",
+      "sha256": "5430b40bb35365a0026e9465f413e51d2f74b51bd3bf7858a9d48c354cc44cb9",
+      "bytes": 2304
+    },
+    {
+      "path": "runtime/checks/782d2e51cec4/http-evidence/test_http_expiry_boundary_and_reopened_service_preserve_history_without_resending.json",
+      "sha256": "7204ef1530eccb123f6747403b6b71376289757f82b4c64b120674917e19e301",
+      "bytes": 2366
+    },
+    {
+      "path": "runtime/checks/782d2e51cec4/http-evidence/test_http_four_modes_dispatch_registered_runners_on_one_budget[cloudyfan].json",
+      "sha256": "5879158c64ed647a35718249f52d407fa23d4d503fda020e6359e0d374ca5807",
+      "bytes": 1555
+    },
+    {
+      "path": "runtime/checks/782d2e51cec4/http-evidence/test_http_four_modes_dispatch_registered_runners_on_one_budget[fixed_high].json",
+      "sha256": "0d2c545729003f1e1f9f65e4b70f14ecad5350180cff5594d7abd7b6cfb082dc",
+      "bytes": 1551
+    },
+    {
+      "path": "runtime/checks/782d2e51cec4/http-evidence/test_http_four_modes_dispatch_registered_runners_on_one_budget[low_first].json",
+      "sha256": "414a94cd726788d463b5d173c75d7e36439eea1d15dfac256f6edd3192b576cc",
+      "bytes": 1546
+    },
+    {
+      "path": "runtime/checks/782d2e51cec4/http-evidence/test_http_four_modes_dispatch_registered_runners_on_one_budget[open_source_first].json",
+      "sha256": "5e0828fe10b34431e0ecf6904a8ac4f677e88d8ee958a114f8af0b88bfc10ea6",
+      "bytes": 1586
+    },
+    {
+      "path": "runtime/checks/782d2e51cec4/http-evidence/test_http_interrupted_category_resumes_original_contract_and_keeps_original_expiry.json",
+      "sha256": "8c7be1129427698a949c937eec83a1a0c7fde9c396e710a6d2ba932389ef929d",
+      "bytes": 3540
+    },
+    {
+      "path": "runtime/checks/782d2e51cec4/http-evidence/test_http_missing_original_and_unregistered_category_reject_before_dispatch.json",
+      "sha256": "6c655f72cc0f1eabc2ddb5ade161dd40f0d92cbda45cc41d3565853c73a4eabb",
+      "bytes": 2453
+    },
+    {
+      "path": "runtime/checks/782d2e51cec4/http-evidence/test_http_rotated_credential_keeps_principal_task_statistics_and_cost-identity.json",
+      "sha256": "c521ee02c9e2325097ffce571bc685d9b243ac344cc8aeb5ecbdf84634c7071f",
+      "bytes": 10671
+    },
+    {
+      "path": "runtime/checks/782d2e51cec4/http-evidence/test_http_rotated_credential_keeps_principal_task_statistics_and_cost.json",
+      "sha256": "7a01a005f2639743b4b4799e2982051bfc0b5a79100141deb82c04b17f24bb39",
+      "bytes": 2061
+    },
+    {
+      "path": "runtime/checks/782d2e51cec4/http-evidence/test_http_switches_and_reopen_preserve_original_binding_receipts_and_deadline.json",
+      "sha256": "e0302a8af0bbcc67c9f9e30508aa6b3b5e99728dc9d35cfb3e4537c4d3b00424",
+      "bytes": 5348
+    },
+    {
+      "path": "runtime/checks/782d2e51cec4/http-evidence/test_interrupted_http_submission_only_continues_after_explicit_resume.json",
+      "sha256": "4676a4322b010439f90e432951e6f12e7ebbd52bf433e6fed6fe8dd71b51fd1d",
+      "bytes": 1385
+    },
+    {
+      "path": "runtime/checks/782d2e51cec4/http-evidence/test_killed_worker_is_not_automatically_resumed_or_rebilled_after_reopen.json",
+      "sha256": "386d8cbdd64ac4b497c7d0a9b7f088bfe0a7e5a484f7bb1ba47777c00484acb4",
+      "bytes": 1515
+    },
+    {
+      "path": "runtime/checks/782d2e51cec4/http-evidence/test_running_http_task_keeps_reads_responsive_and_rejects_another_client.json",
+      "sha256": "72f2072699a979a30ff04e63d3c894d7dfaf75064fd398484000f7f9bf437e3b",
+      "bytes": 2031
+    },
+    {
+      "path": "runtime/checks/782d2e51cec4/http-evidence/test_separate_http_worker_shares_one_service_slot_and_does_not_queue.json",
+      "sha256": "bf365e45ee800f2535e66b561f63cfa5f837a5c28e7dab5f7a49ca17f733f52b",
+      "bytes": 1164
+    },
+    {
+      "path": "runtime/checks/782d2e51cec4/http-evidence/test_unknown_model_fee_blocks_other_client_over_real_http.json",
+      "sha256": "b292a2d565aff74bd60b7b10eb9a699070a124e66defda1914f1815d27537798",
+      "bytes": 1338
+    },
+    {
+      "path": "runtime/checks/782d2e51cec4/step-1.log",
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+      "bytes": 19
+    },
+    {
+      "path": "runtime/checks/782d2e51cec4/step-2.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "runtime/checks/782d2e51cec4/step-3.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "runtime/checks/782d2e51cec4/step-4.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "runtime/checks/782d2e51cec4/step-5.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "runtime/checks/782d2e51cec4/step-6.log",
+      "sha256": "64bac32eda6694437ab0d2075de6bf73ef024c734a6047c958d0b0778fb6d007",
+      "bytes": 180
+    },
+    {
+      "path": "runtime/checks/782d2e51cec4/step-7.log",
+      "sha256": "cb40af90f34ec081bd1793b017c5d326240f86d07162f5fc2d6bba6660504988",
+      "bytes": 253
+    },
+    {
+      "path": "runtime/final-acceptance/approved-records-repair.json",
+      "sha256": "f6acf02478ff20c679d497d7d7cbc270928a8033f0d72d929742c99d9be77f22",
+      "bytes": 515
+    },
+    {
+      "path": "runtime/final-acceptance/core-full-checks.json",
+      "sha256": "5abc15769fa0ad30f9c7ef93da83633d41b99244c51d4e84cc71c7782c228f4e",
+      "bytes": 1402
+    },
+    {
+      "path": "runtime/final-acceptance/core-full-receipt.json",
+      "sha256": "edb90e0829ba46cf6a6b4545c31bf4d9313dc5883a8310ad9151ec9b884ce457",
+      "bytes": 46245
+    },
+    {
+      "path": "runtime/final-acceptance/core-full.log",
+      "sha256": "dd9cd572e00c5bb3a993b45027f8c4d375d0bfc271b4419fa7ae0f8fb29b8762",
+      "bytes": 113323
+    },
+    {
+      "path": "runtime/final-acceptance/core-narrow-bounded.log",
+      "sha256": "c6c63756254fec5ebcdf3a2087091cce95274c2df724eac04b647f58bdc5c50e",
+      "bytes": 1051
+    },
+    {
+      "path": "runtime/final-acceptance/core-narrow-compound.log",
+      "sha256": "35293319012a5d3793acb847fe14467552d6c714009f3b9c97fa4f3b0fb92d68",
+      "bytes": 1110
+    },
+    {
+      "path": "runtime/final-acceptance/core-narrow-environment.log",
+      "sha256": "e6b95f2b472df69ec1ed4e8a0674b1994c90dda5ed7b1a84bed1c4702f2e44c1",
+      "bytes": 272
+    },
+    {
+      "path": "runtime/final-acceptance/core-narrow-locked-sync.log",
+      "sha256": "42f719b6bdc5cc66f0cdf4fd89bd325cb0f2018a58398e351799981abb2ca25f",
+      "bytes": 58
+    },
+    {
+      "path": "runtime/final-acceptance/core-narrow-low-research.log",
+      "sha256": "ecfa043935a7f8765d96cc4c2a7341f4d2a2730bdad7bab181a6bd1e773ab2f0",
+      "bytes": 1036
+    },
+    {
+      "path": "runtime/final-acceptance/core-narrow-receipt.json",
+      "sha256": "2b4032d4951604cd7acc04f67487e180ddcde571d6026aeee1589e3366342d66",
+      "bytes": 43087
+    },
+    {
+      "path": "runtime/final-acceptance/historical-119-checks.json",
+      "sha256": "a09e13b24d60910d4a12a493ffb8557dd3c4c47166505d7135b57bc0163ce6e7",
+      "bytes": 2512
+    },
+    {
+      "path": "runtime/final-acceptance/historical-119-scope.json",
+      "sha256": "19c68af42d0ff22487a5978730f824652ca855fdf887738bc1836e5797eab504",
+      "bytes": 616
+    },
+    {
+      "path": "runtime/final-acceptance/historical-pre-reboot-canonical-integration.log",
+      "sha256": "ef3c545bc5e75ade91a6d5186f991ca9caeb568466d5440c8d556c5ddacb340a",
+      "bytes": 2785
+    },
+    {
+      "path": "runtime/final-acceptance/historical-pre-reboot-required-integration.log",
+      "sha256": "f245ed7bcd02e988bdddc267f64e502b6dbed4c9a768a7cdc6c9901eb57bc741",
+      "bytes": 3524
+    },
+    {
+      "path": "runtime/final-acceptance/source-get/candidate-view.json",
+      "sha256": "0244a72a319f86a1ff9a604f6778f6830aff13903275463a4a920fa6cba47ae9",
+      "bytes": 421009
+    },
+    {
+      "path": "runtime/final-acceptance/source-get/observed-requests.json",
+      "sha256": "e3ce46dfb9ea055ff84e69ef8b4f1a2879630d81f3bdf6e99cf863965497b7e9",
+      "bytes": 6070
+    },
+    {
+      "path": "runtime/final-acceptance/source-get/report.json",
+      "sha256": "9ff5e4c13b2110af7b3842a408954da7bd5e7b1b28263423376103fff6c9d7fd",
+      "bytes": 11699
+    },
+    {
+      "path": "runtime/final-acceptance/source-get/response-01.json",
+      "sha256": "260e41fee174a2a4a4a554049c9fd1554a059e1b75610e667dc2004f2e3e1857",
+      "bytes": 787247
+    },
+    {
+      "path": "runtime/final-acceptance/source-get/response-02.json",
+      "sha256": "a1e3443aec9efabeb5699e3f549b92129d4d76e35adbf954b4d12a448a0a266c",
+      "bytes": 611418
+    },
+    {
+      "path": "runtime/final-acceptance/source-get/response-03.json",
+      "sha256": "5fd978f29670eac6079bd21e20a03bd5342b111ce359f6623428925241f7256b",
+      "bytes": 7158
+    },
+    {
+      "path": "runtime/final-acceptance/source-get/response-04.json",
+      "sha256": "69a4a7b5030b72088f538bccd67a2479c2cbea791e213586852e71e9f32419f8",
+      "bytes": 2744
+    },
+    {
+      "path": "runtime/final-acceptance/source-get/response-05.json",
+      "sha256": "a43392f65598821447de9fe82ee350713548346049c35c38301a284cf3375d8c",
+      "bytes": 8725
+    },
+    {
+      "path": "runtime/final-acceptance/source-get/response-06.json",
+      "sha256": "85af826c8eb57166d37f1da442fbebaa1d7e871ab58c3da7832ee3e660acb600",
+      "bytes": 1573
+    },
+    {
+      "path": "runtime/final-acceptance/source-get/response-07.json",
+      "sha256": "c4fca1585bc57a0bd64b18ed3e8a221c7c0051deed8eeef955b8c6445e2dec64",
+      "bytes": 1599
+    },
+    {
+      "path": "runtime/final-acceptance/source-get/response-08.json",
+      "sha256": "03d6a51fdab19a8cae0925b82e87abb540a0c0fef13d20d6b9e9fe5af450ab82",
+      "bytes": 11876
+    },
+    {
+      "path": "runtime/final-acceptance/source-get/response-09.json",
+      "sha256": "dea64547deb88d83267e2256a59185ce0293686c74fb37202e461ac548d84fb7",
+      "bytes": 1607
+    },
+    {
+      "path": "runtime/final-acceptance/source-get/response-10.json",
+      "sha256": "839d0a307ca8ba069095c06582d36725b77ade303ed73c0daf40ba3d82de3409",
+      "bytes": 1693
+    },
+    {
+      "path": "runtime/final-acceptance/source-get/response-11.json",
+      "sha256": "4b4e073ae6442fed5a55523189638f1a515e59a0680f1cc5d0c47e80bfc2247f",
+      "bytes": 20880
+    },
+    {
+      "path": "runtime/final-acceptance/source-get/response-12.json",
+      "sha256": "d44b4fec78e9c385799d163b4dca93e33c08e47959a2343da4fcbbe637471a7b",
+      "bytes": 4627
+    },
+    {
+      "path": "runtime/final-acceptance/source-get/response-13.json",
+      "sha256": "2c5ca83ce54c955915741e2c38d8b5bff1be6da328b25d8f8c8c4ab260854f12",
+      "bytes": 5433
+    },
+    {
+      "path": "runtime/final-acceptance/source-get/response-14.json",
+      "sha256": "ce0897a53e1213d54f314d965c9ca643ffa5bc9dec2450c9eb5eed59f778aaca",
+      "bytes": 3085
+    },
+    {
+      "path": "runtime/final-acceptance/source-get/response-15.json",
+      "sha256": "b0f98e6d05b7dbc53fba7bb6dcc9cd9bbc38ce54d21a0e2e656dbbdcbf74a14b",
+      "bytes": 1774
+    },
+    {
+      "path": "runtime/final-preview-smoke/0bee0d3e/overview.aria.txt",
+      "sha256": "1294bee3c8731a9c91437ee5b211fecd56c436be8ecc843fa33a53a23c01fde0",
+      "bytes": 6008
+    },
+    {
+      "path": "runtime/final-preview-smoke/0bee0d3e/overview.png",
+      "sha256": "398fdf5c906ff04bb73bfaec844472ad1eb32faf24c229ed45cfd47c877d29db",
+      "bytes": 166194
+    },
+    {
+      "path": "runtime/final-preview-smoke/0bee0d3e/report.json",
+      "sha256": "cd249d58b66243532fe8f526ec294bef253b7a89a0e095b8f5bdb3b93ce35493",
+      "bytes": 3282
+    },
+    {
+      "path": "runtime/identity-desktop/48010ccc8056/browser-report.json",
+      "sha256": "9626c213d15b3b9bd23c3788bc44cb92d0644549fe1d3580de32427115d00799",
+      "bytes": 1626
+    },
+    {
+      "path": "runtime/identity-desktop/48010ccc8056/client-login-rejected.aria.txt",
+      "sha256": "f4e9583b3d477456e7fdaf2e725ed210153f805de36aee925b0b37e0f058b81f",
+      "bytes": 1115
+    },
+    {
+      "path": "runtime/identity-desktop/48010ccc8056/client-login-rejected.png",
+      "sha256": "4bee849511f05212152758731b6325ecf5d275ec78d7ad60d15cdcf2ac403a3b",
+      "bytes": 72421
+    },
+    {
+      "path": "runtime/identity-desktop/48010ccc8056/clients-after-rotation.aria.txt",
+      "sha256": "d3b340cf672165c5f291affc7ad0e3fcc372e88697c684065445b8fd924ca4a2",
+      "bytes": 4268
+    },
+    {
+      "path": "runtime/identity-desktop/48010ccc8056/clients-after-rotation.png",
+      "sha256": "ef4467afc361ce3a8be520e874640d541f5f7975db8672313ab2bcdc2dbfeb97",
+      "bytes": 153803
+    },
+    {
+      "path": "runtime/identity-desktop/48010ccc8056/clients-before-rotation.aria.txt",
+      "sha256": "138081908b648ae40f7830d3e8cb7c0aa215bbd56e3de2a1e7dc471719ea67f5",
+      "bytes": 4268
+    },
+    {
+      "path": "runtime/identity-desktop/48010ccc8056/clients-before-rotation.png",
+      "sha256": "c31eb378baa73ce0c2cc3539b7e780ebe75ae5fafa75d3013b78d7b06cbb1abf",
+      "bytes": 156555
+    },
+    {
+      "path": "runtime/identity-desktop/48010ccc8056/ledger-after-rotation.aria.txt",
+      "sha256": "c329444658b9788ee21b4c458e9b11a725d085d427bdb98e9a360faa21975d0e",
+      "bytes": 4994
+    },
+    {
+      "path": "runtime/identity-desktop/48010ccc8056/ledger-after-rotation.png",
+      "sha256": "3b02dc4ffed36f6a2a96115a31b1de01df55c0cb1ddaa60d41eaa89c31599221",
+      "bytes": 209613
+    },
+    {
+      "path": "runtime/identity-desktop/48010ccc8056/report.json",
+      "sha256": "266963414c433112979bd760abb4a58a913177946fca0f33d1dba0bddbb5ccd1",
+      "bytes": 10524
+    },
+    {
+      "path": "runtime/integration-desktop/75d86630-a3d/desktop-client-override.aria.txt",
+      "sha256": "a8c0e2d79c22b84605508fba1fcf59a6afa07f68b65fb5a9d4a479108a1408bf",
+      "bytes": 5244
+    },
+    {
+      "path": "runtime/integration-desktop/75d86630-a3d/desktop-client-override.png",
+      "sha256": "837c81ad947a881d4a7a0bdb96a094fdcd4835e4aaac0523b29b07eaa4166f2c",
+      "bytes": 118696
+    },
+    {
+      "path": "runtime/integration-desktop/75d86630-a3d/desktop-contract-matrix.aria.txt",
+      "sha256": "3ee112de82cbff58ebfe0a84a4005bbf1397b6cb49d412937382ca3d9ee2eb96",
+      "bytes": 26430
+    },
+    {
+      "path": "runtime/integration-desktop/75d86630-a3d/desktop-contract-matrix.png",
+      "sha256": "8b96fab77bfa1f8c5aa0cabf95e82ab3eb715cb8fbfdc16dcfd66c64e426fc1c",
+      "bytes": 150145
+    },
+    {
+      "path": "runtime/integration-desktop/75d86630-a3d/desktop-ledger-attribution.aria.txt",
+      "sha256": "76f5e851c6c3b3ca3695b14e434458b7f72d794fd3f4113e5821697dd787e8c6",
+      "bytes": 7959
+    },
+    {
+      "path": "runtime/integration-desktop/75d86630-a3d/desktop-ledger-attribution.png",
+      "sha256": "67f14dd9868b72b41cdd85494e1e0f10d5a60e66fe50f7f0c8d5df57e28304ef",
+      "bytes": 118329
+    },
+    {
+      "path": "runtime/integration-desktop/75d86630-a3d/desktop-missing-candidates.aria.txt",
+      "sha256": "77ccd45f1607f902e5973a5feebb71ac12b44e0bb5b118961e8e0f687fb2ec20",
+      "bytes": 25469
+    },
+    {
+      "path": "runtime/integration-desktop/75d86630-a3d/desktop-missing-candidates.png",
+      "sha256": "41c6814f3d49fd4c17190b97647188c0dfcddaa55361ad9d0d0e3b005fccd262",
+      "bytes": 145196
+    },
+    {
+      "path": "runtime/integration-desktop/75d86630-a3d/desktop-mode-confirm.aria.txt",
+      "sha256": "ca817a7621608a8921fc54a23b5ef451a3eadcd5c4fa6febd8035a98fdd945bd",
+      "bytes": 6384
+    },
+    {
+      "path": "runtime/integration-desktop/75d86630-a3d/desktop-mode-confirm.png",
+      "sha256": "af1ffda75849bdf8147ccd322243ea4603d4c212c3e8df8e96a5526bebd1da59",
+      "bytes": 145467
+    },
+    {
+      "path": "runtime/integration-desktop/75d86630-a3d/desktop-overview-busy.aria.txt",
+      "sha256": "c1a25a506ed90bcffa781d0cec70269b81beadcbbea80c955290aadf720ebfe3",
+      "bytes": 5994
+    },
+    {
+      "path": "runtime/integration-desktop/75d86630-a3d/desktop-overview-busy.png",
+      "sha256": "e925d204921e7076aca6b844bcde36e95dc914340ecc72e13f683688cb70ddaf",
+      "bytes": 166005
+    },
+    {
+      "path": "runtime/integration-desktop/75d86630-a3d/desktop-overview-finished.aria.txt",
+      "sha256": "c86ce9fd61e4719978b2976291a0db452eeb7e5adb2ba7bc490ada45c8a96d55",
+      "bytes": 5973
+    },
+    {
+      "path": "runtime/integration-desktop/75d86630-a3d/desktop-overview-finished.png",
+      "sha256": "2b0001b5d8e81c3facfff96b99333f5690cd92193fbd92c84217a1feaf607db7",
+      "bytes": 165945
+    },
+    {
+      "path": "runtime/integration-desktop/75d86630-a3d/desktop-report.json",
+      "sha256": "cfc3ebd70347932b90ea1176b4fb03ac7aa0db8ec0cc381ef53d207a941ebb33",
+      "bytes": 9754
+    },
+    {
+      "path": "runtime/integration-desktop/75d86630-a3d/desktop-source-diff.aria.txt",
+      "sha256": "044bb7d5404ea97052ffd0b53190cd151e8f1606dc0506095624bdfbb9401c12",
+      "bytes": 35770
+    },
+    {
+      "path": "runtime/integration-desktop/75d86630-a3d/desktop-source-diff.png",
+      "sha256": "e66f10f04966f425ea8664c5367948b1456b26835b79bff57ebb6d3e9c832f95",
+      "bytes": 180467
+    },
+    {
+      "path": "runtime/integration-desktop/75d86630-a3d/desktop-source-main-failure.aria.txt",
+      "sha256": "51eb8800e197cf22acdde52830c26bff52ecdf9bb2e00611df1bf709a91acad2",
+      "bytes": 27827
+    },
+    {
+      "path": "runtime/integration-desktop/75d86630-a3d/desktop-source-main-failure.png",
+      "sha256": "91f5c5b0e3878182a294b224ba853d12753bdc9a6ea1f94ba2450ff8e4bbaa01",
+      "bytes": 162196
+    },
+    {
+      "path": "runtime/integration-desktop/75d86630-a3d/desktop-source-partial-published.aria.txt",
+      "sha256": "2505ec082dc5d0a06efae1fec2e432b02386afb79dc382e6a56f9ebb50cf00ed",
+      "bytes": 27761
+    },
+    {
+      "path": "runtime/integration-desktop/75d86630-a3d/desktop-source-partial-published.png",
+      "sha256": "dac6f6e6131f78ef43e608c036ad256258e2168e8278a52debf64f189e8fc914",
+      "bytes": 162439
+    },
+    {
+      "path": "runtime/integration-desktop/75d86630-a3d/desktop-tasks-expired-and-busy.aria.txt",
+      "sha256": "7d642190648b3ce5e3728ebe40842708f62fff4bbf207602893f4866fb15c51c",
+      "bytes": 4027
+    },
+    {
+      "path": "runtime/integration-desktop/75d86630-a3d/desktop-tasks-expired-and-busy.png",
+      "sha256": "f86a2ace04d3c5c50447527b634e40176b4bee0e141d41c652ca6d63365311d5",
+      "bytes": 141702
+    },
+    {
+      "path": "runtime/integration-desktop/75d86630-a3d/http-receipt.json",
+      "sha256": "a2f4d56594ba51f4a95f5788b3a2fa26fdca7f53a02cf96cfd244a259fb3228d",
+      "bytes": 5831
+    },
+    {
+      "path": "runtime/mode-desktop/92dae824-3be/01-four-modes.png",
+      "sha256": "563e9ca54deda790d79ac85c3466bc87ca96b36c272476f65aa5e701def05501",
+      "bytes": 291310
+    },
+    {
+      "path": "runtime/mode-desktop/92dae824-3be/02-client-override.png",
+      "sha256": "0eda92e88715b24f16213b82e01956cdc9dcb112f239502e4e59f7f0c3e94077",
+      "bytes": 150503
+    },
+    {
+      "path": "runtime/mode-desktop/92dae824-3be/03-contract-matrix.png",
+      "sha256": "179159547456f10871f75a9de1bb4dafb8dcec7617db2d0c5aa9fa60fc93c188",
+      "bytes": 324344
+    },
+    {
+      "path": "runtime/mode-desktop/92dae824-3be/04-original-task-after-reopen.png",
+      "sha256": "a3919228bd3059fe079d79b59c38be1be62aac01ae36ef399eb2be4e420b2db0",
+      "bytes": 106185
+    },
+    {
+      "path": "runtime/mode-desktop/92dae824-3be/desktop-report.json",
+      "sha256": "6bec8e2f678930a365be67ef05decabd14a5366bee50feecaf18855c0956548f",
+      "bytes": 4944
+    },
+    {
+      "path": "runtime/mode-desktop/92dae824-3be/http-receipt.json",
+      "sha256": "07c79c877cbc5455cb4b05c1c02b1ad24eb5452751bebfe960c21621e726499d",
+      "bytes": 7758
+    }
+  ],
+  "delivery_validation": {
+    "artifact_count": 106,
+    "artifact_hashes_verified": true,
+    "safe_artifact_secret_scan": {
+      "status": "passed",
+      "findings": [],
+      "scope": "indexed JSON/log/ARIA text; nonempty exact sensitive keys and credential-like strings",
+      "text_files_scanned": 86,
+      "index_text_scanned": true
+    },
+    "excluded_private_fixture_content": "No SQLite files, fixture prompt/answer payloads or credential stores indexed. Raw collect-only output with a credential-like parameter identifier is preserved ignored but excluded from safe artifacts.",
+    "document_links": {
+      "status": "passed",
+      "scope": [
+        "docs/issue20-final-acceptance.md",
+        "docs/execution-checkpoint.md",
+        "docs/work-plan.md"
+      ],
+      "count": 27,
+      "links": [
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "evidence/monitor-issue20-final-20261022.json",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "../runtime/checks/782d2e51cec4/checks.json",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "../runtime/integration-desktop/75d86630-a3d/desktop-report.json",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "../runtime/integration-desktop/75d86630-a3d/http-receipt.json",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "../runtime/identity-desktop/48010ccc8056/report.json",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "identity-http-acceptance.md",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "../runtime/mode-desktop/92dae824-3be/desktop-report.json",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "../runtime/mode-desktop/92dae824-3be/http-receipt.json",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "mode-http-acceptance.md",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "../runtime/final-acceptance/historical-119-checks.json",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "../runtime/final-acceptance/historical-119-scope.json",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "../runtime/final-preview-smoke/0bee0d3e/report.json",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "../runtime/final-acceptance/core-full.log",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "../runtime/final-acceptance/core-full-checks.json",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "../runtime/final-acceptance/core-full-receipt.json",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "../runtime/final-acceptance/approved-records-repair.json",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "../runtime/final-acceptance/core-narrow-receipt.json",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "../runtime/final-acceptance/core-narrow-bounded.log",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "../runtime/final-acceptance/core-narrow-compound.log",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "../runtime/final-acceptance/core-narrow-low-research.log",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "../runtime/final-acceptance/historical-pre-reboot-required-integration.log",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "../runtime/final-acceptance/historical-pre-reboot-canonical-integration.log",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "../runtime/final-acceptance/source-get/report.json",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "../runtime/final-acceptance/source-get/observed-requests.json",
+          "exists": true
+        },
+        {
+          "document": "docs/execution-checkpoint.md",
+          "target": "issue20-final-acceptance.md",
+          "exists": true
+        },
+        {
+          "document": "docs/execution-checkpoint.md",
+          "target": "evidence/monitor-issue20-final-20261022.json",
+          "exists": true
+        },
+        {
+          "document": "docs/work-plan.md",
+          "target": "issue20-final-acceptance.md",
+          "exists": true
+        }
+      ]
+    }
+  }
+}

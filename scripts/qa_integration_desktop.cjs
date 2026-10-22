@@ -3,22 +3,21 @@
 // Actual desktop only, using existing local Playwright + Chrome; no downloads.
 const { chromium } = require(process.env.CLOUDYFAN_PLAYWRIGHT_MODULE || process.env.PLAYWRIGHT_PATH ||
   '/Users/alexwang0315/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
-const { spawn } = require('node:child_process');
-const readline = require('node:readline');
 const { createHash, randomUUID } = require('node:crypto');
+const { startFixture } = require('./qa_fixture_ipc.cjs');
 const fs = require('node:fs/promises');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const ROOT = path.resolve(__dirname, '..');
 const CORE = process.env.CLOUDYFAN_CORE_ROOT || '/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core';
 const OUT = process.argv[2] ? path.resolve(process.argv[2]) : path.join(ROOT, 'runtime/integration-desktop', randomUUID().slice(0,12));
-let ORIGIN, fixture, fixtureExit, nextMessage;
+let ORIGIN, fixture;
 const report = {started_at:new Date().toISOString(), viewport:{width:1280,height:800},
   mobile:'stopped_by_user', steps:[], requests:[], responses:[], blocked:[], console:[], page_errors:[]};
-let browser, page, fixtureStderr = '';
+let browser, page;
 async function fixtureCommand(command) {
-  fixture.stdin.write(JSON.stringify({command})+'\n');
-  return nextMessage();
+  fixture.send({command});
+  return fixture.next();
 }
 async function save() { await fs.writeFile(path.join(OUT,'desktop-report.json'),JSON.stringify(report,null,2)); }
 async function step(name, action) {
@@ -40,20 +39,13 @@ async function reloadData() {
 async function main() {
   await fs.mkdir(path.dirname(OUT),{recursive:true});
   await fs.mkdir(OUT);
-  fixture=spawn(path.join(CORE,'.venv/bin/python'),[path.join(__dirname,'qa_integration_http.py'),'--output',OUT],{
+  fixture=startFixture(path.join(CORE,'.venv/bin/python'),[path.join(__dirname,'qa_integration_http.py'),'--output',OUT],{
     cwd:ROOT,env:{...process.env,PYTHONDONTWRITEBYTECODE:'1',
-      PYTHONPATH:[path.join(ROOT,'src'),path.join(CORE,'src')].join(path.delimiter)},stdio:['pipe','pipe','pipe']});
-  fixture.stderr.on('data',chunk=>{fixtureStderr+=chunk.toString();});
-  fixtureExit=new Promise(resolve=>fixture.once('exit',(code,signal)=>resolve({code,signal})));
-  const lines=readline.createInterface({input:fixture.stdout}),queue=[],waiters=[];
-  lines.on('line',line=>{const item=JSON.parse(line);if(waiters.length)waiters.shift()(item);else queue.push(item);});
-  nextMessage=async()=>queue.length?queue.shift():Promise.race([
-    new Promise(resolve=>waiters.push(resolve)),
-    new Promise((_,reject)=>{const timer=setTimeout(()=>reject(Error('Fixture response timeout')),30000);timer.unref();})]);
-  const ready=await nextMessage();
+      PYTHONPATH:[path.join(ROOT,'src'),path.join(CORE,'src')].join(path.delimiter)},responseTimeoutMs:30000});
+  const ready=await fixture.next();
   assert.equal(ready.type,'ready');ORIGIN=ready.origin;report.origin=ORIGIN;
   report.scope='disposable synthetic data; actual desktop + loopback HTTP; MockTransport model and metadata upstream';
-  const sourcePaths=['scripts/qa_integration_http.py','scripts/qa_integration_desktop.cjs',
+  const sourcePaths=['scripts/qa_integration_http.py','scripts/qa_integration_desktop.cjs','scripts/qa_fixture_ipc.cjs',
     'tests/test_local_http_integration.py','tests/test_sources.py','src/cloudyfan_monitor/static/app.js'];
   report.source_sha256=Object.fromEntries(await Promise.all(sourcePaths.map(async name=>
     [name,createHash('sha256').update(await fs.readFile(path.join(ROOT,name))).digest('hex')])));
@@ -219,16 +211,15 @@ main().catch(async error=>{
   report.passed=false;report.failure={name:error.name,message:error.message,stack:error.stack};
   console.error(error.stack);process.exitCode=1;
 }).finally(async()=>{
-  if(browser) await browser.close();
+  if(browser) await browser.close().catch(()=>{
+    report.browser_cleanup_error='Browser cleanup failed';report.passed=false;process.exitCode=1;
+  });
   if(fixture){
-    fixture.stdin.end(JSON.stringify({command:'stop'})+'\n');
-    const outcome=await Promise.race([fixtureExit,new Promise(resolve=>{
-      const timer=setTimeout(()=>resolve({timed_out:true}),5000);timer.unref();})]);
+    const outcome=await fixture.stop();
     report.fixture_exit=outcome;
-    if(outcome.timed_out){fixture.kill();report.passed=false;process.exitCode=1;}
-    if(outcome.code!==0){report.passed=false;process.exitCode=1;}
+    if(outcome.timed_out||outcome.cleanup_failed||outcome.code!==0){report.passed=false;process.exitCode=1;}
     // A safe marker avoids exporting library exception text with request data.
-    if(fixtureStderr)report.fixture_error='Fixture stderr present; inspect locally';
+    if(outcome.stderr_present)report.fixture_error='Fixture stderr present; inspect locally';
   }
   report.finished_at=new Date().toISOString();await save();
   console.log(JSON.stringify({passed:report.passed,steps:report.steps.length,report:path.join(OUT,'desktop-report.json')}));

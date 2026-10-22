@@ -6,6 +6,7 @@ import json
 import multiprocessing
 import os
 from pathlib import Path
+import re
 import socket
 from socketserver import ThreadingMixIn
 import threading
@@ -112,10 +113,19 @@ class LocalService:
                  else self.bundle.credentials[principal].token)
 
         def record(response):
-            self.http_records.append({"method": response.request.method,
-                                      "path": response.request.url.path,
-                                      "port": response.request.url.port,
-                                      "status": response.status_code})
+            observed = {"method": response.request.method, "path": response.request.url.path,
+                        "port": response.request.url.port, "status": response.status_code}
+            if response.status_code >= 400:
+                response.read()
+                try:
+                    code = response.json().get("error", {}).get("code")
+                except (ValueError, AttributeError):
+                    code = None
+                # Only the bounded public error code is exported, never headers,
+                # request payloads, result bodies or provider exception messages.
+                if isinstance(code, str) and re.fullmatch(r"[a-z][a-z0-9_]{0,79}", code):
+                    observed["error_code"] = code
+            self.http_records.append(observed)
 
         return self.stack.enter_context(httpx.Client(
             base_url=origin or self.origin, headers={"Authorization": "Bearer " + token},
@@ -262,11 +272,56 @@ def test_disconnected_http_client_does_not_cancel_task_or_release_execution_slot
             break
         assert time.monotonic() < deadline, "Disconnected task did not finish on the server"
         time.sleep(.01)
-    result = observer.get("/v1/tasks/" + TASK["run_id"] + "/result")
+    # Completed status can be visible while a concurrent final capture owns the
+    # nonblocking read guard. Retry only its explicit public task_busy response.
+    deadline = time.monotonic() + 5
+    while True:
+        result = observer.get("/v1/tasks/" + TASK["run_id"] + "/result")
+        if result.status_code != 409:
+            break
+        assert result.json() == {"error": {"code": "task_busy"}}, result.json()
+        assert time.monotonic() < deadline, "Completed result remained busy"
+        time.sleep(.01)
     assert result.status_code == 200 and result.json()["answer"] == "2"
     assert observer.post("/v1/tasks", json=TASK).json()["status"] == "passed"
     assert len(bundle.upstream.calls) == 1
     assert second_client.get("/v1/monitor").json()["tasks"] == []
+
+
+def test_completed_http_task_remains_read_only_while_another_result_reader_is_busy(local_service):
+    bundle = local_service.bundle
+    bundle.upstream.fail_tiers = set()
+    client = local_service.client()
+    assert client.post("/v1/tasks", json=TASK).json()["status"] == "passed"
+    entered, release = threading.Event(), threading.Event()
+    service = bundle.app.gateway.service
+
+    def overlapping_result_reader():
+        # The fixture owns a real guard used by an overlapping reader/finalizer.
+        # Observations and assertions below remain at the actual HTTP boundary.
+        with service.retention.guard(service.internal_id("studio", TASK["run_id"])):
+            entered.set()
+            assert release.wait(5), "Overlapping reader was not released"
+
+    with ThreadPoolExecutor(1) as workers:
+        reader = workers.submit(overlapping_result_reader)
+        try:
+            assert entered.wait(3)
+            status = client.get("/v1/tasks/" + TASK["run_id"])
+            assert status.status_code == 200 and status.json()["status"] == "passed"
+            assert status.json()["observation"] == "busy"
+            busy = client.get("/v1/tasks/" + TASK["run_id"] + "/result")
+            assert busy.status_code == 409 and busy.json()["error"]["code"] == "task_busy"
+            repeated = client.post("/v1/tasks", json=TASK)
+            assert repeated.status_code == 200 and repeated.json()["status"] == "passed"
+            assert len(bundle.upstream.calls) == 1
+        finally:
+            release.set()
+        reader.result(timeout=5)
+
+    result = client.get("/v1/tasks/" + TASK["run_id"] + "/result")
+    assert result.status_code == 200 and result.json()["answer"] == "2"
+    assert len(bundle.upstream.calls) == 1
 
 
 def test_http_expiry_boundary_and_reopened_service_preserve_history_without_resending(local_service):

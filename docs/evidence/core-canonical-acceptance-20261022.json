@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "monitor-issue20-human-approved-core-canonical-delivery",
+  "human_approved_scope": true,
+  "finished_at_utc": "2026-10-22T07:41:47.473566+00:00",
+  "tests_passed": 1921,
+  "source_digest": "09311fb4173eadf7f1366f9396f9ad21b770e618e6f4691e14bf65ae29305f98",
+  "source_and_metadata_hashes_match_before_after": true,
+  "retained_inputs": 438,
+  "historical_test_snapshots_omitted_only_in_delivery": 17,
+  "historical_tests_preserved": 633,
+  "historical_source_copies_retained": 8,
+  "fixture_change": "synthetic history remains completed; current phase stays in_progress with no current verification",
+  "fixture_module_tests_passed": 31,
+  "test_filters": [],
+  "official_steps_passed": 8,
+  "mock_core_demo_requests": 5,
+  "mock_score_demo_requests": 5,
+  "network_policy": "unchanged default test socket guard and mocked external model transports",
+  "offline_sdist_and_wheel_passed": true,
+  "input_archive_sha256": "6afb337d58dd6eddf6e65e00efba589042361024a2d26c45c1955ca049bee1a2",
+  "official_receipt_sha256": "38119c8055769fe8bf84d3851b62eb3b9c6afeddf620b581964c9c3ffa1823db",
+  "shared_original_last_full_run": {
+    "passed": 2483,
+    "failed": 71,
+    "completed_before_fixture_fix": true,
+    "not_reclassified_as_green": true
+  },
+  "git": {
+    "historical_base_commit": "a441ab8ed57d13df1151069a7d54ed0a93306bf5",
+    "verified_commit": null,
+    "worktree_dirty": true
+  },
+  "production_qualification_recorded": false
+}

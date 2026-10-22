@@ -2,11 +2,10 @@
 'use strict';
 // Existing local Playwright + Chrome, actual 1280x800 desktop; no downloads or mobile contexts.
 const assert = require('node:assert/strict');
-const { spawn } = require('node:child_process');
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const readline = require('node:readline');
 const { createHash, randomUUID } = require('node:crypto');
+const { startFixture } = require('./qa_fixture_ipc.cjs');
 
 async function main() {
   const root = path.resolve(__dirname, '..');
@@ -19,29 +18,19 @@ async function main() {
   await fs.mkdir(output);
   const report = { schema_version: 1, viewport: { width: 1280, height: 800 }, checks: [], screenshots: [],
     page_errors: [], console_errors: [], blocked_browser_requests: [], api_responses: [], status: 'incomplete' };
-  const fixture = spawn(path.join(core, '.venv', 'bin', 'python'),
+  const fixture = startFixture(path.join(core, '.venv', 'bin', 'python'),
     [path.join(__dirname, 'qa_mode_http.py'), '--output', output], {
       cwd: root, env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1',
         PYTHONPATH: [path.join(root, 'src'), path.join(core, 'src')].join(path.delimiter) },
-      stdio: ['pipe', 'pipe', 'pipe'],
     });
-  let stderr = '', browser;
-  fixture.stderr.on('data', chunk => { stderr += chunk.toString(); });
-  const lines = readline.createInterface({ input: fixture.stdout });
-  const queue = [], waiters = [];
-  lines.on('line', line => { const value = JSON.parse(line); if (waiters.length) waiters.shift()(value); else queue.push(value); });
-  async function nextMessage() {
-    if (queue.length) return queue.shift();
-    return Promise.race([new Promise(resolve => waiters.push(resolve)),
-      new Promise((_, reject) => { const timer = setTimeout(() => reject(Error('Fixture response timeout')), 15000); timer.unref(); })]);
-  }
-  const exit = new Promise(resolve => fixture.once('exit', (code, signal) => resolve({ code, signal })));
+  let browser;
   const sourcePaths = ['tests/test_http_mode_acceptance.py', 'tests/test_category_host_integration.py',
-    'scripts/qa_mode_desktop.cjs', 'scripts/qa_mode_http.py', 'src/cloudyfan_monitor/static/app.js'];
-  report.source_sha256 = Object.fromEntries(await Promise.all(sourcePaths.map(async name =>
-    [name, createHash('sha256').update(await fs.readFile(path.join(root, name))).digest('hex')])));
+    'scripts/qa_mode_desktop.cjs', 'scripts/qa_mode_http.py', 'scripts/qa_fixture_ipc.cjs',
+    'src/cloudyfan_monitor/static/app.js'];
   try {
-    const ready = await nextMessage();
+    report.source_sha256 = Object.fromEntries(await Promise.all(sourcePaths.map(async name =>
+      [name, createHash('sha256').update(await fs.readFile(path.join(root, name))).digest('hex')])));
+    const ready = await fixture.next();
     assert.equal(ready.type, 'ready');
     report.origin = ready.origin;
     report.scope = 'synthetic CategoryCore and baseline Core runners; actual desktop controls and loopback HTTP; mocked upstream';
@@ -171,8 +160,8 @@ async function main() {
     assert.equal(snapshot.tasks.find(task => task.run === 'desktop-after-pool').pool, ready.pools[1]);
     report.checks.push({ behavior: 'pool_switch_only_changes_future_tasks', passed: true });
 
-    fixture.stdin.write(JSON.stringify({ command: 'reopen' }) + '\n');
-    const reopened = await nextMessage();
+    fixture.send({ command: 'reopen' });
+    const reopened = await fixture.next();
     assert.equal(reopened.type, 'reopened');
     assert.equal(reopened.mock_call_count, 7);
     const retained = await api('studio', 'GET', '/v1/tasks/desktop-cloudyfan/result');
@@ -209,15 +198,13 @@ async function main() {
     report.failure = { name: error.name, message: error.message, stack: error.stack };
     process.exitCode = 1;
   } finally {
-    if (browser) await browser.close();
-    fixture.stdin.end(JSON.stringify({ command: 'stop' }) + '\n');
-    const outcome = await Promise.race([exit, new Promise(resolve => {
-      const timer = setTimeout(() => resolve({ timed_out: true }), 5000); timer.unref();
-    })]);
+    if (browser) await browser.close().catch(() => {
+      report.browser_cleanup_error = 'Browser cleanup failed'; report.status = 'failed'; process.exitCode = 1;
+    });
+    const outcome = await fixture.stop();
     report.fixture_exit = outcome;
-    if (outcome.timed_out) { fixture.kill(); report.status = 'failed'; process.exitCode = 1; }
-    if (outcome.code !== 0) { report.status = 'failed'; process.exitCode = 1; }
-    if (stderr) report.fixture_stderr = stderr;
+    if (outcome.timed_out || outcome.cleanup_failed || outcome.code !== 0) { report.status = 'failed'; process.exitCode = 1; }
+    if (outcome.stderr_present) report.fixture_error = 'Fixture stderr present; inspect locally';
     await fs.writeFile(path.join(output, 'desktop-report.json'), JSON.stringify(report, null, 2));
     console.log(JSON.stringify({ status: report.status, checks: report.checks.length, output }));
   }

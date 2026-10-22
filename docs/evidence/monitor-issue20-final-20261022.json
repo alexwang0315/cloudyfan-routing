@@ -1,12 +1,12 @@
 {
   "schema_version": "cloudyfan-monitor-issue20-final-v1",
-  "recorded_at": "2026-10-22T07:54:50.818582+00:00",
+  "recorded_at": "2026-10-22T08:09:29.646041+00:00",
   "spec_issue": "https://github.com/alexwang0315/cloudyfan-routing/issues/20",
   "ticket": "https://github.com/alexwang0315/cloudyfan-routing/issues/23",
   "integration_base_commit": "b849e4677e40f513730c5668bd704fc0c022d891",
   "integration_branch": "codex/monitor-issue20-integration",
   "ticket_branch": "codex/monitor-final-acceptance",
-  "completion_status": "required_checks_passed_pending_final_integration",
+  "completion_status": "local_acceptance_complete_in_human_approved_scope",
   "mobile": "stopped_by_user",
   "test_seams": [
     "actual loopback HTTP with dedicated socket allowlist",
@@ -531,7 +531,7 @@
         "src/cloudyfan_monitor/static/style.css": "8feb3f9eebd70226ec33741dff8dd48319ce7bb4a2391c68e68c1bb7240762cb",
         "src/cloudyfan_monitor/store.py": "55ebf64a9a33152c69e9fc8655ad373b44613e282af78976733259c13f2989ce"
       },
-      "final_sync_product_hash_check": "pending_root_sync"
+      "final_sync_product_hash_check": "verified_13_unchanged_product_inputs"
     },
     "qa_input_verification": {
       "mode_report_all_direct_hashes_match_gate": true,
@@ -1338,6 +1338,31 @@
       "bytes": 43087
     },
     {
+      "path": "runtime/final-acceptance/final-integration/desktop-review.json",
+      "sha256": "405f4c9a1d9410a5eb25af7341323e76d712b185e2835f8c4b25a9059e099848",
+      "bytes": 1221
+    },
+    {
+      "path": "runtime/final-acceptance/final-integration/initial-sync-receipt.json",
+      "sha256": "97b6e335bbd8481e2a95d5ce18180e7349cc9d097e646d6a2750d29bbb30c4ae",
+      "bytes": 271271
+    },
+    {
+      "path": "runtime/final-acceptance/final-integration/product-sync-verification.json",
+      "sha256": "36c498be95f7f910ad76560d2348aea44f07cfdfbe505eb418c778d73699aead",
+      "bytes": 2234
+    },
+    {
+      "path": "runtime/final-acceptance/final-integration/spec-final.md",
+      "sha256": "73e72c6d08ed36f3ddd7e029e1922607e30e8d51c0236cd22b6d66b62c26be45",
+      "bytes": 2205
+    },
+    {
+      "path": "runtime/final-acceptance/final-integration/standards-final.md",
+      "sha256": "1e02cbb6e8eaf858964baa536bcc9a01a8b433fbdeb637678b8075b5359f4491",
+      "bytes": 1828
+    },
+    {
       "path": "runtime/final-acceptance/historical-119-checks.json",
       "sha256": "a09e13b24d60910d4a12a493ffb8557dd3c4c47166505d7135b57bc0163ce6e7",
       "bytes": 2512
@@ -1939,12 +1964,12 @@
     }
   ],
   "delivery_validation": {
-    "artifact_count": 258,
+    "artifact_count": 263,
     "artifact_hashes_verified": true,
     "safe_artifact_secret_scan": {
       "status": "passed",
       "findings": [],
-      "text_files_scanned": 215,
+      "text_files_scanned": 220,
       "index_text_scanned": true,
       "scope": "Indexed JSON/log/ARIA/Markdown/patch text; exact sensitive keys and credential-like strings. Binary frozen-input archives are private preserved artifacts and are not text-scanned."
     },
@@ -1957,7 +1982,7 @@
         "docs/work-plan.md",
         "docs/issue20-code-review.md"
       ],
-      "count": 49,
+      "count": 55,
       "links": [
         {
           "document": "docs/issue20-final-acceptance.md",
@@ -2022,6 +2047,21 @@
         {
           "document": "docs/issue20-final-acceptance.md",
           "target": "../runtime/final-preview-smoke/0bee0d3e/report.json",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "../runtime/final-acceptance/final-integration/product-sync-verification.json",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "../runtime/final-acceptance/final-integration/initial-sync-receipt.json",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "../runtime/final-acceptance/final-integration/desktop-review.json",
           "exists": true
         },
         {
@@ -2201,10 +2241,31 @@
         },
         {
           "document": "docs/issue20-code-review.md",
+          "target": "../runtime/final-acceptance/final-integration/product-sync-verification.json",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-code-review.md",
           "target": "issue20-final-acceptance.md",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-code-review.md",
+          "target": "../runtime/final-acceptance/final-integration/standards-final.md",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-code-review.md",
+          "target": "../runtime/final-acceptance/final-integration/spec-final.md",
           "exists": true
         }
       ]
+    },
+    "metadata_only_input_check": {
+      "monitor_input_count": 34,
+      "injected_core_source_count": 66,
+      "all_current_hashes_match_209c861141b0": true,
+      "test_rerun": "not_required_for_metadata_only_change"
     }
   },
   "review_base_commit": "094cb99",
@@ -2215,9 +2276,7 @@
     "Final original preview sync must preserve the product hashes measured by the passing fresh 18767 smoke, or repeat the smoke if product inputs change."
   ],
   "remaining_actions": [
-    "Merge reviewed local changes into the integration branch.",
-    "Final original-preview sync must preserve the product hashes already verified by its fresh smoke; repeat smoke if product sources change.",
-    "Root integrator resolves tracker state and requested worktree cleanup scope."
+    "Root integrator lands this metadata-only receipt update and resolves #20/#23 tracker state."
   ],
   "monitor_gate_history": [
     {
@@ -2263,20 +2322,26 @@
     "post_pytest_demos_and_build": "not_run_after_failure",
     "official_passed": false,
     "approved_one_field_metadata_repair": "runtime/final-acceptance/approved-records-repair.json",
-    "followup_scope": "pending_direct_user_decision"
+    "followup_scope": "Resolved by direct user-approved canonical1921 delivery scope; original unfiltered failed result remains unchanged."
   },
   "review_resolution": {
     "report": "docs/issue20-code-review.md",
     "standards": {
       "documented_hard_violations": 0,
       "low_maintenance_findings": 1,
-      "action": "Resolved duplicated fixture IPC/lifecycle and inconsistent raw stderr projection with one shared helper."
+      "action": "Resolved duplicated fixture IPC/lifecycle and inconsistent raw stderr projection with one shared helper.",
+      "final_documented_hard_violations": 0,
+      "remaining_judgment_findings": 0,
+      "final_report": "runtime/final-acceptance/final-integration/standards-final.md"
     },
     "spec": {
       "original_open_gate": 1,
       "new_product_defects": 0,
       "scope_creep": 0,
-      "action": "User-approved canonical 1921 full integration gate passed; original unfiltered result preserved."
+      "action": "User-approved canonical 1921 full integration gate passed; original unfiltered result preserved.",
+      "required_gate_status": "cleared_in_directly_approved_scope",
+      "remaining_gate_findings": 0,
+      "final_report": "runtime/final-acceptance/final-integration/spec-final.md"
     },
     "new_monitor_failure": {
       "original_receipt": "runtime/checks/5d28c8b0f924/checks.json",
@@ -2289,5 +2354,28 @@
       "affected_module_tests_passed": 8,
       "bounded_wait_policy": "At most 5 seconds, only actual 409 error.code task_busy; any other 409 fails immediately; no model redispatch or weaker slot assertions."
     }
+  },
+  "historical_scope_notes_status": "Former open conditions resolved by direct scope approval, canonical 1921 pass and final merge/sync verification; historical failures remain unchanged.",
+  "final_integration": {
+    "status": "verified",
+    "merged_commit": "e5fbd6e7cb06e0512d78f56d74c17e1012bc68c2",
+    "reviewed_candidate_commit": "4d546e245ba68fc56446bca29939dafafe94c814",
+    "reviewed_and_merged_trees_identical": true,
+    "tracked_files_synchronized": 53,
+    "changed_delivery_files": 23,
+    "private_evidence_files_copied": 1212,
+    "unchanged_product_input_count": 13,
+    "current_preview_get": {
+      "method": "GET",
+      "origin": "http://127.0.0.1:18767",
+      "path": "/",
+      "status": 200,
+      "body_bytes": 2732,
+      "body_sha256": "f5d386a356b823309c5e03fb7012c0ff2807fa2a58f4d12d30ea4123ec19cfb9"
+    },
+    "proof": "runtime/final-acceptance/final-integration/product-sync-verification.json",
+    "sync_receipt": "runtime/final-acceptance/final-integration/initial-sync-receipt.json",
+    "desktop_visual_review": "runtime/final-acceptance/final-integration/desktop-review.json",
+    "metadata_followup_scope": "Only five owned docs/index paths; tested executable inputs remain identical to the89-pass gate."
   }
 }

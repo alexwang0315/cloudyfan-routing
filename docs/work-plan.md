@@ -5,10 +5,11 @@
 The initial side-task history below is preserved. The later main-thread scope is desktop only: mobile implementation and tests were stopped by the user. The invoked implement-spec skill now permits isolated local integration commits, not code push or deployment.
 
 - #21 identity and #22 four-mode real HTTP/desktop evidence: merged and closed.
-- #23 final evidence: Monitor gate 88 passed; 19 real HTTP cases; three fresh desktop groups with 20 checks passed. Portable baseline desktop host and QA syntax/input fingerprints added; no product behavior was changed.
-- Required unfiltered whole-core integration: **incomplete**, with 71 failed / 2,483 passed. Preserved snapshot tests and one current project-state fixture failure require an explicit acceptance-scope decision and stable follow-up. Historical selected-core 119 passes do not close this gate.
+- #23 reviewed evidence: latest Monitor gate 89 passed; 20 real HTTP cases / 182 responses; three desktop groups with 20 checks passed. Shared fixture IPC/lifecycle and safe stderr handling address the low maintenance finding; scenario assertions remain in the entry scripts.
+- The first review rerun's 87 passes / 1 disconnected-result failure is preserved. A deterministic public-HTTP overlap case observed task_busy; it does not recover the original missing error body. Only explicit task_busy receives a bounded read wait; other 409 responses fail immediately. The affected HTTP module and final full gate pass without product/core changes.
+- Required human-approved canonical core delivery: **1921 passed** with all 8 integration steps successful and 438 frozen inputs unchanged. The 17 historical numbered snapshots / 633 tests remain preserved outside that approved delivery scope; the original 71 failed / 2483 passed run is not relabelled green.
 - The unique source GET window is reused with verified original hashes; 15 attempts and 24 deferred endpoints remain partial. No new external requests, live pool publication, mobile work, paid calls or erasure.
-- Root's 15:08 fresh Chrome smoke on the original 18767 preview passed (12 synthetic tasks / 12 passed / 0 unknown, GET-only, unchanged public summary); product fingerprints match this gate. Final sync must preserve those product fingerprints or repeat the smoke. Completion still requires the applicable core gates. See [current acceptance](issue20-final-acceptance.md).
+- Root's 15:08 Chrome smoke on the original 18767 preview passed (12 synthetic tasks / 12 passed / 0 unknown, GET-only, unchanged summary); product fingerprints match. Final merge/sync must preserve those product hashes or repeat the smoke. See [current acceptance](issue20-final-acceptance.md) and [two-axis review resolution](issue20-code-review.md).
 
 ## Original side-task history
 

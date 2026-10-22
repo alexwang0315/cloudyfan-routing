@@ -4,14 +4,15 @@
 
 ## Issue #20 implement-spec 最新檢查點
 
-- #21 身分與 #22 四模式工作單已結案並合入 `codex/monitor-issue20-integration`；#23 與父規格保持未完成。
-- 本輪 Monitor 全 gate **88 passed**，Ruff、產品及 3 支桌機 QA JavaScript 語法、離線建置通過；`runtime/checks/782d2e51cec4/checks.json` 同時固定 Monitor／QA／核心來源指紋。
-- 真正 loopback HTTP 共19個案例、177筆回應；新增可重跑的原8項桌機入口，加上身分4項與模式8項，三組共20項全部通過。預期模擬來源503留下1筆console resource error；JavaScript page error皆0。
-- 原完整核心 `./scripts/check --integration` 已完成為 **71 failed, 2483 passed**。70項在保留舊快照、1項在目前 project-state 測試；檢查期間agent-state metadata有變動。必要核心門檻未通過，不以119個指定模組的歷史通過替代。
-- 三個歷史SQL案例當前逐一重跑皆通過，但原中斷日誌缺traceback，歷史根因仍未知。RG-04單欄位修正有直接人類核准收據；沒有自行擴大修改研究或檢查器。
-- 沿用唯一一次來源GET的15次嘗試，15份原始metadata雜湊已核對，24個未查端點維持部分更新；沒有重跑／發布／啟用真實來源。
-- 文件與機讀索引：[目前驗收報告](issue20-final-acceptance.md)、[機讀索引](evidence/monitor-issue20-final-20261022.json)。原18767於15:08即時Chrome檢查通過，12件合成任務／12通過／0未知，產品指紋與本輪gate一致；最後同步後再核對指紋。三組新QA服務已正常退出。
-- 本輪僅依implement-spec技能建立隔離本機提交，runtime／output不提交；沒有推送、部署、付費呼叫、手機工作或資料刪除。
+- #21 身分與 #22 四模式已合入並結案；#23／父規格的必要檢查已在核定範圍通過，待整合者合併審查修正及最後產品指紋核對後結案。
+- 最新 Monitor 全 gate **89 passed**，Ruff、產品／3支桌機QA／共用fixture工具語法及離線建置通過；`runtime/checks/209c861141b0/checks.json` 固定完整產品、測試、QA及核心來源指紋。
+- 真正loopback HTTP共20個案例、182筆回應；三組桌機8＋4＋8共20項通過。預期模擬503保留1筆console resource error，JavaScript page error皆0。
+- 審查維護性意見已處理：共用JSON-line訊息、逾時與子程序清理，stderr統一安全標記。新增一次87／1的Monitor失敗及其409錯誤碼未知狀態保持不變；只對明確task_busy作有限結果等候，受影響HTTP模組8項及最後89全檢查通過，未改產品。
+- 使用者核准單一合成fixture修正及隔離現行交付範圍；核心原命令在穩定438份輸入下 **1921 passed**，兩個模擬示範、依賴／records／Ruff與離線建置均通過。原17份633項快照保留，原71失敗／2483通過另列，不改稱原工作區全綠。
+- 三個歷史SQL案例當前逐一與核准現行整套均通過；原中斷日誌缺traceback，歷史根因仍未知。RG-04與單一fixture修正各有直接人類核准收據；沒有擴改研究、付費範圍或檢查器。
+- 沿用唯一一次來源GET的15次嘗試與15份已核對原始檔，24個未查端點維持部分更新；沒有重跑／發布／啟用真實來源。
+- [目前驗收報告](issue20-final-acceptance.md)、[兩軸審查處理](issue20-code-review.md)、[機讀索引](evidence/monitor-issue20-final-20261022.json)。18767於15:08即時Chrome通過12件合成任務／12通過／0未知；最後同步後須保持產品指紋相同。三組新QA服務已正常退出。
+- 本輪僅依implement-spec建立隔離本機提交，runtime／output不提交；沒有推送、部署、付費呼叫、手機工作或資料刪除。
 
 以下保留較早的主線接入紀錄；其76測試／119指定核心結果與18767狀態屬各自執行時點，最新完成判定以上述段落及驗收索引為準。
 

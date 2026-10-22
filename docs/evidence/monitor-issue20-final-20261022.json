@@ -1,18 +1,12 @@
 {
   "schema_version": "cloudyfan-monitor-issue20-final-v1",
-  "recorded_at": "2026-10-22T07:11:34.759526+00:00",
+  "recorded_at": "2026-10-22T07:54:50.818582+00:00",
   "spec_issue": "https://github.com/alexwang0315/cloudyfan-routing/issues/20",
   "ticket": "https://github.com/alexwang0315/cloudyfan-routing/issues/23",
   "integration_base_commit": "b849e4677e40f513730c5668bd704fc0c022d891",
   "integration_branch": "codex/monitor-issue20-integration",
   "ticket_branch": "codex/monitor-final-acceptance",
-  "completion_status": "incomplete",
-  "incomplete_conditions": [
-    "Mandatory original unfiltered core integration gate failed: 71 failed, 2483 passed.",
-    "One failure is in a current project-state test; preserved numbered-copy tests account for 70 failures. Follow-up acceptance scope requires explicit decision.",
-    "Core agent-state metadata changed during the full gate; an unchanged executable source digest does not establish metadata stability.",
-    "Final original preview sync must preserve the product hashes measured by the passing fresh 18767 smoke, or repeat the smoke if product inputs change."
-  ],
+  "completion_status": "required_checks_passed_pending_final_integration",
   "mobile": "stopped_by_user",
   "test_seams": [
     "actual loopback HTTP with dedicated socket allowlist",
@@ -21,8 +15,8 @@
   ],
   "monitor_gate": {
     "status": "passed",
-    "tests_passed": 88,
-    "receipt": "runtime/checks/782d2e51cec4/checks.json",
+    "tests_passed": 89,
+    "receipt": "runtime/checks/209c861141b0/checks.json",
     "steps": [
       {
         "command": [
@@ -34,9 +28,9 @@
           "."
         ],
         "exit_code": 0,
-        "log": "runtime/checks/782d2e51cec4/step-1.log",
-        "started_at": "2026-10-22T07:00:08.988500+00:00",
-        "seconds": 0.627891
+        "log": "runtime/checks/209c861141b0/step-1.log",
+        "started_at": "2026-10-22T07:47:16.348623+00:00",
+        "seconds": 0.32922
       },
       {
         "command": [
@@ -45,9 +39,20 @@
           "src/cloudyfan_monitor/static/app.js"
         ],
         "exit_code": 0,
-        "log": "runtime/checks/782d2e51cec4/step-2.log",
-        "started_at": "2026-10-22T07:00:09.643020+00:00",
-        "seconds": 0.14499
+        "log": "runtime/checks/209c861141b0/step-2.log",
+        "started_at": "2026-10-22T07:47:16.692367+00:00",
+        "seconds": 0.070106
+      },
+      {
+        "command": [
+          "node",
+          "--check",
+          "scripts/qa_fixture_ipc.cjs"
+        ],
+        "exit_code": 0,
+        "log": "runtime/checks/209c861141b0/step-3.log",
+        "started_at": "2026-10-22T07:47:16.775545+00:00",
+        "seconds": 0.075099
       },
       {
         "command": [
@@ -56,9 +61,9 @@
           "scripts/qa_identity_desktop.cjs"
         ],
         "exit_code": 0,
-        "log": "runtime/checks/782d2e51cec4/step-3.log",
-        "started_at": "2026-10-22T07:00:09.810688+00:00",
-        "seconds": 0.537126
+        "log": "runtime/checks/209c861141b0/step-4.log",
+        "started_at": "2026-10-22T07:47:16.865549+00:00",
+        "seconds": 0.064067
       },
       {
         "command": [
@@ -67,9 +72,9 @@
           "scripts/qa_integration_desktop.cjs"
         ],
         "exit_code": 0,
-        "log": "runtime/checks/782d2e51cec4/step-4.log",
-        "started_at": "2026-10-22T07:00:10.372586+00:00",
-        "seconds": 0.164266
+        "log": "runtime/checks/209c861141b0/step-5.log",
+        "started_at": "2026-10-22T07:47:16.942499+00:00",
+        "seconds": 0.063211
       },
       {
         "command": [
@@ -78,9 +83,9 @@
           "scripts/qa_mode_desktop.cjs"
         ],
         "exit_code": 0,
-        "log": "runtime/checks/782d2e51cec4/step-5.log",
-        "started_at": "2026-10-22T07:00:10.558672+00:00",
-        "seconds": 0.109429
+        "log": "runtime/checks/209c861141b0/step-6.log",
+        "started_at": "2026-10-22T07:47:17.018782+00:00",
+        "seconds": 0.068195
       },
       {
         "command": [
@@ -93,9 +98,9 @@
           "tests"
         ],
         "exit_code": 0,
-        "log": "runtime/checks/782d2e51cec4/step-6.log",
-        "started_at": "2026-10-22T07:00:10.691783+00:00",
-        "seconds": 36.763056
+        "log": "runtime/checks/209c861141b0/step-7.log",
+        "started_at": "2026-10-22T07:47:17.105511+00:00",
+        "seconds": 33.576432
       },
       {
         "command": [
@@ -103,12 +108,12 @@
           "build",
           "--offline",
           "--out-dir",
-          "/Users/alexwang0315/Documents/CloudyFan/.scratch/cloudyfan-monitor-issue-20/worktrees/final/runtime/checks/782d2e51cec4/build"
+          "/Users/alexwang0315/Documents/CloudyFan/.scratch/cloudyfan-monitor-issue-20/worktrees/final/runtime/checks/209c861141b0/build"
         ],
         "exit_code": 0,
-        "log": "runtime/checks/782d2e51cec4/step-7.log",
-        "started_at": "2026-10-22T07:00:47.480940+00:00",
-        "seconds": 3.334339
+        "log": "runtime/checks/209c861141b0/step-8.log",
+        "started_at": "2026-10-22T07:47:50.698988+00:00",
+        "seconds": 2.485358
       }
     ],
     "monitor_inputs_unchanged": true,
@@ -117,11 +122,12 @@
       "pyproject.toml": "4daec1b53c1e9fd0e9f8fd11b7196467d290dd7f057b53ab63e80435a96db777",
       "scripts/check": "ff2f23d8c00155862b9e465a075a69e0064aa48fe93d477b8363d7d108eb3943",
       "scripts/preview": "ca29c2add2c1746c63c0ba2f895029fccede59f7f5be775bd53b316c748b6755",
+      "scripts/qa_fixture_ipc.cjs": "60323062bf22f85157033aa0189ea1c9db316e4a2ec11638a2abe336f42ea83f",
       "scripts/qa_identity_desktop.cjs": "32feb00c9b715a830d64557d7d0639a01fa6ffe49378475fb9c6f14e82a3ea5e",
       "scripts/qa_identity_http.py": "c619bb249fc7404c006f5b0ac65622172ceb131d74a8eb71b0da0f24aa5e94fa",
-      "scripts/qa_integration_desktop.cjs": "edeb9a069a119fc686e2f80ccd0773022619f30d2b305466210d6ec34aa3b0de",
+      "scripts/qa_integration_desktop.cjs": "a22432d904cec4459cd4ac0f213ed9ec422ddac5aab0d370d850dcb1932b5018",
       "scripts/qa_integration_http.py": "ee38cba8e2fd3ec6f128c15b5e2a6e0af020583cb7d5860f88af0157ee13216d",
-      "scripts/qa_mode_desktop.cjs": "fc37f38d790c1c493293920aef3c85d261d3698565ee2b2a2fb696ce8b8662ca",
+      "scripts/qa_mode_desktop.cjs": "dd776e7e4a17b8d435942b0349e6fe478215110d0314c9e513bd78d107826cfb",
       "scripts/qa_mode_http.py": "d6faa5a2fc1363f360e1bfd63cb14dfed7f7375fc1642b628975ee0487fbb060",
       "src/cloudyfan_monitor/__init__.py": "704695191ca04a65bcb495c4db9dc6a235866a05ab9a81a1c1c13aaffbf10600",
       "src/cloudyfan_monitor/__main__.py": "c621cfbae281b7979d13de735da5ad704384429d5ae981c9cda22b99a77a97ee",
@@ -142,7 +148,7 @@
       "tests/test_http_identity_acceptance.py": "92022b28bacef599412492be8c2abf13705fa47915205360f6a2e12f2a2b27d1",
       "tests/test_http_mode_acceptance.py": "d74c743ef8d9a13cd90d149d93fedb6e303bc86ebfe3e965cdd0909e72c3d403",
       "tests/test_integration_composition.py": "a504479664f49fd1e0aec4e7dbe2f75398bbdc1f5c096506b5950b7a9383323f",
-      "tests/test_local_http_integration.py": "11d1eeac73b6261bff4e2e17334eba4d13403f6e70ad1e007878c0869107d9b6",
+      "tests/test_local_http_integration.py": "3c4a823dfee1859c5132de064c65a195d445154da75552aade5f99615a1d4ba8",
       "tests/test_monitor.py": "75e317b921683cda4bc4868e1ff41d4042733878a41255201d28a9cd8799f10d",
       "tests/test_monitor_integration_backend.py": "a8e94f2a1eeb1bd0688512210d656b14b9ba0037b168a377d404e1d99b9357f2",
       "tests/test_source_completeness.py": "b9ffad5dd5f966b950156d8d4ed90c06258f40f6474a77045803cd52d575e2cd",
@@ -219,19 +225,28 @@
   },
   "real_http": {
     "status": "passed",
-    "socket_cases": 19,
-    "http_responses": 177,
+    "socket_cases": 20,
+    "http_responses": 182,
     "groups": {
       "original": 7,
       "identity": 4,
-      "mode_contracts": 8
+      "mode_contracts": 8,
+      "completed_task_overlapping_reader": 1
     },
-    "parent_observed_mock_call_count": 25,
+    "parent_observed_mock_call_count": 26,
     "separately_observed_worker_mock_call_count": 1,
     "cases": [
       {
+        "test": "test_completed_http_task_remains_read_only_while_another_result_reader_is_busy",
+        "socket_receipt": "runtime/checks/209c861141b0/http-evidence/test_completed_http_task_remains_read_only_while_another_result_reader_is_busy.json",
+        "http_response_count": 5,
+        "parent_observed_mock_call_count": 1,
+        "additional_workers": [],
+        "blocked_socket_attempts": []
+      },
+      {
         "test": "test_disconnected_http_client_does_not_cancel_task_or_release_execution_slot",
-        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_disconnected_http_client_does_not_cancel_task_or_release_execution_slot.json",
+        "socket_receipt": "runtime/checks/209c861141b0/http-evidence/test_disconnected_http_client_does_not_cancel_task_or_release_execution_slot.json",
         "http_response_count": 8,
         "parent_observed_mock_call_count": 1,
         "additional_workers": [],
@@ -239,7 +254,7 @@
       },
       {
         "test": "test_http_category_tasks_bind_each_client_identity_and_server_workload",
-        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_http_category_tasks_bind_each_client_identity_and_server_workload.json",
+        "socket_receipt": "runtime/checks/209c861141b0/http-evidence/test_http_category_tasks_bind_each_client_identity_and_server_workload.json",
         "http_response_count": 11,
         "parent_observed_mock_call_count": 2,
         "additional_workers": [],
@@ -247,7 +262,7 @@
       },
       {
         "test": "test_http_clients_and_scopes_cannot_read_resume_or_manage_each_other",
-        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_http_clients_and_scopes_cannot_read_resume_or_manage_each_other.json",
+        "socket_receipt": "runtime/checks/209c861141b0/http-evidence/test_http_clients_and_scopes_cannot_read_resume_or_manage_each_other.json",
         "http_response_count": 25,
         "parent_observed_mock_call_count": 2,
         "additional_workers": [],
@@ -255,7 +270,7 @@
       },
       {
         "test": "test_http_disabled_client_keeps_operator_history_and_revalidates_originals[response.json]",
-        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_http_disabled_client_keeps_operator_history_and_revalidates_originals[response.json].json",
+        "socket_receipt": "runtime/checks/209c861141b0/http-evidence/test_http_disabled_client_keeps_operator_history_and_revalidates_originals[response.json].json",
         "http_response_count": 10,
         "parent_observed_mock_call_count": 1,
         "additional_workers": [],
@@ -263,7 +278,7 @@
       },
       {
         "test": "test_http_disabled_client_keeps_operator_history_and_revalidates_originals[result.json]",
-        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_http_disabled_client_keeps_operator_history_and_revalidates_originals[result.json].json",
+        "socket_receipt": "runtime/checks/209c861141b0/http-evidence/test_http_disabled_client_keeps_operator_history_and_revalidates_originals[result.json].json",
         "http_response_count": 10,
         "parent_observed_mock_call_count": 1,
         "additional_workers": [],
@@ -271,13 +286,13 @@
       },
       {
         "test": "test_http_expiry_boundary_and_reopened_service_preserve_history_without_resending",
-        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_http_expiry_boundary_and_reopened_service_preserve_history_without_resending.json",
+        "socket_receipt": "runtime/checks/209c861141b0/http-evidence/test_http_expiry_boundary_and_reopened_service_preserve_history_without_resending.json",
         "http_response_count": 10,
         "parent_observed_mock_call_count": 1,
         "additional_workers": [
           {
             "kind": "reopened_application",
-            "pid": 25817,
+            "pid": 36540,
             "mock_upstream_call_count": 0
           }
         ],
@@ -285,7 +300,7 @@
       },
       {
         "test": "test_http_four_modes_dispatch_registered_runners_on_one_budget[cloudyfan]",
-        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_http_four_modes_dispatch_registered_runners_on_one_budget[cloudyfan].json",
+        "socket_receipt": "runtime/checks/209c861141b0/http-evidence/test_http_four_modes_dispatch_registered_runners_on_one_budget[cloudyfan].json",
         "http_response_count": 5,
         "parent_observed_mock_call_count": 1,
         "additional_workers": [],
@@ -293,7 +308,7 @@
       },
       {
         "test": "test_http_four_modes_dispatch_registered_runners_on_one_budget[fixed_high]",
-        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_http_four_modes_dispatch_registered_runners_on_one_budget[fixed_high].json",
+        "socket_receipt": "runtime/checks/209c861141b0/http-evidence/test_http_four_modes_dispatch_registered_runners_on_one_budget[fixed_high].json",
         "http_response_count": 5,
         "parent_observed_mock_call_count": 1,
         "additional_workers": [],
@@ -301,7 +316,7 @@
       },
       {
         "test": "test_http_four_modes_dispatch_registered_runners_on_one_budget[low_first]",
-        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_http_four_modes_dispatch_registered_runners_on_one_budget[low_first].json",
+        "socket_receipt": "runtime/checks/209c861141b0/http-evidence/test_http_four_modes_dispatch_registered_runners_on_one_budget[low_first].json",
         "http_response_count": 5,
         "parent_observed_mock_call_count": 1,
         "additional_workers": [],
@@ -309,7 +324,7 @@
       },
       {
         "test": "test_http_four_modes_dispatch_registered_runners_on_one_budget[open_source_first]",
-        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_http_four_modes_dispatch_registered_runners_on_one_budget[open_source_first].json",
+        "socket_receipt": "runtime/checks/209c861141b0/http-evidence/test_http_four_modes_dispatch_registered_runners_on_one_budget[open_source_first].json",
         "http_response_count": 5,
         "parent_observed_mock_call_count": 1,
         "additional_workers": [],
@@ -317,7 +332,7 @@
       },
       {
         "test": "test_http_interrupted_category_resumes_original_contract_and_keeps_original_expiry",
-        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_http_interrupted_category_resumes_original_contract_and_keeps_original_expiry.json",
+        "socket_receipt": "runtime/checks/209c861141b0/http-evidence/test_http_interrupted_category_resumes_original_contract_and_keeps_original_expiry.json",
         "http_response_count": 15,
         "parent_observed_mock_call_count": 1,
         "additional_workers": [],
@@ -325,7 +340,7 @@
       },
       {
         "test": "test_http_missing_original_and_unregistered_category_reject_before_dispatch",
-        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_http_missing_original_and_unregistered_category_reject_before_dispatch.json",
+        "socket_receipt": "runtime/checks/209c861141b0/http-evidence/test_http_missing_original_and_unregistered_category_reject_before_dispatch.json",
         "http_response_count": 9,
         "parent_observed_mock_call_count": 2,
         "additional_workers": [],
@@ -333,7 +348,7 @@
       },
       {
         "test": "test_http_rotated_credential_keeps_principal_task_statistics_and_cost",
-        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_http_rotated_credential_keeps_principal_task_statistics_and_cost.json",
+        "socket_receipt": "runtime/checks/209c861141b0/http-evidence/test_http_rotated_credential_keeps_principal_task_statistics_and_cost.json",
         "http_response_count": 9,
         "parent_observed_mock_call_count": 1,
         "additional_workers": [],
@@ -341,7 +356,7 @@
       },
       {
         "test": "test_http_switches_and_reopen_preserve_original_binding_receipts_and_deadline",
-        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_http_switches_and_reopen_preserve_original_binding_receipts_and_deadline.json",
+        "socket_receipt": "runtime/checks/209c861141b0/http-evidence/test_http_switches_and_reopen_preserve_original_binding_receipts_and_deadline.json",
         "http_response_count": 24,
         "parent_observed_mock_call_count": 5,
         "additional_workers": [],
@@ -349,7 +364,7 @@
       },
       {
         "test": "test_interrupted_http_submission_only_continues_after_explicit_resume",
-        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_interrupted_http_submission_only_continues_after_explicit_resume.json",
+        "socket_receipt": "runtime/checks/209c861141b0/http-evidence/test_interrupted_http_submission_only_continues_after_explicit_resume.json",
         "http_response_count": 5,
         "parent_observed_mock_call_count": 1,
         "additional_workers": [],
@@ -357,14 +372,14 @@
       },
       {
         "test": "test_killed_worker_is_not_automatically_resumed_or_rebilled_after_reopen",
-        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_killed_worker_is_not_automatically_resumed_or_rebilled_after_reopen.json",
+        "socket_receipt": "runtime/checks/209c861141b0/http-evidence/test_killed_worker_is_not_automatically_resumed_or_rebilled_after_reopen.json",
         "http_response_count": 4,
         "parent_observed_mock_call_count": 0,
         "additional_workers": [
           {
             "entered": true,
-            "pid": 25847,
-            "port": 53073,
+            "pid": 36568,
+            "port": 54511,
             "phase": "mock_request_before_response",
             "mock_upstream_call_count": 1,
             "blocked_socket_attempts": [],
@@ -372,7 +387,7 @@
           },
           {
             "kind": "reopened_application",
-            "pid": 25817,
+            "pid": 36540,
             "mock_upstream_call_count": 0
           }
         ],
@@ -380,7 +395,7 @@
       },
       {
         "test": "test_running_http_task_keeps_reads_responsive_and_rejects_another_client",
-        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_running_http_task_keeps_reads_responsive_and_rejects_another_client.json",
+        "socket_receipt": "runtime/checks/209c861141b0/http-evidence/test_running_http_task_keeps_reads_responsive_and_rejects_another_client.json",
         "http_response_count": 9,
         "parent_observed_mock_call_count": 1,
         "additional_workers": [],
@@ -388,13 +403,13 @@
       },
       {
         "test": "test_separate_http_worker_shares_one_service_slot_and_does_not_queue",
-        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_separate_http_worker_shares_one_service_slot_and_does_not_queue.json",
+        "socket_receipt": "runtime/checks/209c861141b0/http-evidence/test_separate_http_worker_shares_one_service_slot_and_does_not_queue.json",
         "http_response_count": 3,
         "parent_observed_mock_call_count": 1,
         "additional_workers": [
           {
-            "pid": 25846,
-            "port": 53056,
+            "pid": 36567,
+            "port": 54493,
             "mock_upstream_call_count": 0,
             "blocked_socket_attempts": [],
             "socket_attempt_count": 0
@@ -404,7 +419,7 @@
       },
       {
         "test": "test_unknown_model_fee_blocks_other_client_over_real_http",
-        "socket_receipt": "runtime/checks/782d2e51cec4/http-evidence/test_unknown_model_fee_blocks_other_client_over_real_http.json",
+        "socket_receipt": "runtime/checks/209c861141b0/http-evidence/test_unknown_model_fee_blocks_other_client_over_real_http.json",
         "http_response_count": 5,
         "parent_observed_mock_call_count": 1,
         "additional_workers": [],
@@ -412,10 +427,10 @@
       }
     ],
     "identity_safe_response_sidecars": [
-      "runtime/checks/782d2e51cec4/http-evidence/test_http_clients_and_scopes_cannot_read_resume_or_manage_each_other-identity.json",
-      "runtime/checks/782d2e51cec4/http-evidence/test_http_disabled_client_keeps_operator_history_and_revalidates_originals[response.json]-identity.json",
-      "runtime/checks/782d2e51cec4/http-evidence/test_http_disabled_client_keeps_operator_history_and_revalidates_originals[result.json]-identity.json",
-      "runtime/checks/782d2e51cec4/http-evidence/test_http_rotated_credential_keeps_principal_task_statistics_and_cost-identity.json"
+      "runtime/checks/209c861141b0/http-evidence/test_http_clients_and_scopes_cannot_read_resume_or_manage_each_other-identity.json",
+      "runtime/checks/209c861141b0/http-evidence/test_http_disabled_client_keeps_operator_history_and_revalidates_originals[response.json]-identity.json",
+      "runtime/checks/209c861141b0/http-evidence/test_http_disabled_client_keeps_operator_history_and_revalidates_originals[result.json]-identity.json",
+      "runtime/checks/209c861141b0/http-evidence/test_http_rotated_credential_keeps_principal_task_statistics_and_cost-identity.json"
     ]
   },
   "desktop": {
@@ -426,8 +441,8 @@
     },
     "checks_passed": 20,
     "baseline": {
-      "report": "runtime/integration-desktop/75d86630-a3d/desktop-report.json",
-      "http_receipt": "runtime/integration-desktop/75d86630-a3d/http-receipt.json",
+      "report": "runtime/integration-desktop/705aff87-35a/desktop-report.json",
+      "http_receipt": "runtime/integration-desktop/705aff87-35a/http-receipt.json",
       "checks_passed": 8,
       "observed_model_mock_calls": 6,
       "observed_metadata_mock_attempts": 6,
@@ -441,30 +456,36 @@
       "blocked_browser_requests": [],
       "fixture_exit": {
         "code": 0,
-        "signal": null
+        "signal": null,
+        "timed_out": false,
+        "cleanup_failed": false,
+        "stderr_present": false
       }
     },
     "identity": {
-      "report": "runtime/identity-desktop/48010ccc8056/report.json",
-      "browser_report": "runtime/identity-desktop/48010ccc8056/browser-report.json",
+      "report": "runtime/identity-desktop/50778322aa45/report.json",
+      "browser_report": "runtime/identity-desktop/50778322aa45/browser-report.json",
       "checks_passed": 4,
       "observed_model_mock_calls": 2,
       "page_errors": [],
       "blocked_browser_requests": []
     },
     "mode_contracts": {
-      "report": "runtime/mode-desktop/92dae824-3be/desktop-report.json",
-      "http_receipt": "runtime/mode-desktop/92dae824-3be/http-receipt.json",
+      "report": "runtime/mode-desktop/fec34692-9c6/desktop-report.json",
+      "http_receipt": "runtime/mode-desktop/fec34692-9c6/http-receipt.json",
       "checks_passed": 8,
       "observed_model_mock_calls": 7,
       "page_errors": [],
       "blocked_browser_requests": [],
       "fixture_exit": {
         "code": 0,
-        "signal": null
+        "signal": null,
+        "timed_out": false,
+        "cleanup_failed": false,
+        "stderr_present": false
       }
     },
-    "qa_source_hashes_match_gate": true,
+    "qa_source_hashes_match_gate": false,
     "preview_status": "passed_fresh_before_final_sync_product_hashes_match_gate",
     "fixtures_are_stopped": true,
     "original_preview": {
@@ -511,6 +532,15 @@
         "src/cloudyfan_monitor/store.py": "55ebf64a9a33152c69e9fc8655ad373b44613e282af78976733259c13f2989ce"
       },
       "final_sync_product_hash_check": "pending_root_sync"
+    },
+    "qa_input_verification": {
+      "mode_report_all_direct_hashes_match_gate": true,
+      "baseline_direct_hash_mismatches": [
+        "tests/test_local_http_integration.py"
+      ],
+      "baseline_unchanged_imported_definitions_proof": "runtime/result-read-diagnosis/desktop-input-reuse-proof.json",
+      "baseline_entry_host_helper_product_hashes_match_gate": true,
+      "identity_refreshed_after_telemetry_change": true
     }
   },
   "historical_core_affected": {
@@ -521,36 +551,58 @@
     "full_core_pass_asserted": false
   },
   "required_core_integration": {
-    "status": "failed",
-    "command": [
-      "./scripts/check",
-      "--integration"
-    ],
-    "test_filters": [],
-    "pytest_addopts_present": false,
-    "preserved_legacy_copies": true,
-    "receipt": "runtime/final-acceptance/core-full-receipt.json",
-    "official_receipt": "runtime/final-acceptance/core-full-checks.json",
-    "full_log": "runtime/final-acceptance/core-full.log",
-    "started_at": "2026-10-22T06:33:39.563892+00:00",
-    "finished_at": "2026-10-22T06:52:47.207785+00:00",
-    "exit_code": 1,
-    "pytest": {
-      "passed": 2483,
-      "failed": 71,
-      "seconds": 1144.99,
-      "preserved_snapshot_failed_count": 70,
-      "current_file_failed_tests": [
-        "tests/test_project_state.py::test_historical_pass_and_closed_work_never_imply_current_or_production_completion"
-      ]
+    "status": "passed_in_directly_approved_delivery_scope",
+    "safe_summary": "docs/evidence/core-canonical-acceptance-20261022.json",
+    "scope_approval": "runtime/final-acceptance/approved-canonical-scope.json",
+    "approved_fixture_patch": "docs/evidence/core-project-state-fixture.patch",
+    "fixture_patch_sha256": "f957e8907eefd2a7e47c08528f42a933d93e57c131076f9263dff76409443c52",
+    "frozen_input_archive_sha256": "6afb337d58dd6eddf6e65e00efba589042361024a2d26c45c1955ca049bee1a2",
+    "git_verified_commit": null,
+    "summary": {
+      "schema_version": 1,
+      "kind": "offline",
+      "result": "passed",
+      "scope": "monitor-issue20-human-approved-core-canonical-delivery",
+      "human_approved_scope": true,
+      "finished_at_utc": "2026-10-22T07:41:47.473566+00:00",
+      "tests_passed": 1921,
+      "source_digest": "09311fb4173eadf7f1366f9396f9ad21b770e618e6f4691e14bf65ae29305f98",
+      "source_and_metadata_hashes_match_before_after": true,
+      "retained_inputs": 438,
+      "historical_test_snapshots_omitted_only_in_delivery": 17,
+      "historical_tests_preserved": 633,
+      "historical_source_copies_retained": 8,
+      "fixture_change": "synthetic history remains completed; current phase stays in_progress with no current verification",
+      "fixture_module_tests_passed": 31,
+      "test_filters": [],
+      "official_steps_passed": 8,
+      "mock_core_demo_requests": 5,
+      "mock_score_demo_requests": 5,
+      "network_policy": "unchanged default test socket guard and mocked external model transports",
+      "offline_sdist_and_wheel_passed": true,
+      "input_archive_sha256": "6afb337d58dd6eddf6e65e00efba589042361024a2d26c45c1955ca049bee1a2",
+      "official_receipt_sha256": "38119c8055769fe8bf84d3851b62eb3b9c6afeddf620b581964c9c3ffa1823db",
+      "shared_original_last_full_run": {
+        "passed": 2483,
+        "failed": 71,
+        "completed_before_fixture_fix": true,
+        "not_reclassified_as_green": true
+      },
+      "git": {
+        "historical_base_commit": "a441ab8ed57d13df1151069a7d54ed0a93306bf5",
+        "verified_commit": null,
+        "worktree_dirty": true
+      },
+      "production_qualification_recorded": false
     },
-    "changed_inputs": [
-      "docs/agent-state.json"
-    ],
-    "post_pytest_demos_and_build": "not_run_after_failure",
-    "official_passed": false,
-    "approved_one_field_metadata_repair": "runtime/final-acceptance/approved-records-repair.json",
-    "followup_scope": "pending_direct_user_decision"
+    "official_receipt": "runtime/final-acceptance/core-canonical/canonical-core-gate-20261022T153238/official-checks.json",
+    "wrapper_receipt": "runtime/final-acceptance/core-canonical/canonical-core-gate-20261022T153238/receipt.json",
+    "full_log": "runtime/final-acceptance/core-canonical/canonical-core-gate-20261022T153238/required-integration.log",
+    "frozen_inputs_manifest": "runtime/final-acceptance/core-canonical/canonical-inputs-20261022T073139Z/manifest.json",
+    "unchanged_438_inputs": true,
+    "excluded_historical_tests": 633,
+    "preserved_historical_test_files": 17,
+    "original_full_result_is_not_relabelled_passed": true
   },
   "historical_sql_reproduction": {
     "status": "three_current_nodes_passed_individually_historical_cause_unknown",
@@ -592,9 +644,339 @@
     "code_push": false,
     "data_erasure": false,
     "local_commits": "authorized for isolated implement-spec integration; ignored runtime artifacts are not committed",
-    "research_changes": "Only the root-approved one-field RG04 metadata repair; no fixture repair or canonical acceptance run is authorized by this report."
+    "research_changes": "Directly approved one-field RG04 metadata prerequisite and one synthetic project-state test fixture repair applied by the core investigator; no product, checker, SQL limit, paid permission or research-content change."
   },
   "artifact_sha256": [
+    {
+      "path": "docs/evidence/core-canonical-acceptance-20261022.json",
+      "sha256": "472f9539e657a1c2095a6847042bb0d65fd60fef37317a9ef9acbb6462b12a4b",
+      "bytes": 1516
+    },
+    {
+      "path": "docs/evidence/core-project-state-fixture.patch",
+      "sha256": "f957e8907eefd2a7e47c08528f42a933d93e57c131076f9263dff76409443c52",
+      "bytes": 691
+    },
+    {
+      "path": "runtime/checks/209c861141b0/checks.json",
+      "sha256": "33695d1e7445018bf056e2970c1feca4758822fd8591d30a77763074928732db",
+      "bytes": 16998
+    },
+    {
+      "path": "runtime/checks/209c861141b0/http-evidence/test_completed_http_task_remains_read_only_while_another_result_reader_is_busy.json",
+      "sha256": "7c2e8da6e5fc0ccd394138df66d6d1b61d5ca5f7e06cbff2bb5aeeedb4557093",
+      "bytes": 1419
+    },
+    {
+      "path": "runtime/checks/209c861141b0/http-evidence/test_disconnected_http_client_does_not_cancel_task_or_release_execution_slot.json",
+      "sha256": "b5853942699b75e5dfdf322ef720c4446e4ae2a2f82253a50d48f3ce31c514e0",
+      "bytes": 1997
+    },
+    {
+      "path": "runtime/checks/209c861141b0/http-evidence/test_http_category_tasks_bind_each_client_identity_and_server_workload.json",
+      "sha256": "60dc08176d81ad9943ccfb499ccaf915dd11335a38c53e697a228591b2427818",
+      "bytes": 3945
+    },
+    {
+      "path": "runtime/checks/209c861141b0/http-evidence/test_http_clients_and_scopes_cannot_read_resume_or_manage_each_other-identity.json",
+      "sha256": "9bca06c6fb0fda58f613184419f220f2a71a90d45c036bb8f1ab8ca7a415efb2",
+      "bytes": 12994
+    },
+    {
+      "path": "runtime/checks/209c861141b0/http-evidence/test_http_clients_and_scopes_cannot_read_resume_or_manage_each_other.json",
+      "sha256": "06a279a7347855573c4247d2701c9402dc298fd0a999187b35e24748e14e1313",
+      "bytes": 5539
+    },
+    {
+      "path": "runtime/checks/209c861141b0/http-evidence/test_http_disabled_client_keeps_operator_history_and_revalidates_originals[response.json]-identity.json",
+      "sha256": "9bf35067a8e319559de9a7fc6dfd6919a0c61e93199f9bdc451e704fbea347b7",
+      "bytes": 18320
+    },
+    {
+      "path": "runtime/checks/209c861141b0/http-evidence/test_http_disabled_client_keeps_operator_history_and_revalidates_originals[response.json].json",
+      "sha256": "90843b6207cd4500552e099171cf93047b9cc636655458b4f0a6c6f2108f2c7e",
+      "bytes": 2429
+    },
+    {
+      "path": "runtime/checks/209c861141b0/http-evidence/test_http_disabled_client_keeps_operator_history_and_revalidates_originals[result.json]-identity.json",
+      "sha256": "89d33a19df54f5d9f2370e5eececf1d01d9d78a170aebf6b3829daa211eaab2d",
+      "bytes": 18318
+    },
+    {
+      "path": "runtime/checks/209c861141b0/http-evidence/test_http_disabled_client_keeps_operator_history_and_revalidates_originals[result.json].json",
+      "sha256": "499682eea05453a42b1912b86c9699ee84593042b721e0665c2f3bfa220288ae",
+      "bytes": 2427
+    },
+    {
+      "path": "runtime/checks/209c861141b0/http-evidence/test_http_expiry_boundary_and_reopened_service_preserve_history_without_resending.json",
+      "sha256": "6e45d561012ff330b376fcc614505902de6cdbf33ad82f5ae9a2760b441ac690",
+      "bytes": 2546
+    },
+    {
+      "path": "runtime/checks/209c861141b0/http-evidence/test_http_four_modes_dispatch_registered_runners_on_one_budget[cloudyfan].json",
+      "sha256": "383c7c2362a803342977845f4f8e7ff5bac667edff6bd731b83b485daa651244",
+      "bytes": 1555
+    },
+    {
+      "path": "runtime/checks/209c861141b0/http-evidence/test_http_four_modes_dispatch_registered_runners_on_one_budget[fixed_high].json",
+      "sha256": "67c933dd3087f76ee38b5b00617c2f60c5bd80d43c7798aeb264546e0a43be31",
+      "bytes": 1551
+    },
+    {
+      "path": "runtime/checks/209c861141b0/http-evidence/test_http_four_modes_dispatch_registered_runners_on_one_budget[low_first].json",
+      "sha256": "880b7cfe45acbaf416acd07b0ce8826cc00cfa03676e47b03aec5e8d7fc787df",
+      "bytes": 1546
+    },
+    {
+      "path": "runtime/checks/209c861141b0/http-evidence/test_http_four_modes_dispatch_registered_runners_on_one_budget[open_source_first].json",
+      "sha256": "b7f926e07d768ff1377587703a82b55bdac6368ec94e00de2bcc79eea01871e7",
+      "bytes": 1586
+    },
+    {
+      "path": "runtime/checks/209c861141b0/http-evidence/test_http_interrupted_category_resumes_original_contract_and_keeps_original_expiry.json",
+      "sha256": "2931ff64fc55d56f84c70a635391a64dc6a4340540026a1c7d4e782fd23ac620",
+      "bytes": 3738
+    },
+    {
+      "path": "runtime/checks/209c861141b0/http-evidence/test_http_missing_original_and_unregistered_category_reject_before_dispatch.json",
+      "sha256": "a0e743d00d21758e0226e0c47c960fdaa1abcdbf736fea2261b2f65ff283aec6",
+      "bytes": 2687
+    },
+    {
+      "path": "runtime/checks/209c861141b0/http-evidence/test_http_rotated_credential_keeps_principal_task_statistics_and_cost-identity.json",
+      "sha256": "ce4184042d35cc231d924fd4af8b21b2ad7979817abf0b0ffc0d967bccbbd23d",
+      "bytes": 10659
+    },
+    {
+      "path": "runtime/checks/209c861141b0/http-evidence/test_http_rotated_credential_keeps_principal_task_statistics_and_cost.json",
+      "sha256": "04dbc271ba289cb1e6ae5dabe6c4cccf6e394d5b4f5ae0dd7a1c9637bd411119",
+      "bytes": 2133
+    },
+    {
+      "path": "runtime/checks/209c861141b0/http-evidence/test_http_switches_and_reopen_preserve_original_binding_receipts_and_deadline.json",
+      "sha256": "03b5c6f1c0ae274645c64909f1af11691ef292bdb8ed62e5e9bd9ef792e650c0",
+      "bytes": 5451
+    },
+    {
+      "path": "runtime/checks/209c861141b0/http-evidence/test_interrupted_http_submission_only_continues_after_explicit_resume.json",
+      "sha256": "7003027860bd2374ce77154dd599a4f304d89fdaee1c784d3af6f1d1c992ad8f",
+      "bytes": 1519
+    },
+    {
+      "path": "runtime/checks/209c861141b0/http-evidence/test_killed_worker_is_not_automatically_resumed_or_rebilled_after_reopen.json",
+      "sha256": "0e122b83c746c5db244c89812acf8a46bc0b0b97db66be212971ccc0a911eef3",
+      "bytes": 1587
+    },
+    {
+      "path": "runtime/checks/209c861141b0/http-evidence/test_running_http_task_keeps_reads_responsive_and_rejects_another_client.json",
+      "sha256": "0cc101bef1324822a4c56539db0ce77bbf30aec82d9264749bdcb4d84ab9d4d7",
+      "bytes": 2067
+    },
+    {
+      "path": "runtime/checks/209c861141b0/http-evidence/test_separate_http_worker_shares_one_service_slot_and_does_not_queue.json",
+      "sha256": "b57e40f1f2ccaf86ac6090789b0ac037660e57382cb0adf6a53d00a2abdf50ec",
+      "bytes": 1200
+    },
+    {
+      "path": "runtime/checks/209c861141b0/http-evidence/test_unknown_model_fee_blocks_other_client_over_real_http.json",
+      "sha256": "d54556a44d6067827931ababffbd19206c007b050ec5b13ef44a7238c02467a0",
+      "bytes": 1448
+    },
+    {
+      "path": "runtime/checks/209c861141b0/step-1.log",
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+      "bytes": 19
+    },
+    {
+      "path": "runtime/checks/209c861141b0/step-2.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "runtime/checks/209c861141b0/step-3.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "runtime/checks/209c861141b0/step-4.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "runtime/checks/209c861141b0/step-5.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "runtime/checks/209c861141b0/step-6.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "runtime/checks/209c861141b0/step-7.log",
+      "sha256": "cb7213e95fb255b2a8515326995740eb268b75132cecfb3fd8f739e17dea8769",
+      "bytes": 180
+    },
+    {
+      "path": "runtime/checks/209c861141b0/step-8.log",
+      "sha256": "2a651aaf6899068fac2d921ffe0d45c23aaf28d8b84753597d46f7382574edfe",
+      "bytes": 253
+    },
+    {
+      "path": "runtime/checks/5d28c8b0f924/checks.json",
+      "sha256": "4758b7649aff5b6a49d63f2b27555428d43de855c4dc7a7b90afde233c37bf90",
+      "bytes": 16457
+    },
+    {
+      "path": "runtime/checks/5d28c8b0f924/http-evidence/test_disconnected_http_client_does_not_cancel_task_or_release_execution_slot.json",
+      "sha256": "72d359dc20a1bec7349b47013dfa3800d9ba572cc46b0a4905f800f113fa6b05",
+      "bytes": 1630
+    },
+    {
+      "path": "runtime/checks/5d28c8b0f924/http-evidence/test_http_category_tasks_bind_each_client_identity_and_server_workload.json",
+      "sha256": "48ba3755f070c0c1bdd91e5f7303a4fa87b25499f1fb5bd851c383d9148c221d",
+      "bytes": 3663
+    },
+    {
+      "path": "runtime/checks/5d28c8b0f924/http-evidence/test_http_clients_and_scopes_cannot_read_resume_or_manage_each_other-identity.json",
+      "sha256": "74b2cbdd92b63fd06a6063ce7c607c43642c7f51ee3176d81ea70796659ef5b6",
+      "bytes": 12994
+    },
+    {
+      "path": "runtime/checks/5d28c8b0f924/http-evidence/test_http_clients_and_scopes_cannot_read_resume_or_manage_each_other.json",
+      "sha256": "5ef0c1b2cf0299907c60f4de039e11db4df0bcbd25a7160c2b9325b35fd02158",
+      "bytes": 4987
+    },
+    {
+      "path": "runtime/checks/5d28c8b0f924/http-evidence/test_http_disabled_client_keeps_operator_history_and_revalidates_originals[response.json]-identity.json",
+      "sha256": "54bf7398ce0a6616427fe441a290002b8fa9508f47e19b39e9791df9232e1a8e",
+      "bytes": 18304
+    },
+    {
+      "path": "runtime/checks/5d28c8b0f924/http-evidence/test_http_disabled_client_keeps_operator_history_and_revalidates_originals[response.json].json",
+      "sha256": "73b4a1d5ad7ab8bccf1600313e63ace487d095414c4301cef704ef732b3f7f87",
+      "bytes": 2306
+    },
+    {
+      "path": "runtime/checks/5d28c8b0f924/http-evidence/test_http_disabled_client_keeps_operator_history_and_revalidates_originals[result.json]-identity.json",
+      "sha256": "e3e1d099eaa27809cb662d2d19c5e0c2a3b3b76427b18b595fc5182c2ee40009",
+      "bytes": 18302
+    },
+    {
+      "path": "runtime/checks/5d28c8b0f924/http-evidence/test_http_disabled_client_keeps_operator_history_and_revalidates_originals[result.json].json",
+      "sha256": "74a1bc32058d227275b35d0fd2b94c4f34f4e21dc8c6aa908172a3c374834011",
+      "bytes": 2304
+    },
+    {
+      "path": "runtime/checks/5d28c8b0f924/http-evidence/test_http_expiry_boundary_and_reopened_service_preserve_history_without_resending.json",
+      "sha256": "177d40b63a94d7f9d1c638fdd49a044486fac07bf5d4c8fd184e2392d2d21a98",
+      "bytes": 2366
+    },
+    {
+      "path": "runtime/checks/5d28c8b0f924/http-evidence/test_http_four_modes_dispatch_registered_runners_on_one_budget[cloudyfan].json",
+      "sha256": "3420715808e49e79c0a830ba7091255ed0e7f0a6b8acc827acce3c44d32c6136",
+      "bytes": 1555
+    },
+    {
+      "path": "runtime/checks/5d28c8b0f924/http-evidence/test_http_four_modes_dispatch_registered_runners_on_one_budget[fixed_high].json",
+      "sha256": "06665cc8b66eceb8f19f78c8d6e9f91849df7f5d0378dcfe508fb6182c1824ed",
+      "bytes": 1551
+    },
+    {
+      "path": "runtime/checks/5d28c8b0f924/http-evidence/test_http_four_modes_dispatch_registered_runners_on_one_budget[low_first].json",
+      "sha256": "4b2b8e79c230a5fce880e5fdf64f6db672bdd426980ea06315bbbfd30fc9c243",
+      "bytes": 1546
+    },
+    {
+      "path": "runtime/checks/5d28c8b0f924/http-evidence/test_http_four_modes_dispatch_registered_runners_on_one_budget[open_source_first].json",
+      "sha256": "65182655b6583b15c619f759e7cba0e62b9354c93e188955b44a12485c5e9b7a",
+      "bytes": 1586
+    },
+    {
+      "path": "runtime/checks/5d28c8b0f924/http-evidence/test_http_interrupted_category_resumes_original_contract_and_keeps_original_expiry.json",
+      "sha256": "2266b6130d80b12e6b9a1d10eb5793327ebda53ecc509f79b88c3d984f94293a",
+      "bytes": 3540
+    },
+    {
+      "path": "runtime/checks/5d28c8b0f924/http-evidence/test_http_missing_original_and_unregistered_category_reject_before_dispatch.json",
+      "sha256": "4fa09b9bafc31a5d43925f270b7dec32eb6ba3c8b307d45f2ab54c4fbc9ef160",
+      "bytes": 2453
+    },
+    {
+      "path": "runtime/checks/5d28c8b0f924/http-evidence/test_http_rotated_credential_keeps_principal_task_statistics_and_cost-identity.json",
+      "sha256": "635eeb67a5593e463953b04afa81f890376e232ae2a06ddf2c6f165372c6353c",
+      "bytes": 10671
+    },
+    {
+      "path": "runtime/checks/5d28c8b0f924/http-evidence/test_http_rotated_credential_keeps_principal_task_statistics_and_cost.json",
+      "sha256": "691fc841754b0a19537010db45df5294cd881f901ca9023979d4572b2ff11fcd",
+      "bytes": 2061
+    },
+    {
+      "path": "runtime/checks/5d28c8b0f924/http-evidence/test_http_switches_and_reopen_preserve_original_binding_receipts_and_deadline.json",
+      "sha256": "898d87e7923d981904c5ac5ea8419e3f6aa4b793d65b94bdc18aafe22f2c83dc",
+      "bytes": 5348
+    },
+    {
+      "path": "runtime/checks/5d28c8b0f924/http-evidence/test_interrupted_http_submission_only_continues_after_explicit_resume.json",
+      "sha256": "72147903a8127900c0862fa1d902d8efce2e17b4bad3535ff5d6b546fac6d30e",
+      "bytes": 1385
+    },
+    {
+      "path": "runtime/checks/5d28c8b0f924/http-evidence/test_killed_worker_is_not_automatically_resumed_or_rebilled_after_reopen.json",
+      "sha256": "82e212f10fc384a0cf39b880b135475be85bb8e555fe565f781cc3bb7ca4a3ac",
+      "bytes": 1515
+    },
+    {
+      "path": "runtime/checks/5d28c8b0f924/http-evidence/test_running_http_task_keeps_reads_responsive_and_rejects_another_client.json",
+      "sha256": "1a6414828c74e7800a6c189be63688f90805207a34b4d031ce76442a5eede37d",
+      "bytes": 2031
+    },
+    {
+      "path": "runtime/checks/5d28c8b0f924/http-evidence/test_separate_http_worker_shares_one_service_slot_and_does_not_queue.json",
+      "sha256": "41849a644e4bfc4f7205799829c91beebac13e7960b5bdd3e25b4ad84566ee19",
+      "bytes": 1164
+    },
+    {
+      "path": "runtime/checks/5d28c8b0f924/http-evidence/test_unknown_model_fee_blocks_other_client_over_real_http.json",
+      "sha256": "037ec12ccf30926f356bbf8b47e530e33486c686b1ea5e9e7596c8f5af288060",
+      "bytes": 1338
+    },
+    {
+      "path": "runtime/checks/5d28c8b0f924/step-1.log",
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+      "bytes": 19
+    },
+    {
+      "path": "runtime/checks/5d28c8b0f924/step-2.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "runtime/checks/5d28c8b0f924/step-3.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "runtime/checks/5d28c8b0f924/step-4.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "runtime/checks/5d28c8b0f924/step-5.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "runtime/checks/5d28c8b0f924/step-6.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "runtime/checks/5d28c8b0f924/step-7.log",
+      "sha256": "3a34124cd072147b68f7a12b6bb57de4cb68429ea413d1ce700ed0a26a9aa56f",
+      "bytes": 3417
+    },
     {
       "path": "runtime/checks/782d2e51cec4/checks.json",
       "sha256": "1432e49d7d2929d418c993e0614f9f6c7e16d1d0387c49399d5ce10422b9bd2b",
@@ -751,9 +1133,164 @@
       "bytes": 253
     },
     {
+      "path": "runtime/final-acceptance/approved-canonical-scope.json",
+      "sha256": "979cbbcca5b6d265e1bdfd18ef6a3cdcbb398ba0ae2dda0b92b37b8693545947",
+      "bytes": 597
+    },
+    {
+      "path": "runtime/final-acceptance/approved-fixture-module.log",
+      "sha256": "443f201251814d4f3b9cc11f3625bb9a69f03294c7fe6f74a9fbfcf2480f8fe8",
+      "bytes": 99
+    },
+    {
+      "path": "runtime/final-acceptance/approved-fixture-repair.json",
+      "sha256": "568536fdd8dfdfa13c3a53ebbfca47e61e1a2c09f4d1110414db27f14b8b6c31",
+      "bytes": 154984
+    },
+    {
       "path": "runtime/final-acceptance/approved-records-repair.json",
       "sha256": "f6acf02478ff20c679d497d7d7cbc270928a8033f0d72d929742c99d9be77f22",
       "bytes": 515
+    },
+    {
+      "path": "runtime/final-acceptance/core-canonical/approved-fixture-module.log",
+      "sha256": "443f201251814d4f3b9cc11f3625bb9a69f03294c7fe6f74a9fbfcf2480f8fe8",
+      "bytes": 99
+    },
+    {
+      "path": "runtime/final-acceptance/core-canonical/approved-fixture-repair.json",
+      "sha256": "568536fdd8dfdfa13c3a53ebbfca47e61e1a2c09f4d1110414db27f14b8b6c31",
+      "bytes": 154984
+    },
+    {
+      "path": "runtime/final-acceptance/core-canonical/approved-records-repair.json",
+      "sha256": "f6acf02478ff20c679d497d7d7cbc270928a8033f0d72d929742c99d9be77f22",
+      "bytes": 515
+    },
+    {
+      "path": "runtime/final-acceptance/core-canonical/canonical-core-gate-20261022T153238/dist/.gitignore",
+      "sha256": "684888c0ebb17f374298b65ee2807526c066094c701bcc7ebbe1c1095f494fc1",
+      "bytes": 1
+    },
+    {
+      "path": "runtime/final-acceptance/core-canonical/canonical-core-gate-20261022T153238/dist/cloudyfan_jev_core-0.1.0-py3-none-any.whl",
+      "sha256": "b58cd7d8a5a7aab39dfc59080890f0999a0655d4879f70e276eda14660573a2f",
+      "bytes": 274315
+    },
+    {
+      "path": "runtime/final-acceptance/core-canonical/canonical-core-gate-20261022T153238/dist/cloudyfan_jev_core-0.1.0.tar.gz",
+      "sha256": "0924ec03c218dea39a7b56231ae02192c96ae4f24428ab0c885eaf9ce1fb5ba9",
+      "bytes": 1061383
+    },
+    {
+      "path": "runtime/final-acceptance/core-canonical/canonical-core-gate-20261022T153238/final-summary.json",
+      "sha256": "02483ea9d60da8213abc18d083e9c82fd67e9bb7e579e673db1dff6e1fe9a91c",
+      "bytes": 3010
+    },
+    {
+      "path": "runtime/final-acceptance/core-canonical/canonical-core-gate-20261022T153238/git-status.txt",
+      "sha256": "e0d9d8cdd42d88127741512f00db3e8a9051b948aa646818001d3539ca0b6103",
+      "bytes": 2936
+    },
+    {
+      "path": "runtime/final-acceptance/core-canonical/canonical-core-gate-20261022T153238/historical-test-preservation.json",
+      "sha256": "c93c1452bb101594d9cd110880eeb8f19402985cbb40eebf08c7d51190d40d6b",
+      "bytes": 6521
+    },
+    {
+      "path": "runtime/final-acceptance/core-canonical/canonical-core-gate-20261022T153238/input-diff.json",
+      "sha256": "d13d50876790a5d486edfa534dd64d9d6c47772390f90881d57153e9ce82b05b",
+      "bytes": 176
+    },
+    {
+      "path": "runtime/final-acceptance/core-canonical/canonical-core-gate-20261022T153238/inputs-after.json",
+      "sha256": "9939ac49e1f397a0a1d74c0bcfd63e922ec2a7033fb60bda54bf5f350ccba76c",
+      "bytes": 85292
+    },
+    {
+      "path": "runtime/final-acceptance/core-canonical/canonical-core-gate-20261022T153238/inputs-before.json",
+      "sha256": "444799e4cf9fabf40fe62fd90f26387625953fbd64463a74ca1406269a06ad6d",
+      "bytes": 85292
+    },
+    {
+      "path": "runtime/final-acceptance/core-canonical/canonical-core-gate-20261022T153238/isolation-imports.json",
+      "sha256": "d6e6163aa3c6d42421b4cd5dbe66a5a04a5e30560f4315dfed1f342978e82e9d",
+      "bytes": 1213
+    },
+    {
+      "path": "runtime/final-acceptance/core-canonical/canonical-core-gate-20261022T153238/official-checks.json",
+      "sha256": "38119c8055769fe8bf84d3851b62eb3b9c6afeddf620b581964c9c3ffa1823db",
+      "bytes": 3016
+    },
+    {
+      "path": "runtime/final-acceptance/core-canonical/canonical-core-gate-20261022T153238/receipt.json",
+      "sha256": "0474749be4d47184c2683635534a87d9d9516f26fc351cf6e41095749e28616e",
+      "bytes": 42807
+    },
+    {
+      "path": "runtime/final-acceptance/core-canonical/canonical-core-gate-20261022T153238/required-integration.log",
+      "sha256": "77a1a7fba5569b6d36e79bcd0a3a5809e20a99855946dd51c8d2a5861995b2af",
+      "bytes": 6887
+    },
+    {
+      "path": "runtime/final-acceptance/core-canonical/canonical-inputs-20261022T073139Z/inputs.tar.gz",
+      "sha256": "6afb337d58dd6eddf6e65e00efba589042361024a2d26c45c1955ca049bee1a2",
+      "bytes": 1088468
+    },
+    {
+      "path": "runtime/final-acceptance/core-canonical/canonical-inputs-20261022T073139Z/manifest.json",
+      "sha256": "1771728983b31059e7f8fc811e75ce886ac5c322bf271ce5e329838892a71fc2",
+      "bytes": 88166
+    },
+    {
+      "path": "runtime/final-acceptance/core-canonical/canonical-inputs-20261022T073139Z/receipt.json",
+      "sha256": "ea84120585ad7050f2384097d6a829ffc5ffccdc3bdc6823df5325689e880e39",
+      "bytes": 122079
+    },
+    {
+      "path": "runtime/final-acceptance/core-canonical/core-canonical-acceptance-sanitized.json",
+      "sha256": "472f9539e657a1c2095a6847042bb0d65fd60fef37317a9ef9acbb6462b12a4b",
+      "bytes": 1516
+    },
+    {
+      "path": "runtime/final-acceptance/core-canonical/core-canonical-durable-artifacts.json",
+      "sha256": "db4eb1a15b7cdecca087f76ca0bfbfee7599a13a04c0d95f1cdfe381d7548ac2",
+      "bytes": 7511
+    },
+    {
+      "path": "runtime/final-acceptance/core-canonical/core-gate-summary.json",
+      "sha256": "c5ddbf2260fec85105a3990b2889777e6451dd7229d22654b5a51605dc0c1352",
+      "bytes": 13902
+    },
+    {
+      "path": "runtime/final-acceptance/core-canonical/core-gate.md",
+      "sha256": "355cc315062179b4b34b6fdca91dfa7c6e35c47561c94f586f7c9fea60866665",
+      "bytes": 20914
+    },
+    {
+      "path": "runtime/final-acceptance/core-canonical/proposed-fixture-repair.patch",
+      "sha256": "f957e8907eefd2a7e47c08528f42a933d93e57c131076f9263dff76409443c52",
+      "bytes": 691
+    },
+    {
+      "path": "runtime/final-acceptance/core-canonical/required-core-gate-20261022T143339/official-checks.json",
+      "sha256": "5abc15769fa0ad30f9c7ef93da83633d41b99244c51d4e84cc71c7782c228f4e",
+      "bytes": 1402
+    },
+    {
+      "path": "runtime/final-acceptance/core-canonical/required-core-gate-20261022T143339/receipt.json",
+      "sha256": "edb90e0829ba46cf6a6b4545c31bf4d9313dc5883a8310ad9151ec9b884ce457",
+      "bytes": 46245
+    },
+    {
+      "path": "runtime/final-acceptance/core-canonical/required-core-gate-20261022T143339/required-integration.log",
+      "sha256": "dd9cd572e00c5bb3a993b45027f8c4d375d0bfc271b4419fa7ae0f8fb29b8762",
+      "bytes": 113323
+    },
+    {
+      "path": "runtime/final-acceptance/core-canonical/required-core-gate-20261022T143339/state-delta.json",
+      "sha256": "e335df6626b8dfdbf1311538fc2967c405fda781a372dc7026b82c51540db62c",
+      "bytes": 1236
     },
     {
       "path": "runtime/final-acceptance/core-full-checks.json",
@@ -819,6 +1356,16 @@
       "path": "runtime/final-acceptance/historical-pre-reboot-required-integration.log",
       "sha256": "f245ed7bcd02e988bdddc267f64e502b6dbed4c9a768a7cdc6c9901eb57bc741",
       "bytes": 3524
+    },
+    {
+      "path": "runtime/final-acceptance/review-spec.md",
+      "sha256": "8d144dc384c2db4df98f098547a6dcaac3a92f4142b3b2c43dc7bd0631b3b2a6",
+      "bytes": 1835
+    },
+    {
+      "path": "runtime/final-acceptance/review-standards.md",
+      "sha256": "5ebe7a925c04b265e39df55ffc99f435b0798eb6c89bbc86c7d45683a58c00c2",
+      "bytes": 1477
     },
     {
       "path": "runtime/final-acceptance/source-get/candidate-view.json",
@@ -976,6 +1523,176 @@
       "bytes": 10524
     },
     {
+      "path": "runtime/identity-desktop/50778322aa45/browser-report.json",
+      "sha256": "9626c213d15b3b9bd23c3788bc44cb92d0644549fe1d3580de32427115d00799",
+      "bytes": 1626
+    },
+    {
+      "path": "runtime/identity-desktop/50778322aa45/client-login-rejected.aria.txt",
+      "sha256": "d31ef7d143b6b6997cc8b16a69b88be43a071946a4b1da54c73f0a79aaa9fda0",
+      "bytes": 1115
+    },
+    {
+      "path": "runtime/identity-desktop/50778322aa45/client-login-rejected.png",
+      "sha256": "bb07202334d8329ee389900bc91a748d15ca9b109e6bc13f1f9ca516ad1c3d4b",
+      "bytes": 72411
+    },
+    {
+      "path": "runtime/identity-desktop/50778322aa45/clients-after-rotation.aria.txt",
+      "sha256": "7bcff4f82eefcd73db2464e45302f5238b3649d5d73ced86053acf6fac7d0f13",
+      "bytes": 4268
+    },
+    {
+      "path": "runtime/identity-desktop/50778322aa45/clients-after-rotation.png",
+      "sha256": "24feb9395de36b180f216dd9149199e3689b626e345fce4fb16f19854e78efc0",
+      "bytes": 153801
+    },
+    {
+      "path": "runtime/identity-desktop/50778322aa45/clients-before-rotation.aria.txt",
+      "sha256": "c67302031c5b1b13bb640848a6f68f013fecc3246c89a6096cdc18fab4412af6",
+      "bytes": 4268
+    },
+    {
+      "path": "runtime/identity-desktop/50778322aa45/clients-before-rotation.png",
+      "sha256": "34d04a06a3f967e631fe38f303d5e7f0ca529f76ea2b81ab37dbf27976031a42",
+      "bytes": 156669
+    },
+    {
+      "path": "runtime/identity-desktop/50778322aa45/ledger-after-rotation.aria.txt",
+      "sha256": "071fd75f16fb6303d7758b153d99617c6d2596ea46095e44c8861c6a7647b0d3",
+      "bytes": 4994
+    },
+    {
+      "path": "runtime/identity-desktop/50778322aa45/ledger-after-rotation.png",
+      "sha256": "c82a61e7a5adc3f57c9b5215a8cfa43b2e64ddca16a33f170473b3ec6b0c4773",
+      "bytes": 209278
+    },
+    {
+      "path": "runtime/identity-desktop/50778322aa45/report.json",
+      "sha256": "cc87aa4f69d62afb47c5627cb02bb5f0cffa99df363972712e82c916a41fe7f6",
+      "bytes": 10524
+    },
+    {
+      "path": "runtime/integration-desktop/705aff87-35a/desktop-client-override.aria.txt",
+      "sha256": "82a7079fcf5ce02469b240a3ddabfe18aef08f7240d58caa9f382a505c1602e4",
+      "bytes": 5244
+    },
+    {
+      "path": "runtime/integration-desktop/705aff87-35a/desktop-client-override.png",
+      "sha256": "000c7aa6236be80b545cc819f7dc4c1eeec68f42f61056f065e94f8cdea9a8f7",
+      "bytes": 118717
+    },
+    {
+      "path": "runtime/integration-desktop/705aff87-35a/desktop-contract-matrix.aria.txt",
+      "sha256": "a0a18197a924fbff7f374b4a65290ab99ba5fcca06cfb93b58a326322ce5dded",
+      "bytes": 26430
+    },
+    {
+      "path": "runtime/integration-desktop/705aff87-35a/desktop-contract-matrix.png",
+      "sha256": "8b96fab77bfa1f8c5aa0cabf95e82ab3eb715cb8fbfdc16dcfd66c64e426fc1c",
+      "bytes": 150145
+    },
+    {
+      "path": "runtime/integration-desktop/705aff87-35a/desktop-ledger-attribution.aria.txt",
+      "sha256": "b2101a92e3fa8cdef3a799111d04004f905bdfa2c9de6b9924f7ca8da9e47dd5",
+      "bytes": 7897
+    },
+    {
+      "path": "runtime/integration-desktop/705aff87-35a/desktop-ledger-attribution.png",
+      "sha256": "ce81b7e948bd99ae2232561ee0189959b695d9c69433facc9567ee5431df846f",
+      "bytes": 111852
+    },
+    {
+      "path": "runtime/integration-desktop/705aff87-35a/desktop-missing-candidates.aria.txt",
+      "sha256": "6961b90eda21d7e5e0731d8bd6bc09b5837d6845103ab9433e1f075a64903e18",
+      "bytes": 25469
+    },
+    {
+      "path": "runtime/integration-desktop/705aff87-35a/desktop-missing-candidates.png",
+      "sha256": "6ae437c5ff632e85022e32500d50009be24a4a067399024b5dfa7a3c832941e4",
+      "bytes": 145233
+    },
+    {
+      "path": "runtime/integration-desktop/705aff87-35a/desktop-mode-confirm.aria.txt",
+      "sha256": "25b3394ec406587c9c69d235cc82cdebf7ba131b040596c246a31ef0d5242888",
+      "bytes": 6384
+    },
+    {
+      "path": "runtime/integration-desktop/705aff87-35a/desktop-mode-confirm.png",
+      "sha256": "f7f222cd0ca91a57a32bd0e06ec29c09d7db006517cd66fe0502385641065df0",
+      "bytes": 145456
+    },
+    {
+      "path": "runtime/integration-desktop/705aff87-35a/desktop-overview-busy.aria.txt",
+      "sha256": "1ecc32fcfbb8bbc37c0e686d40e494294b87ed4e9242b8e27a2e87b8402d0553",
+      "bytes": 5994
+    },
+    {
+      "path": "runtime/integration-desktop/705aff87-35a/desktop-overview-busy.png",
+      "sha256": "d0673f63d19de4710a05c0bda98d877ff66035c108565a89a753fdd55b97e551",
+      "bytes": 165611
+    },
+    {
+      "path": "runtime/integration-desktop/705aff87-35a/desktop-overview-finished.aria.txt",
+      "sha256": "f10e9ec7b3b2ee5fec19a23143cb380ed890f6001405f81c96374f32a6eeaee9",
+      "bytes": 5976
+    },
+    {
+      "path": "runtime/integration-desktop/705aff87-35a/desktop-overview-finished.png",
+      "sha256": "f1885bd5687e5a0ad15597b0370c214b039003c22e09805797b4089e7c123dff",
+      "bytes": 165811
+    },
+    {
+      "path": "runtime/integration-desktop/705aff87-35a/desktop-report.json",
+      "sha256": "42c6babc0a4e9edf72d966dc47093773a7ba73cf77ac1c17d57de5e2c8934b22",
+      "bytes": 9940
+    },
+    {
+      "path": "runtime/integration-desktop/705aff87-35a/desktop-source-diff.aria.txt",
+      "sha256": "44a1e3d5070de33176b6bb37224b2402ce64adaa2bf3c668cd169bccec2fa090",
+      "bytes": 35770
+    },
+    {
+      "path": "runtime/integration-desktop/705aff87-35a/desktop-source-diff.png",
+      "sha256": "50f7dc0f656bb935164ae083ad1ffa3221ec7b493ff39a2ef4bbb2c0b4c82d85",
+      "bytes": 180488
+    },
+    {
+      "path": "runtime/integration-desktop/705aff87-35a/desktop-source-main-failure.aria.txt",
+      "sha256": "7ba8a48caf9c25b4f13b7ed1c1d18f8c20cdaf289681146f326e662fa82761f1",
+      "bytes": 27765
+    },
+    {
+      "path": "runtime/integration-desktop/705aff87-35a/desktop-source-main-failure.png",
+      "sha256": "bfa00673881e540e925613beacedbe862ab594211dcc072971ab775a230320f2",
+      "bytes": 152039
+    },
+    {
+      "path": "runtime/integration-desktop/705aff87-35a/desktop-source-partial-published.aria.txt",
+      "sha256": "57a78b9974a38be1c10575f0359f6df107843f9904cd5f0b2f667397c6e9b398",
+      "bytes": 27761
+    },
+    {
+      "path": "runtime/integration-desktop/705aff87-35a/desktop-source-partial-published.png",
+      "sha256": "14d9288e81c4343a4cfb2949dcc3bb1bcfe50e14fa61925874818c84033dcec1",
+      "bytes": 162490
+    },
+    {
+      "path": "runtime/integration-desktop/705aff87-35a/desktop-tasks-expired-and-busy.aria.txt",
+      "sha256": "aa7f6af0693c0b27ad73ef7b326d98971a87fd1d1c2d29ff03c32c4dedc986d2",
+      "bytes": 3965
+    },
+    {
+      "path": "runtime/integration-desktop/705aff87-35a/desktop-tasks-expired-and-busy.png",
+      "sha256": "1913f5ed8ec426c2f1e6e7c96edb1a95542264e4666cb9177e3545347813de82",
+      "bytes": 135900
+    },
+    {
+      "path": "runtime/integration-desktop/705aff87-35a/http-receipt.json",
+      "sha256": "398d98fad34842a0cc4c46cf92b1ab955793fe1185f28c7c8ed4c603f99ec354",
+      "bytes": 5831
+    },
+    {
       "path": "runtime/integration-desktop/75d86630-a3d/desktop-client-override.aria.txt",
       "sha256": "a8c0e2d79c22b84605508fba1fcf59a6afa07f68b65fb5a9d4a479108a1408bf",
       "bytes": 5244
@@ -1124,17 +1841,112 @@
       "path": "runtime/mode-desktop/92dae824-3be/http-receipt.json",
       "sha256": "07c79c877cbc5455cb4b05c1c02b1ad24eb5452751bebfe960c21621e726499d",
       "bytes": 7758
+    },
+    {
+      "path": "runtime/mode-desktop/fec34692-9c6/01-four-modes.png",
+      "sha256": "3804d8bca1c2b0b0bedc3b06c5aa0a16495cfe135c09253e84de64658dc1b5cd",
+      "bytes": 284980
+    },
+    {
+      "path": "runtime/mode-desktop/fec34692-9c6/02-client-override.png",
+      "sha256": "32c82e4e850cd111caf762211a6f4bd420892a092eed38304421652e92fd5ca8",
+      "bytes": 150479
+    },
+    {
+      "path": "runtime/mode-desktop/fec34692-9c6/03-contract-matrix.png",
+      "sha256": "179159547456f10871f75a9de1bb4dafb8dcec7617db2d0c5aa9fa60fc93c188",
+      "bytes": 324344
+    },
+    {
+      "path": "runtime/mode-desktop/fec34692-9c6/04-original-task-after-reopen.png",
+      "sha256": "1e96226aadd91b2d70af87f6370bc805b3516b4896a61ed142c96bbabad51795",
+      "bytes": 112834
+    },
+    {
+      "path": "runtime/mode-desktop/fec34692-9c6/desktop-report.json",
+      "sha256": "654a097d3ab0c6244c4132aa4e254c601034c3bcaba213b2dc6c99d8051ec54a",
+      "bytes": 5128
+    },
+    {
+      "path": "runtime/mode-desktop/fec34692-9c6/http-receipt.json",
+      "sha256": "d88970522f3a47f227dfc87e0fa47e814d1a4d325183863fc771255efc890fb3",
+      "bytes": 8050
+    },
+    {
+      "path": "runtime/result-read-affected/http-evidence/test_completed_http_task_remains_read_only_while_another_result_reader_is_busy.json",
+      "sha256": "67c9e89dd0b5a982d1f2bf53d3867029a8031b1ab976517a7db8b5bc57df6b23",
+      "bytes": 1419
+    },
+    {
+      "path": "runtime/result-read-affected/http-evidence/test_disconnected_http_client_does_not_cancel_task_or_release_execution_slot.json",
+      "sha256": "484d4b04f8dd0bb6a48f2eff0e122d189838da2b3886a48077c1afe9c6e1a65b",
+      "bytes": 1997
+    },
+    {
+      "path": "runtime/result-read-affected/http-evidence/test_http_expiry_boundary_and_reopened_service_preserve_history_without_resending.json",
+      "sha256": "61d9862d86c6bef0a3dbe65ee4a6989c406302aa45ccc9ebce62390ce5f60ff2",
+      "bytes": 2546
+    },
+    {
+      "path": "runtime/result-read-affected/http-evidence/test_interrupted_http_submission_only_continues_after_explicit_resume.json",
+      "sha256": "c141f8d3ce99b20dcfdf1a50b84313cf7fd263dbd898e87ffba0f3ff676dc446",
+      "bytes": 1519
+    },
+    {
+      "path": "runtime/result-read-affected/http-evidence/test_killed_worker_is_not_automatically_resumed_or_rebilled_after_reopen.json",
+      "sha256": "5059b0ddeaeff5cabc03affaca8dbd2187443c6498cf87a6b79a2defa5efc78d",
+      "bytes": 1587
+    },
+    {
+      "path": "runtime/result-read-affected/http-evidence/test_running_http_task_keeps_reads_responsive_and_rejects_another_client.json",
+      "sha256": "3aa8874d66daa1c96b5a878acdd40e2106bcc1a757ce8e5a6d8b1268c3103929",
+      "bytes": 2067
+    },
+    {
+      "path": "runtime/result-read-affected/http-evidence/test_separate_http_worker_shares_one_service_slot_and_does_not_queue.json",
+      "sha256": "47a87483f2962e1e6e7e2d08f8ce2e962ebe796f4948a7bb24696dd2208dd83a",
+      "bytes": 1200
+    },
+    {
+      "path": "runtime/result-read-affected/http-evidence/test_unknown_model_fee_blocks_other_client_over_real_http.json",
+      "sha256": "8fe541a7561650df8645faee1c04b192b2941603d0be4f673b0547d853ffafb5",
+      "bytes": 1448
+    },
+    {
+      "path": "runtime/result-read-affected/pytest.log",
+      "sha256": "ff75f103945ee127d01ab8cd5eeb9e4f6476e99dd9642f98eec9471c95a3def1",
+      "bytes": 99
+    },
+    {
+      "path": "runtime/result-read-diagnosis/desktop-input-reuse-proof.json",
+      "sha256": "367b8c2b1974bd188f84636d4b56a527dabc6ec18254f16f0cdf5f275e27ca06",
+      "bytes": 1367
+    },
+    {
+      "path": "runtime/result-read-diagnosis/http-evidence/test_completed_http_task_remains_read_only_while_another_result_reader_is_busy.json",
+      "sha256": "c136133ac4666bf109d4e3df93fa884379f600eb7e65cf8a8b5e420411a854d6",
+      "bytes": 1419
+    },
+    {
+      "path": "runtime/result-read-diagnosis/http-evidence/test_disconnected_http_client_does_not_cancel_task_or_release_execution_slot.json",
+      "sha256": "40ff3df3b567a8586741b5b53c833474a20ea2766751ea8e619d4dfa9be2ea43",
+      "bytes": 1997
+    },
+    {
+      "path": "runtime/result-read-diagnosis/pytest.log",
+      "sha256": "ffbaf7dc4b0a5b85f5185d87e9802a8778d49ba5da86282f65d0db30726cac29",
+      "bytes": 99
     }
   ],
   "delivery_validation": {
-    "artifact_count": 106,
+    "artifact_count": 258,
     "artifact_hashes_verified": true,
     "safe_artifact_secret_scan": {
       "status": "passed",
       "findings": [],
-      "scope": "indexed JSON/log/ARIA text; nonempty exact sensitive keys and credential-like strings",
-      "text_files_scanned": 86,
-      "index_text_scanned": true
+      "text_files_scanned": 215,
+      "index_text_scanned": true,
+      "scope": "Indexed JSON/log/ARIA/Markdown/patch text; exact sensitive keys and credential-like strings. Binary frozen-input archives are private preserved artifacts and are not text-scanned."
     },
     "excluded_private_fixture_content": "No SQLite files, fixture prompt/answer payloads or credential stores indexed. Raw collect-only output with a credential-like parameter identifier is preserved ignored but excluded from safe artifacts.",
     "document_links": {
@@ -1142,9 +1954,10 @@
       "scope": [
         "docs/issue20-final-acceptance.md",
         "docs/execution-checkpoint.md",
-        "docs/work-plan.md"
+        "docs/work-plan.md",
+        "docs/issue20-code-review.md"
       ],
-      "count": 27,
+      "count": 49,
       "links": [
         {
           "document": "docs/issue20-final-acceptance.md",
@@ -1153,22 +1966,27 @@
         },
         {
           "document": "docs/issue20-final-acceptance.md",
-          "target": "../runtime/checks/782d2e51cec4/checks.json",
+          "target": "issue20-code-review.md",
           "exists": true
         },
         {
           "document": "docs/issue20-final-acceptance.md",
-          "target": "../runtime/integration-desktop/75d86630-a3d/desktop-report.json",
+          "target": "../runtime/checks/209c861141b0/checks.json",
           "exists": true
         },
         {
           "document": "docs/issue20-final-acceptance.md",
-          "target": "../runtime/integration-desktop/75d86630-a3d/http-receipt.json",
+          "target": "../runtime/integration-desktop/705aff87-35a/desktop-report.json",
           "exists": true
         },
         {
           "document": "docs/issue20-final-acceptance.md",
-          "target": "../runtime/identity-desktop/48010ccc8056/report.json",
+          "target": "../runtime/integration-desktop/705aff87-35a/http-receipt.json",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "../runtime/identity-desktop/50778322aa45/report.json",
           "exists": true
         },
         {
@@ -1178,12 +1996,12 @@
         },
         {
           "document": "docs/issue20-final-acceptance.md",
-          "target": "../runtime/mode-desktop/92dae824-3be/desktop-report.json",
+          "target": "../runtime/mode-desktop/fec34692-9c6/desktop-report.json",
           "exists": true
         },
         {
           "document": "docs/issue20-final-acceptance.md",
-          "target": "../runtime/mode-desktop/92dae824-3be/http-receipt.json",
+          "target": "../runtime/mode-desktop/fec34692-9c6/http-receipt.json",
           "exists": true
         },
         {
@@ -1204,6 +2022,46 @@
         {
           "document": "docs/issue20-final-acceptance.md",
           "target": "../runtime/final-preview-smoke/0bee0d3e/report.json",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "evidence/core-project-state-fixture.patch",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "../runtime/final-acceptance/approved-canonical-scope.json",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "evidence/core-canonical-acceptance-20261022.json",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "../runtime/final-acceptance/core-canonical/canonical-core-gate-20261022T153238/official-checks.json",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "../runtime/final-acceptance/core-canonical/canonical-core-gate-20261022T153238/required-integration.log",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "../runtime/final-acceptance/core-canonical/canonical-core-gate-20261022T153238/receipt.json",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "../runtime/final-acceptance/core-canonical/canonical-inputs-20261022T073139Z/inputs.tar.gz",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "../runtime/final-acceptance/core-canonical/canonical-inputs-20261022T073139Z/manifest.json",
           "exists": true
         },
         {
@@ -1258,6 +2116,26 @@
         },
         {
           "document": "docs/issue20-final-acceptance.md",
+          "target": "../runtime/result-read-diagnosis/desktop-input-reuse-proof.json",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "../runtime/checks/5d28c8b0f924/checks.json",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "../runtime/result-read-diagnosis/pytest.log",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
+          "target": "../runtime/result-read-affected/pytest.log",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-final-acceptance.md",
           "target": "../runtime/final-acceptance/source-get/report.json",
           "exists": true
         },
@@ -1273,6 +2151,11 @@
         },
         {
           "document": "docs/execution-checkpoint.md",
+          "target": "issue20-code-review.md",
+          "exists": true
+        },
+        {
+          "document": "docs/execution-checkpoint.md",
           "target": "evidence/monitor-issue20-final-20261022.json",
           "exists": true
         },
@@ -1280,8 +2163,131 @@
           "document": "docs/work-plan.md",
           "target": "issue20-final-acceptance.md",
           "exists": true
+        },
+        {
+          "document": "docs/work-plan.md",
+          "target": "issue20-code-review.md",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-code-review.md",
+          "target": "../runtime/final-acceptance/review-standards.md",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-code-review.md",
+          "target": "../runtime/final-acceptance/review-spec.md",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-code-review.md",
+          "target": "../scripts/qa_fixture_ipc.cjs",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-code-review.md",
+          "target": "evidence/core-project-state-fixture.patch",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-code-review.md",
+          "target": "evidence/core-canonical-acceptance-20261022.json",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-code-review.md",
+          "target": "evidence/monitor-issue20-final-20261022.json",
+          "exists": true
+        },
+        {
+          "document": "docs/issue20-code-review.md",
+          "target": "issue20-final-acceptance.md",
+          "exists": true
         }
       ]
+    }
+  },
+  "review_base_commit": "094cb99",
+  "historical_scope_notes": [
+    "Mandatory original unfiltered core integration gate failed: 71 failed, 2483 passed.",
+    "One failure is in a current project-state test; preserved numbered-copy tests account for 70 failures. Follow-up acceptance scope requires explicit decision.",
+    "Core agent-state metadata changed during the full gate; an unchanged executable source digest does not establish metadata stability.",
+    "Final original preview sync must preserve the product hashes measured by the passing fresh 18767 smoke, or repeat the smoke if product inputs change."
+  ],
+  "remaining_actions": [
+    "Merge reviewed local changes into the integration branch.",
+    "Final original-preview sync must preserve the product hashes already verified by its fresh smoke; repeat smoke if product sources change.",
+    "Root integrator resolves tracker state and requested worktree cleanup scope."
+  ],
+  "monitor_gate_history": [
+    {
+      "status": "passed",
+      "tests_passed": 88,
+      "receipt": "runtime/checks/782d2e51cec4/checks.json"
+    },
+    {
+      "status": "failed",
+      "tests_passed": 87,
+      "tests_failed": 1,
+      "receipt": "runtime/checks/5d28c8b0f924/checks.json",
+      "failure": "Disconnected task status was passed; immediate result read returned 409. Original response error body was not recorded; exact historical code remains unknown."
+    }
+  ],
+  "historical_unfiltered_core_integration": {
+    "status": "failed",
+    "command": [
+      "./scripts/check",
+      "--integration"
+    ],
+    "test_filters": [],
+    "pytest_addopts_present": false,
+    "preserved_legacy_copies": true,
+    "receipt": "runtime/final-acceptance/core-full-receipt.json",
+    "official_receipt": "runtime/final-acceptance/core-full-checks.json",
+    "full_log": "runtime/final-acceptance/core-full.log",
+    "started_at": "2026-10-22T06:33:39.563892+00:00",
+    "finished_at": "2026-10-22T06:52:47.207785+00:00",
+    "exit_code": 1,
+    "pytest": {
+      "passed": 2483,
+      "failed": 71,
+      "seconds": 1144.99,
+      "preserved_snapshot_failed_count": 70,
+      "current_file_failed_tests": [
+        "tests/test_project_state.py::test_historical_pass_and_closed_work_never_imply_current_or_production_completion"
+      ]
+    },
+    "changed_inputs": [
+      "docs/agent-state.json"
+    ],
+    "post_pytest_demos_and_build": "not_run_after_failure",
+    "official_passed": false,
+    "approved_one_field_metadata_repair": "runtime/final-acceptance/approved-records-repair.json",
+    "followup_scope": "pending_direct_user_decision"
+  },
+  "review_resolution": {
+    "report": "docs/issue20-code-review.md",
+    "standards": {
+      "documented_hard_violations": 0,
+      "low_maintenance_findings": 1,
+      "action": "Resolved duplicated fixture IPC/lifecycle and inconsistent raw stderr projection with one shared helper."
+    },
+    "spec": {
+      "original_open_gate": 1,
+      "new_product_defects": 0,
+      "scope_creep": 0,
+      "action": "User-approved canonical 1921 full integration gate passed; original unfiltered result preserved."
+    },
+    "new_monitor_failure": {
+      "original_receipt": "runtime/checks/5d28c8b0f924/checks.json",
+      "original_409_error_code": "unknown_not_recorded",
+      "diagnostic_log": "runtime/result-read-diagnosis/pytest.log",
+      "diagnostic_socket_receipts": "runtime/result-read-diagnosis/http-evidence",
+      "diagnostic_observed_code": "task_busy",
+      "does_not_retroactively_prove_original_cause": true,
+      "affected_module_log": "runtime/result-read-affected/pytest.log",
+      "affected_module_tests_passed": 8,
+      "bounded_wait_policy": "At most 5 seconds, only actual 409 error.code task_busy; any other 409 fails immediately; no model redispatch or weaker slot assertions."
     }
   }
 }

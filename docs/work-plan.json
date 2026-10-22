@@ -48,6 +48,34 @@
         "SQL-LOW-TWO-PREPARE"
       ],
       "consumed_interfaces": []
+    },
+    {
+      "id": "PARALLEL-FOUR-ARM-OFFLINE",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "docs/research-parallel-four-arm.md",
+        "docs/evidence/research-parallel-four-arm-offline-20261022.json"
+      ],
+      "depends_on": [],
+      "consumed_interfaces": [],
+      "outcome": "Offline additive adapter completed:121new+40existing regressions, Ruff,200workflow/550mock-call four-slot and zero-resend replay;115actual archived terminal links+C038paid-answer import with0newcalls.16timing scenarios,3conditionally under30min,not live SLA. Real activation/hosted full fee upper/expired authority remain blocked. Existing global71failures not claimed fixed; two non-owned check-runner files changed and preserved. No API/Git/deploy/push."
+    },
+    {
+      "id": "PARALLEL-FOUR-ARM-LOCAL-REVIEW",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "scripts/research_parallel",
+        "pyproject.toml",
+        "docs/research-parallel-four-arm.md",
+        "docs/evidence/research-parallel-four-arm-commit-review-20261022.json"
+      ],
+      "depends_on": [
+        "PARALLEL-FOUR-ARM-OFFLINE"
+      ],
+      "consumed_interfaces": [],
+      "outcome": "Reviewed selective local delivery:1962 indexed tests including131 research regressions,Ruff,2existing demos,sdist/wheel and independent200flow/550mockcall four-slot replay passed.10 added identity/orphan/I-O regressions.21823 original study/bank/prior files and12 original source files unchanged. Executable/data bytes match tested snapshot. Raw evidence outside Git; local commit authorized; no paid API/deploy/push; qualification pending."
     }
   ]
 }

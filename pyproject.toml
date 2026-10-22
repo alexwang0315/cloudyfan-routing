@@ -28,7 +28,7 @@ packages = ["src/cloudyfan_jev"]
 include = ["src", "tests", "examples", "docs", "README.md", "AGENTS.md", "pyproject.toml", "uv.lock", ".env.example", ".gitignore", ".github", "scripts", ".githooks"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "scripts/research_parallel"]
 
 [tool.ruff]
 target-version = "py312"

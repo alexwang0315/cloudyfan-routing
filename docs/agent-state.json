@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "scope": "sql-low-two-candidate-preparation-v1",
-  "phase": "offline_verified",
+  "scope": "research-parallel-four-arm-local-review",
+  "phase": "in_progress",
   "baseline_commit": "9d20072b076bb64c3666cd3d1380dcb5e49bb909",
   "integration_branch": "codex/implement-routing-spec-1",
   "constraints": {
@@ -317,12 +317,20 @@
     {
       "path": "docs/evidence/sql-backup-multi-tree-precommit-20261021.json",
       "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/research-parallel-four-arm-offline-20261022.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/research-parallel-four-arm-commit-review-20261022.json",
+      "record_kind": "historical"
     }
   ],
   "next_steps": [
     {
       "gate": "RG-02",
-      "action": "Two low-candidate identity/measurement/admission preparation frozen; real identity and 50-task capability measurements remain absent. Conditional runtime admission adapter and independent whole-flow evidence still required; preserve strict legacy qualification and RG01.",
+      "action": "Preserve SQL qualification and original results. No single-candidate50-question admission. Four-arm complete-workflow comparison remains offline; no all-high-model arm or paid restart authorized.",
       "requires_authorization": true
     },
     {
@@ -332,12 +340,9 @@
     },
     {
       "gate": "RG-04",
-      "action": "USD1 is an unapproved research target; all112 guarantee cells and complete bounds remain unknown. Require new spending authority and effective full-batch reservation, or separately reviewed explicit research-risk design; no verifier bypass.",
+      "action": "Offline four-arm harness reviewed; paid entry remains disabled. Preserve old paid evidence and unknown-fee stops. Hosted complete fee reserve, serving identity, live account gate and effective paid authority remain unverified; no qualification promotion.",
       "requires_authorization": true
     }
   ],
-  "current_verification": {
-    "path": "docs/evidence/sql-low-two-precommit-20261022.json",
-    "sha256": "ee43842dad0f6523004c5760d435e93ce1aae03910dbceaa8afe213d1930d2e1"
-  }
+  "current_verification": null
 }

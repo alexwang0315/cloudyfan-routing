@@ -1,0 +1,511 @@
+{
+  "block_distribution": {
+    "D1": 2,
+    "D2": 3,
+    "D3": 3,
+    "D4": 2
+  },
+  "schedule": [
+    {
+      "block": 1,
+      "mode_order": [
+        "cloudyfan",
+        "open_source_first",
+        "low_first"
+      ],
+      "ordinal": 1,
+      "question_id": "S50-026"
+    },
+    {
+      "block": 1,
+      "mode_order": [
+        "open_source_first",
+        "low_first",
+        "cloudyfan"
+      ],
+      "ordinal": 2,
+      "question_id": "S50-044"
+    },
+    {
+      "block": 1,
+      "mode_order": [
+        "low_first",
+        "open_source_first",
+        "cloudyfan"
+      ],
+      "ordinal": 3,
+      "question_id": "S50-042"
+    },
+    {
+      "block": 1,
+      "mode_order": [
+        "open_source_first",
+        "cloudyfan",
+        "low_first"
+      ],
+      "ordinal": 4,
+      "question_id": "S50-005"
+    },
+    {
+      "block": 1,
+      "mode_order": [
+        "low_first",
+        "cloudyfan",
+        "open_source_first"
+      ],
+      "ordinal": 5,
+      "question_id": "S50-024"
+    },
+    {
+      "block": 1,
+      "mode_order": [
+        "cloudyfan",
+        "low_first",
+        "open_source_first"
+      ],
+      "ordinal": 6,
+      "question_id": "S50-014"
+    },
+    {
+      "block": 1,
+      "mode_order": [
+        "cloudyfan",
+        "open_source_first",
+        "low_first"
+      ],
+      "ordinal": 7,
+      "question_id": "S50-035"
+    },
+    {
+      "block": 1,
+      "mode_order": [
+        "open_source_first",
+        "low_first",
+        "cloudyfan"
+      ],
+      "ordinal": 8,
+      "question_id": "S50-011"
+    },
+    {
+      "block": 1,
+      "mode_order": [
+        "low_first",
+        "open_source_first",
+        "cloudyfan"
+      ],
+      "ordinal": 9,
+      "question_id": "S50-006"
+    },
+    {
+      "block": 1,
+      "mode_order": [
+        "open_source_first",
+        "cloudyfan",
+        "low_first"
+      ],
+      "ordinal": 10,
+      "question_id": "S50-027"
+    },
+    {
+      "block": 2,
+      "mode_order": [
+        "low_first",
+        "cloudyfan",
+        "open_source_first"
+      ],
+      "ordinal": 11,
+      "question_id": "S50-015"
+    },
+    {
+      "block": 2,
+      "mode_order": [
+        "cloudyfan",
+        "low_first",
+        "open_source_first"
+      ],
+      "ordinal": 12,
+      "question_id": "S50-041"
+    },
+    {
+      "block": 2,
+      "mode_order": [
+        "cloudyfan",
+        "open_source_first",
+        "low_first"
+      ],
+      "ordinal": 13,
+      "question_id": "S50-021"
+    },
+    {
+      "block": 2,
+      "mode_order": [
+        "open_source_first",
+        "low_first",
+        "cloudyfan"
+      ],
+      "ordinal": 14,
+      "question_id": "S50-028"
+    },
+    {
+      "block": 2,
+      "mode_order": [
+        "low_first",
+        "open_source_first",
+        "cloudyfan"
+      ],
+      "ordinal": 15,
+      "question_id": "S50-003"
+    },
+    {
+      "block": 2,
+      "mode_order": [
+        "open_source_first",
+        "cloudyfan",
+        "low_first"
+      ],
+      "ordinal": 16,
+      "question_id": "S50-046"
+    },
+    {
+      "block": 2,
+      "mode_order": [
+        "low_first",
+        "cloudyfan",
+        "open_source_first"
+      ],
+      "ordinal": 17,
+      "question_id": "S50-039"
+    },
+    {
+      "block": 2,
+      "mode_order": [
+        "cloudyfan",
+        "low_first",
+        "open_source_first"
+      ],
+      "ordinal": 18,
+      "question_id": "S50-020"
+    },
+    {
+      "block": 2,
+      "mode_order": [
+        "cloudyfan",
+        "open_source_first",
+        "low_first"
+      ],
+      "ordinal": 19,
+      "question_id": "S50-001"
+    },
+    {
+      "block": 2,
+      "mode_order": [
+        "open_source_first",
+        "low_first",
+        "cloudyfan"
+      ],
+      "ordinal": 20,
+      "question_id": "S50-031"
+    },
+    {
+      "block": 3,
+      "mode_order": [
+        "low_first",
+        "open_source_first",
+        "cloudyfan"
+      ],
+      "ordinal": 21,
+      "question_id": "S50-012"
+    },
+    {
+      "block": 3,
+      "mode_order": [
+        "open_source_first",
+        "cloudyfan",
+        "low_first"
+      ],
+      "ordinal": 22,
+      "question_id": "S50-049"
+    },
+    {
+      "block": 3,
+      "mode_order": [
+        "low_first",
+        "cloudyfan",
+        "open_source_first"
+      ],
+      "ordinal": 23,
+      "question_id": "S50-010"
+    },
+    {
+      "block": 3,
+      "mode_order": [
+        "cloudyfan",
+        "low_first",
+        "open_source_first"
+      ],
+      "ordinal": 24,
+      "question_id": "S50-033"
+    },
+    {
+      "block": 3,
+      "mode_order": [
+        "cloudyfan",
+        "open_source_first",
+        "low_first"
+      ],
+      "ordinal": 25,
+      "question_id": "S50-017"
+    },
+    {
+      "block": 3,
+      "mode_order": [
+        "open_source_first",
+        "low_first",
+        "cloudyfan"
+      ],
+      "ordinal": 26,
+      "question_id": "S50-002"
+    },
+    {
+      "block": 3,
+      "mode_order": [
+        "low_first",
+        "open_source_first",
+        "cloudyfan"
+      ],
+      "ordinal": 27,
+      "question_id": "S50-037"
+    },
+    {
+      "block": 3,
+      "mode_order": [
+        "open_source_first",
+        "cloudyfan",
+        "low_first"
+      ],
+      "ordinal": 28,
+      "question_id": "S50-050"
+    },
+    {
+      "block": 3,
+      "mode_order": [
+        "low_first",
+        "cloudyfan",
+        "open_source_first"
+      ],
+      "ordinal": 29,
+      "question_id": "S50-040"
+    },
+    {
+      "block": 3,
+      "mode_order": [
+        "cloudyfan",
+        "low_first",
+        "open_source_first"
+      ],
+      "ordinal": 30,
+      "question_id": "S50-023"
+    },
+    {
+      "block": 4,
+      "mode_order": [
+        "cloudyfan",
+        "open_source_first",
+        "low_first"
+      ],
+      "ordinal": 31,
+      "question_id": "S50-045"
+    },
+    {
+      "block": 4,
+      "mode_order": [
+        "open_source_first",
+        "low_first",
+        "cloudyfan"
+      ],
+      "ordinal": 32,
+      "question_id": "S50-019"
+    },
+    {
+      "block": 4,
+      "mode_order": [
+        "low_first",
+        "open_source_first",
+        "cloudyfan"
+      ],
+      "ordinal": 33,
+      "question_id": "S50-025"
+    },
+    {
+      "block": 4,
+      "mode_order": [
+        "open_source_first",
+        "cloudyfan",
+        "low_first"
+      ],
+      "ordinal": 34,
+      "question_id": "S50-007"
+    },
+    {
+      "block": 4,
+      "mode_order": [
+        "low_first",
+        "cloudyfan",
+        "open_source_first"
+      ],
+      "ordinal": 35,
+      "question_id": "S50-030"
+    },
+    {
+      "block": 4,
+      "mode_order": [
+        "cloudyfan",
+        "low_first",
+        "open_source_first"
+      ],
+      "ordinal": 36,
+      "question_id": "S50-022"
+    },
+    {
+      "block": 4,
+      "mode_order": [
+        "cloudyfan",
+        "open_source_first",
+        "low_first"
+      ],
+      "ordinal": 37,
+      "question_id": "S50-032"
+    },
+    {
+      "block": 4,
+      "mode_order": [
+        "open_source_first",
+        "low_first",
+        "cloudyfan"
+      ],
+      "ordinal": 38,
+      "question_id": "S50-009"
+    },
+    {
+      "block": 4,
+      "mode_order": [
+        "low_first",
+        "open_source_first",
+        "cloudyfan"
+      ],
+      "ordinal": 39,
+      "question_id": "S50-038"
+    },
+    {
+      "block": 4,
+      "mode_order": [
+        "open_source_first",
+        "cloudyfan",
+        "low_first"
+      ],
+      "ordinal": 40,
+      "question_id": "S50-047"
+    },
+    {
+      "block": 5,
+      "mode_order": [
+        "low_first",
+        "cloudyfan",
+        "open_source_first"
+      ],
+      "ordinal": 41,
+      "question_id": "S50-004"
+    },
+    {
+      "block": 5,
+      "mode_order": [
+        "cloudyfan",
+        "low_first",
+        "open_source_first"
+      ],
+      "ordinal": 42,
+      "question_id": "S50-043"
+    },
+    {
+      "block": 5,
+      "mode_order": [
+        "cloudyfan",
+        "open_source_first",
+        "low_first"
+      ],
+      "ordinal": 43,
+      "question_id": "S50-034"
+    },
+    {
+      "block": 5,
+      "mode_order": [
+        "open_source_first",
+        "low_first",
+        "cloudyfan"
+      ],
+      "ordinal": 44,
+      "question_id": "S50-016"
+    },
+    {
+      "block": 5,
+      "mode_order": [
+        "low_first",
+        "open_source_first",
+        "cloudyfan"
+      ],
+      "ordinal": 45,
+      "question_id": "S50-018"
+    },
+    {
+      "block": 5,
+      "mode_order": [
+        "open_source_first",
+        "cloudyfan",
+        "low_first"
+      ],
+      "ordinal": 46,
+      "question_id": "S50-008"
+    },
+    {
+      "block": 5,
+      "mode_order": [
+        "low_first",
+        "cloudyfan",
+        "open_source_first"
+      ],
+      "ordinal": 47,
+      "question_id": "S50-036"
+    },
+    {
+      "block": 5,
+      "mode_order": [
+        "cloudyfan",
+        "low_first",
+        "open_source_first"
+      ],
+      "ordinal": 48,
+      "question_id": "S50-029"
+    },
+    {
+      "block": 5,
+      "mode_order": [
+        "cloudyfan",
+        "open_source_first",
+        "low_first"
+      ],
+      "ordinal": 49,
+      "question_id": "S50-048"
+    },
+    {
+      "block": 5,
+      "mode_order": [
+        "open_source_first",
+        "low_first",
+        "cloudyfan"
+      ],
+      "ordinal": 50,
+      "question_id": "S50-013"
+    }
+  ],
+  "seed": 20261022
+}

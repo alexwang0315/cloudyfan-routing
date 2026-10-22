@@ -156,3 +156,8 @@ Runtime receipts 含使用者 prompt／答案，預設寫入 private permissions
 ### 各類主選＋兩備援（明示選用）
 
 新版 `qcs-backup-policy-v1` 支援23類各自四池、每池最多三個不同模型、健康快照與故障切換。[使用與限制](docs/category-backup-runtime.md)、[23類92池具名主備清單](docs/category-backup-coverage-20261021.md)。候選不足明列缺額；離線模擬不代表所有真實模型已合格，舊任務不自動更換規則。
+
+
+## Four-arm offline research harness
+
+[Four-slot scheduler and hosted Jev](docs/research-parallel-four-arm.md): complete-workflow reservations, incremental accounting and safe replay; [offline commands](scripts/research_parallel/README.md). This is research tooling, with no enabled paid entry or live qualification.

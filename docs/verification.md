@@ -763,3 +763,12 @@ The user now authorizes review and local Git commit; earlier no-commit statement
 ## 2026-10-22：低池兩候選本機提交審閱
 
 [本輪證據](evidence/sql-low-two-precommit-20261022.json)分開記錄重新執行的26項專屬回歸／紀錄檢查，以及逐檔核對後沿用的1,831項完整離線整合結果，沒有宣稱本輪重跑完整套件或整個dirty工作區全通過。程式、凍結計畫、SQL規則與正式資格均不變；原始失敗及實驗紀錄保留。本次僅本機提交，沒有模型／來源API、供應商聯絡、部署或推送。
+
+
+## 2026-10-22 四槽／託管 Jev 本機提交審閱
+
+本次只擷取四槽並行、完整流程費用預留、增量核帳及託管 Jev 的研究程式／測試，來源見 [scripts/research_parallel](../scripts/research_parallel/README.md)；原始外部研究程式、付費答案、帳本及中斷保留，不加入 Git。審閱補上快取身分交叉比對、殘缺／不可讀證據停止與單一回應緩衝區，共10項新增回歸。新版使用獨立v2 harness／plan識別，不修改舊凍結版本或SQL驗收。
+
+[實作與限制](research-parallel-four-arm.md)、[擷取對照](evidence/research-parallel-four-arm-extraction-20261022.json)、[提交審閱驗證](evidence/research-parallel-four-arm-commit-review-20261022.json)分開保存。30分鐘仍是條件式容量推估；沒有新的真實正確率或節費結果。正式資格pending、付費入口停用。使用者本次僅授權本機提交，沒有付費請求、部署、推送或供應商聯絡；未把其他SQL、模型池、監控與檢查入口的dirty變更納入。
+
+提交快照完整離線整合 **1,962項通過**（含131項研究回歸）、Ruff、兩個既有Mock示範及sdist／wheel建置通過；獨立200流程／550次Mock、4槽、重播0新增呼叫。21,823份原研究／題庫／前輪資料雜湊不變。此為提交子集，不代表整個dirty工作區或正式服務通過。

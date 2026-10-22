@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "kind": "source_extraction_provenance",
+  "original_directory": "../artifacts/routing-parallel-four-arm-offline-20261022",
+  "original_sources": {
+    "core_bridge.py": "9a165c3d40eb9b7910a903d6c354769cbf376fc25522075cf2af848642d302ef",
+    "conftest.py": "6615606a978054755dae5f04c4f08b2356d56164f9b2d806e2d54b6f8aa7e593",
+    "test_concurrent_ledger.py": "e9b0691d7cc172a6d024616f8cf385155e5cbe6cd379ec88626d7311ca5fb909",
+    "test_historical_readonly.py": "398f4b8c188174c70c5a2f5957145fdd60f4a2c0c7450cfde166c983e3554465",
+    "hosted_jev.py": "7c9ae03a84c5ec80bd7e29bffa848a04ae00c97e1f1af97bf1b30fa6193b0244",
+    "test_parallel_runner.py": "aa33db2f553a6f6ed313a3168b79cf92309643be0b5b163ab23ff63677d45c2c",
+    "historical_readonly.py": "6b3dc698eca2434b730f162cf7c15ff63744dc9890e4cd718abdb39b9fe2440d",
+    "parallel_runner.py": "ad13aa178429994b1c3edf81bcb60f28eb827ae73771572771fa57f8724a1aa8",
+    "concurrent_ledger.py": "c32ec11659e3c3b6b1fef06af19a1671a7012d3d88d6321b16cd97782040a951",
+    "mock_four_arm_demo.py": "871a072f99119d38f9aada682678e34b7a2c34de448ccb744294f7a8ec747ca8",
+    "timing_rehearsal.py": "1cd5176c807e1bc7043f99c7f3fe3c9bfe3697ff7544c9fb35a4f2fc54fb6e2d",
+    "test_hosted_jev.py": "ec068837a4c17d53f8caedfa860a46f09081ad7141b6ed7f895bbdd928637bb4"
+  },
+  "extracted_sources": {
+    "scripts/research_parallel/core_bridge.py": "d629d8d5ee6cbfd9d6c3e026885746812d26f0eb35e679e10b76c6d569639558",
+    "scripts/research_parallel/conftest.py": "6615606a978054755dae5f04c4f08b2356d56164f9b2d806e2d54b6f8aa7e593",
+    "scripts/research_parallel/test_concurrent_ledger.py": "e9b0691d7cc172a6d024616f8cf385155e5cbe6cd379ec88626d7311ca5fb909",
+    "scripts/research_parallel/test_historical_readonly.py": "398f4b8c188174c70c5a2f5957145fdd60f4a2c0c7450cfde166c983e3554465",
+    "scripts/research_parallel/hosted_jev.py": "7c9ae03a84c5ec80bd7e29bffa848a04ae00c97e1f1af97bf1b30fa6193b0244",
+    "scripts/research_parallel/test_parallel_runner.py": "0ffd56089de9fa62b38a831e4428b74ffa31234a7716e14c820b709d526e9c6f",
+    "scripts/research_parallel/historical_readonly.py": "1b4af9dfce9360e9d8b58d7430fa9c227ccc5866bfdac34c7767254eed41b9a9",
+    "scripts/research_parallel/README.md": "32100c2efee20ff436b90f1dc0c8f5c8cded44d9fa5ec8ca1cd9374c48043f21",
+    "scripts/research_parallel/parallel_runner.py": "26e126d66c01953a44f599becb57518bc408ed628861243f51faceebe1e01a05",
+    "scripts/research_parallel/concurrent_ledger.py": "c32ec11659e3c3b6b1fef06af19a1671a7012d3d88d6321b16cd97782040a951",
+    "scripts/research_parallel/mock_four_arm_demo.py": "0fc571b5174b9ae2dc01a7091586761b9986331ac59798a771053e3276cfe19e",
+    "scripts/research_parallel/timing_rehearsal.py": "d201c5685edfae1bc3f0946a30ac68c178e72bfebd9195705dae07ce20f1e12f",
+    "scripts/research_parallel/test_hosted_jev.py": "ec068837a4c17d53f8caedfa860a46f09081ad7141b6ed7f895bbdd928637bb4",
+    "scripts/research_parallel/public-schedule.json": "ade0cab4460153d95ca0c27a242e7a09d9bc8066cf6984641a892bbe5bd1727e"
+  },
+  "intentional_differences": [
+    "v2 harness and plan identifiers; originals remain unchanged",
+    "Archived workspace/baseline path discovery follows new source location",
+    "Standalone synthetic demo uses public schedule without private research dependencies",
+    "Replay binds ledger/call/workflow/request; orphan or unreadable evidence durably stops; saved response is hashed and parsed from one buffer; 10 new regression cases",
+    "Default pytest paths include the research regressions"
+  ],
+  "public_schedule_only_no_answers": true,
+  "paid_entry_activation": false
+}

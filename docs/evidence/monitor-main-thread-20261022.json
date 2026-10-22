@@ -1,0 +1,215 @@
+{
+  "schema_version": "cloudyfan-monitor-main-thread-acceptance-v1",
+  "recorded_at": "2026-10-22T05:48:48.314801+00:00",
+  "scope": "local synchronous integration and desktop acceptance with mock model upstream",
+  "mobile": "stopped_by_user",
+  "spec_issue": "https://github.com/alexwang0315/cloudyfan-routing/issues/20",
+  "spec_body_sha256": "11903f736f5c8d68b3c1b05de37fd3f02013ce5d469e4e7a27f5ccf6b297240a",
+  "monitor": {
+    "tests_passed": 76,
+    "checks": "runtime/checks/925f741a42ce/checks.json",
+    "steps": [
+      {
+        "command": [
+          "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/.venv/bin/python",
+          "-m",
+          "ruff",
+          "check",
+          "--no-cache",
+          "."
+        ],
+        "exit_code": 0,
+        "log": "runtime/checks/925f741a42ce/step-1.log",
+        "started_at": "2026-10-22T05:45:40.474663+00:00",
+        "seconds": 0.706316
+      },
+      {
+        "command": [
+          "node",
+          "--check",
+          "src/cloudyfan_monitor/static/app.js"
+        ],
+        "exit_code": 0,
+        "log": "runtime/checks/925f741a42ce/step-2.log",
+        "started_at": "2026-10-22T05:45:41.222704+00:00",
+        "seconds": 0.340388
+      },
+      {
+        "command": [
+          "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/.venv/bin/python",
+          "-m",
+          "pytest",
+          "-q",
+          "-p",
+          "no:cacheprovider",
+          "tests"
+        ],
+        "exit_code": 0,
+        "log": "runtime/checks/925f741a42ce/step-3.log",
+        "started_at": "2026-10-22T05:45:41.595782+00:00",
+        "seconds": 58.453815
+      },
+      {
+        "command": [
+          "uv",
+          "build",
+          "--offline",
+          "--out-dir",
+          "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-monitor/runtime/checks/925f741a42ce/build"
+        ],
+        "exit_code": 0,
+        "log": "runtime/checks/925f741a42ce/step-4.log",
+        "started_at": "2026-10-22T05:46:40.428086+00:00",
+        "seconds": 10.557729
+      }
+    ],
+    "core_inputs_unchanged_during_check": true,
+    "http_cases": 7,
+    "http_evidence": [
+      "runtime/checks/925f741a42ce/http-evidence/test_disconnected_http_client_does_not_cancel_task_or_release_execution_slot.json",
+      "runtime/checks/925f741a42ce/http-evidence/test_http_expiry_boundary_and_reopened_service_preserve_history_without_resending.json",
+      "runtime/checks/925f741a42ce/http-evidence/test_interrupted_http_submission_only_continues_after_explicit_resume.json",
+      "runtime/checks/925f741a42ce/http-evidence/test_killed_worker_is_not_automatically_resumed_or_rebilled_after_reopen.json",
+      "runtime/checks/925f741a42ce/http-evidence/test_running_http_task_keeps_reads_responsive_and_rejects_another_client.json",
+      "runtime/checks/925f741a42ce/http-evidence/test_separate_http_worker_shares_one_service_slot_and_does_not_queue.json",
+      "runtime/checks/925f741a42ce/http-evidence/test_unknown_model_fee_blocks_other_client_over_real_http.json"
+    ]
+  },
+  "core_affected_integration": {
+    "tests_passed": 119,
+    "test_modules": [
+      "test_http_api.py",
+      "test_retention.py",
+      "test_monitor_retention_concurrency.py",
+      "test_monitor_observation.py",
+      "test_identity.py",
+      "test_scheduler.py"
+    ],
+    "demos_and_build": "passed",
+    "checks": "../cloudyfan-jev-core/runtime/checks/2c9f1398b3ce46dbacc4c8d4d62224b5/checks.json",
+    "full_suite_asserted": false
+  },
+  "desktop": {
+    "steps_passed": 8,
+    "viewport": {
+      "width": 1280,
+      "height": 800
+    },
+    "report": "output/playwright/main-thread-20261022/desktop-report.json",
+    "page_errors": [],
+    "expected_console_resource_errors": [
+      {
+        "kind": "error",
+        "message": "Failed to load resource: the server responded with a status of 503 (Service Unavailable)"
+      }
+    ]
+  },
+  "live_source": {
+    "report": "runtime/main-thread-acceptance-20261022/source-get/report.json",
+    "sha256": "9ff5e4c13b2110af7b3842a408954da7bd5e7b1b28263423376103fff6c9d7fd",
+    "window_seconds": 30.62158,
+    "completeness": {
+      "status": "partial",
+      "attempted": 15,
+      "succeeded": 15,
+      "failed": 0,
+      "deferred": 24,
+      "endpoint_attempted": 12,
+      "endpoint_succeeded": 12,
+      "endpoint_failed": 0,
+      "failures": [],
+      "deferred_models": [
+        "google/gemma-4-31b-it:free",
+        "inclusionai/ling-3.0-flash-vl",
+        "liquid/lfm-2.5-2.6b:free",
+        "meta-llama/llama-3.1-8b-instruct",
+        "meta/muse-spark-1.3",
+        "minimax/minimax-m3.1-flash:free",
+        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+        "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "nvidia/nemotron-3.5-lightning:free",
+        "nvidia/nemotron-3.5-super-vl:free",
+        "openai/gpt-5-image",
+        "openai/gpt-5-image-mini",
+        "openai/gpt-5-nano:batch",
+        "openai/gpt-oss-120b:batch",
+        "openai/gpt-oss-20b",
+        "qwen/qwen3.7-plus:batch",
+        "sao10k/l3-lunaris-8b",
+        "thinkingmachines/inkling-small:free",
+        "thinkingmachines/inkling:free",
+        "xiaomi/mimo-v2.5",
+        "xiaomi/mimo-v2.6-pro",
+        "z-ai/glm-5.3",
+        "z-ai/glm-5.3-flash",
+        "z-ai/glm-5.3-flash:batch"
+      ]
+    },
+    "categories": 23,
+    "occupied_positions": 143,
+    "policy_status": "exploratory_unvalidated",
+    "published": false,
+    "activated": false
+  },
+  "whole_core_workspace": {
+    "status": "interrupted_not_passed",
+    "reason": "Two pre-reboot runs were unfinished and had visible failures; no final full-suite trace was available.",
+    "ordinary_log": "../cloudyfan-jev-core/runtime/monitor-integration/required-integration.log",
+    "canonical_log": "../cloudyfan-jev-core/runtime/monitor-integration/canonical-integration.log",
+    "canonical_observed_failed_tests": [
+      "tests/test_sql_bounded.py::test_new_catalog_review_rejects_old_and_new_mutants_without_changing_old_catalog",
+      "tests/test_sql_environment.py::test_compound_order_expression_is_a_public_model_error_with_one_repair[(total IS NOT NULL)]",
+      "tests/test_sql_low_research.py::test_complete_rotating_fifty_capture_public_repair_and_zero_post_replay"
+    ],
+    "root_cause": "unverified; call paths do not enter the Monitor guard/result edits"
+  },
+  "boundaries": {
+    "real_model_requests": "not used: mock upstream plus observed socket allowlists; live metadata-only boundary recorded separately",
+    "production_qualification": false,
+    "deployment": false,
+    "push_or_commit": false,
+    "data_erasure": false
+  },
+  "monitor_source_sha256": {
+    "src/cloudyfan_monitor/__init__.py": "704695191ca04a65bcb495c4db9dc6a235866a05ab9a81a1c1c13aaffbf10600",
+    "src/cloudyfan_monitor/__main__.py": "c621cfbae281b7979d13de735da5ad704384429d5ae981c9cda22b99a77a97ee",
+    "src/cloudyfan_monitor/admission.py": "e43d118cfce6cbe671d1d2881cee1437f369c2f94ce0274a08c01f4e5a853afd",
+    "src/cloudyfan_monitor/app.py": "c0bc1ab90b4f84f9f5c68bccf0f8ebcdd5477e9feb8fcfd00b56a2f081b03863",
+    "src/cloudyfan_monitor/demo.py": "f3f62db3d30fc1ff07fa7237e6dc5bdb319812dc59f4824acc470df3f5134f6f",
+    "src/cloudyfan_monitor/gateway.py": "59bfcb6cbbf2486b733537b103a5011f06dee39084fb59adf895c7e0cd577a11",
+    "src/cloudyfan_monitor/integration.py": "dbe025bbc0b56925bc11758b0c4eb16db8116742953f7dd1c2d8af5a73cc64e2",
+    "src/cloudyfan_monitor/pools.py": "010aad96639a5732ad57a72e57fa4c8ea16f81b70a7d59d51c0a9ac544f5f216",
+    "src/cloudyfan_monitor/retention_policy.py": "1144805fad8f5acd0962bdfe882093e2c4233cb627a868a1db7c7a862efd5c28",
+    "src/cloudyfan_monitor/static/app.js": "be2d28c2c8952625b907d8a2c860b980a505376b945df9d9013f12837e8a3057",
+    "src/cloudyfan_monitor/static/index.html": "f5d386a356b823309c5e03fb7012c0ff2807fa2a58f4d12d30ea4123ec19cfb9",
+    "src/cloudyfan_monitor/static/style.css": "8feb3f9eebd70226ec33741dff8dd48319ce7bb4a2391c68e68c1bb7240762cb",
+    "src/cloudyfan_monitor/store.py": "55ebf64a9a33152c69e9fc8655ad373b44613e282af78976733259c13f2989ce"
+  },
+  "post_reboot_preview": {
+    "passed": true,
+    "report": "output/playwright/main-thread-20261022/post-reboot-report.json",
+    "summary": {
+      "complete_api_usd": "0.0319",
+      "complete_task_api_usd": "0.0319",
+      "completed": 12,
+      "escalated": 4,
+      "expired": 0,
+      "failed": 0,
+      "final_rate": 1,
+      "first_passed": 8,
+      "first_rate": 0.6666666666666666,
+      "in_progress": 0,
+      "jev_once": 0,
+      "jev_twice": 2,
+      "known_api_usd": "0.0319",
+      "known_task_api_usd": "0.0319",
+      "latency_p50": 0.18770159599080216,
+      "latency_p95": 0.3763810620002914,
+      "latency_samples": 12,
+      "passed": 12,
+      "tasks": 12,
+      "unknown": 0
+    },
+    "mobile": "stopped_by_user"
+  }
+}

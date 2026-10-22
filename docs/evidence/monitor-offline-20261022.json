@@ -1,0 +1,67 @@
+{
+  "schema": "cloudyfan-monitor-offline-v1",
+  "recorded_at": "2026-10-22T03:21:49.204500+00:00",
+  "scope": "independent monitor package wrapping real Core/TaskService and MockTransport; no parent experiment changes",
+  "checks": "runtime/checks/631c93a63215/checks.json",
+  "regression_tests_passed": 35,
+  "ruff": "passed",
+  "javascript_syntax": "passed",
+  "offline_build": "passed",
+  "real_model_api_calls": 0,
+  "external_source_gets": 0,
+  "paid_api_usd": "0",
+  "core_source_unchanged_during_checks": true,
+  "browser": {
+    "desktop": [
+      1280,
+      720
+    ],
+    "mobile": [
+      390,
+      844
+    ],
+    "mobile_document_width": 390,
+    "console_errors_warnings_observed": [],
+    "checked": [
+      "global_mode_change_and_restore",
+      "per_client_override_and_restore",
+      "immutable_old_task_display",
+      "source_refresh_preview_publish_no_activation",
+      "category_shortages",
+      "task_filter",
+      "ledger_generation_and_classifier_usage",
+      "keyboard_confirmation",
+      "invalid_login_and_recovery",
+      "loading_state"
+    ],
+    "screenshots": [
+      "docs/evidence/monitor-desktop-20261022.jpg",
+      "docs/evidence/monitor-mobile-20261022.jpg"
+    ]
+  },
+  "not_verified": [
+    "main_service_live_integration",
+    "real_openrouter_source_schema_roundtrip",
+    "production_TLS_load_and_retention",
+    "Queue_OpenAI_Ollama_entrypoints",
+    "commercial_savings"
+  ],
+  "implementation_sha256": {
+    "pyproject.toml": "4daec1b53c1e9fd0e9f8fd11b7196467d290dd7f057b53ab63e80435a96db777",
+    "src/cloudyfan_monitor/__init__.py": "704695191ca04a65bcb495c4db9dc6a235866a05ab9a81a1c1c13aaffbf10600",
+    "src/cloudyfan_monitor/__main__.py": "729ca69014939ebc719d0f0f922f73efd9714a1dc68a7cbb45a6ef1fe3327821",
+    "src/cloudyfan_monitor/app.py": "1d64fa59d3a863e30c11752198da042b77cc0da6753d442d660e66b16e630cd8",
+    "src/cloudyfan_monitor/demo.py": "b124ff01516ec613d7b56939c8b06c20b84db0ff3e9097ea9fa47aa1e6608b47",
+    "src/cloudyfan_monitor/gateway.py": "6f8e17c8b4724eef5a418d9183157c632291c2b5f5bfc243592c87c9d142d0b0",
+    "src/cloudyfan_monitor/pools.py": "a8e2b1966180ca5bfef569f5919d911a1d6ac275c58461fbae36e86b2e01071e",
+    "src/cloudyfan_monitor/store.py": "57dcd6e825141489b5fb494c644ae8b86613bc88bbec6980943b76a175ce234c",
+    "src/cloudyfan_monitor/static/app.js": "51983270761348e3d7f6bbf6dc48f937b462f30b4eb7c57c52af504d079fed75",
+    "src/cloudyfan_monitor/static/style.css": "8feb3f9eebd70226ec33741dff8dd48319ce7bb4a2391c68e68c1bb7240762cb",
+    "src/cloudyfan_monitor/static/index.html": "e93044561e682f86e11f5233fd3c86da8dadd0c4db89e29f75b4556bc6bdb528",
+    "tests/conftest.py": "2796ef7454e60e4a5b68164b65f34ecdcca84ebf093482bce968539c566d5e9a",
+    "tests/test_monitor.py": "75e317b921683cda4bc4868e1ff41d4042733878a41255201d28a9cd8799f10d",
+    "tests/test_sources.py": "d012af55611cd949abd4b426520b94154aeeb4f7df7b382f3cbf15a9e0543b78",
+    "scripts/check": "f0a568baf34eded76c03dad56b1afd34f2922f4ebd209ac618a11a1a67a4f0a6",
+    "scripts/preview": "a8f8c9f2c35fa12d6564da08a110f07985585da21cb3fd68fee867dd063d9f4c"
+  }
+}

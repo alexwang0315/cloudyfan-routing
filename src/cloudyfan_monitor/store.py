@@ -1,0 +1,321 @@
+"""Separate durable control state; never edits a core receipt or budget database."""
+from contextlib import contextmanager
+from copy import deepcopy
+from decimal import Decimal
+import hashlib
+import json
+import math
+import os
+from pathlib import Path
+import re
+import sqlite3
+import time
+
+MODES = {"cloudyfan": "CloudyFan MRC", "fixed_high": "全大模型優先",
+         "low_first": "全便宜模型優先", "open_source_first": "全開源模型優先"}
+TIERS = ("open_source", "low", "mid", "high")
+
+
+class MonitorError(Exception):
+    def __init__(self, code, status=422):
+        self.code, self.status = code, status
+        super().__init__(code)
+
+
+def encode(value):
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, allow_nan=False,
+                      separators=(",", ":"))
+
+
+def digest(value):
+    return hashlib.sha256(encode(value).encode()).hexdigest()
+
+
+def identifier(value):
+    if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}", value):
+        raise MonitorError("invalid_identifier")
+    return value
+
+
+def percentile(values, p):
+    values = sorted(v for v in values if v is not None)
+    return values[max(0, math.ceil(len(values) * p) - 1)] if values else None
+
+
+def stats(tasks):
+    n = len(tasks)
+    complete = [t for t in tasks if (t.get("completed_status") or t["status"])
+                in ("passed", "failed", "unverifiable")]
+    passed = sum(t.get("final_pass") is True for t in tasks)
+    first = sum(t.get("first_pass") is True for t in tasks)
+    latency = [t.get("wall_seconds") for t in complete]
+    # Proportions always retain unknown/in-progress jobs in the denominator.
+    known = sum((Decimal(t["known_api_usd"]) for t in tasks if t.get("known_api_usd") is not None), Decimal(0))
+    fully_accounted = all(t.get("complete_api_usd") is not None for t in tasks)
+    return {"tasks": n, "completed": len(complete), "passed": passed, "first_passed": first,
+            "known_api_usd": str(known), "complete_api_usd": str(known) if fully_accounted else None,
+            "first_rate": first / n if n else None, "final_rate": passed / n if n else None,
+            "failed": sum((t.get("completed_status") or t["status"]) == "failed" for t in tasks),
+            "unknown": sum((t.get("completed_status") or t["status"])
+                           in ("unverifiable", "engineering_interrupted", "accounting_interrupted") for t in tasks),
+            "expired": sum(t["status"] == "expired" for t in tasks),
+            "in_progress": sum(t["status"] in ("bound", "ready", "running", "queued") for t in tasks),
+            "escalated": sum(t.get("generation_attempts", 0) > 1 for t in tasks),
+            "jev_once": sum(t.get("classifier_calls") == 1 for t in tasks),
+            "jev_twice": sum(t.get("classifier_calls") == 2 for t in tasks),
+            "latency_p50": percentile(latency, .5), "latency_p95": percentile(latency, .95),
+            "latency_samples": sum(v is not None for v in latency)}
+
+
+class Store:
+    def __init__(self, path, *, clock=time.time):
+        self.path, self.clock = Path(path), clock
+        if self.path.is_symlink() or any(p.is_symlink() for p in self.path.parents):
+            raise ValueError("Private monitor path must not use symlinks")
+        self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        with self.db() as db:
+            db.executescript("""
+                CREATE TABLE IF NOT EXISTS control (id INTEGER PRIMARY KEY, revision INTEGER,
+                    mode TEXT, routing_pool TEXT, catalog_pool TEXT);
+                INSERT OR IGNORE INTO control VALUES (1,0,'cloudyfan',NULL,NULL);
+                CREATE TABLE IF NOT EXISTS clients (id TEXT PRIMARY KEY, label TEXT, token_hash TEXT UNIQUE,
+                    mode TEXT, enabled INTEGER, last_seen REAL);
+                CREATE TABLE IF NOT EXISTS bindings (client TEXT, run TEXT, fingerprint TEXT, pool TEXT,
+                    mode TEXT, category TEXT, contract TEXT, created REAL, PRIMARY KEY(client,run));
+                CREATE TABLE IF NOT EXISTS tasks (client TEXT, run TEXT, data TEXT, PRIMARY KEY(client,run));
+                CREATE TABLE IF NOT EXISTS pools (id TEXT PRIMARY KEY, data TEXT, created REAL);
+                CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY, at REAL, action TEXT, data TEXT);
+                CREATE TABLE IF NOT EXISTS version_uses (pool TEXT, contract TEXT, created REAL,
+                    last_used REAL, PRIMARY KEY(pool,contract));
+            """)
+        os.chmod(self.path, 0o600)
+
+    @contextmanager
+    def db(self):
+        db = sqlite3.connect(self.path, timeout=10)
+        db.row_factory = sqlite3.Row
+        try:
+            db.execute("BEGIN IMMEDIATE")
+            yield db
+            db.commit()
+        except BaseException:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+
+    def audit(self, db, action, data):
+        actor = "client:" + str(data["client"]) if action == "task_bound" else "operator"
+        db.execute("INSERT INTO audit(at,action,data) VALUES(?,?,?)",
+                   (self.clock(), action, encode({**data, "actor": actor})))
+
+    def register_principal(self, client_id, label):
+        """Register public identity metadata; credentials remain in IdentityStore."""
+        identifier(client_id)
+        if not isinstance(label, str) or not 1 <= len(label) <= 80:
+            raise ValueError("Explicit client label required")
+        with self.db() as db:
+            old = db.execute("SELECT id FROM clients WHERE id=?", (client_id,)).fetchone()
+            if old is None:
+                db.execute("INSERT INTO clients VALUES(?,?,NULL,NULL,1,NULL)", (client_id, label))
+                self.audit(db, "client_registered", {"client": client_id, "credential_owner": "identity_store"})
+
+    def touch_client(self, principal):
+        with self.db() as db:
+            row = db.execute("SELECT id FROM clients WHERE id=? AND enabled=1", (principal,)).fetchone()
+            if row is None:
+                raise MonitorError("unauthorized", 401)
+            db.execute("UPDATE clients SET last_seen=? WHERE id=?", (self.clock(), principal))
+        return principal
+
+    def register_client(self, client_id, label, token):
+        identifier(client_id)
+        if not isinstance(label, str) or not 1 <= len(label) <= 80 or len(token) < 24:
+            raise ValueError("Explicit label and strong client token required")
+        with self.db() as db:
+            old = db.execute("SELECT * FROM clients WHERE id=?", (client_id,)).fetchone()
+            if old:
+                if old["token_hash"] != digest(token):
+                    raise MonitorError("client_token_changed", 409)
+                return
+            db.execute("INSERT INTO clients VALUES(?,?,?,NULL,1,NULL)", (client_id, label, digest(token)))
+            self.audit(db, "client_registered", {"client": client_id})
+
+    def authenticate(self, token):
+        with self.db() as db:
+            row = db.execute("SELECT id FROM clients WHERE token_hash=? AND enabled=1", (digest(token),)).fetchone()
+            if not row:
+                raise MonitorError("unauthorized", 401)
+            db.execute("UPDATE clients SET last_seen=? WHERE id=?", (self.clock(), row["id"]))
+            return row["id"]
+
+    def control(self):
+        with self.db() as db:
+            return dict(db.execute("SELECT * FROM control").fetchone())
+
+    def change(self, *, revision, mode=None, client=None, catalog=None, routing=None, inherit=False):
+        if type(revision) is not int:
+            raise MonitorError("revision_required")
+        if mode is not None and mode not in MODES:
+            raise MonitorError("unsupported_mode")
+        with self.db() as db:
+            old = db.execute("SELECT * FROM control").fetchone()
+            if revision != old["revision"]:
+                raise MonitorError("configuration_changed_reload", 409)
+            if client is not None:
+                if db.execute("SELECT id FROM clients WHERE id=?", (client,)).fetchone() is None:
+                    raise MonitorError("client_not_found", 404)
+                db.execute("UPDATE clients SET mode=? WHERE id=?", (None if inherit else mode, client))
+            elif mode is not None:
+                db.execute("UPDATE control SET mode=?", (mode,))
+            for column, value in (("catalog_pool", catalog), ("routing_pool", routing)):
+                if value is not None:
+                    if db.execute("SELECT id FROM pools WHERE id=?", (value,)).fetchone() is None:
+                        raise MonitorError("pool_not_found", 404)
+                    db.execute(f"UPDATE control SET {column}=?", (value,))
+            db.execute("UPDATE control SET revision=revision+1")
+            self.audit(db, "configuration_changed", {"client": client, "mode": mode, "inherit": inherit,
+                       "catalog": catalog, "routing": routing, "previous_revision": revision})
+            return dict(db.execute("SELECT * FROM control").fetchone())
+
+    def save_pool(self, view):
+        from cloudyfan_jev.scores.categories import CATEGORY_SPECS
+        view = deepcopy(view)
+        if set(view.get("categories", {})) != set(CATEGORY_SPECS):
+            raise MonitorError("expected_23_categories")
+        for category in view["categories"].values():
+            if set(category["pools"]) != set(TIERS):
+                raise MonitorError("expected_four_pools")
+            if any(len(v) != 3 for v in category["pools"].values()):
+                raise MonitorError("expected_primary_and_two_backup_positions")
+        key = digest(view)
+        with self.db() as db:
+            db.execute("INSERT OR IGNORE INTO pools VALUES(?,?,?)", (key, encode(view), self.clock()))
+            self.audit(db, "pool_staged", {"pool": key, "source": view.get("source_kind")})
+        return key
+
+    def pool(self, key):
+        with self.db() as db:
+            row = db.execute("SELECT data FROM pools WHERE id=?", (key,)).fetchone()
+            if row is None:
+                raise MonitorError("pool_not_found", 404)
+            data = json.loads(row["data"])
+            if digest(data) != key:
+                raise MonitorError("pool_integrity_failed", 409)
+            return {"id": key, **data}
+
+    def bind(self, client, payload, registry):
+        if not isinstance(payload, dict) or set(payload) != {"run_id", "category", "prompt"}:
+            raise MonitorError("unsupported_task_fields")
+        if not isinstance(payload["run_id"], str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", payload["run_id"]):
+            raise MonitorError("invalid_run_id")
+        if not isinstance(payload["prompt"], str) or not payload["prompt"].strip() or len(payload["prompt"].encode()) > 32768:
+            raise MonitorError("invalid_prompt")
+        from cloudyfan_jev.scores.categories import resolve_category
+        try:
+            category = resolve_category(payload["category"])
+        except ValueError:
+            raise MonitorError("unknown_category") from None
+        fingerprint = digest({**payload, "category": category})
+        with self.db() as db:
+            prior = db.execute("SELECT * FROM bindings WHERE client=? AND run=?", (client, payload["run_id"])).fetchone()
+            if prior:
+                if prior["fingerprint"] != fingerprint:
+                    raise MonitorError("frozen_task_changed", 409)
+                return dict(prior)
+            config = db.execute("SELECT * FROM control").fetchone()
+            client_row = db.execute("SELECT * FROM clients WHERE id=? AND enabled=1", (client,)).fetchone()
+            if client_row is None:
+                raise MonitorError("unauthorized", 401)
+            mode = client_row["mode"] or config["mode"]
+            pool = config["routing_pool"]
+            contract = registry.get((pool, category, mode))
+            if contract is None:
+                raise MonitorError("routing_configuration_unavailable", 409)
+            row = {"client": client, "run": payload["run_id"], "fingerprint": fingerprint,
+                   "pool": pool, "mode": mode, "category": category, "contract": contract, "created": self.clock()}
+            db.execute("INSERT INTO bindings VALUES(:client,:run,:fingerprint,:pool,:mode,:category,:contract,:created)", row)
+            db.execute("INSERT INTO version_uses VALUES(?,?,?,?) ON CONFLICT(pool,contract) "
+                       "DO UPDATE SET last_used=MAX(last_used,excluded.last_used)",
+                       (pool, contract, row["created"], row["created"]))
+            self.audit(db, "task_bound", {k: v for k, v in row.items() if k != "fingerprint"})
+            return row
+
+    def binding(self, client, run):
+        with self.db() as db:
+            row = db.execute("SELECT * FROM bindings WHERE client=? AND run=?", (client, run)).fetchone()
+            if row is None:
+                raise MonitorError("task_not_found", 404)
+            return dict(row)
+
+    def existing_binding(self, client, run):
+        with self.db() as db:
+            row = db.execute("SELECT * FROM bindings WHERE client=? AND run=?", (client, run)).fetchone()
+            return dict(row) if row is not None else None
+
+    def record(self, binding, summary):
+        # Only allow explicit public counters/identities. No prompt, answer, diagnosis prose or raw receipts.
+        fields = ("status", "first_pass", "final_pass", "generation_attempts", "classifier_calls",
+                  "wall_seconds", "known_api_usd", "complete_api_usd", "unknown_events", "path", "error_code",
+                  "completed_status", "access_expired", "observation")
+        with self.db() as db:
+            previous = db.execute("SELECT data FROM tasks WHERE client=? AND run=?",
+                                  (binding["client"], binding["run"])).fetchone()
+            data = json.loads(previous["data"]) if previous else {key: None for key in fields}
+            data.update({key: summary[key] for key in fields if key in summary})
+            data.update({key: binding[key] for key in ("client", "run", "pool", "mode", "category", "created")})
+            data["updated"] = self.clock()
+            if data["status"] in ("passed", "failed", "unverifiable"):
+                data["completed_status"] = data["status"]
+            for key in ("generation_attempts", "classifier_calls"):
+                data[key] = data[key] or 0
+            db.execute("INSERT INTO tasks VALUES(?,?,?) ON CONFLICT(client,run) DO UPDATE SET data=excluded.data",
+                       (binding["client"], binding["run"], encode(data)))
+
+    def observation(self, client, run):
+        with self.db() as db:
+            row = db.execute("SELECT data FROM tasks WHERE client=? AND run=?", (client, run)).fetchone()
+            return json.loads(row["data"]) if row else None
+
+    def record_version_use(self, binding):
+        with self.db() as db:
+            db.execute("INSERT INTO version_uses VALUES(?,?,?,?) ON CONFLICT(pool,contract) "
+                       "DO UPDATE SET last_used=MAX(last_used,excluded.last_used)",
+                       (binding["pool"], binding["contract"], binding["created"], self.clock()))
+
+    def version_retention_context(self, binding, access_seconds):
+        with self.db() as db:
+            row = db.execute("SELECT last_used FROM version_uses WHERE pool=? AND contract=?",
+                             (binding["pool"], binding["contract"])).fetchone()
+            references = [dict(item) for item in db.execute(
+                "SELECT client,run,created FROM bindings WHERE pool=? AND contract=?",
+                (binding["pool"], binding["contract"]))]
+        # Existing databases remain intact; legacy bindings are conservative use evidence.
+        latest = max([binding["created"], *[item["created"] for item in references],
+                      *([row["last_used"]] if row else [])])
+        active = [{"client": item["client"], "run_id": item["run"],
+                   "access_expires_at": item["created"] + access_seconds}
+                  for item in references if self.clock() < item["created"] + access_seconds]
+        return latest, active
+
+    def dashboard(self, client=None):
+        with self.db() as db:
+            tasks = [json.loads(r["data"]) for r in db.execute("SELECT data FROM tasks")]
+            clients = [dict(r) for r in db.execute("SELECT id,label,mode,enabled,last_seen FROM clients")]
+            config = dict(db.execute("SELECT * FROM control").fetchone())
+            audit = [dict(r) for r in db.execute("SELECT * FROM audit ORDER BY id DESC LIMIT 100")]
+        if client:
+            tasks = [t for t in tasks if t["client"] == client]
+            clients = [c for c in clients if c["id"] == client]
+            audit = []
+        for c in clients:
+            c["effective_mode"] = c["mode"] or config["mode"]
+            c["recently_seen"] = c["last_seen"] is not None and self.clock() - c["last_seen"] < 90
+            c["stats"] = stats([t for t in tasks if t["client"] == c["id"]])
+        known = sum((Decimal(t["known_api_usd"]) for t in tasks if t.get("known_api_usd") is not None), Decimal(0))
+        cost_complete = all(t.get("complete_api_usd") is not None for t in tasks)
+        return {"control": config, "clients": clients, "tasks": sorted(tasks, key=lambda t: t["created"], reverse=True),
+                "summary": {**stats(tasks), "known_task_api_usd": str(known),
+                            "complete_task_api_usd": str(known) if cost_complete else None},
+                "by_mode": {mode: stats([t for t in tasks if t["mode"] == mode]) for mode in MODES},
+                "audit": [{**a, "data": json.loads(a["data"])} for a in audit]}

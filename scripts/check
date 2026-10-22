@@ -1,0 +1,54 @@
+#!/usr/bin/env python3
+"""Offline monitor gate, using the core's existing locked dependency environment."""
+import datetime
+import hashlib
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import uuid
+
+root = Path(__file__).resolve().parents[1]
+core = Path(os.environ.get("CLOUDYFAN_CORE_ROOT", root.parent / "cloudyfan-jev-core")).resolve()
+output = root / "runtime" / "checks" / uuid.uuid4().hex[:12]
+output.mkdir(parents=True)
+env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1", "PYTHONPATH": str(root / "src") + ":" + str(core / "src")}
+env["CLOUDYFAN_MONITOR_EVIDENCE_DIR"] = str(output / "http-evidence")
+python = str(core / ".venv/bin/python")
+
+
+def fingerprint():
+    return {str(p.relative_to(core)): hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in sorted((core / "src").rglob("*.py")) if not p.name.endswith(" 2.py")}
+
+
+before = fingerprint()
+commands = [
+    [python, "-m", "ruff", "check", "--no-cache", "."],
+    ["node", "--check", "src/cloudyfan_monitor/static/app.js"],
+    [python, "-m", "pytest", "-q", "-p", "no:cacheprovider", "tests"],
+    ["uv", "build", "--offline", "--out-dir", str(output / "build")],
+]
+records = []
+for i, command in enumerate(commands):
+    started = datetime.datetime.now(datetime.timezone.utc)
+    completed = subprocess.run(command, cwd=root, env=env, capture_output=True, text=True)
+    log = output / f"step-{i + 1}.log"
+    log.write_text(completed.stdout + completed.stderr)
+    record = {"command": command, "exit_code": completed.returncode, "log": str(log.relative_to(root)),
+              "started_at": started.isoformat(), "seconds": (datetime.datetime.now(datetime.timezone.utc)-started).total_seconds()}
+    records.append(record)
+    print(completed.stdout + completed.stderr, end="", flush=True)
+    (output / "checks.json").write_text(json.dumps({"steps": records, "core_inputs_before": before,
+        "core_inputs_unchanged": before == fingerprint(),
+        "network_policy": "Tests deny sockets except dedicated loopback ports; model upstream uses MockTransport",
+        "network_evidence": [str(p.relative_to(root)) for p in sorted((output / "http-evidence").glob("*.json"))],
+        "scope": "monitor package plus injected real core, mock upstream; live source GET verified separately"}, indent=2))
+    if completed.returncode:
+        print(f"Failure preserved: {output}")
+        sys.exit(completed.returncode)
+if before != fingerprint():
+    print("Core source changed during the check; repeat against a stable host version.")
+    sys.exit(1)
+print(f"Offline monitor checks passed: {output}")

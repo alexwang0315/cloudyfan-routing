@@ -1,6 +1,6 @@
 # Issue #20 本機接入驗收索引
 
-2026-10-22：**核定現行交付範圍的必要檢查已通過**：Monitor 89 passed、核心隔離整合 1,921 passed、桌機 20 項通過。整合者仍須合併本輪審查修正並完成最後產品指紋核對，再結案父規格及 [#23](https://github.com/alexwang0315/cloudyfan-routing/issues/23)。原工作區的 71 失敗／2,483 通過另行保留；沒有將它改列全綠、刪除共享舊副本、改檢查器或放寬 SQL 限制。
+2026-10-22：**核定現行交付範圍的必要檢查已通過**：Monitor 89 passed、核心隔離整合 1,921 passed、桌機 20 項通過。審查候選已合入 `e5fbd6e7cb06e0512d78f56d74c17e1012bc68c2` 並同步原 Monitor；53 份交付檔案一致，13 份產品指紋保持不變。父規格及 [#23](https://github.com/alexwang0315/cloudyfan-routing/issues/23) 的工作單結案由整合者接續辦理。原工作區的 71 失敗／2,483 通過另行保留；沒有將它改列全綠、刪除共享舊副本、改檢查器或放寬 SQL 限制。
 
 本文件對應 [#20](https://github.com/alexwang0315/cloudyfan-routing/issues/20)、[身分驗收 #21](https://github.com/alexwang0315/cloudyfan-routing/issues/21) 與 [四模式驗收 #22](https://github.com/alexwang0315/cloudyfan-routing/issues/22)。兩張前置工作單已結案，其本機提交均已合入整合分支。機讀結果與每份安全證據的 SHA256 見 [最終機讀索引](evidence/monitor-issue20-final-20261022.json)。本索引記錄的「最終」指本輪彙整版本；完成判定限於使用者核定的交付範圍，不表示原工作區所有歷史快照或正式服務均通過。審查兩軸與修正見 [審查處理紀錄](issue20-code-review.md)。
 
@@ -17,7 +17,7 @@
 
 三組桌機共 20 項，皆為實際 Chrome、1280 × 800；沒有新增手機介面或手機測試。畫面明確顯示模擬上游。原有流程故意注入主來源 503，因此保留 1 筆預期的 console resource error；三組 JavaScript page error 皆為 0。各次服務使用新資料夾與隨機 loopback 埠，測試結束已正常停止。
 
-整合者於 15:08（Asia/Taipei）另對原 18767 預覽完成 [即時 Chrome 檢查](../runtime/final-preview-smoke/0bee0d3e/report.json)：12 件合成任務、12 通過、0 未知，讀取前後公開統計一致；瀏覽器只送出 GET，沒有 page error 或站外請求。該預覽的產品來源指紋與本輪 Monitor gate 一致；最後同步只有測試、腳本與文件，整合者仍須核對同步後產品指紋沒有改變，若有改變則重跑預覽。
+整合者於 15:08（Asia/Taipei）另對原 18767 預覽完成 [即時 Chrome 檢查](../runtime/final-preview-smoke/0bee0d3e/report.json)：12 件合成任務、12 通過、0 未知，讀取前後公開統計一致；瀏覽器只送出 GET，沒有 page error 或站外請求。該預覽的產品來源指紋與本輪 Monitor gate 一致；整合者已完成最後同步並核對 13 份產品指紋不變，原 18767 再次實際 GET 回應 200；見 [同步與產品核對](../runtime/final-acceptance/final-integration/product-sync-verification.json)、[檔案同步收據](../runtime/final-acceptance/final-integration/initial-sync-receipt.json) 及 [桌機畫面複核](../runtime/final-acceptance/final-integration/desktop-review.json)。
 
 20 個 HTTP 案例的父程序合計觀測到 26 次模擬呼叫；被終止 worker 另留下 1 次已進入上游的觀測。重建後父程序的 0 次新增呼叫沒有被拿來取代該 worker 的實際呼叫。身分安全投影與模式觀測各自連回同案 socket 收據，不以初始 demo bundle 的計數代表真正 CategoryCore 流量。
 
@@ -74,4 +74,4 @@ node scripts/qa_mode_desktop.cjs
 
 每個入口建立新的 ignored `runtime/` 證據目錄。核心完整 gate 的重跑另依核心工作區規範與當次驗收決定執行，不是由上述桌機命令暗中啟動。未修改真實服務帳本、未取得實付模型能力或降本證據，未新增來源 GET、手機測試、資料刪除、推送或部署。本輪 implement-spec 僅允許隔離分支的本機提交；私人 runtime、截圖、合成收據與診斷日誌不加入提交。
 
-機讀索引只列安全投影、檢查日誌、公開 metadata 及其雜湊，不收錄 fixture 的資料庫、憑證、原始提示或答案。來源檔案與歷史失敗保留不變；文件連結、證據雜湊與秘密樣式掃描的實際結果另在同一索引列出。它們的通過不取代未通過的核心必要門檻。
+機讀索引只列安全投影、檢查日誌、公開 metadata 及其雜湊，不收錄 fixture 的資料庫、憑證、原始提示或答案。來源檔案與歷史失敗保留不變；文件連結、證據雜湊與秘密樣式掃描的實際結果另在同一索引列出。這些查核只驗證證據完整性；功能驗收仍以上述實際檢查與核定範圍為準。

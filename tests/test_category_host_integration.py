@@ -32,8 +32,7 @@ CONTRACT = "synthetic-category-host-arithmetic-v1"
 OPERATOR = "synthetic-category-host-operator-not-a-real-secret"
 
 
-@pytest.fixture
-def category_fixture():
+def category_values():
     """Reuse existing offline evidence instead of inventing real model admission data."""
     core_tests = Path(cloudyfan_jev.__file__).resolve().parents[2] / "tests"
     spec = importlib.util.spec_from_file_location(
@@ -67,9 +66,15 @@ def category_fixture():
             "category": module.CATEGORY, "now": module.NOW}
 
 
-def assemble_category_host(root, values, requests):
+@pytest.fixture
+def category_fixture():
+    return category_values()
+
+
+def assemble_category_host(root, values, requests, *, clock=None):
     instant = datetime.fromisoformat(values["now"])
-    clock = lambda: instant.timestamp()
+    if clock is None:
+        clock = lambda: instant.timestamp()
     store = Store(root / "monitor.sqlite", clock=clock)
     identities = IdentityStore(root / "identity.sqlite", clock=clock,
                                 pepper=b"synthetic-category-host-pepper-only-000000")

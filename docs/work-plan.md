@@ -1,5 +1,17 @@
 # Monitor v0.1 delivery scope
 
+## Current Issue #20 integration follow-up (2026-10-22)
+
+The initial side-task history below is preserved. The later main-thread scope is desktop only: mobile implementation and tests were stopped by the user. The invoked implement-spec skill now permits isolated local integration commits, not code push or deployment.
+
+- #21 identity and #22 four-mode real HTTP/desktop evidence: merged and closed.
+- #23 final evidence: Monitor gate 88 passed; 19 real HTTP cases; three fresh desktop groups with 20 checks passed. Portable baseline desktop host and QA syntax/input fingerprints added; no product behavior was changed.
+- Required unfiltered whole-core integration: **incomplete**, with 71 failed / 2,483 passed. Preserved snapshot tests and one current project-state fixture failure require an explicit acceptance-scope decision and stable follow-up. Historical selected-core 119 passes do not close this gate.
+- The unique source GET window is reused with verified original hashes; 15 attempts and 24 deferred endpoints remain partial. No new external requests, live pool publication, mobile work, paid calls or erasure.
+- Root's 15:08 fresh Chrome smoke on the original 18767 preview passed (12 synthetic tasks / 12 passed / 0 unknown, GET-only, unchanged public summary); product fingerprints match this gate. Final sync must preserve those product fingerprints or repeat the smoke. Completion still requires the applicable core gates. See [current acceptance](issue20-final-acceptance.md).
+
+## Original side-task history
+
 The user explicitly requested a first-version operational monitor in the side conversation on 2026-10-22. This is an independent additive package; it does not change the parent experiment or core checkout. No subagents, supplier contact, model spending, deployment, source push or commit.
 
 1. Inspect the real core TaskService, budget, category-pool and update seams.

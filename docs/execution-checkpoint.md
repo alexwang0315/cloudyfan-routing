@@ -2,6 +2,19 @@
 
 2026-10-22：完整方案已獲使用者確認並授權實作。手機端介面製作與測試已依最新指示停止；接續範圍為桌機、本機接入及驗收收尾。規格 [Issue #20](https://github.com/alexwang0315/cloudyfan-routing/issues/20) 已同步排除手機，ready-for-agent 標籤及本文已回讀確認。
 
+## Issue #20 implement-spec 最新檢查點
+
+- #21 身分與 #22 四模式工作單已結案並合入 `codex/monitor-issue20-integration`；#23 與父規格保持未完成。
+- 本輪 Monitor 全 gate **88 passed**，Ruff、產品及 3 支桌機 QA JavaScript 語法、離線建置通過；`runtime/checks/782d2e51cec4/checks.json` 同時固定 Monitor／QA／核心來源指紋。
+- 真正 loopback HTTP 共19個案例、177筆回應；新增可重跑的原8項桌機入口，加上身分4項與模式8項，三組共20項全部通過。預期模擬來源503留下1筆console resource error；JavaScript page error皆0。
+- 原完整核心 `./scripts/check --integration` 已完成為 **71 failed, 2483 passed**。70項在保留舊快照、1項在目前 project-state 測試；檢查期間agent-state metadata有變動。必要核心門檻未通過，不以119個指定模組的歷史通過替代。
+- 三個歷史SQL案例當前逐一重跑皆通過，但原中斷日誌缺traceback，歷史根因仍未知。RG-04單欄位修正有直接人類核准收據；沒有自行擴大修改研究或檢查器。
+- 沿用唯一一次來源GET的15次嘗試，15份原始metadata雜湊已核對，24個未查端點維持部分更新；沒有重跑／發布／啟用真實來源。
+- 文件與機讀索引：[目前驗收報告](issue20-final-acceptance.md)、[機讀索引](evidence/monitor-issue20-final-20261022.json)。原18767於15:08即時Chrome檢查通過，12件合成任務／12通過／0未知，產品指紋與本輪gate一致；最後同步後再核對指紋。三組新QA服務已正常退出。
+- 本輪僅依implement-spec技能建立隔離本機提交，runtime／output不提交；沒有推送、部署、付費呼叫、手機工作或資料刪除。
+
+以下保留較早的主線接入紀錄；其76測試／119指定核心結果與18767狀態屬各自執行時點，最新完成判定以上述段落及驗收索引為準。
+
 ## 已完成並取得證據
 
 - Monitor 最新完整套件檢查：76 passed，Ruff、JavaScript 語法與離線 sdist／wheel 通過。原始檢查：`runtime/checks/925f741a42ce/checks.json`。

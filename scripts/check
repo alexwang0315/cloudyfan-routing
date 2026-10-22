@@ -23,10 +23,21 @@ def fingerprint():
             for p in sorted((core / "src").rglob("*.py")) if not p.name.endswith(" 2.py")}
 
 
+def monitor_fingerprint():
+    paths = [p for directory in ("src", "tests", "scripts")
+             for p in (root / directory).rglob("*")
+             if p.is_file() and "__pycache__" not in p.parts]
+    paths.extend(p for name in ("pyproject.toml", "uv.lock") if (p := root / name).is_file())
+    return {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in sorted(paths)}
+
+
 before = fingerprint()
+monitor_before = monitor_fingerprint()
 commands = [
     [python, "-m", "ruff", "check", "--no-cache", "."],
     ["node", "--check", "src/cloudyfan_monitor/static/app.js"],
+    *[["node", "--check", str(p.relative_to(root))] for p in sorted((root / "scripts").glob("qa_*.cjs"))],
     [python, "-m", "pytest", "-q", "-p", "no:cacheprovider", "tests"],
     ["uv", "build", "--offline", "--out-dir", str(output / "build")],
 ]
@@ -42,13 +53,15 @@ for i, command in enumerate(commands):
     print(completed.stdout + completed.stderr, end="", flush=True)
     (output / "checks.json").write_text(json.dumps({"steps": records, "core_inputs_before": before,
         "core_inputs_unchanged": before == fingerprint(),
+        "monitor_inputs_before": monitor_before,
+        "monitor_inputs_unchanged": monitor_before == monitor_fingerprint(),
         "network_policy": "Tests deny sockets except dedicated loopback ports; model upstream uses MockTransport",
         "network_evidence": [str(p.relative_to(root)) for p in sorted((output / "http-evidence").glob("*.json"))],
         "scope": "monitor package plus injected real core, mock upstream; live source GET verified separately"}, indent=2))
     if completed.returncode:
         print(f"Failure preserved: {output}")
         sys.exit(completed.returncode)
-if before != fingerprint():
-    print("Core source changed during the check; repeat against a stable host version.")
+if before != fingerprint() or monitor_before != monitor_fingerprint():
+    print("Monitor or core inputs changed during the check; repeat against stable versions.")
     sys.exit(1)
 print(f"Offline monitor checks passed: {output}")

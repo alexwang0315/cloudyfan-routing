@@ -1,10 +1,19 @@
 # Monitor 本機接入執行檢查點
 
+本頁保存 Issue20 各輪執行時的結果，以下「最新」限於該輪紀錄。改善後的目前驗收狀態請執行 `python3 scripts/acceptance.py status`；操作方式見 [驗收工具說明](tooling.md)。
+
+## 2026-10-23：本輪工具修正提交
+
+- 四項驗收工具問題與P3共用步驟已完成；核心工具提交為 `e0d570a2ba371b00e6068fb949cb8594f29a1ac4`，Monitor本輪提交包含本節及[主線交接](main-thread-handoff.md)。原工作區的其他研究變更及既有截圖保留未提交。
+- 從暫存區匯出的提交內容通過核心快速檢查／13項工具案例、Monitor快速檢查／24項工具案例；實際提交仍執行既有密鑰掃描與快速檢查。
+- R7完整凍結驗收的2,058／113項及兩軸零剩餘問題仍限於其原輸入；原收據SHA256為 `abcbc38ea8c96553fb3c796fd26dbdec2c590eccc2b00b3b9d17a9902214df14`。本輪開始時目前工作區因後續核心研究變更而為 `stale`，不把歷史驗收改稱當前整個工作區通過。
+- 詳細範圍、原始證據與續接命令見主線交接及 CloudyFan `.scratch/cloudyfan-monitor-local-commits-20261023/`。本輪只做本機提交，沒有推送、部署、模型／來源請求、手機工作或刪除。
+
 2026-10-22：完整方案已獲使用者確認並授權實作。手機端介面製作與測試已依最新指示停止；接續範圍為桌機、本機接入及驗收收尾。規格 [Issue #20](https://github.com/alexwang0315/cloudyfan-routing/issues/20) 已同步排除手機，ready-for-agent 標籤及本文已回讀確認。
 
 ## Issue #20 implement-spec 最新檢查點
 
-- #21 身分與 #22 四模式已合入並結案；#23／父規格的必要檢查已在核定範圍通過；審查修正已合入e5fbd6e並同步，53份交付檔案一致、13份產品指紋不變，待整合者辦理工作單結案。
+- #21 身分與 #22 四模式已合入並結案；#23／父規格的必要檢查已在核定範圍通過；審查修正已合入e5fbd6e並同步，53份交付檔案一致、13份產品指紋不變，Issue20/23 已結案；最新工具驗證狀態由 `python3 scripts/acceptance.py status` 查核。
 - 最新 Monitor 全 gate **89 passed**，Ruff、產品／3支桌機QA／共用fixture工具語法及離線建置通過；`runtime/checks/209c861141b0/checks.json` 固定完整產品、測試、QA及核心來源指紋。
 - 真正loopback HTTP共20個案例、182筆回應；三組桌機8＋4＋8共20項通過。預期模擬503保留1筆console resource error，JavaScript page error皆0。
 - 審查維護性意見已處理：共用JSON-line訊息、逾時與子程序清理，stderr統一安全標記。新增一次87／1的Monitor失敗及其409錯誤碼未知狀態保持不變；只對明確task_busy作有限結果等候，受影響HTTP模組8項及最後89全檢查通過，未改產品。

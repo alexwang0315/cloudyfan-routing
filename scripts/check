@@ -1,67 +1,81 @@
 #!/usr/bin/env python3
-"""Offline monitor gate, using the core's existing locked dependency environment."""
+"""One offline Monitor gate; quick mode is used by the chained commit hook."""
+import argparse
 import datetime
 import hashlib
-import json
 import os
 from pathlib import Path
-import subprocess
 import sys
 import uuid
 
-root = Path(__file__).resolve().parents[1]
-core = Path(os.environ.get("CLOUDYFAN_CORE_ROOT", root.parent / "cloudyfan-jev-core")).resolve()
-output = root / "runtime" / "checks" / uuid.uuid4().hex[:12]
-output.mkdir(parents=True)
-env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1", "PYTHONPATH": str(root / "src") + ":" + str(core / "src")}
-env["CLOUDYFAN_MONITOR_EVIDENCE_DIR"] = str(output / "http-evidence")
-python = str(core / ".venv/bin/python")
+from acceptance import ROOT_FILES, clean_environment, check_support
 
 
-def fingerprint():
-    return {str(p.relative_to(core)): hashlib.sha256(p.read_bytes()).hexdigest()
-            for p in sorted((core / "src").rglob("*.py")) if not p.name.endswith(" 2.py")}
+def fingerprint(core):
+    paths = [p for p in (core / "src").rglob("*.py") if not p.name.endswith(" 2.py")]
+    paths += [core / p for p in ("scripts/check.py", *ROOT_FILES)
+              if not p.endswith(".md") and (core / p).is_file()]
+    return {str(p.relative_to(core)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(paths)}
 
 
-def monitor_fingerprint():
-    paths = [p for directory in ("src", "tests", "scripts")
+def monitor_fingerprint(root):
+    paths = [p for directory in ("src", "tests", "scripts", "config", ".github", ".githooks")
              for p in (root / directory).rglob("*")
              if p.is_file() and "__pycache__" not in p.parts]
-    paths.extend(p for name in ("pyproject.toml", "uv.lock") if (p := root / name).is_file())
+    paths.extend(p for name in ROOT_FILES if not name.endswith(".md") and (p := root / name).is_file())
     return {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest()
             for p in sorted(paths)}
 
 
-before = fingerprint()
-monitor_before = monitor_fingerprint()
-commands = [
-    [python, "-m", "ruff", "check", "--no-cache", "."],
-    ["node", "--check", "src/cloudyfan_monitor/static/app.js"],
-    *[["node", "--check", str(p.relative_to(root))] for p in sorted((root / "scripts").glob("qa_*.cjs"))],
-    [python, "-m", "pytest", "-q", "-p", "no:cacheprovider", "tests"],
-    ["uv", "build", "--offline", "--out-dir", str(output / "build")],
-]
-records = []
-for i, command in enumerate(commands):
-    started = datetime.datetime.now(datetime.timezone.utc)
-    completed = subprocess.run(command, cwd=root, env=env, capture_output=True, text=True)
-    log = output / f"step-{i + 1}.log"
-    log.write_text(completed.stdout + completed.stderr)
-    record = {"command": command, "exit_code": completed.returncode, "log": str(log.relative_to(root)),
-              "started_at": started.isoformat(), "seconds": (datetime.datetime.now(datetime.timezone.utc)-started).total_seconds()}
-    records.append(record)
-    print(completed.stdout + completed.stderr, end="", flush=True)
-    (output / "checks.json").write_text(json.dumps({"steps": records, "core_inputs_before": before,
-        "core_inputs_unchanged": before == fingerprint(),
-        "monitor_inputs_before": monitor_before,
-        "monitor_inputs_unchanged": monitor_before == monitor_fingerprint(),
-        "network_policy": "Tests deny sockets except dedicated loopback ports; model upstream uses MockTransport",
-        "network_evidence": [str(p.relative_to(root)) for p in sorted((output / "http-evidence").glob("*.json"))],
-        "scope": "monitor package plus injected real core, mock upstream; live source GET verified separately"}, indent=2))
-    if completed.returncode:
-        print(f"Failure preserved: {output}")
-        sys.exit(completed.returncode)
-if before != fingerprint() or monitor_before != monitor_fingerprint():
-    print("Monitor or core inputs changed during the check; repeat against stable versions.")
-    sys.exit(1)
-print(f"Offline monitor checks passed: {output}")
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--quick", action="store_true", help="Ruff and JavaScript syntax only; not delivery verification")
+    args = parser.parse_args()
+    root = Path(__file__).resolve().parents[1]
+    core = Path(os.environ.get("CLOUDYFAN_CORE_ROOT", root.parent / "cloudyfan-jev-core")).resolve()
+    output = root / "runtime/checks" / uuid.uuid4().hex[:12]
+    output.mkdir(parents=True, mode=0o700)
+    env = clean_environment(core, root)
+    env["CLOUDYFAN_MONITOR_EVIDENCE_DIR"] = str(output / "http-evidence")
+    python = str(core / ".venv/bin/python")
+    before, monitor_before = fingerprint(core), monitor_fingerprint(root)
+    report = {"mode": "quick" if args.quick else "full", "status": "running", "passed": False,
+              "started_at": datetime.datetime.now(datetime.timezone.utc).isoformat(), "steps": [],
+              "core_inputs_before": before, "monitor_inputs_before": monitor_before,
+              "network_policy": "Tests deny sockets except dedicated loopback ports; model upstream uses MockTransport",
+              "scope": "Monitor package and injected core; mocked model upstream; live source evidence is separate"}
+    # Use the same atomic receipt and private streaming log implementation as core.
+    support = check_support(core)
+    save = support.write_report
+    save(output / "checks.json", report)
+    commands = [[python, "-m", "ruff", "check", "--no-cache", ".", "scripts/check"],
+                ["node", "--check", "src/cloudyfan_monitor/static/app.js"],
+                *[["node", "--check", str(p.relative_to(root))]
+                  for p in sorted((root / "scripts").glob("qa_*.cjs"))]]
+    if not args.quick:
+        commands += [[python, "-m", "pytest", "-q", "-p", "no:cacheprovider", "tests"],
+                     ["uv", "build", "--offline", "--out-dir", str(output / "build")]]
+    code = 0
+    for number, command in enumerate(commands, 1):
+        log = output / f"step-{number}.log"
+        code = support.run_step(report, command=command, cwd=root, env=env, log_path=log,
+                                receipt_path=output / "checks.json", log_reference=str(log.relative_to(root)),
+                                exit_key="exit_code")
+        if code:
+            break
+    report["core_inputs_unchanged"] = before == fingerprint(core)
+    report["monitor_inputs_unchanged"] = monitor_before == monitor_fingerprint(root)
+    if not report["core_inputs_unchanged"] or not report["monitor_inputs_unchanged"]:
+        code = code or 1
+        report["error"] = "Verification inputs changed during the check"
+    status = "passed" if code == 0 else "interrupted" if report["steps"][-1]["status"] == "interrupted" else "failed"
+    report.update(status=status, passed=code == 0, returncode=code,
+                  finished_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                  network_evidence=[str(p.relative_to(root)) for p in sorted((output / "http-evidence").glob("*.json"))])
+    save(output / "checks.json", report)
+    print(f"Offline Monitor {'quick' if args.quick else 'full'} checks {'passed' if code == 0 else 'failed'}: {output}")
+    return code if code >= 0 else 128 - code
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "scope": "Current test sources; preserve the explicitly approved17 historical copies outside delivery",
+  "approval_reference": "docs/issue20-final-acceptance.md#核准的現行核心完整驗收",
+  "notice": "This records a prior human decision; this file cannot grant new exclusion or paid authority. A changed or new numbered test fails closed.",
+  "historical_tests": [
+    {
+      "path": "tests/test_budget 2.py",
+      "sha256": "591473def2aa6b42f9a27e7549a62b1f67ba4fe91e4849443581b86ff7bdf06d"
+    },
+    {
+      "path": "tests/test_component_bounds 2.py",
+      "sha256": "67df4f88953d32b53fe993156d4894556b1fd915c6592cfad6ac1173cb6d51cc"
+    },
+    {
+      "path": "tests/test_engine 2.py",
+      "sha256": "9cbeb742308c19d7c41f53048a25770a602ef06d3d0e599e5e10456812236329"
+    },
+    {
+      "path": "tests/test_experiments 2.py",
+      "sha256": "5eec5b853f1d8751746d947246b8cd1c0b643e5dd55a2b36b79b2e1da2b6cc54"
+    },
+    {
+      "path": "tests/test_first_pool_updates 2.py",
+      "sha256": "f1f8b69b5f2ebff1787783d2e0d14a7a39bf70628a1cedd77cff980af955afed"
+    },
+    {
+      "path": "tests/test_http_api 2.py",
+      "sha256": "e73141e29aca262d7198614d9477e78488cc6a9e64685c4933a51bf4852c2874"
+    },
+    {
+      "path": "tests/test_ollama_api 2.py",
+      "sha256": "d60119c7131411c2daca0a9c82f02e1406d637154277c2936f79d04c5886b1bd"
+    },
+    {
+      "path": "tests/test_ollama_sdk 2.py",
+      "sha256": "d2d266d42955538bcd47515126b9df7b1675b55291976188dd21710c05630a7f"
+    },
+    {
+      "path": "tests/test_provider_bounds 2.py",
+      "sha256": "1164ca79ce9af7ec66657faa889c438db44423be53fe54d5b0e374022631f9ad"
+    },
+    {
+      "path": "tests/test_provider_rejection 2.py",
+      "sha256": "3fc08a078a13a2f0aacd725911223a8c4d83e7ddf62224d1e9c1ca260ee886cc"
+    },
+    {
+      "path": "tests/test_routing 2.py",
+      "sha256": "2de307a466aa0ac65c52f355e8593a8ed1fcc91a7cecf7f444e9b6748b0c041c"
+    },
+    {
+      "path": "tests/test_scheduler 2.py",
+      "sha256": "4a66eb759884364e04355cbe2877e0d15909af857ff4681a379d736958988d0c"
+    },
+    {
+      "path": "tests/test_scores 2.py",
+      "sha256": "9b6ea6571bf60fd35ca516843ecabcecbf4268d6401261d81fb33b3bd6dc6f51"
+    },
+    {
+      "path": "tests/test_sql_bounded 2.py",
+      "sha256": "af5a401d67bc3a912b8191e9994a5ed4dc4bf46b395eb89937a5128bbfbb357d"
+    },
+    {
+      "path": "tests/test_sql_environment 2.py",
+      "sha256": "2dc5d8f0958e7d3f67cf6c8b08b0e53358d356368e5c8217707139f6f9075d7f"
+    },
+    {
+      "path": "tests/test_sql_public_suite 2.py",
+      "sha256": "da279b5b333bb741d3ed289f7de43a62745b36572089b2d62782d1deb276aa7c"
+    },
+    {
+      "path": "tests/test_transport_contracts 2.py",
+      "sha256": "f206d2fc0757e7c447b5fc1edc2551924dff031c0cc8b136f23c2d399e716caf"
+    }
+  ]
+}

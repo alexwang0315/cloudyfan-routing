@@ -1,6 +1,6 @@
 # Issue #20 本機接入驗收索引
 
-2026-10-22：**核定現行交付範圍的必要檢查已通過**：Monitor 89 passed、核心隔離整合 1,921 passed、桌機 20 項通過。審查候選已合入 `e5fbd6e7cb06e0512d78f56d74c17e1012bc68c2` 並同步原 Monitor；53 份交付檔案一致，13 份產品指紋保持不變。父規格及 [#23](https://github.com/alexwang0315/cloudyfan-routing/issues/23) 的工作單結案由整合者接續辦理。原工作區的 71 失敗／2,483 通過另行保留；沒有將它改列全綠、刪除共享舊副本、改檢查器或放寬 SQL 限制。
+2026-10-22：**核定現行交付範圍的必要檢查已通過**：Monitor 89 passed、核心隔離整合 1,921 passed、桌機 20 項通過。審查候選已合入 `e5fbd6e7cb06e0512d78f56d74c17e1012bc68c2` 並同步原 Monitor；53 份交付檔案一致，13 份產品指紋保持不變。父規格及 [#23](https://github.com/alexwang0315/cloudyfan-routing/issues/23) 的工作單已完成結案；此處保留 Issue20 當時的驗收範圍，最新工具驗證依 `python3 scripts/acceptance.py status` 查核。原工作區的 71 失敗／2,483 通過另行保留；沒有將它改列全綠、刪除共享舊副本、改檢查器或放寬 SQL 限制。
 
 本文件對應 [#20](https://github.com/alexwang0315/cloudyfan-routing/issues/20)、[身分驗收 #21](https://github.com/alexwang0315/cloudyfan-routing/issues/21) 與 [四模式驗收 #22](https://github.com/alexwang0315/cloudyfan-routing/issues/22)。兩張前置工作單已結案，其本機提交均已合入整合分支。機讀結果與每份安全證據的 SHA256 見 [最終機讀索引](evidence/monitor-issue20-final-20261022.json)。本索引記錄的「最終」指本輪彙整版本；完成判定限於使用者核定的交付範圍，不表示原工作區所有歷史快照或正式服務均通過。審查兩軸與修正見 [審查處理紀錄](issue20-code-review.md)。
 

@@ -1,5 +1,8 @@
 # Monitor v0.1 delivery scope
 
+This page records the Issue20 delivery history. For the current tooling result,
+run `python3 scripts/acceptance.py status`; see [the tooling guide](tooling.md).
+
 ## Current Issue #20 integration follow-up (2026-10-22)
 
 The initial side-task history below is preserved. The later main-thread scope is desktop only: mobile implementation and tests were stopped by the user. The invoked implement-spec skill now permits isolated local integration commits, not code push or deployment.
@@ -9,7 +12,7 @@ The initial side-task history below is preserved. The later main-thread scope is
 - The first review rerun's 87 passes / 1 disconnected-result failure is preserved. A deterministic public-HTTP overlap case observed task_busy; it does not recover the original missing error body. Only explicit task_busy receives a bounded read wait; other 409 responses fail immediately. The affected HTTP module and final full gate pass without product/core changes.
 - Required human-approved canonical core delivery: **1921 passed** with all 8 integration steps successful and 438 frozen inputs unchanged. The 17 historical numbered snapshots / 633 tests remain preserved outside that approved delivery scope; the original 71 failed / 2483 passed run is not relabelled green.
 - The unique source GET window is reused with verified original hashes; 15 attempts and 24 deferred endpoints remain partial. No new external requests, live pool publication, mobile work, paid calls or erasure.
-- Root's 15:08 Chrome smoke on the original 18767 preview passed (12 synthetic tasks / 12 passed / 0 unknown, GET-only, unchanged summary); product fingerprints match. Final reviewed merge e5fbd6e and sync are complete: 53 delivery files match, all 13 product hashes are unchanged, and the original 18767 GET returns 200. Tracker closure remains with the root integrator. See [current acceptance](issue20-final-acceptance.md) and [two-axis review resolution](issue20-code-review.md).
+- Root's 15:08 Chrome smoke on the original 18767 preview passed (12 synthetic tasks / 12 passed / 0 unknown, GET-only, unchanged summary); product fingerprints match. Final reviewed merge e5fbd6e and sync are complete: 53 delivery files match, all 13 product hashes are unchanged, and the original 18767 GET returns 200. Issue20/23 closure is recorded in `runtime/final-acceptance/final-root/tracker-completion.json`; read `python3 scripts/acceptance.py status` for the current verification state. See [current acceptance](issue20-final-acceptance.md) and [two-axis review resolution](issue20-code-review.md).
 
 ## Original side-task history
 

@@ -2,6 +2,18 @@
 
 原旁支交付為獨立 `cloudyfan-monitor/`；使用者後續已確認完整方案並授權本機接入。本次已接上主服務身分與任務介面，並在核心新增非阻塞 retention guard 及只讀結果選項；沒有恢復主線付費測試。使用者要求第一版具備運作監控、完整帳本、23類四池更新、個別client儀表板及四模式控制。
 
+## 2026-10-23：驗收工具修正與本機 Git 交接
+
+本輪只提交驗收工具、測試、說明及交接更新。核心對應提交為 `e0d570a2ba371b00e6068fb949cb8594f29a1ac4`，只含共用檢查入口、13項工具案例、檢查說明、兩筆 Monitor 工作紀錄及其交接段落。其他核心研究／接入變更與兩張既有截圖仍保留在工作區，不納入這兩個工具提交。
+
+- 四項修正：固定核准的17份歷史排除清單；將根目錄設定與所有 pytest 路徑納入驗收；核對日誌、收集清單及輸出的封印；固定離線環境。P3 的重複流程統一由核心 `run_step` 記錄開始、完成、失敗與中斷，保留串流日誌與受控子程序清理。
+- 提交內容從暫存區匯出後，核心快速檢查與13項工具測試、Monitor快速檢查與24項工具測試通過。既有提交 hooks 照常執行密鑰掃描與快速檢查，沒有停用。
+- 上輪 R7 完整凍結驗收為核心2,058項、Monitor113項、各8步檢查通過；Standards硬性0／判斷性0、Spec0。這是當時完整輸入的結果，不是本次狹窄提交子集重新完成全套驗收。17份歷史副本／633項仍另列；原失敗與中斷紀錄保留。
+- [R7不可變收據](../runtime/deliveries/retro-review-fixes-20261022-r7/delivery.json)的SHA256為 `abcbc38ea8c96553fb3c796fd26dbdec2c590eccc2b00b3b9d17a9902214df14`；[封存修正與獨立審查](../runtime/deliveries/retro-review-fixes-20261022-r7/snapshot/tooling-evidence/review-fixes/re-review-r7/reports/review.md)及[當時交付查核](../runtime/tooling/review-fixes-r7-finalization-audit.json)保留完整證據。runtime、原始研究資料及截圖不加入本輪提交。
+- 本輪開始時，`python3 scripts/acceptance.py status` 因後續核心研究輸入變更而為 `stale`；101份輸出封印與263筆歷史索引仍核對通過。核心另外回報其他研究工作的 ownership overlap；其他工作也正更新共享紀錄。接續時先重新執行狀態命令，不沿用R7的 `verified` 宣稱目前整個工作區通過。
+
+本次授權僅含本機 Git 提交與交接更新；手機停止指示、未知費停止、研究及正式資格限制維持。沒有新增模型／來源請求、部署、推送或刪除。本機提交與保留核對證據在 CloudyFan `.scratch/cloudyfan-monitor-local-commits-20261023/`；工具操作方式見[驗收工具說明](tooling.md)。以下保留原接入歷史，當中的測試數字與執行狀態屬各自時點。
+
 ## 可以直接檢視
 
 - `docs/main-thread-integration-plan.md`：本次十二項已確認決定、接入範圍與手機排除指示。

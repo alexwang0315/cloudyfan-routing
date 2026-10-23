@@ -1,9 +1,5 @@
-# Monitor Issue #20 local integration
+# CloudyFan Monitor
 
-Follow the parent CloudyFan AGENTS.md and domain/tracker documentation.
-This is an isolated snapshot of the existing Monitor package.
-Use CLOUDYFAN_CORE_ROOT=/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core and that core .venv Python for offline tests.
-The approved test seam is actual loopback HTTP with MockTransport upstream and real desktop Playwright; do not re-ask for this seam.
-Do not modify the original core research tree or mainline runtime, call model APIs or source GETs, build/test mobile, push, deploy, or delete data.
-Local integration branches and ticket commits are required by the currently invoked implement-spec skill; never stage runtime/output or unrelated changes.
-Workers own only their assigned files. Other workers are active; preserve their work.
+Follow [the CloudyFan project instructions](../AGENTS.md).
+For checks, frozen acceptance, hooks, CI, delivery or resuming work, read [docs/tooling.md](docs/tooling.md).
+Read current verification with `python3 scripts/acceptance.py status`; it validates source and evidence hashes. Older issue reports describe their own recorded scope.

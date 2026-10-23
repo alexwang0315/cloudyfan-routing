@@ -1,0 +1,42 @@
+name: Frozen offline Monitor checks
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+env:
+  CLOUDYFAN_CORE_REPOSITORY: ${{ vars.CLOUDYFAN_CORE_REPOSITORY }}
+  CLOUDYFAN_CORE_REF: ${{ vars.CLOUDYFAN_CORE_REF }}
+  CLOUDYFAN_CORE_INPUT_SHA256: ${{ vars.CLOUDYFAN_CORE_INPUT_SHA256 }}
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: monitor
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Require the reviewed immutable core inputs
+        working-directory: monitor
+        run: python3 scripts/acceptance.py ci-config
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.CLOUDYFAN_CORE_REPOSITORY }}
+          ref: ${{ vars.CLOUDYFAN_CORE_REF }}
+          token: ${{ secrets.CLOUDYFAN_CORE_READ_TOKEN || github.token }}
+          path: core
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.11.7'
+      - name: Prepare declared dependency caches
+        working-directory: core
+        run: |
+          uv sync --locked --extra dev
+          uv build --out-dir runtime/ci-build-preparation
+      - name: Freeze and verify the collected test scope
+        working-directory: monitor
+        run: |
+          python3 scripts/acceptance.py snapshot --core-root ../core --output runtime/ci-inputs --expected-core-sha256 "$CLOUDYFAN_CORE_INPUT_SHA256"
+          python3 scripts/acceptance.py run --snapshot runtime/ci-inputs

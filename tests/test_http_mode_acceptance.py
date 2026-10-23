@@ -3,6 +3,7 @@ from contextlib import ExitStack
 from copy import deepcopy
 from dataclasses import dataclass, field, replace
 from datetime import datetime
+from functools import partial
 import json
 import os
 from pathlib import Path
@@ -102,6 +103,9 @@ def mode_service(tmp_path, category_fixture, loopback_network, request):
         stack.callback(thread.join, 2)
         stack.callback(server.shutdown)
         service = LocalService(host, origin, stack, server, host.clock)
+        # These are functional receipt/contract workflows, not latency checks.
+        # Leave dedicated responsiveness fixtures at their existing 2s default.
+        service.client = partial(service.client, timeout=10)
         try:
             yield service
         finally:

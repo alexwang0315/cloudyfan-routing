@@ -631,3 +631,15 @@ Use the locked Python/SQLite runtime; a system-Python freeze failed reproducibil
 - 本輪開始時，原工作區的 `project-state show` 回報 `ROUTING-V2-S50-INTEGRATION` 與 `JEV-SELECTOR-LOCAL-REVIEW` 的 active ownership overlap；Monitor `acceptance.py status` 因後續核心研究輸入變更而為 `stale`，101份輸出封印與263筆歷史索引仍核對通過。其他工作同時更新共享紀錄；續接時應重新讀取目前狀態，不能把R7改稱當前整個工作區通過。
 
 本輪授權為本機 Git 提交與交接更新；正式資格、研究範圍及原付費限制維持既有狀態。沒有模型／來源請求、部署、推送、手機工作或資料刪除。提交與保留核對的本機證據位於 CloudyFan `.scratch/cloudyfan-monitor-local-commits-20261023/`。
+
+
+## Jev selector research correction — 2026-10-23
+
+The [new selector research contract](jev-selector-research.md) replaces the fixed-direct study adapter only in a separately versioned opt-in path. The previous S50 routing had13 conditional selections, all direct-upper due missing comparative calibration; zero Jev was not a measured economic conclusion. New core and actual SQL research adapter distinguish proven unprofitable, uncertain and missing, and the two classifiers have real Mock/SQLite execution evidence. No old run is migrated and no formal qualification is granted. Applicable real conditional calibration remains0; the pending prepared SQL plan cannot dispatch. No paid API, Git commit, deployment or source push in this correction. Follow the new document for activation prerequisites; retain prior SQL/model qualification work.
+
+
+## Jev 選擇器本機提交審閱 — 2026-10-23
+
+依使用者授權僅提交選擇器、校準契約及可重建的必要支援程式；原始研究／付費結果／失敗紀錄不移入Git、不覆寫。保留工作區SQL資格、Monitor及舊副本。本次額外補上fixture客戶端覆寫防護；SQL合成回歸不再載入外部研究或正式題。實作與離線測試完成不代表實際校準：適用真實條件校準仍0，RG-01凍結、正式資格pending，沒有新付費／部署／推送。提交子集驗證與原dirty工作區70項舊副本失敗分開記於[審閱證據](evidence/jev-selector-commit-review-20261023.json)。
+
+本機審閱完成：最終19檔提交子集103項受影響回歸、Ruff／狀態檢查、2個Mock示範與離線建置通過。曾有狀態測試誤啟用歷史完成工作，已納入測試隔離修正並複驗31項；原失敗與中止完整保留，未稱全工作區全綠。原24,354份研究／題庫／證據不變。真實校準仍0、正式資格pending。

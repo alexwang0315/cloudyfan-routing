@@ -106,7 +106,7 @@ class BackupCategoryCore(Core):
         self._manifest = Path(client.root) / 'runs' / run_id / 'manifest.json'
         if self._manifest.is_symlink() or self._manifest.parent.is_symlink():
             raise ValueError('Run manifest cannot use symlinks')
-        verify_backup_pools(self._backup, now=None)
+        self._verify_backup_plan()
         policy = self._backup['qcs_policy']
         if policy.get('schema_version') != VERSION:
             raise ValueError('Explicit opt-in backup policy required; singleton QCS calibration is incompatible')
@@ -131,6 +131,13 @@ class BackupCategoryCore(Core):
         self._base_limits = self.limits
         self._deadline = None
         self._validate_policy(None)
+
+    def _verify_backup_plan(self):
+        """Strict by default; explicitly versioned research subclasses may differ."""
+        verify_backup_pools(self._backup, now=None)
+
+    def _rank_record(self, record):
+        return _rank(record)
 
     def _now(self):
         value = self._clock()
@@ -298,7 +305,7 @@ class BackupCategoryCore(Core):
             observations.append({'config_id': record['entry']['config_id'], 'assessment': health, 'reasons': reasons})
             if not reasons:
                 eligible.append(record)
-        return (deepcopy(min(eligible, key=_rank)) if eligible else None), observations
+        return (deepcopy(min(eligible, key=self._rank_record)) if eligible else None), observations
 
     def _checked(self, cid, url, payload, accepted, provider, *, allow_rejection=False):
         directory = self.client._directory(cid)
@@ -445,7 +452,7 @@ class BackupCategoryCore(Core):
                 raise ValueError('Frozen backup selection health identity changed')
             eligible = [r for r in self._backup['pools'][candidate_tier]
                         if any(h['config_id'] == r['entry']['config_id'] and not h['reasons'] for h in observations)]
-            if not eligible or candidate != min(eligible, key=_rank):
+            if not eligible or candidate != min(eligible, key=self._rank_record):
                 raise ValueError('Frozen backup selection differs from recorded health choice')
         expected_economic = (self._economic(stage, previous, saved['pair']) if stage and saved['pair'] else
             {'action': 'direct', 'selected_tier': tier, 'reason': 'same_pool_availability_or_initial'}
@@ -508,7 +515,7 @@ class BackupCategoryCore(Core):
             if (directory / '.retired.json').exists() or (directory / '.retired.json').is_symlink():
                 raise ValueError('Retired run cannot be dispatched')
             if not self._manifest.exists():
-                verify_backup_pools(self._backup, now=None)
+                self._verify_backup_plan()
                 self._validate_policy(None)
             frozen = {**self.configuration_descriptor(), 'task': task, 'mode': mode,
                       'contract_version': contract_version}

@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "scope": "jev-selector-research-offline-repair",
+  "kind": "offline",
+  "result": "scoped_pass_with_existing_workspace_failures",
+  "source_digest": "635b0a7b30a358cd506f80904b05ea18d27f3b7722d879dedaa2346ec15a7969",
+  "versions": {
+    "selector": "sequential-evidence-selectors-v1",
+    "sql_adapter": "sql-evidence-selectors-research-v1"
+  },
+  "checks": {
+    "new_network_blocked_regressions": {
+      "passed": 31,
+      "log": "/Users/alexwang0315/Documents/CloudyFan/artifacts/jev-selector-repair-20261023/combined-network-blocked-tests-v2.log"
+    },
+    "ruff": "passed",
+    "full_workspace": {
+      "passed_tests": 2637,
+      "failed_tests": 70,
+      "all_failures_retained_numbered_copies": true,
+      "non_numbered_failures": 0,
+      "overall_passed": false,
+      "receipt": "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/runtime/checks/c6e5a13059c1497781d23aad5799734c/checks.json",
+      "receipt_sha256": "2bbb9f71be3939f6a212bf5313ea7566ebac65d6d79587d7c39803cb82b8bafb"
+    },
+    "existing_mock_demos": {
+      "passed": 2,
+      "are_new_selector_evidence": false
+    },
+    "sdist_and_wheel": "passed",
+    "project_records": "passed",
+    "final_metadata_quick_gate": {
+      "passed": true,
+      "log": "/Users/alexwang0315/Documents/CloudyFan/artifacts/jev-selector-repair-20261023/final-quick-check-v2.log",
+      "sha256": "bdf4260f4f5f23a0e1a4cf9feff4df76a2007ded933698c794c8d1902ffca199"
+    }
+  },
+  "behavior_verified": [
+    "two parsed binary Jev calls, not upper fallback",
+    "either low or mid selected",
+    "second selector uses latest actual profile, answer and public diagnostics",
+    "missing or uncertain evidence stops before first model request",
+    "only proven economic rejection skips for cost with zero classifier fees",
+    "single candidate and speed rejection are distinct operational reasons",
+    "full classifier and continuation reservation",
+    "direct class/factory/mounted/post-construction fixture transport guards",
+    "completed replay makes no new requests",
+    "real SQLite with synthetic upstream"
+  ],
+  "observed_calibration": {
+    "applicable_samples": 0,
+    "source_hashes_rechecked": 130,
+    "formal_evaluation_answers_used": false,
+    "missing_contexts": [
+      "open_source_failure_to_low_mid",
+      "low_failure_to_mid_high",
+      "mid_failure_to_mid_high"
+    ],
+    "prepared_full_pool_missing_contracts": 81,
+    "single_model_perfect50_required": false,
+    "ready_for_paid_comparison": false
+  },
+  "limitations": [
+    "Synthetic calibration is not real model calibration or new savings evidence.",
+    "Raw source hashes and independence labels do not independently prove empirical validity.",
+    "No new driver authorization or frozen paid study; pending prepared template cannot dispatch.",
+    "Entire dirty workspace gate is not certified;70 retained legacy-copy failures preserved.",
+    "Exact source/endpoint/contract freshness, independent calibration and effective paid authority remain activation prerequisites."
+  ],
+  "paid_api_calls": 0,
+  "paid_api_cost_usd": "0",
+  "credentials_read": false,
+  "old_paid_requests_resent": 0,
+  "original_frozen_studies_modified": false,
+  "rg01_changed": false,
+  "formal_qualification": "pending",
+  "git_commit": false,
+  "deployment": false,
+  "push": false,
+  "source_and_evidence_sha256": {
+    "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/src/cloudyfan_jev/scores/selector_research.py": "029e08bfaca0f2a82eb4dd552f40291be50f3d16f8716e88746bb165837436e2",
+    "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/tests/test_selector_research.py": "fd8fb62f722e7ddbd959c5112c6467c24edcc51607a2078dd94def3992213062",
+    "/Users/alexwang0315/Documents/CloudyFan/cloudyfan-jev-core/docs/jev-selector-research.md": "48c6fe19c4a9e01fdd643b7f13b6c7487eb49cd610f216804f3869902d04de49",
+    "/Users/alexwang0315/Documents/CloudyFan/artifacts/jev-selector-repair-20261023/selector_adapter.py": "7cc98cd34ddff54b113867a37aface7e1b54ccb60cfdbbb5d52697e7319b93c8",
+    "/Users/alexwang0315/Documents/CloudyFan/artifacts/jev-selector-repair-20261023/test_selector_adapter.py": "3b4e46e3f19bd2669b2f259527f36b4c9ec38faa040f30e8fe578db2bcbb2983",
+    "/Users/alexwang0315/Documents/CloudyFan/artifacts/jev-selector-repair-20261023/combined-network-blocked-tests-v2.log": "72232c61c0728a4dd9dc1457f817c1078de3b88b4413cd0efcdebc15c16f2e9b",
+    "/Users/alexwang0315/Documents/CloudyFan/artifacts/jev-selector-repair-20261023/adapter-tests-v6.log": "1685d0c6dc46956fe1721fd6d7c04e27bad2cded46c8dae35dbe7f582fd98d54",
+    "/Users/alexwang0315/Documents/CloudyFan/artifacts/jev-selector-repair-20261023/calibration-inventory.json": "b35e21ab1ed1ff90f84ef27d8700aa5e01b160c39fe2b515b89af39070f7941d",
+    "/Users/alexwang0315/Documents/CloudyFan/artifacts/jev-selector-repair-20261023/calibration-inventory.md": "403e7bf60c10b8ae4f79c0203e356653b222bafe5272a2edce1d42ad081d1737",
+    "/Users/alexwang0315/Documents/CloudyFan/artifacts/jev-selector-repair-20261023/old-selector-cause-audit.json": "c1b3494a6325eb2fe6b769a4f5774b3746ac79edc53cacce9900f61e894fbc2b",
+    "/Users/alexwang0315/Documents/CloudyFan/artifacts/jev-selector-repair-20261023/prepared-sql-selector-plan-v1.json": "daae4f947ade970f47feab20fc01ab28c6339e38b53143c9535bf0b7091d042f",
+    "/Users/alexwang0315/Documents/CloudyFan/artifacts/jev-selector-repair-20261023/independent-core-review.md": "990c68f1431163c89ea589bf7d8edce935fd07ae4a16a3826944014bf9a34d83",
+    "/Users/alexwang0315/Documents/CloudyFan/artifacts/jev-selector-repair-20261023/dependency-restoration.json": "dfba664b1905ba634fe5c4b582f394b298f99c0203bd55604dd9c88753fb330e",
+    "/Users/alexwang0315/Documents/CloudyFan/artifacts/jev-selector-repair-20261023/full-integration-r1.log": "6516cd400d6ef3d51ce432589eadaae6aaf75760cc237cb768ac12fa0221a19a",
+    "/Users/alexwang0315/Documents/CloudyFan/artifacts/jev-selector-repair-20261023/full-integration-r2.log": "186a8d560ca88e1117ff0f68c77c13fe7184265699f540b11de3f181a76a09b9",
+    "/Users/alexwang0315/Documents/CloudyFan/artifacts/jev-selector-repair-20261023/demo-core.log": "6ec07288c14d743aedc1a0f9903fa9c85a8758e3d3562e05708cd44bef38864b",
+    "/Users/alexwang0315/Documents/CloudyFan/artifacts/jev-selector-repair-20261023/demo-scores.log": "ba9fdaffe57d6e4076d9c2eb9c47884b19c57f1252e5eed03f0a48a2e32ac8f5",
+    "/Users/alexwang0315/Documents/CloudyFan/artifacts/jev-selector-repair-20261023/build.log": "c2493ca90dcb9cc2c7d3b8a9a1e6be76abf65a1c8ecba089089c9bcc01db7036"
+  }
+}

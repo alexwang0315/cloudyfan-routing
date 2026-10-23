@@ -102,6 +102,45 @@
       "depends_on": [],
       "consumed_interfaces": [],
       "outcome": "Shared lifecycle and denied-query cleanup verified through 13 core CLI cases: query denial retains bounded owned-group escalation, while actual termination denial fails with 127. Monitor regressions cover fixed historical scope, root configuration inventory, output seals and a pinned offline uv environment. Full acceptance and independent review are recorded separately in Monitor tooling; original failed attempts and research authority are preserved."
+    },
+    {
+      "id": "JEV-SELECTOR-RESEARCH-REPAIR",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/scores/selector_research.py",
+        "tests/test_selector_research.py",
+        "docs/jev-selector-research.md",
+        "docs/evidence/jev-selector-research-offline-20261023.json"
+      ],
+      "depends_on": [],
+      "consumed_interfaces": [],
+      "outcome": "Opt-in evidence selectors and actual SQL adapter replace unconditional direct decisions. Two parsed selectors, latest diagnosis, cost reservations, strict fixture transports and zero-resend replay verified offline. Current exact observed conditional calibration samples remain zero; missing/uncertain evidence stops preparation, not an economic rejection. No paid calls, formal qualification, deployment, push or Git commit."
+    },
+    {
+      "id": "JEV-SELECTOR-LOCAL-REVIEW",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/recovery_prompts.py",
+        "src/cloudyfan_jev/scores/workflow_research.py",
+        "src/cloudyfan_jev/scores/selector_research.py",
+        "src/cloudyfan_jev/scores/sql_selector_research.py",
+        "src/cloudyfan_jev/scores/_sql_research_support.py",
+        "src/cloudyfan_jev/scores/backup_runtime.py",
+        "tests/test_selector_research.py",
+        "tests/test_sql_selector_research.py",
+        "tests/test_workflow_research.py",
+        "tests/test_recovery_prompts.py",
+        "docs/jev-selector-research.md",
+        "docs/evidence/jev-selector-commit-review-20261023.json",
+        "tests/test_project_state.py"
+      ],
+      "depends_on": [
+        "JEV-SELECTOR-RESEARCH-REPAIR"
+      ],
+      "consumed_interfaces": [],
+      "outcome": "Reviewed19-file local subset:103 affected regressions, Ruff, project records,2Mock demos and offline build passed. Prior2034 full pass retained; rebased full run had a false closed-history fixture conflict, interrupted and preserved, fixed and all31 state regressions passed. Self-contained SQL adapter, Client override guard, real calibration0, RG01 unchanged. No API/deploy/push; local commit only."
     }
   ]
 }

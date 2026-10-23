@@ -39,8 +39,11 @@ def checkout(tmp_path):
     }])
     write(tmp_path / 'docs/agent-state.json', state)
     plan = read(tmp_path, 'docs/work-plan.json')
+    # Historical closed work stays closed; current readiness still requires
+    # offline_verified and current evidence, not merely completed task records.
+    # Reactivating history creates unrelated synthetic ownership conflicts.
     for task in plan['tasks']:
-        task['status'] = 'in_progress'
+        task['status'] = 'completed'
     write(tmp_path / 'docs/work-plan.json', plan)
     for interface in plan['shared_interfaces']:
         if interface['provided_by'] is None:

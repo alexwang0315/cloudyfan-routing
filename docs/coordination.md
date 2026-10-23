@@ -353,3 +353,17 @@ Root reviewed only the frozen low-candidate preparation and its indexed Git subs
 [實作與限制](research-parallel-four-arm.md)、[擷取對照](evidence/research-parallel-four-arm-extraction-20261022.json)、[提交審閱驗證](evidence/research-parallel-four-arm-commit-review-20261022.json)分開保存。30分鐘仍是條件式容量推估；沒有新的真實正確率或節費結果。正式資格pending、付費入口停用。使用者本次僅授權本機提交，沒有付費請求、部署、推送或供應商聯絡；未把其他SQL、模型池、監控與檢查入口的dirty變更納入。
 
 提交快照完整離線整合 **1,962項通過**（含131項研究回歸）、Ruff、兩個既有Mock示範及sdist／wheel建置通過；獨立200流程／550次Mock、4槽、重播0新增呼叫。21,823份原研究／題庫／前輪資料雜湊不變。此為提交子集，不代表整個dirty工作區或正式服務通過。
+
+
+## Jev selector research repair — 2026-10-23
+
+Root owns the new opt-in selector_research module, Core.run/MockTransport regressions, a separate SQL research adapter, and offline activation/calibration documents. Existing provisional S50 adapters, frozen plans/answers/receipts, RG-01 and unrelated dirty SQL/Monitor work remain unchanged. The evidence reviewer only inventories pre-existing independent calibration sources under artifacts/jev-selector-repair-20261023; no shared code edits. Missing calibration must not be called economically unprofitable, and formal holdout answers cannot become calibration. The existing agreed Core.run plus injected validator/MockTransport seam is retained. No paid HTTP, credentials, deployment, push or Git commit is authorized.
+
+2026-10-23: JEV-SELECTOR-RESEARCH-REPAIR implementation completed. Core and SQL adapter can run both parsed selectors with synthetic evidence; no compatible observed conditional calibration was found. Offline completion is separate from the blocked real-comparison preparation. No external authority changed.
+
+Final scope verification:31 new regressions pass; full dirty workspace2637pass/70retained numbered-copy failures. Two existing mock demos and offline build pass. Evidence recorded; real conditional calibration remains0 and phase blocked only for activation, not a claim that the new implementation is unfinished.
+
+
+## Jev 選擇器本機提交審閱 — 2026-10-23
+
+依使用者授權僅提交選擇器、校準契約及可重建的必要支援程式；原始研究／付費結果／失敗紀錄不移入Git、不覆寫。保留工作區SQL資格、Monitor及舊副本。本次額外補上fixture客戶端覆寫防護；SQL合成回歸不再載入外部研究或正式題。實作與離線測試完成不代表實際校準：適用真實條件校準仍0，RG-01凍結、正式資格pending，沒有新付費／部署／推送。提交子集驗證與原dirty工作區70項舊副本失敗分開記於[審閱證據](evidence/jev-selector-commit-review-20261023.json)。

@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "scope": "jev-selector-local-review",
+  "result": "scoped_pass_after_state_fixture_repair",
+  "tested_parent_commit": "e0d570a2ba371b00e6068fb949cb8594f29a1ac4",
+  "source_digest": "3596d9e09f82bc8e5c0d1b41f5fc95a4c51ff1d23eabd464778db608c8986988",
+  "checks": {
+    "final_affected_regressions": {
+      "passed": 103,
+      "selector_sql": 32,
+      "sequential_and_recovery_support": 40,
+      "state_records": 31,
+      "log": "artifacts/jev-selector-commit-review-20261023/final-checks/02.log"
+    },
+    "ruff": "passed",
+    "project_records": "passed",
+    "mock_demos": 2,
+    "offline_build": [
+      "sdist",
+      "wheel"
+    ],
+    "receipt": "artifacts/jev-selector-commit-review-20261023/final-checks/checks.json",
+    "receipt_sha256": "6d38848d3e9b4e6e631c7c3fa945d2bff12580b26701e26bacee6583f64141cb",
+    "first_parent_full_integration": {
+      "passed": true,
+      "tests": 2034,
+      "parent_commit": "1fa389f019c3d4c3d51ebbd64a370cdf7134824f"
+    },
+    "superseded_rebased_full_run": {
+      "passed": false,
+      "interrupted": true,
+      "returncode": 130,
+      "known_failing_test": "tests/test_project_state.py::test_historical_pass_and_closed_work_never_imply_current_or_production_completion",
+      "cause": "Synthetic fixture reactivated closed Monitor work, causing false ownership conflict. Production checker unchanged.",
+      "not_full_suite_pass": true
+    },
+    "historical_dirty_workspace": {
+      "passed": 2637,
+      "failed_numbered_copies": 70,
+      "not_claimed_fixed": true
+    },
+    "final_metadata_quick": "passed",
+    "state_fixture_red_reproduction": {
+      "failed": 1,
+      "error": "unordered active ownership overlap: MONITOR-RETRO-CHECK-LOGS, MONITOR-RETRO-REVIEW-FIXES",
+      "log": "artifacts/jev-selector-commit-review-20261023/state-fixture-red.log"
+    }
+  },
+  "review_fixes": [
+    "Version required sequential/recovery dependencies and default-preserving backup hooks.",
+    "Replace external study-code loading with packaged private SQL support; no paid-study inputs in synthetic tests.",
+    "Reject custom Client/httpx.Client overrides for fixture transport; no network dispatch.",
+    "Include existing closed-history test-fixture isolation without changing production qualification checks."
+  ],
+  "activation": {
+    "observed_exact_conditional_calibration_samples": 0,
+    "formal_qualification": "pending",
+    "requires_independent_calibration_and_effective_paid_authority": true
+  },
+  "preservation": {
+    "original_files": 24354,
+    "changed": 0,
+    "missing": 0,
+    "rg01_changed": false,
+    "paid_results_resent": 0,
+    "original_failed_records_retained": true,
+    "concurrent_check_tool_commit_preserved": "e0d570a2ba371b00e6068fb949cb8594f29a1ac4",
+    "unrelated_working_changes_preserved": true
+  },
+  "scope_files": [
+    "src/cloudyfan_jev/recovery_prompts.py",
+    "src/cloudyfan_jev/scores/workflow_research.py",
+    "src/cloudyfan_jev/scores/selector_research.py",
+    "src/cloudyfan_jev/scores/sql_selector_research.py",
+    "src/cloudyfan_jev/scores/_sql_research_support.py",
+    "src/cloudyfan_jev/scores/backup_runtime.py",
+    "tests/test_recovery_prompts.py",
+    "tests/test_workflow_research.py",
+    "tests/test_selector_research.py",
+    "tests/test_sql_selector_research.py",
+    "docs/jev-selector-research.md",
+    "docs/evidence/jev-selector-research-offline-20261023.json",
+    "docs/handoff.md",
+    "docs/coordination.md",
+    "docs/verification.md",
+    "docs/agent-state.json",
+    "docs/work-plan.json",
+    "docs/evidence/jev-selector-commit-review-20261023.json",
+    "tests/test_project_state.py"
+  ],
+  "paid_api_calls": 0,
+  "credentials_read": false,
+  "deployment": false,
+  "push": false,
+  "local_commit_authorized": true,
+  "evidence_root": "artifacts/jev-selector-commit-review-20261023",
+  "historical_evidence_note": "Prior31-case record remains historical; new fixture guard, SQL extraction and state-fixture repair are verified here.",
+  "source_sha256": {
+    "src/cloudyfan_jev/recovery_prompts.py": "d6b031a26b12f08151d101d1c15099a341980e0626a138a8e036c990a19bca6a",
+    "src/cloudyfan_jev/scores/workflow_research.py": "2e4e78c569241592c272ebf646be434d2933d2f37c8d65f9099c2014f7baac68",
+    "src/cloudyfan_jev/scores/selector_research.py": "f9eec74fe33e6d1df1ff3bb88c583f2a2621b52b347959ae3f8a3a9a4537a00d",
+    "src/cloudyfan_jev/scores/sql_selector_research.py": "00989ef3ad810e8a2d3f74afd35658edcd7416f0ae1384512367f2cd4607cbfb",
+    "src/cloudyfan_jev/scores/_sql_research_support.py": "5baa4703e41fa62221eb0eb07c1b295dac6aaf4b92968ba3a883bbf27610b49a",
+    "src/cloudyfan_jev/scores/backup_runtime.py": "fdb952aff8b8ea78b7d683f16c5b61dc9574b0e7b97db47a5921ebe2b90c165c",
+    "tests/test_recovery_prompts.py": "c15a2dca50dd52f7f5e20f902c13797c69fbc158ad6fc44d540c6c98a0e361e7",
+    "tests/test_workflow_research.py": "a9b6401458b16e3516bbe33b81f65e86a6d9abf4a15e5014e560fd3576eb7c2b",
+    "tests/test_selector_research.py": "4f98a3339d599229af9c584d0c1a9f1e133dde3ae3eca90c65b21019218826d7",
+    "tests/test_sql_selector_research.py": "8b4499a870b95e19eb6480704a037cf1cdff821e89d7ee41b7afdecc7dd9f160",
+    "tests/test_project_state.py": "9ea2cd0c59e54806395f912530162b53522db4664e0d8a8506ed94596015240b"
+  },
+  "evidence_sha256": {
+    "final-checks/checks.json": "6d38848d3e9b4e6e631c7c3fa945d2bff12580b26701e26bacee6583f64141cb",
+    "final-checks/02.log": "42c27925734d51c0fd22b0c272c10fda885ff542b16cd25b4563df4e266212c9",
+    "extraction-review.json": "7250bff1405570c54255e9d105aaa1b38cd1c1e2c5cbef4734e3b3646df61438",
+    "review-findings.md": "2c8b6704b4401ec1bd628f30f550dfece4b4ca64e51f30af7cb95710be4bfa09",
+    "original-evidence-after.json": "bc8feadfe725739b854530deb204894cf626419cb143d99cc5c00501f7aa01f0",
+    "state-fixture-red.log": "8fdeb3aec59c94c4d93b4264f3a8d870f00c61ee0cb594c3722010286bce575e",
+    "focused-extraction-r1.log": "b30f5e2448b90a9b13fe2cc39400d25b2cc664ee0cb8dcf2510110b3f62191ac",
+    "focused-extraction-r2.log": "7fa66a142145bf15216f15c916acade55daa3ffc3ff6a111f0c69f81cdede0e9",
+    "superseded-full-run-stop.json": "e6686a0a96a2463834d5219a7a0ba6fa577d809487c78aeed25641f214a062f0"
+  }
+}

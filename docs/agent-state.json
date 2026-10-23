@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "scope": "research-parallel-four-arm-local-review",
-  "phase": "in_progress",
+  "scope": "jev-selector-local-review",
+  "phase": "blocked",
   "baseline_commit": "9d20072b076bb64c3666cd3d1380dcb5e49bb909",
   "integration_branch": "codex/implement-routing-spec-1",
   "constraints": {
@@ -325,22 +325,35 @@
     {
       "path": "docs/evidence/research-parallel-four-arm-commit-review-20261022.json",
       "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/jev-selector-research-offline-20261023.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/jev-selector-commit-review-20261023.json",
+      "record_kind": "historical"
     }
   ],
   "next_steps": [
     {
       "gate": "RG-02",
-      "action": "Preserve SQL qualification and original results. No single-candidate50-question admission. Four-arm complete-workflow comparison remains offline; no all-high-model arm or paid restart authorized.",
+      "action": "New selector implementation is offline verified, not empirically calibrated. Supply independent exact conditional calibration for OSS->low/mid and low/mid failure->mid/high, complete continuation costs and timing, then prepare a separately frozen version. Current suitable observed samples=0; paid collection needs new effective authorization. Missing evidence must never be silently treated as uneconomic. See docs/jev-selector-research.md.",
       "requires_authorization": true
     },
     {
-      "gate": "RG-03",
-      "action": "Recheck exact source/price/data-policy and current endpoint health without rewriting old snapshots before proposed launch. No automatic source refresh or current activation.",
+      "gate": "RG-02",
+      "action": "Preserve SQL qualification, sealed four-arm S50 results and original answers/receipts. Do not migrate prior paid results into the new selector version or require every candidate to pass50. New exact independent selector calibration is pending; no paid restart is authorized in this scope.",
       "requires_authorization": true
     },
     {
       "gate": "RG-04",
-      "action": "Offline four-arm harness reviewed; paid entry remains disabled. Preserve old paid evidence and unknown-fee stops. Hosted complete fee reserve, serving identity, live account gate and effective paid authority remain unverified; no qualification promotion.",
+      "action": "Preserve completed four-arm records and historical unknown525/reserve without new receipt GET. Prior research authorization windows do not extend automatically. New calibration/comparison requires effective separate authority, complete in-flight reservations including classifiers/fallbacks, and unknown-charge stop. No model API, deployment or push in this correction.",
+      "requires_authorization": true
+    },
+    {
+      "gate": "RG-03",
+      "action": "Preserve existing score/endpoint snapshots; missing candidate cost/speed/capability and health evidence is explicit. V1.0 fifty-task bank remains unchanged; v2.0 difficulty document is a separate design, not a model result.",
       "requires_authorization": true
     }
   ],

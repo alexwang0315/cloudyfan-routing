@@ -76,6 +76,32 @@
       ],
       "consumed_interfaces": [],
       "outcome": "Reviewed selective local delivery:1962 indexed tests including131 research regressions,Ruff,2existing demos,sdist/wheel and independent200flow/550mockcall four-slot replay passed.10 added identity/orphan/I-O regressions.21823 original study/bank/prior files and12 original source files unchanged. Executable/data bytes match tested snapshot. Raw evidence outside Git; local commit authorized; no paid API/deploy/push; qualification pending."
+    },
+    {
+      "id": "MONITOR-RETRO-CHECK-LOGS",
+      "owner": "monitor-tooling",
+      "status": "completed",
+      "owned_files": [
+        "scripts/check.py",
+        "tests/test_check_entrypoint.py",
+        "docs/checks.md"
+      ],
+      "depends_on": [],
+      "consumed_interfaces": [],
+      "outcome": "Streaming check orchestration and owned process-group interruption verified through10 affected CLI tests, Ruff and preserved red/green logs. No src, research, qualification or authority changes. Root will run a separately frozen integration gate for the full delivered scope."
+    },
+    {
+      "id": "MONITOR-RETRO-REVIEW-FIXES",
+      "owner": "monitor-tooling",
+      "status": "completed",
+      "owned_files": [
+        "scripts/check.py",
+        "tests/test_check_entrypoint.py",
+        "docs/checks.md"
+      ],
+      "depends_on": [],
+      "consumed_interfaces": [],
+      "outcome": "Shared lifecycle and denied-query cleanup verified through 13 core CLI cases: query denial retains bounded owned-group escalation, while actual termination denial fails with 127. Monitor regressions cover fixed historical scope, root configuration inventory, output seals and a pinned offline uv environment. Full acceptance and independent review are recorded separately in Monitor tooling; original failed attempts and research authority are preserved."
     }
   ]
 }

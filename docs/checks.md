@@ -24,6 +24,61 @@ repeated checks do not reuse paid-looking demo results or overwrite evidence.
 The runner does not delete prior outputs. Quick mode does not certify tests or
 packaging. Console output retains the actual test summary.
 
+Each new run writes a private `checks.json` before starting its first child.
+The receipt starts with `status: running`, `passed: false` and a null
+`returncode`. Each step's command, start time, running status and relative `log`
+path are recorded before launch. Completion adds the step's finish time, monotonic
+elapsed `seconds` and exit code, including failure and interruption. Only completion
+of every required step sets the overall `passed` to true.
+Receipt replacements are atomic, so a hard-killed runner leaves a readable
+running/incomplete record instead of implying success.
+
+Step logs (`01.log`, `02.log`, ...) contain the exact combined stdout/stderr bytes
+and are flushed while the child is running; files and receipts use mode `0600`
+inside a `0700` run directory. Console output is decoded incrementally as UTF-8,
+with invalid bytes replaced only for display. Partial output remains available
+after a failure. Ctrl-C signals only the child's newly created process group,
+first with SIGINT so nested verification runners can save their own receipts and
+cascade interruption. After a five-second grace period it escalates to SIGTERM,
+then after five more seconds to SIGKILL if needed, and reaps its own child.
+Unrelated processes are not signalled. It records `interrupted` with exit code 130
+and starts no later steps. Existing step
+`command`/`returncode` and overall `mode`/`steps`/`passed` keys remain available.
+Do not treat a running record or an older completed run as current verification.
+
+If the signal-zero existence query is denied, cleanup keeps the same bounded
+wait and termination escalation on its owned group. Query denial does not prove
+that descendants have exited. Errors sending actual termination signals still
+fail the step; they are not converted into successful cleanup or interruption.
+
+The core, Monitor and frozen acceptance entries share this public helper in
+`scripts/check.py`:
+
+```python
+run_step(report, *, command, cwd, env, log_path, receipt_path,
+         log_reference=None, step_fields=None, exit_key='returncode') -> int
+```
+
+It appends and atomically saves a running step before launching the child, then
+closes that step exactly once with its status, exit code, finish time and elapsed
+seconds. The default `log` is a POSIX path relative to the receipt directory;
+`log_reference` preserves an entry's existing log convention. `step_fields` adds
+metadata such as the acceptance step's `name`; lifecycle fields remain owned by
+the helper. `exit_key` accepts only `returncode` or Monitor's existing `exit_code`.
+The entry still owns report-wide completion and whether to raise after failure.
+
+A caught interrupt returns 130 with step status `interrupted` after child cleanup.
+A log or launch `OSError` returns 127 with status `failed`; its type and message
+stay in the private step's `error`, and the console prints a fixed diagnostic.
+Other child exits retain their raw return codes and stop the entry's later steps.
+Acceptance re-raises interruption only after the helper saves the closed step.
+
+The lower-level public `run_logged(command, *, cwd, env, log_path) -> int` helper
+still streams exact bytes and owns process cleanup. Pass a fresh log path: it
+refuses to overwrite a previous log. It returns the child's raw exit code,
+propagates errors, and re-raises `KeyboardInterrupt` after child cleanup. It
+installs no signal handlers and never signals the caller's process group.
+
 ## Dependency preparation versus verification
 
 A fresh machine without cached dependencies fails explicitly in offline mode.

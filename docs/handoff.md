@@ -618,3 +618,16 @@ Use the locked Python/SQLite runtime; a system-Python freeze failed reproducibil
 [實作與限制](research-parallel-four-arm.md)、[擷取對照](evidence/research-parallel-four-arm-extraction-20261022.json)、[提交審閱驗證](evidence/research-parallel-four-arm-commit-review-20261022.json)分開保存。30分鐘仍是條件式容量推估；沒有新的真實正確率或節費結果。正式資格pending、付費入口停用。使用者本次僅授權本機提交，沒有付費請求、部署、推送或供應商聯絡；未把其他SQL、模型池、監控與檢查入口的dirty變更納入。
 
 提交快照完整離線整合 **1,962項通過**（含131項研究回歸）、Ruff、兩個既有Mock示範及sdist／wheel建置通過；獨立200流程／550次Mock、4槽、重播0新增呼叫。21,823份原研究／題庫／前輪資料雜湊不變。此為提交子集，不代表整個dirty工作區或正式服務通過。
+
+
+## Monitor 驗收工具修正本機交接 — 2026-10-23
+
+本輪本機提交只包含核心的共用驗收步驟、串流日誌、受控子程序清理、對應測試、檢查說明、兩筆 `MONITOR-RETRO-*` 工作紀錄及本節。`docs/work-plan.json` 以已提交版本加入這兩筆完成紀錄；本檔也只擷取本節，其他研究變更保留在原工作區。
+
+- 修正固定歷史排除範圍、根目錄設定與全部 pytest 路徑收集、原始輸出封存驗證、離線環境固定，以及 P3 共用 `run_step`。核心負責共用步驟與串流／中斷處理；Monitor 修正見[主線交接](../../cloudyfan-monitor/docs/main-thread-handoff.md)及[工具說明](../../cloudyfan-monitor/docs/tooling.md)。
+- 提交前由暫存區匯出兩個檢查目錄；核心快速檢查與13項工具案例、Monitor快速檢查與24項工具案例通過。實際提交仍透過既有 hooks，先密鑰掃描再快速檢查；沒有停用 hooks。
+- 上輪 R7 凍結完整驗收為核心2,058項／Monitor113項、各8步檢查通過；Standards硬性0／判斷性0、Spec0。這些數字屬當時完整輸入，並非本次狹窄提交子集的新全套驗收。17份歷史副本／633項另列，原失敗及中斷紀錄保留。
+- R7 不可變收據在 Monitor `runtime/deliveries/retro-review-fixes-20261022-r7/delivery.json`，SHA256為 `abcbc38ea8c96553fb3c796fd26dbdec2c590eccc2b00b3b9d17a9902214df14`；原始 runtime 與研究資料不加入 Git。
+- 本輪開始時，原工作區的 `project-state show` 回報 `ROUTING-V2-S50-INTEGRATION` 與 `JEV-SELECTOR-LOCAL-REVIEW` 的 active ownership overlap；Monitor `acceptance.py status` 因後續核心研究輸入變更而為 `stale`，101份輸出封印與263筆歷史索引仍核對通過。其他工作同時更新共享紀錄；續接時應重新讀取目前狀態，不能把R7改稱當前整個工作區通過。
+
+本輪授權為本機 Git 提交與交接更新；正式資格、研究範圍及原付費限制維持既有狀態。沒有模型／來源請求、部署、推送、手機工作或資料刪除。提交與保留核對的本機證據位於 CloudyFan `.scratch/cloudyfan-monitor-local-commits-20261023/`。

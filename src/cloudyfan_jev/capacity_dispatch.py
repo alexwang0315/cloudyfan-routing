@@ -584,7 +584,7 @@ class _CapacityDispatch:
         scope, groups = self.controller.window_scope(self.adoption, self.route, snapshot, allocation['wire_sha256'])
         scope['physical_groups'] = groups
         try:
-            scope['observed_at'] = _time(self.controller.store.clock())
+            scope['observed_at'] = _time(record['window_headers']['observed_at'])
         except Exception:
             scope.update(observed_at=None, time_error='capacity_clock_invalid')
         try:

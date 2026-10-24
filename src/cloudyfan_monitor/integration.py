@@ -72,7 +72,7 @@ class RunBoundCore(Core):
 
 def assemble_monitor(store, service, registry, identities, *, operator_token, source=None,
                      origin="http://127.0.0.1:8766", demo=False, labels=None, billing_source=None,
-                     ollama_models=None, simulation=None, task_observer=None):
+                     ollama_models=None, simulation=None, candidate_observer=None, task_observer=None):
     """Consume an explicitly controlled host service; never create qualifications."""
     if (not isinstance(store, Store) or not isinstance(service, TaskService)
             or not isinstance(identities, IdentityStore)):
@@ -97,7 +97,8 @@ def assemble_monitor(store, service, registry, identities, *, operator_token, so
         task_observer = TaskDecisionObserver(service, store, registry)
     return App(Gateway(store, service, registry, demo=demo), admin_token=operator_token,
                source=source, origin=origin, identity_store=identities, billing_source=billing_source,
-               ollama_models=ollama_models, simulation=simulation, task_observer=task_observer)
+               ollama_models=ollama_models, simulation=simulation, candidate_observer=candidate_observer,
+               task_observer=task_observer)
 
 
 @dataclass

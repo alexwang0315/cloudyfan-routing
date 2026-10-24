@@ -42,3 +42,24 @@ def attach_window_protocol(bundle, previous, backend):
         operator_token=bundle.operator_token, source=old.source, origin=old.origin, demo=True,
         capacity_observer=CapacityObserver(previous.store, sources={}), capacity_controller=controller)
     return controller
+
+
+def attach_queue(bundle, clock, *, limits=None, rpm=10, tpm=None, concurrency=1,
+                 token_adapter=None, seconds=300):
+    from cloudyfan_jev.capacity_queue import QueuePreparation
+    from cloudyfan_jev.scheduler import QueueScheduler, QueueLimits
+    from capacity_admission_fixture import attach_admission
+    previous = attach_admission(bundle, clock, rpm=rpm, tpm=tpm, concurrency=concurrency,
+        token_adapter=token_adapter, seconds=seconds)
+    old = bundle.app
+    preparation = QueuePreparation("synthetic-pure-queue-v1", contracts=old.gateway.service.contracts,
+        tools={name: [] for name in old.gateway.service.contracts})
+    previous.queue_backend = preparation
+    previous.register("synthetic-queued-admission-v1", configuration_version="synthetic-admission-config-v1",
+        routes=previous.routes["synthetic-admission-v1"], max_seconds=seconds, queue_version=preparation.version)
+    queue = QueueScheduler(old.gateway.service, bundle.root / "queue.sqlite", clock=clock,
+        limits=limits or QueueLimits(8, 2, 4, 120), measurement_kind="synthetic", capacity_protocol=preparation)
+    bundle.app = assemble_monitor(old.store, old.gateway.service, old.gateway.registry, old.identity_store,
+        operator_token=bundle.operator_token, source=old.source, origin=old.origin, demo=True,
+        capacity_observer=old.capacity_observer, capacity_controller=previous, queue=queue)
+    return queue

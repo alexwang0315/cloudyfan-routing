@@ -73,7 +73,7 @@ class RunBoundCore(Core):
 def assemble_monitor(store, service, registry, identities, *, operator_token, source=None,
                      origin="http://127.0.0.1:8766", demo=False, labels=None, billing_source=None,
                      ollama_models=None, simulation=None, candidate_observer=None, task_observer=None,
-                     capacity_observer=None, capacity_controller=None):
+                     capacity_observer=None, capacity_controller=None, queue=None):
     """Consume an explicitly controlled host service; never create qualifications."""
     if (not isinstance(store, Store) or not isinstance(service, TaskService)
             or not isinstance(identities, IdentityStore)):
@@ -110,7 +110,11 @@ def assemble_monitor(store, service, registry, identities, *, operator_token, so
     if task_observer is None:
         from .history_observation import TaskDecisionObserver
         task_observer = TaskDecisionObserver(service, store, registry)
-    return App(Gateway(store, service, registry, demo=demo), admin_token=operator_token,
+    if queue is not None:
+        from cloudyfan_jev.scheduler import QueueScheduler
+        if type(queue) is not QueueScheduler or queue.service is not service or service.queue_scheduler is not queue:
+            raise ValueError('Controlled queue must share the exact service')
+    return App(Gateway(store, service, registry, demo=demo, queue=queue), admin_token=operator_token,
                source=source, origin=origin, identity_store=identities, billing_source=billing_source,
                ollama_models=ollama_models, simulation=simulation, candidate_observer=candidate_observer,
                task_observer=task_observer, capacity_observer=capacity_observer, capacity_controller=capacity_controller)

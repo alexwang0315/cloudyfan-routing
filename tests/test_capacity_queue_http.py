@@ -4,6 +4,34 @@ from capacity_admission_fixture import attach_admission
 from capacity_queue_fixture import attach_window_protocol, WindowProtocolFixture
 
 
+def test_queued_acceptance_is_202_idempotent_cancellable_and_never_starts_paid_work(local_service):
+    from capacity_queue_fixture import attach_queue
+    bundle = local_service.bundle
+    attach_queue(bundle, local_service.clock)
+    local_service.server.set_app(bundle.app)
+    operator, client = local_service.client("operator"), local_service.client()
+    assert operator.post("/monitor/capacity/activate", json={"revision": 0,
+        "version": "synthetic-queued-admission-v1"}).status_code == 200
+    payload = {**TASK, "run_id": "queued-cancelled"}
+    accepted = client.post("/v1/tasks", json=payload)
+    assert accepted.status_code == 202, accepted.text
+    view = accepted.json()
+    assert view["status"] == "queued" and view["reason"] == "queue_waiting_worker"
+    assert view["queue"]["protocol"] == "capacity-queue-v1"
+    assert view["queue"]["limits"] == {"capacity": 8, "concurrency": 2, "per_principal": 4, "max_wait_seconds": 120}
+    assert client.post("/v1/tasks", json=payload).status_code == 202
+    assert client.post("/v1/tasks", json={**payload, "prompt": "changed"}).status_code == 409
+    assert client.post("/v1/tasks/queued-cancelled/cancel", json={}).json()["status"] == "cancelled"
+    assert client.post("/v1/tasks", json=payload).json()["status"] == "cancelled"
+    snapshot = operator.get("/monitor/queue").json()
+    assert snapshot["jobs"][0]["status"] == "cancelled"
+    assert local_service.client("agent").get("/v1/tasks/queued-cancelled").status_code == 404
+    assert bundle.upstream.calls == []
+    assert list((bundle.root / "receipts/calls").glob("*/intent.json")) == []
+    ledger = operator.get("/monitor/snapshot").json()["ledger"]
+    assert ledger["rows"] == [] and ledger["reserved_usd"] == "0"
+
+
 def test_window_protocol_is_explicitly_not_applicable_on_original_immediate_policy(local_service):
     bundle = local_service.bundle
     attach_admission(bundle, local_service.clock)

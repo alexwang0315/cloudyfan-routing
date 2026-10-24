@@ -26,8 +26,9 @@ def _bound_task_id(binding):
 
 
 class Gateway:
-    def __init__(self, store, service, registry, *, demo=False):
+    def __init__(self, store, service, registry, *, demo=False, queue=None):
         self.store, self.service, self.demo = store, service, demo
+        self.queue = queue
         self.billing = Billing(store, demo=demo)
         self.registry = MappingProxyType(dict(registry))
         self.refresh_lock = threading.Lock()
@@ -66,6 +67,14 @@ class Gateway:
 
     def create(self, principal, payload, *, expected_contract=None):
         self.service.authorize(principal)
+        if self.queue is not None and (self.service.capacity_controller.queue_policy() is not None
+                or isinstance(payload, dict) and isinstance(payload.get('run_id'), str)
+                and self.queue.contains(principal, payload['run_id'])):
+            binding = self.store.bind(principal, payload, self.registry, expected_contract=expected_contract)
+            state = self.queue.submit(principal, {'run_id': binding['run'], 'contract_id': binding['contract'],
+                                                'prompt': payload['prompt']})
+            self.capture(binding)
+            return state
         prior = (self.store.existing_binding(principal, payload.get("run_id"))
                  if isinstance(payload, dict) and isinstance(payload.get("run_id"), str) else None)
         if prior is not None:
@@ -107,6 +116,8 @@ class Gateway:
         if self.registry.get((binding["pool"], binding["category"], binding["mode"])) != binding["contract"]:
             raise MonitorError("frozen_runtime_contract_unavailable", 409)
         try:
+            if self.queue is not None and self.queue.contains(principal, run):
+                return self.queue.status(principal, run)
             status = self.service.status(principal, run)
             if status["status"] in ("bound", "ready", "running", "queued"):
                 status["costs"] = {**status.get("costs", {}), "complete_api_usd": None}
@@ -137,6 +148,8 @@ class Gateway:
     def execute(self, principal, run):
         self.service.authorize(principal)
         binding = self.store.binding(principal, run)
+        if self.queue is not None and self.queue.contains(principal, run):
+            return self.queue.status(principal, run)
         status = self.status(principal, run)
         if status["status"] in ("passed", "failed", "unverifiable"):
             return status
@@ -191,11 +204,16 @@ class Gateway:
                 raise ServiceError(expired, 410)
             observed = self.service.observe(principal, run)
             status = observed["state"]
+            if self.queue is not None and self.queue.contains(principal, run):
+                status = self.queue.status(principal, run)
             costs = status.get("costs", {})
             summary = {"status": status["status"], "known_api_usd": costs.get("known_api_usd"),
                        "complete_api_usd": costs.get("complete_api_usd"),
                        "unknown_events": costs.get("unknown_events"),
                        "error_code": (status.get("error") or {}).get("code"), "observation": None}
+            if 'queue' in status:
+                summary.update({key: status.get(key) for key in ('queue', 'queue_state', 'reason',
+                    'queue_seconds', 'end_to_end_seconds', 'cancellation_requested', 'provider_cancellation_confirmed')})
             if status["status"] in ("bound", "ready", "running", "queued"):
                 summary["complete_api_usd"] = None
             if status["status"] in ("passed", "failed", "unverifiable"):

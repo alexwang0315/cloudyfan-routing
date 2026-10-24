@@ -353,6 +353,7 @@ class TaskService:
     @_retained
     def execute(self, principal, run_id):
         directory, job = self._job(principal, run_id)
+        internal = self.internal_id(principal, run_id)
         with _lock(directory):
             contract = self.contracts.get(job['request']['contract_id'])
             if contract is None or _encode(contract.descriptor()) != _encode(job['registered']):
@@ -370,15 +371,15 @@ class TaskService:
                     model_bounds=registered.model_bounds, verify_bound=registered.verify_bound,
                     tool_bounds={name: bound for name, bound in registered.tool_bounds.items()
                                  if name in contract.tool_names}, capacity_controller=self.capacity_controller)
-                context = (self.capacity_controller.context(self.internal_id(principal, run_id), principal, job['registered'])
+                context = (self.capacity_controller.context(internal, principal, job['registered'])
                            if self.capacity_controller is not None else None)
-                result = runner.run(self.internal_id(principal, run_id),
+                result = runner.run(internal,
                     {'prompt': job['request']['prompt']}, environment,
                     contract_version=contract.version, mode=contract.mode,
                     **({"capacity_context": context, "capacity_descriptor": job["registered"]}
                        if self.capacity_controller is not None else {}))
                 if self.capacity_controller is not None:
-                    self.capacity_controller.terminal(self.internal_id(principal, run_id))
+                    self.capacity_controller.terminal(internal)
                 state = {'run_id': run_id, 'status': result['status']}
                 _write(directory / 'outcome.json', {**state,
                     'answer': result['attempts'][-1]['final'],
@@ -398,9 +399,18 @@ class TaskService:
             except Exception as error:
                 from .capacity_dispatch import CapacityDenied
                 if isinstance(error, CapacityDenied):
+                    # This protocol makes capacity refusal terminal. Release only
+                    # its unused monetary workflow reserve; actual/provisional
+                    # fees and the independent capacity ledger retain authority.
+                    try:
+                        contract.runner.store.finish(internal)
+                    except BudgetError:
+                        state = {'run_id': run_id, 'status': 'accounting_interrupted', 'error': {'code': 'unknown_cost'}}
+                        _write(directory / 'state.json', state)
+                        return self.status(principal, run_id)
                     state = {'run_id': run_id, 'status': 'capacity_denied', 'error': {'code': error.code}}
-                    self.capacity_controller.refused(self.internal_id(principal, run_id), error.code)
-                    self.capacity_controller.terminal(self.internal_id(principal, run_id))
+                    self.capacity_controller.refused(internal, error.code)
+                    self.capacity_controller.terminal(internal)
                     _write(directory / 'state.json', state)
                     return self.status(principal, run_id)
                 unknown = contract.runner.store.report()['unknown_events']

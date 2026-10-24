@@ -136,6 +136,10 @@ class FourSlotScheduler:
     def directory(self, job):
         return self.root / "workflows" / digest(job.run_id)
 
+    def _require_completed_dispatches(self, job):
+        if self.ledger.has_not_dispatched_calls(job.run_id):
+            raise RuntimeError("WORKFLOW_NOT_DISPATCHED")
+
     def _terminal(self, job):
         p = self.directory(job) / "terminal.json"
         if not p.exists():
@@ -152,6 +156,7 @@ class FourSlotScheduler:
             or terminal.get("evidence_sha256") != self.evidence_provider(job)
         ):
             raise ValueError("COMPLETED_WORKFLOW_EVIDENCE_CHANGED")
+        self._require_completed_dispatches(job)
         workflow = self.ledger.lookup_workflow(job.run_id)
         if (
             not workflow
@@ -172,7 +177,8 @@ class FourSlotScheduler:
         began = self.clock()
         # Complete result without terminal means crash during sealing: no Core.
         result_path = directory / "result.json"
-        if result_path.exists():
+        has_saved_result = result_path.exists()
+        if has_saved_result:
             saved = read(result_path)
             if saved.get("job_sha256") != initial or saved.get("plan_id") != self.plan_id:
                 raise ValueError("PREPARED_RESULT_BINDING_CHANGED")
@@ -181,6 +187,8 @@ class FourSlotScheduler:
             result = self.runner(job)
             if job.identity != initial:
                 raise ValueError("WORKFLOW_CONFIGURATION_CHANGED_DURING_RUN")
+        self._require_completed_dispatches(job)
+        if not has_saved_result:
             write_once(
                 result_path, {"plan_id": self.plan_id, "job_sha256": initial, "result": result}
             )

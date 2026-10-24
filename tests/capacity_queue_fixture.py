@@ -113,7 +113,7 @@ def build_queue_host(root, *, clock, origin, options=None, before_response=None)
         credentials_path.write_text(json.dumps({name: asdict(value) for name, value in credentials.items()}))
         credentials_path.chmod(0o600)
     service = original.gateway.service
-    if options.get('separate_budgets'):
+    if options.get('separate_budgets') or options.get('shared_budget'):
         replacements = {}
         for name, contract in service.contracts.items():
             template, old = contract.runner.core, contract.runner
@@ -122,9 +122,10 @@ def build_queue_host(root, *, clock, origin, options=None, before_response=None)
                             'synthetic-key-' + name, receipt_root)
             core = Core(client, template.profiles, template.decision, limits=template.limits,
                 execution_policy=template.execution_policy, diagnostic_contract=template.diagnostic_contract)
-            budget = BudgetStore(root / ('budget-' + name + '.sqlite'))
+            account = 'shared-queue' if options.get('shared_budget') else name
+            budget = BudgetStore(root / ('budget-' + account + '.sqlite'))
             if budget.report()['authorization'] is None:
-                budget.authorize(Authorization('synthetic-queue-' + name, Decimal('100'),
+                budget.authorize(Authorization('synthetic-queue-' + account, Decimal('100'),
                     (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()))
             runner = BudgetedCore(core, budget, model_bounds=old.model_bounds,
                 tool_bounds=old.tool_bounds, verify_bound=old.verify_bound)

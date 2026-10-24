@@ -21,3 +21,4 @@
 #queue-page .queue-binding-heading{margin-top:20px;font-size:13px}
 @media(max-width:1000px){#queue-page .queue-limits{grid-template-columns:repeat(2,minmax(0,1fr))}#queue-page .queue-properties{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:600px){#queue-page .queue-job,#queue-page .queue-configuration{padding:16px}#queue-page .queue-timings,#queue-page .queue-properties{grid-template-columns:1fr}#queue-page .queue-job-heading{flex-wrap:wrap}}
+.queue-integrity{margin:18px 0;padding:22px;line-height:1.7;overflow-wrap:anywhere}.queue-integrity h2{margin:0;font-size:18px}.queue-integrity summary{font-size:13px}.queue-integrity details{margin-top:16px}

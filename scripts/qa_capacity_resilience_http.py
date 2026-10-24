@@ -138,10 +138,12 @@ def main():
 
         def save():
             with lock:
+                snapshot = receipt()
                 temporary = output / "http-receipt.pending"
-                temporary.write_text(json.dumps(receipt(), indent=2))
+                temporary.write_text(json.dumps(snapshot, indent=2))
                 temporary.replace(output / "http-receipt.json")
                 clock_file.write_text(json.dumps({"now": clock()}))
+                return snapshot
 
         def app(environ, start_response):
             read_started = time.monotonic()
@@ -302,8 +304,8 @@ def main():
                     raise ValueError("Unknown private fixture command")
                 commands.append({"command": name, "started_elapsed_seconds": command_started - started,
                     "duration_before_receipt_seconds": time.monotonic() - command_started})
-                save()
-                print(json.dumps({"type": "inspected", **receipt(),
+                snapshot = save()
+                print(json.dumps({"type": "inspected", **snapshot,
                     **({"reauth_token": host.app.admin_token} if name == "rotate_operator" else {})}), flush=True)
         finally:
             if not args.minimal and controlled.held.is_set() and not controlled.released.is_set():

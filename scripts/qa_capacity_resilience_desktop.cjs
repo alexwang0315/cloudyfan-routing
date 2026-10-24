@@ -178,6 +178,16 @@ async function lifecycleMain() {
     accessibility_scope:'Keyboard focus/disclosure at the declared desktop viewport; no screen-reader or WCAG certification'};
   report.planned_check_count=['--queue-fault','--local-fault','--companion-loss'].some(flag=>process.argv.includes(flag))?3:process.argv.includes('--focused-restart')?12:13;
   if(process.argv.includes('--focused-restart'))report.scope+='; focused restart slice: >100 paid history and refusal steps explicitly not run';
+  let liveHoldStarted=null;
+  const requireLiveHold=()=>{
+    if(liveHoldStarted===null)return;
+    const elapsed=performance.now()-liveHoldStarted;
+    report.live_hold_guard.maximum_observed_elapsed_ms=Math.max(report.live_hold_guard.maximum_observed_elapsed_ms,elapsed);
+    if(elapsed>=600000){
+      report.live_hold_guard.bound_reached=true;
+      throw Error('Original 600-second live-held prerequisite ended; remaining workflow is not accepted');
+    }
+  };
   const mib=1024*1024,fullWorkflow=report.planned_check_count===13;
   report.resource_guard={enforced:fullWorkflow,start_minimum_available_bytes:512*mib,
     minimum_available_bytes:128*mib,maximum_run_output_bytes:256*mib,final_receipt_reserve_bytes:4*mib,
@@ -220,9 +230,10 @@ async function lifecycleMain() {
   const inspect=async(command={command:'inspect'})=>{
     const started=performance.now(),row={command:command.command,started_at:new Date().toISOString()};
     try {
+      requireLiveHold();
       fixture.send(command);const value=await fixture.next();
       row.response_type=value.type;row.model_request_count=value.model_requests?.length;
-      row.receipt_build_seconds=value.receipt_build_seconds;return value;
+      row.receipt_build_seconds=value.receipt_build_seconds;requireLiveHold();return value;
     } catch(error) {row.failure_type=error.name;row.failure_message=error.message;throw error;}
     finally {row.duration_ms=performance.now()-started;await fs.appendFile(path.join(output,'actual-fixture-durations.jsonl'),JSON.stringify(row)+'\n');}
   };
@@ -230,10 +241,11 @@ async function lifecycleMain() {
   const api=async(method,url,auth=operator,data)=>{
     const started=performance.now(),row={method:method.toUpperCase(),path:url,started_at:new Date().toISOString()};
     try {
+      requireLiveHold();
       const response=await context.request[method](ready.origin+url,{headers:auth,...(data===undefined?{}:{data})});
       const body=await response.json();row.status=response.status();
       if(response.status()>=400)report.expected_http_errors.push({method:row.method,path:url,status:response.status(),code:body.error?.code});
-      return {response,body};
+      requireLiveHold();return {response,body};
     } catch(error) {row.failure_type=error.name;throw error;}
     finally {row.duration_ms=performance.now()-started;await fs.appendFile(path.join(output,'actual-client-http-durations.jsonl'),JSON.stringify(row)+'\n');}
   };
@@ -245,7 +257,8 @@ async function lifecycleMain() {
   const step=async(name,action)=>{
     const row={name,started_at:new Date().toISOString(),passed:false};report.checks.push(row);
     await resourceCheck('before:'+name);
-    await action();await resourceCheck('after:'+name);row.passed=true;row.finished_at=new Date().toISOString();
+    requireLiveHold();await action();requireLiveHold();
+    await resourceCheck('after:'+name);row.passed=true;row.finished_at=new Date().toISOString();
     await fs.writeFile(path.join(output,'desktop-progress.json'),JSON.stringify({checks:report.checks},null,2));
   };
   function unchanged(before,after) {
@@ -432,6 +445,9 @@ async function lifecycleMain() {
       await inspect({command:'hold'});
       const accepted=await api('post','/v1/tasks',client,task('resilience-held'));assert.equal(accepted.response.status(),202);
       heldOriginal=accepted.body;
+      liveHoldStarted=performance.now();
+      report.live_hold_guard={started_at:new Date().toISOString(),started_before:'original held work command',
+        original_limit_ms:600000,maximum_observed_elapsed_ms:0,bound_reached:false};
       await inspect({command:'work'});
       for(let i=0;i<80;i++){
         const state=await inspect();
@@ -465,9 +481,9 @@ async function lifecycleMain() {
       const switched=await api('post','/monitor/mode',operator,{revision:control.control.revision,mode:'open_source_first',client:'agent'});
       assert.equal(switched.response.status(),200);
       let completed=0;
-      for(let offset=0;offset<101;offset+=24){
-        const names=Array.from({length:Math.min(24,101-offset)},(_,i)=>'resilience-history-'+String(offset+i).padStart(3,'0'));
-        for(let i=0;i<names.length;i+=4)await Promise.all(names.slice(i,i+4).map(async name=>{
+      for(let offset=0;offset<101;offset+=3){
+        const names=Array.from({length:Math.min(3,101-offset)},(_,i)=>'resilience-history-'+String(offset+i).padStart(3,'0'));
+        for(let i=0;i<names.length;i+=3)await Promise.all(names.slice(i,i+3).map(async name=>{
           const accepted=await api('post','/v1/tasks',agent,task(name));assert.equal(accepted.response.status(),202);
         }));
         let pending=new Set(names);
@@ -482,6 +498,7 @@ async function lifecycleMain() {
         }
         assert.equal(pending.size,0);assert.equal((await inspect()).model_response_held,true);
         await fs.writeFile(path.join(output,'overflow-progress.json'),JSON.stringify({actual_completed:completed,held_unreleased:true}));
+        requireLiveHold();
         await resourceCheck('paid_history_batch:'+completed);
       }
       const state=await inspect(),cap=await get('/monitor/capacity'),queue=await get('/monitor/queue');
@@ -508,7 +525,7 @@ async function lifecycleMain() {
       for(let i=0;i<101;i++){
         const row=await api('post','/v1/tasks',agent,task('resilience-refused-'+String(i).padStart(3,'0')));
         assert.equal(row.response.status(),429);assert.equal(row.body.error.code,'principal_quota_full');
-        if((i+1)%25===0||i===100)await resourceCheck('refusal_batch:'+(i+1));
+        if((i+1)%25===0||i===100){requireLiveHold();await resourceCheck('refusal_batch:'+(i+1));}
       }
       const queue=await get('/monitor/queue');assert.equal(queue.rejection_count,101);
       assert.equal(queue.rejections.length,100);assert.equal(queue.rejection_history_complete,false);
@@ -573,7 +590,12 @@ async function lifecycleMain() {
     });
     await step('intentional_unreleased_exit_and_new_PID_read_same_original_stores_without_retry',async()=>{
       const before=await inspect();assert.equal(before.model_response_held,true);assert.equal(before.worker_running_count,1);
+      requireLiveHold();
       const oldReady=ready;fixture.send({command:'planned_crash'});const crash=await fixture.next();assert.equal(crash.type,'planned_crash');
+      requireLiveHold();
+      report.live_hold_guard.live_claim_ended_at=new Date().toISOString();
+      report.live_hold_guard.end_reason='actual planned crash confirmed; post-restart occupancy is uncertain, not a live HTTP claim';
+      liveHoldStarted=null;
       const exited=await fixture.stop();report.boots[0].exit=exited;assert.equal(exited.code,86);assert.equal(exited.cleanup_failed,false);
       fixture=null;await start(new URL(oldReady.origin).port);assert.notEqual(ready.pid,oldReady.pid);assert.deepEqual(ready.credentials,oldReady.credentials);
       const after=await inspect();assert.equal(after.model_requests.length,0);

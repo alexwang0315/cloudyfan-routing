@@ -93,7 +93,8 @@ def test_fee_denial_before_physical_post_releases_all_capacity_and_keeps_zero_re
     with process_pair(first_mode="deny") as pair:
         pair.activate()
         denied = pair.client(0).post("/v1/tasks", json={**TASK, "run_id": "withdrawn-fee-a"})
-        assert denied.status_code == 503 and denied.json()["status"] == "engineering_interrupted", denied.text
+        assert denied.status_code == 429 and denied.json()["status"] == "capacity_denied", denied.text
+        assert denied.json()["error"]["code"] == "capacity_original_budget_denied"
         assert denied.json()["costs"]["unknown_events"] == 0
         assert denied.json()["costs"]["known_api_usd"] == "0"
         assert pair.calls(0) == []
@@ -109,6 +110,52 @@ def test_fee_denial_before_physical_post_releases_all_capacity_and_keeps_zero_re
         accepted = pair.client(1).post("/v1/tasks", json={**TASK, "run_id": "released-capacity-b"})
         assert accepted.status_code == 200 and accepted.json()["status"] == "passed", accepted.text
         assert pair.calls(0) == [] and len(pair.calls(1)) == 1
+
+
+@pytest.mark.parametrize("first_mode", ["prepared", "hold"])
+def test_prepared_or_held_request_retains_rate_capacity_until_full_completed_window(process_pair, first_mode):
+    with process_pair(first_mode=first_mode, rpm=1, concurrency=2) as pair:
+        pair.activate()
+        first, second = pair.client(0, timeout=20), pair.client(1)
+        with ThreadPoolExecutor(1) as requests:
+            pending = requests.submit(first.post, "/v1/tasks", json={**TASK, "run_id": "window-held-a"})
+            try:
+                entered = pair.entered(0)
+                assert entered["phase"] == ("fee_guard_after_prepare_before_physical_post"
+                    if first_mode == "prepared" else "physical_mock_post_before_response")
+                assert len(pair.calls(0)) == (0 if first_mode == "prepared" else 1)
+                capacity = pair.capacity()
+                assert capacity["allocations"][0]["state"] == ("prepared" if first_mode == "prepared" else "sent")
+                pair.clock.advance(61)
+                denied = second.post("/v1/tasks", json={**TASK, "run_id": "window-contending-b"})
+                assert denied.status_code == 429 and denied.json()["error"]["code"] == "capacity_rpm_exhausted", denied.text
+                assert denied.json()["costs"]["unknown_events"] == 0
+                capacity = pair.capacity()
+                assert len(capacity["allocations"]) == 1
+                assert pair.group(capacity, "account-shared")["rpm_used"] == 1
+                assert pair.group(capacity, "account-shared")["tpm_reserved"] == 1000
+                assert pair.group(capacity, "key-b")["rpm_used"] == 0
+                assert pair.group(capacity, "key-b")["tpm_reserved"] == 0
+                assert pair.group(capacity, "key-b")["concurrency_used"] == 0
+                assert pair.calls(1) == []
+            finally:
+                pair.release(0)
+            completed = pending.result(timeout=10)
+            assert completed.status_code == 200 and completed.json()["status"] == "passed", completed.text
+        assert len(pair.calls(0)) == 1
+        capacity = pair.capacity()
+        assert pair.group(capacity, "account-shared")["concurrency_used"] == 0
+        assert pair.group(capacity, "account-shared")["rpm_used"] == 1
+        assert pair.group(capacity, "account-shared")["tpm_reserved"] == 21
+        pair.clock.advance(59)
+        still_denied = second.post("/v1/tasks", json={**TASK, "run_id": "window-before-reset-b"})
+        assert still_denied.status_code == 429 and still_denied.json()["error"]["code"] == "capacity_rpm_exhausted", still_denied.text
+        assert len(pair.capacity()["allocations"]) == 1 and pair.calls(1) == []
+        pair.clock.advance(1)
+        accepted = second.post("/v1/tasks", json={**TASK, "run_id": "window-after-reset-b"})
+        assert accepted.status_code == 200 and accepted.json()["status"] == "passed", accepted.text
+        assert len(pair.calls(1)) == 1
+        assert len(pair.capacity()["allocations"]) == 2
 
 
 @pytest.mark.parametrize("first_mode", ["kill", "uncertain"])
@@ -140,8 +187,8 @@ def test_dead_or_uncertain_process_retains_concurrency_after_windows_and_never_r
         capacity = pair.capacity()
         assert len(capacity["allocations"]) == 1
         assert capacity["allocations"][0]["state"] == ("sent" if first_mode == "kill" else "uncertain")
-        assert pair.group(capacity, "account-shared")["rpm_used"] == 0
-        assert pair.group(capacity, "account-shared")["tpm_reserved"] == 0
+        assert pair.group(capacity, "account-shared")["rpm_used"] == 1
+        assert pair.group(capacity, "account-shared")["tpm_reserved"] == 1000
         assert pair.group(capacity, "account-shared")["concurrency_used"] == 1
         assert capacity["allocations"][0]["wire_sha256"] == pair.calls(0)[0]["wire_sha256"]
         client = pair.client(0)

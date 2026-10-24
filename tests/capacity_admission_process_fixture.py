@@ -62,8 +62,19 @@ class DeniedAtPost:
         return False
 
 
+class HeldAtPost(DeniedAtPost):
+    """Hold the injected original fee guard after capacity preparation."""
+    def __init__(self, callback):
+        self.callback = callback
+
+    def verify_post(self, *args):
+        self.callback()
+        return True
+
+
 def build_process_bundle(root, index, clock, *, origin, disjoint=False, shared_budget=False,
-                         deny_before_post=False, before_response=None, configuration_at=None):
+                         deny_before_post=False, before_response=None, configuration_at=None,
+                         fee_post_guard=None, rpm=100, concurrency=1):
     """Every worker registers the same two transports, bindings and host policy.
 
     Frontend stores/locks and keys/receipt roots differ deliberately: those locks
@@ -80,6 +91,7 @@ def build_process_bundle(root, index, clock, *, origin, disjoint=False, shared_b
 
     def upstream(request):
         observed = {"pid": os.getpid(), "method": request.method, "url": str(request.url),
+            "synthetic_clock_at_mock_transport": clock(),
             "wire_sha256": hashlib.sha256(request.content).hexdigest(),
             "content": request.content.decode(), "timeout": request.extensions.get("timeout")}
         with calls.open("a") as stream:
@@ -100,8 +112,10 @@ def build_process_bundle(root, index, clock, *, origin, disjoint=False, shared_b
     if budget.report()["authorization"] is None:
         budget.authorize(Authorization("synthetic-process-fee-account-" + ("shared" if shared_budget else suffix),
             Decimal("100"), (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()))
+    verifier = (HeldAtPost(fee_post_guard) if fee_post_guard is not None else
+        DeniedAtPost() if deny_before_post else template.verify_bound)
     runner = BudgetedCore(core, budget, model_bounds=template.model_bounds,
-        tool_bounds=template.tool_bounds, verify_bound=DeniedAtPost() if deny_before_post else template.verify_bound)
+        tool_bounds=template.tool_bounds, verify_bound=verifier)
     from dataclasses import replace
     old.gateway.service.contracts = {key: replace(contract, runner=runner)
         for key, contract in old.gateway.service.contracts.items()}
@@ -111,8 +125,8 @@ def build_process_bundle(root, index, clock, *, origin, disjoint=False, shared_b
     groups = [{"id": identifier, "scope": {"kind": "credential" if identifier.startswith("key-") else "account",
             "ref": "synthetic-process-" + identifier},
         "source": {"kind": "controlled_import", "version": "synthetic-process-reviewed-v1"},
-        "supplier_limits": [], "local_limits": [limit("rpm", 100, configured, expires=7200),
-            limit("tpm", 10000, configured, expires=7200), limit("concurrency", 1, configured, expires=7200)]}
+        "supplier_limits": [], "local_limits": [limit("rpm", rpm, configured, expires=7200),
+            limit("tpm", 10000, configured, expires=7200), limit("concurrency", concurrency, configured, expires=7200)]}
         for identifier in group_ids]
     bindings = [{"id": "binding-" + key, "provider": "openrouter",
         "account_ref": "synthetic-process-account-" + (key if disjoint else "shared"),
@@ -155,12 +169,14 @@ class Worker:
 
 
 class ProcessPair:
-    def __init__(self, root, network, *, disjoint=False, shared_budget=False, first_mode="hold"):
+    def __init__(self, root, network, *, disjoint=False, shared_budget=False, first_mode="hold",
+                 rpm=100, concurrency=1):
         self.root, self.network = Path(root), network
         self.root.mkdir(parents=True, mode=0o700)
         self.context = multiprocessing.get_context("spawn")
         self.clock = SharedClock(self.context.Value("d", time.time()))
-        self.options = {"disjoint": disjoint, "shared_budget": shared_budget, "configuration_at": self.clock()}
+        self.options = {"disjoint": disjoint, "shared_budget": shared_budget, "configuration_at": self.clock(),
+            "rpm": rpm, "concurrency": concurrency}
         self.workers, self.receipts, self.http_records, self.observations = [], [], [], []
         self.stack = ExitStack()
         self.first_mode = first_mode
@@ -241,7 +257,7 @@ class ProcessPair:
 
     def entered(self, index):
         worker = self.workers[index]
-        assert worker.connection.poll(10), "Physical MockTransport POST was not reached"
+        assert worker.connection.poll(10), "Controlled request phase was not reached"
         receipt = worker.connection.recv()
         assert receipt.get("entered"), receipt
         self.receipts.append(receipt)

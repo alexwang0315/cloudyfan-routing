@@ -24,13 +24,20 @@ async function main() {
   const shot=async name=>{await page.screenshot({path:path.join(output,name+'.png'),fullPage:true});report.screenshots.push(name+'.png');
     await fs.writeFile(path.join(output,name+'.aria.txt'),await page.locator('body').ariaSnapshot());};
   const hash=async file=>createHash('sha256').update(await fs.readFile(file)).digest('hex');
-  const names=['src/cloudyfan_monitor/app.py','src/cloudyfan_monitor/gateway.py','src/cloudyfan_monitor/integration.py',
-    'src/cloudyfan_monitor/static/app.js','src/cloudyfan_monitor/static/index.html',
-    'tests/capacity_queue_fixture.py','scripts/qa_capacity_queue_http.py','scripts/qa_capacity_queue_desktop.cjs'];
-  for(const file of ['src/cloudyfan_monitor/static/queue.js','src/cloudyfan_monitor/static/queue.css']) {
-    if(await fs.access(path.join(root,file)).then(()=>true,()=>false))names.push(file);
-  }
-  const coreNames=['capacity_queue.py','capacity_dispatch.py','scheduler.py','client.py','budget.py','http_api.py','engine.py'];
+  const sourceFiles=async(directory,prefix='')=>{
+    const found=[];
+    for(const entry of await fs.readdir(directory,{withFileTypes:true})) {
+      const relative=prefix?prefix+'/'+entry.name:entry.name;
+      if(entry.isDirectory()&&!entry.name.startsWith('.'))found.push(...await sourceFiles(path.join(directory,entry.name),relative));
+      else if(entry.isFile()&&/\.(py|js|css|html)$/.test(entry.name))found.push(relative);
+    }
+    return found.sort();
+  };
+  const names=[...await sourceFiles(path.join(root,'src/cloudyfan_monitor'),'src/cloudyfan_monitor'),
+    'tests/capacity_queue_fixture.py','tests/capacity_admission_fixture.py','tests/capacity_sources_fixture.py',
+    'tests/test_sources.py','tests/test_local_http_integration.py',
+    'scripts/qa_fixture_ipc.cjs','scripts/qa_capacity_queue_http.py','scripts/qa_capacity_queue_desktop.cjs'];
+  const coreNames=await sourceFiles(path.join(core,'src/cloudyfan_jev'));
   try {
     report.source_sha256=Object.fromEntries(await Promise.all(names.map(async name=>[name,await hash(path.join(root,name))])));
     report.core_source_sha256=Object.fromEntries(await Promise.all(coreNames.map(async name=>[name,await hash(path.join(core,'src/cloudyfan_jev',name))])));
@@ -288,6 +295,96 @@ async function main() {
       assert.equal(after.queue_sha256,before.queue_sha256);assert.deepEqual(after.original_evidence_sha256,before.original_evidence_sha256);
       await shot('07-cancel-only-next-dispatch-keeps-fee');await inspect({command:'restore_model'});
     });
+    await step('two_clients_keep_own_scope_and_original_credential_revocation_refuses_dispatch',async()=>{
+      const agentHeaders={Authorization:'Bearer '+ready.credentials.agent};
+      const revokedTask={...task,run_id:'queue-desktop-revoked-credential',prompt:'Return only 1+1. PRIVATE_QUEUE_AGENT_PROMPT_MARKER'};
+      assert.equal((await context.request.post(ready.origin+'/v1/tasks',{headers:agentHeaders,data:revokedTask})).status(),202);
+      const own=await context.request.get(ready.origin+'/v1/tasks/'+revokedTask.run_id,{headers:agentHeaders});
+      assert.equal(own.status(),202);const ownView=JSON.stringify(await own.json());
+      for(const privateValue of ['PRIVATE_','synthetic-binding','synthetic-shared-account','physical_groups',ready.credentials.studio])assert.ok(!ownView.includes(privateValue));
+      assert.equal((await context.request.get(ready.origin+'/v1/tasks/'+revokedTask.run_id,{headers})).status(),404);
+      const cross=await context.request.get(ready.origin+'/v1/tasks/queue-desktop-running',{headers:agentHeaders});assert.equal(cross.status(),404);
+      for(const clientHeaders of [headers,agentHeaders]) {
+        const forbidden=await context.request.get(ready.origin+'/monitor/queue',{headers:clientHeaders});assert.equal(forbidden.status(),401);
+      }
+      const ownMonitor=await context.request.get(ready.origin+'/v1/monitor',{headers:agentHeaders});assert.equal(ownMonitor.status(),200);
+      const monitorView=JSON.stringify(await ownMonitor.json());assert.ok(!monitorView.includes('queue-desktop-running'));assert.ok(!monitorView.includes('PRIVATE_'));
+      const before=await inspect();await inspect({command:'revoke_agent'});
+      assert.equal((await context.request.get(ready.origin+'/v1/tasks/'+revokedTask.run_id,{headers:agentHeaders})).status(),401);
+      await inspect({command:'dispatch'});
+      for(let attempt=0;attempt<80&&(await inspect()).worker_running;attempt++)await page.waitForTimeout(25);
+      const refreshed=page.waitForResponse(response=>response.url().endsWith('/monitor/queue'));
+      await page.locator('#reload').click();await (await refreshed).finished();
+      const job=page.locator('[data-queue-run="queue-desktop-revoked-credential"]');await job.getByText('已拒絕',{exact:true}).waitFor();
+      assert.match(await job.innerText(),/queue_original_authority_denied/);
+      const operatorText=await page.locator('#queue-page').innerText();
+      for(const privateValue of ['PRIVATE_',ready.operator_token,...Object.values(ready.credentials)])assert.ok(!operatorText.includes(privateValue));
+      const after=await inspect();assert.deepEqual(after.model_requests,before.model_requests);
+      assert.deepEqual(after.budget,before.budget);assert.deepEqual(after.original_evidence_sha256,before.original_evidence_sha256);
+      assert.deepEqual(after.source_requests,[]);assert.deepEqual(after.accounting_requests,[]);
+      await shot('08-revoked-original-credential-safe-refusal');
+    });
+    await step('original_wait_deadline_expires_without_POST_or_polling_mutation_and_replay_stays_expired',async()=>{
+      const batchHeaders={Authorization:'Bearer '+ready.credentials.batch};
+      const expiredTask={...task,run_id:'queue-desktop-original-deadline'};
+      const acceptedExpiry=await context.request.post(ready.origin+'/v1/tasks',{headers:batchHeaders,data:expiredTask});
+      assert.equal(acceptedExpiry.status(),202);const originalExpiry=await acceptedExpiry.json();
+      assert.equal(originalExpiry.queue.deadline-originalExpiry.queue.accepted_at,120);
+      await inspect({command:'advance',seconds:121});const before=await inspect();
+      const own=await context.request.get(ready.origin+'/v1/tasks/'+expiredTask.run_id,{headers:batchHeaders});
+      assert.equal(own.status(),410);const expired=await own.json();
+      assert.equal(expired.status,'expired');assert.equal(expired.reason,'queue_deadline_expired');
+      assert.equal(expired.queue.deadline,originalExpiry.queue.deadline);assert.equal(expired.queue.waiting_seconds,120);
+      assert.equal(expired.queue_seconds,null);assert.equal(expired.end_to_end_seconds,120);assert.equal(expired.queue.effective_expiry_only,true);
+      const replay=await context.request.post(ready.origin+'/v1/tasks',{headers:batchHeaders,data:expiredTask});
+      assert.equal(replay.status(),410);assert.deepEqual(await replay.json(),expired);
+      const refreshed=page.waitForResponse(response=>response.url().endsWith('/monitor/queue'));
+      await page.locator('#reload').click();await (await refreshed).finished();
+      const job=page.locator('[data-queue-run="queue-desktop-original-deadline"]');await job.getByText('已到期',{exact:true}).waitFor();
+      assert.match(await job.innerText(),/queue_deadline_expired/);
+      assert.equal(await job.locator('[data-queue-timing="waiting"]').innerText(),'120.00 秒');
+      assert.equal(await job.locator('[data-queue-timing="end_to_end"]').innerText(),'120.00 秒');
+      await job.locator('summary').focus();await page.keyboard.press('Enter');
+      await job.getByText('目前依原期限顯示到期；此唯讀觀測不代表派送程序已寫入新的狀態。',{exact:true}).waitFor();
+      const cancelled=await context.request.get(ready.origin+'/v1/tasks/queue-desktop-one',{headers});
+      assert.equal(cancelled.status(),200);const cancelledView=await cancelled.json();
+      assert.equal(cancelledView.queue.waiting_seconds,3);assert.equal(cancelledView.end_to_end_seconds,3);
+      const after=await inspect();assert.deepEqual(after.model_requests,before.model_requests);
+      assert.deepEqual(after.budget,before.budget);assert.equal(after.queue_sha256,before.queue_sha256);
+      assert.equal(after.capacity_sha256,before.capacity_sha256);assert.deepEqual(after.original_evidence_sha256,before.original_evidence_sha256);
+      await shot('09-original-expiry-is-readonly');
+    });
+    await step('thirty_day_access_is_not_extended_by_waiting_replay_or_resume_and_retained_view_stays_safe',async()=>{
+      await inspect({command:'advance',seconds:30*86400+1});const before=await inspect();
+      const originalRunning={...task,run_id:'queue-desktop-running'};
+      const status=await context.request.get(ready.origin+'/v1/tasks/'+originalRunning.run_id,{headers});
+      assert.equal(status.status(),410);assert.equal((await status.json()).error.code,'task_expired');
+      const result=await context.request.get(ready.origin+'/v1/tasks/'+originalRunning.run_id+'/result',{headers});
+      assert.equal(result.status(),410);assert.equal((await result.json()).error.code,'task_expired');
+      const replay=await context.request.post(ready.origin+'/v1/tasks',{headers,data:originalRunning});
+      assert.equal(replay.status(),410);assert.equal((await replay.json()).error.code,'task_expired');
+      const resume=await context.request.post(ready.origin+'/v1/tasks/'+originalRunning.run_id+'/resume',{headers,data:{}});
+      assert.equal(resume.status(),410);assert.equal((await resume.json()).error.code,'task_expired');
+      const refreshed=page.waitForResponse(response=>response.url().endsWith('/monitor/queue'));
+      await page.locator('#reload').click();await (await refreshed).finished();
+      const expired=page.locator('[data-queue-run="queue-desktop-original-deadline"]');
+      await expired.getByText('存取已到期',{exact:true}).waitFor();
+      assert.match(await expired.innerText(),/task_expired/);assert.ok(!(await expired.innerText()).includes('排隊中'));
+      assert.ok(!(await page.locator('#queue-page').innerText()).includes('PRIVATE_'));
+      const after=await inspect();assert.deepEqual(after.model_requests,before.model_requests);assert.deepEqual(after.budget,before.budget);
+      assert.equal(after.queue_sha256,before.queue_sha256);assert.equal(after.capacity_sha256,before.capacity_sha256);
+      assert.deepEqual(after.original_evidence_sha256,before.original_evidence_sha256);
+      report.retention={access_seconds:30*86400,status:status.status(),result:result.status(),replay:replay.status(),resume:resume.status()};
+      await shot('10-retained-metadata-access-expired');
+    });
+    const final=await inspect();
+    assert.deepEqual(final.source_requests,[]);assert.deepEqual(final.accounting_requests,[]);
+    assert.deepEqual(final.blocked_server_socket_attempts,[]);assert.equal(final.worker_running,false);
+    assert.deepEqual(final.worker_results.filter(item=>item.status==='failed'),[]);
+    report.final_evidence={model_POSTs:final.model_requests.length,source_requests:final.source_requests.length,
+      accounting_requests:final.accounting_requests.length,blocked_server_sockets:final.blocked_server_socket_attempts.length,
+      original_intents:Object.keys(final.original_evidence_sha256).filter(name=>name.endsWith('/intent.json')).length,
+      original_responses:Object.keys(final.original_evidence_sha256).filter(name=>name.endsWith('/response.json')).length};
     report.console_classification=report.console_errors.map(message=>({message,
       classification:/status of (401|503)\b/.test(message)&&report.expected_http_errors.some(item=>message.includes(String(item.status)))?
         'expected_server_auth_rotation_or_controlled_read_fault':'unexpected'}));
@@ -298,6 +395,9 @@ async function main() {
     if(page)await shot('failure').catch(()=>{});
   } finally {
     if(browser)await browser.close();report.fixture_stop=await fixture.stop();
+    if(report.fixture_stop.code!==0||report.fixture_stop.timed_out||report.fixture_stop.cleanup_failed) {
+      report.status='failed';process.exitCode=1;report.cleanup_failure='Private fixture did not exit cleanly';
+    }
     if(report.source_sha256&&report.core_source_sha256) {
       const after=Object.fromEntries(await Promise.all(names.map(async name=>[name,await hash(path.join(root,name))])));
       const coreAfter=Object.fromEntries(await Promise.all(coreNames.map(async name=>[name,await hash(path.join(core,'src/cloudyfan_jev',name))])));

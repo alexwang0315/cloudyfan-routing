@@ -181,6 +181,18 @@ def main():
                 request = json.loads(line)
                 name = request["command"]
                 command_started = time.monotonic()
+                if name == "progress":
+                    progress = {"type": "progress",
+                        "thread_running_count": sum(worker.is_alive() for worker in workers),
+                        "held": not args.minimal and controlled.held.is_set() and not controlled.released.is_set(),
+                        "requests_count": len(requests)}
+                    timing = {"command": name, "started_elapsed_seconds": command_started - started,
+                        "duration_seconds": time.monotonic() - command_started}
+                    commands.append(timing)
+                    with (output / "actual-private-progress.jsonl").open("a") as stream:
+                        stream.write(json.dumps({**timing, **progress}) + "\n")
+                    print(json.dumps(progress), flush=True)
+                    continue
                 if name == "stop":
                     break
                 if name == "work":

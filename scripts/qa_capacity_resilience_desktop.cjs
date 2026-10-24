@@ -232,7 +232,7 @@ async function lifecycleMain() {
     try {
       requireLiveHold();
       fixture.send(command);const value=await fixture.next();
-      row.response_type=value.type;row.model_request_count=value.model_requests?.length;
+      row.response_type=value.type;row.model_request_count=value.model_requests?.length??value.requests_count;
       row.receipt_build_seconds=value.receipt_build_seconds;requireLiveHold();return value;
     } catch(error) {row.failure_type=error.name;row.failure_message=error.message;throw error;}
     finally {row.duration_ms=performance.now()-started;await fs.appendFile(path.join(output,'actual-fixture-durations.jsonl'),JSON.stringify(row)+'\n');}
@@ -270,8 +270,23 @@ async function lifecycleMain() {
     assert.deepEqual(after.blocked_server_socket_attempts,[]);
   }
   const idle=async(expected=0)=>{
-    for(let i=0;i<160;i++){const value=await inspect();if(value.worker_running_count===expected)return value;await page.waitForTimeout(25);}
-    throw Error('Actual controlled worker did not reach expected completion boundary');
+    const started=performance.now(),row={started_at:new Date().toISOString(),expected_workers:expected,
+      maximum_samples:160,sampling_interval_ms:100,samples:0,completed:false};
+    try{
+      for(let i=0;i<160;i++){
+        row.samples++;
+        const progress=await inspect({command:'progress'});assert.equal(progress.type,'progress');
+        if(progress.thread_running_count===expected){
+          const value=await inspect();
+          if(value.worker_running_count===expected){row.completed=true;return value;}
+        }
+        await page.waitForTimeout(100);
+      }
+      throw Error('Actual controlled worker did not reach expected completion boundary');
+    }finally{
+      row.duration_ms=performance.now()-started;
+      await fs.appendFile(path.join(output,'actual-private-idle.jsonl'),JSON.stringify(row)+'\n');
+    }
   };
   const run=async(runId,auth=client,heldWorkers=0)=>{
     let value;

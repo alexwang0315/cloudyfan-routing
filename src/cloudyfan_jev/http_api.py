@@ -194,6 +194,7 @@ class TaskService:
     def __init__(self, root, *, contracts, allowed_principal=None, allowed_principals=None, retention_policy=None,
                  principal_active=None, clock=time.time, retention_protected_paths=(), capacity_controller=None):
         self.capacity_controller = capacity_controller
+        self.queue_scheduler = None
         self.root = Path(root)
         if allowed_principal is not None and allowed_principals is not None:
             raise ValueError('Supply one server principal allowlist')
@@ -252,6 +253,12 @@ class TaskService:
     @_retained
     def create(self, principal, payload):
         self.authorize(principal)
+        if self.capacity_controller is not None and self.capacity_controller.queue_policy() is not None:
+            from .capacity_queue import QueuePreparation
+            if self.queue_scheduler is None:
+                raise ServiceError('capacity_queue_backend_unavailable', 503)
+            if not QueuePreparation.is_accepting(self.queue_scheduler):
+                return self.queue_scheduler.submit(principal, payload)
         if not isinstance(payload, dict) or set(payload) != {'run_id', 'contract_id', 'prompt'}:
             raise ServiceError('unsupported_task_fields')
         if (not isinstance(payload['prompt'], str) or not payload['prompt'].strip()
@@ -303,6 +310,13 @@ class TaskService:
 
     @_retained
     def status(self, principal, run_id):
+        if self.queue_scheduler is not None and self.queue_scheduler.contains(principal, run_id):
+            return self.queue_scheduler.status(principal, run_id)
+        return self.queue_task_status(principal, run_id)
+
+    @_retained
+    def queue_task_status(self, principal, run_id):
+        """Original task-owned fields for the controlled queue projection."""
         directory, job = self._job(principal, run_id)
         return {**_read(directory / 'state.json'), 'costs': self._costs(principal, run_id, job),
                 **({'capacity': self.capacity_controller.own(self.internal_id(principal, run_id))}
@@ -354,6 +368,13 @@ class TaskService:
     def execute(self, principal, run_id):
         directory, job = self._job(principal, run_id)
         internal = self.internal_id(principal, run_id)
+        if self.capacity_controller is not None and self.capacity_controller.queue_policy(internal) is not None:
+            from .capacity_queue import QueuePreparation
+            execution = QueuePreparation.execution()
+            if execution is None or execution.get('scheduler') is not self.queue_scheduler or execution.get('run') != internal:
+                if self.queue_scheduler is None:
+                    raise ServiceError('capacity_queue_backend_unavailable', 503)
+                return self.queue_scheduler.status(principal, run_id)
         with _lock(directory):
             contract = self.contracts.get(job['request']['contract_id'])
             if contract is None or _encode(contract.descriptor()) != _encode(job['registered']):
@@ -683,7 +704,7 @@ class HTTPApp:
             else:
                 raise ServiceError('endpoint_not_supported', 404)
             code = {'policy_denied': 403, 'accounting_interrupted': 409,
-                    'engineering_interrupted': 503}.get(body.get('status'), 200)
+                    'engineering_interrupted': 503, 'queued': 202, 'accepting': 202}.get(body.get('status'), 200)
         except ServiceError as error:
             code, body = error.status, error.body()
         except Exception:

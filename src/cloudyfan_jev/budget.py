@@ -717,6 +717,11 @@ class BudgetedCore:
                 raise CapacityDenied('capacity_adoption_missing', 403)
             self.capacity_controller.verify(capacity_context)
             self._capacity_context, self._capacity_descriptor = capacity_context, capacity_descriptor
+            if capacity_context.get('queue_version') is not None:
+                from .capacity_queue import QueuePreparation
+                execution = QueuePreparation.execution()
+                if execution is None or execution.get('run') != run_id or execution.get('controller') is not self.capacity_controller:
+                    raise CapacityDenied('capacity_queue_claim_required', 403)
         frozen = {**self.core.configuration_descriptor(),
                   'root': str(self.core.client.root.resolve()), 'task': task, 'contract': contract_version,
                   'mode': mode, 'options': kwargs,

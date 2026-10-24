@@ -270,7 +270,7 @@ class CapacityController:
             raise CapacityDenied('capacity_credential_inactive', 403)
         _INGRESS.set((self, value))
 
-    def register(self, version, *, configuration_version, routes, max_seconds, windows_version=None):
+    def register(self, version, *, configuration_version, routes, max_seconds, windows_version=None, queue_version=None):
         _identity(version)
         _identity(configuration_version)
         if type(max_seconds) is not int or not 1 <= max_seconds <= 86400 or not routes or len(routes) > 512:
@@ -279,6 +279,9 @@ class CapacityController:
         if windows_version is not None:
             _identity(windows_version)
             self._window_backend(windows_version)
+        if queue_version is not None:
+            _identity(queue_version)
+            self._queue_backend(queue_version)
         if not config['configured'] or config['configuration_version'] != configuration_version:
             raise ValueError('Registered capacity configuration required')
         bindings = {binding['id'] for binding in config['bindings']}
@@ -309,6 +312,9 @@ class CapacityController:
                  'protocol': SERIALIZER, 'routes': descriptors}
         if windows_version is not None:
             value['windows_version'] = windows_version
+        if queue_version is not None:
+            value['queue_version'] = queue_version
+            value['queue_sha256'] = self._queue_backend(queue_version).sha256
         with self.store.connection(write=True) as db:
             db.execute('BEGIN IMMEDIATE')
             prior = db.execute('SELECT payload FROM capacity_policies WHERE version=?', (version,)).fetchone()
@@ -317,6 +323,22 @@ class CapacityController:
             db.execute('INSERT OR IGNORE INTO capacity_policies VALUES(?,?)', (version, _json(value)))
         self.routes[version] = tuple(routes)
         self._route_credentials[version] = tuple(_transport_identity(route.transport) for route in routes)
+
+    def _queue_backend(self, version):
+        from .capacity_queue import QueuePreparation
+        backend = getattr(self, 'queue_backend', None)
+        if type(backend) is not QueuePreparation or backend.version != version:
+            raise CapacityDenied('capacity_queue_backend_unavailable')
+        return backend
+
+    def queue_policy(self, run=None):
+        with self.store.connection() as db:
+            if run is not None:
+                row = db.execute('SELECT payload FROM capacity_adoptions WHERE run=?', (run,)).fetchone()
+                return json.loads(row[0]).get('queue_version') if row else None
+            version = db.execute('SELECT version FROM capacity_dispatch_control WHERE id=1').fetchone()[0]
+            row = db.execute('SELECT payload FROM capacity_policies WHERE version=?', (version,)).fetchone()
+        return json.loads(row[0]).get('queue_version') if row else None
 
     def _window_backend(self, version):
         backend = self.window_backend
@@ -436,6 +458,11 @@ class CapacityController:
                      'configuration_version': policy['configuration_version'] if policy else None,
                      'protocol': SERIALIZER, 'descriptor_sha256': _hash(descriptor), 'accepted_at': now,
                      'deadline': now + policy['max_seconds'] if policy else None}
+            if policy is not None and policy.get('queue_version') is not None:
+                backend = self._queue_backend(policy['queue_version'])
+                if policy['queue_sha256'] != backend.sha256:
+                    raise CapacityDenied('capacity_queue_contract_changed')
+                value.update(queue_version=backend.version, queue_sha256=backend.sha256)
             db.execute('INSERT INTO capacity_adoptions VALUES(?,?,0)', (run, _json(value)))
             return value
 

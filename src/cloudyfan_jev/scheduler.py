@@ -32,8 +32,16 @@ class QueueLimits:
 
 
 class QueueScheduler:
-    def __init__(self, service, path, *, limits, clock=time, measurement_kind="unqualified"):
+    def __init__(self, service, path, *, limits, clock=time, measurement_kind="unqualified", capacity_protocol=None):
         self.service, self.path, self.limits, self.clock = service, Path(path), limits, clock
+        self.capacity_protocol = capacity_protocol
+        if capacity_protocol is not None:
+            from .capacity_queue import QueuePreparation
+            if (type(capacity_protocol) is not QueuePreparation or service.capacity_controller is None
+                    or getattr(service.capacity_controller, 'queue_backend', None) is not capacity_protocol):
+                raise ValueError('Explicit controlled queue preparation and capacity controller required')
+            for name, contract in service.contracts.items():
+                capacity_protocol.verify_contract(name, contract)
         if measurement_kind not in {'synthetic', 'unqualified'}:
             raise ValueError('Queue measurement provenance must be explicit')
         self.measurement_kind = measurement_kind
@@ -41,8 +49,11 @@ class QueueScheduler:
         self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         with self._transaction() as db:
             db.execute('CREATE TABLE IF NOT EXISTS configuration (singleton INTEGER PRIMARY KEY, body TEXT)')
-            config = _encode({'limits': asdict(limits), 'principals': sorted(service.allowed_principals),
-                              'service_root': str(service.root.resolve()), 'measurement_kind': measurement_kind}).decode()
+            value = {'limits': asdict(limits), 'principals': sorted(service.allowed_principals),
+                     'service_root': str(service.root.resolve()), 'measurement_kind': measurement_kind}
+            if capacity_protocol is not None:
+                value['capacity_preparation'] = capacity_protocol.descriptor()
+            config = _encode(value).decode()
             old = db.execute('SELECT body FROM configuration').fetchone()
             if old and old[0] != config: raise ValueError('Frozen queue configuration changed')
             db.execute('INSERT OR IGNORE INTO configuration VALUES (1,?)', (config,))
@@ -52,6 +63,8 @@ class QueueScheduler:
             db.execute('CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, principal TEXT, run_id TEXT, request TEXT, '
                        'created REAL, deadline REAL, state TEXT, reason TEXT, started REAL, finished REAL, cancel_requested INTEGER DEFAULT 0)')
         os.chmod(self.path, 0o600)
+        if capacity_protocol is not None:
+            service.queue_scheduler = self
         if getattr(service, 'retention_policy', None) is not None:
             existing = getattr(service, 'retention_guard', None)
             if existing is not None and getattr(getattr(existing, '__self__', None), 'path', None) != self.path:
@@ -79,6 +92,16 @@ class QueueScheduler:
             db.close()
 
     @contextmanager
+    def _readonly(self):
+        db = sqlite3.connect(self.path.resolve().as_uri() + '?mode=ro', uri=True, timeout=30)
+        db.row_factory = sqlite3.Row
+        try:
+            db.execute('PRAGMA query_only=ON')
+            yield db
+        finally:
+            db.close()
+
+    @contextmanager
     def _task_guard(self, internal_id):
         retention = getattr(self.service, 'retention', None)
         if retention is None:
@@ -92,6 +115,8 @@ class QueueScheduler:
             raise ServiceError(error.code, error.status) from None
 
     def submit(self, principal, payload):
+        if self.capacity_protocol is not None:
+            return self._capacity_submit(principal, payload)
         self.service.authorize(principal)
         if not isinstance(payload, dict): raise ServiceError('unsupported_task_fields')
         identity = self.service.internal_id(principal, payload.get('run_id'))
@@ -119,6 +144,56 @@ class QueueScheduler:
                     db.execute('INSERT INTO jobs (id,principal,run_id,request,created,deadline,state) VALUES (?,?,?,?,?,?,?)',
                                (identity, principal, payload['run_id'], encoded, now, now + self.limits.max_wait_seconds, 'queued'))
         if rejection: raise ServiceError(rejection, 429)
+        return self.status(principal, payload['run_id'])
+
+    def _capacity_submit(self, principal, payload):
+        self.service.authorize(principal)
+        if not isinstance(payload, dict) or set(payload) != {'run_id', 'contract_id', 'prompt'}:
+            raise ServiceError('unsupported_task_fields')
+        identity = self.service.internal_id(principal, payload['run_id'])
+        contract = self.service.contracts.get(payload['contract_id'])
+        if contract is None:
+            raise ServiceError('unregistered_contract')
+        self.capacity_protocol.verify_contract(payload['contract_id'], contract)
+        encoded = _encode(payload).decode()
+        rejection = None
+        # This committed accepting row is a recovery journal across the queue,
+        # original TaskService job and capacity adoption stores. No cross-store
+        # transaction is claimed; resubmit can only finish the same frozen row.
+        with self._task_guard(identity), self._transaction() as db:
+            if db.execute('SELECT 1 FROM maintenance WHERE active=1').fetchone():
+                raise ServiceError('queue_maintenance', 503)
+            self._expire(db)
+            prior = db.execute('SELECT * FROM jobs WHERE id=?', (identity,)).fetchone()
+            if prior:
+                if prior['request'] != encoded:
+                    raise ServiceError('frozen_task_changed', 409)
+            else:
+                count = db.execute('SELECT COUNT(*) FROM jobs WHERE state IN ("queued","accepting")').fetchone()[0]
+                active = db.execute('SELECT COUNT(*) FROM jobs WHERE principal=? AND state IN ("accepting","queued","running","interrupted_pending")', (principal,)).fetchone()[0]
+                if count >= self.limits.capacity:
+                    rejection = 'queue_full'
+                elif active >= self.limits.per_principal:
+                    rejection = 'principal_quota_full'
+                now = self._now(db)
+                if rejection:
+                    db.execute('INSERT INTO rejections VALUES(?,?,?,?)', (principal, payload['run_id'], rejection, now))
+                else:
+                    db.execute('INSERT INTO jobs(id,principal,run_id,request,created,deadline,state,reason) VALUES(?,?,?,?,?,?,?,?)',
+                        (identity, principal, payload['run_id'], encoded, now, now + self.limits.max_wait_seconds,
+                         'accepting', 'queue_acceptance_incomplete'))
+        if rejection:
+            raise ServiceError(rejection, 429)
+        with self._readonly() as db:
+            state = self._job(db, principal, payload['run_id'])['state']
+        if state == 'accepting':
+            with self.capacity_protocol.accepting(self):
+                self.service.create(principal, payload)
+                self.service.mark_queued(principal, payload['run_id'])
+            with self._transaction() as db:
+                row = self._job(db, principal, payload['run_id'])
+                if row['state'] == 'accepting':
+                    db.execute('UPDATE jobs SET state="queued",reason="queue_waiting_worker" WHERE id=?', (identity,))
         return self.status(principal, payload['run_id'])
 
     @contextmanager
@@ -196,18 +271,69 @@ class QueueScheduler:
         if row is None: raise ServiceError('task_not_found', 404)
         return row
 
+    def contains(self, principal, run_id):
+        identity = self.service.internal_id(principal, run_id)
+        with self._readonly() as db:
+            return db.execute('SELECT 1 FROM jobs WHERE id=?', (identity,)).fetchone() is not None
+
     def status(self, principal, run_id):
-        with self._transaction() as db:
-            self._expire(db)
+        self.service.authorize(principal)
+        with self._readonly() as db:
             row = dict(self._job(db, principal, run_id))
-        task = self.service.status(principal, run_id)
+            now = self._observed_now(db)
+        return self._status(row, now)
+
+    def _observed_now(self, db):
+        now = self.clock()
+        floor = db.execute('SELECT value FROM queue_clock WHERE singleton=1').fetchone()
+        if isinstance(now, bool) or not isinstance(now, (int, float)) or not math.isfinite(now) or floor and now < floor[0]:
+            raise ServiceError('queue_clock_invalid', 503)
+        return now
+
+    def _status(self, row, now):
+        principal, run_id = row['principal'], row['run_id']
+        if row['state'] in {'queued', 'accepting'} and now >= row['deadline']:
+            row = {**row, 'state': 'expired', 'reason': 'queue_deadline_expired', 'finished': row['deadline']}
+        if row['state'] == 'accepting':
+            task = {'status': 'accepting', 'costs': {'complete_api_usd': None, 'known_api_usd': '0', 'unknown_events': 0}}
+        else:
+            task = (self.service.queue_task_status(principal, run_id) if self.capacity_protocol is not None
+                    else self.service.status(principal, run_id))
         status = task['status'] if row['state'] == 'completed' else row['state']
-        return {'run_id': run_id, 'status': status, 'queue_state': row['state'],
+        view = {'run_id': run_id, 'status': status, 'queue_state': row['state'],
                 'reason': row['reason'], 'cancellation_requested': bool(row['cancel_requested']),
                 'provider_cancellation_confirmed': False, 'costs': task['costs'],
                 'measurement_kind': self.measurement_kind, 'production_slo_validated': False,
                 'queue_seconds': None if row['started'] is None else row['started'] - row['created'],
                 'end_to_end_seconds': None if row['finished'] is None else row['finished'] - row['created']}
+        if self.capacity_protocol is not None:
+            view['queue'] = {'protocol': self.capacity_protocol.protocol, 'version': self.capacity_protocol.version,
+                'limits': asdict(self.limits), 'accepted_at': row['created'], 'deadline': row['deadline'],
+                'waiting_seconds': max(0, (row['started'] or min(now, row['deadline'])) - row['created']),
+                'effective_expiry_only': row['state'] == 'expired' and row['finished'] == row['deadline']}
+            if row['state'] in {'queued', 'accepting', 'running', 'interrupted_pending'}:
+                view['costs'] = {**task['costs'], 'complete_api_usd': None}
+        return view
+
+    def snapshot(self):
+        """Trusted operator projection. No prompts, credentials or body paths."""
+        with self._readonly() as db:
+            now = self._observed_now(db)
+            rows = [dict(row) for row in db.execute('SELECT * FROM jobs ORDER BY created,rowid DESC LIMIT 100')]
+            total = db.execute('SELECT COUNT(*) FROM jobs').fetchone()[0]
+        jobs = []
+        for row in rows:
+            try:
+                view = self._status(row, now)
+                jobs.append({'client': row['principal'], **view})
+            except ServiceError as error:
+                jobs.append({'client': row['principal'], 'run_id': row['run_id'],
+                             'status': row['state'], 'reason': error.code})
+        return {'schema_version': 'capacity-queue-v1', 'configured': self.capacity_protocol is not None,
+                'version': self.capacity_protocol.version if self.capacity_protocol is not None else None,
+                'limits': asdict(self.limits), 'now': now, 'jobs': jobs, 'job_count': total,
+                'history_complete': total == len(rows), 'measurement_kind': self.measurement_kind,
+                'production_slo_validated': False}
 
     def result(self, principal, run_id):
         with self._transaction() as db: self._job(db, principal, run_id)
@@ -222,16 +348,19 @@ class QueueScheduler:
             return changed.rowcount
 
     def cancel(self, principal, run_id):
+        self.service.authorize(principal)
         with self._transaction() as db:
             self._expire(db)
             row = self._job(db, principal, run_id)
-            if row['state'] == 'queued':
+            if row['state'] in {'queued', 'accepting'}:
                 db.execute('UPDATE jobs SET state="cancelled",reason="cancelled_before_dispatch",finished=?,cancel_requested=1 WHERE id=?', (self._now(db), row['id']))
             elif row['state'] in {'running', 'interrupted_pending'}:
                 db.execute('UPDATE jobs SET cancel_requested=1 WHERE id=?', (row['id'],))
         return self.status(principal, run_id)
 
     def dispatch_next(self):
+        if self.capacity_protocol is not None:
+            raise ServiceError('queue_worker_protocol_unavailable', 503)
         with self._transaction() as db:
             if db.execute('SELECT 1 FROM maintenance WHERE active=1').fetchone():
                 return None

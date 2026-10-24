@@ -13,6 +13,7 @@ let token = '', data = null, pool = null, selectedCategory = 'artificial-analysi
 const expandedTaskTraces = new Set();
 let simulationStarting = false;
 let authenticationVersion = 0, snapshotFlight = null;
+let selectedCandidateVersion = '', selectedCandidateMode = 'cloudyfan', candidateFlight = 0;
 function setToken(value) {token=value;authenticationVersion+=1;}
 const sameLogin = (version,value) => authenticationVersion===version&&token===value&&!!token;
 const money = v => v === null || v === undefined ? '未知' : '$' + Number(v).toFixed(6);
@@ -135,9 +136,14 @@ function ledgerPage() {
  `${attribution(l)}<section class="panel mt"><div class="panel-header"><h2>預算與預留</h2>${badge(l.basis==='simulated_core_budget'?'模擬帳本':'核心帳本',l.basis==='simulated_core_budget'?'amber':'blue')}</div><div class="table-wrap"><table><thead><tr><th>帳戶</th><th>授權額度</th><th>已預留 / 暫扣</th><th>已知支出</th><th>可用</th><th>派送狀態</th></tr></thead><tbody>${l.accounts.map(a=>`<tr><td class="mono">${esc(a.id)}</td><td>${money(a.authorized_usd)}</td><td>${money(a.reserved_usd)}<br><span class="muted">待核暫扣 ${money(a.provisional_hold_usd)}</span></td><td>${money(a.known_usd)}</td><td>${money(a.available_usd)}</td><td>${badge(a.dispatch_blocked?'已阻擋':'以核心執行前檢查為準',a.dispatch_blocked?'red':'')}</td></tr>`).join('')}</tbody></table></div></section>`+
  `<section class="panel mt"><div class="panel-header"><h2>逐筆費用事件</h2><span class="muted">${l.rows.length} 筆 · 相同帳本只計一次</span></div><div class="table-wrap"><table><thead><tr><th>請求 / generation</th><th>種類 / 實際模型</th><th>金額 / 用量</th><th>帳務證據</th></tr></thead><tbody>${l.rows.slice(-200).reverse().map(r=>`<tr><td><code>${esc(r.id)}</code><br><span class="muted mono">${esc(r.receipt)}</span></td><td>${esc(r.request_kind==='classification'?'Jev 分類':r.request_kind==='generation'?'模型作答':r.request_kind)}<br><span class="muted">${esc(r.model || '模型缺證')}<br>${esc(r.provider || '供應商缺證')}</span></td><td class="amount">${money(r.cost)}<br><span class="muted">${r.tokens ? esc((r.tokens.prompt_tokens ?? r.tokens.input_tokens ?? '—')+' in / '+(r.tokens.completion_tokens ?? r.tokens.output_tokens ?? '—')+' out') : '用量缺證'}</span></td><td>${badge(r.cost===null?'費用未知':r.verified?'已核帳':'API 已報費用',r.cost===null?'amber':r.verified?'green':'blue')}</td></tr>`).join('')||'<tr><td colspan="4" class="empty">尚無帳務事件</td></tr>'}</tbody></table></div><div class="table-note">保存所有事件，依請求 ID 排序顯示末 200 筆。待核暫扣保留尚未最終核帳的費用上界。usage 金額與最終核帳不重複相加。已知分類 ${money(l.by_kind_known_usd.classification)}；已知作答 ${money(l.by_kind_known_usd.generation)}。</div></section>`;
 }
-function candidate(c,i) {
+function candidateObservation() {
+ const observed=pool?.operator_observation?.schema_version==='mrc-observation-v1'?pool.operator_observation.candidates:null;
+ return observed?.context?.category===selectedCategory&&observed.context.mode===selectedCandidateMode
+   &&observed.context.pool_id===(selectedCandidateVersion||pool.id)?observed:null;
+}
+function candidate(c,i,tier) {
  const p=c.profile||{};
- return `<article class="pool-candidate"><div class="position">${['PRIMARY / 主選','BACKUP 01 / 備援','BACKUP 02 / 備援'][i]}</div>${p.model?`<div class="model-name">${esc(p.model)}</div><div class="provider">${esc(p.provider||'供應商未綁定')} · ${esc(p.effort||'強度未知')}</div>${badge(poolStatuses[c.status]||c.status,c.status==='pending_unqualified_stale_source'?'red':'amber')}<div class="property"><span>Quality / 原生分數</span><strong>${esc(c.quality)}</strong></div><div class="property"><span>Cost / 報價情境</span><strong>${money(c.quote_usd)}</strong></div><div class="property"><span>Speed / 端點 P50</span><strong>${c.endpoint_p50_ms===undefined||c.endpoint_p50_ms===null?'未知':esc(c.endpoint_p50_ms)+'ms'}</strong></div><div class="property"><span>完整任務成本</span><strong>${money(c.flow_cost_usd)}</strong></div><div class="property"><span>完整任務延遲</span><strong>${c.flow_latency_ms==null?'未知':esc(c.flow_latency_ms)+'ms'}</strong></div>`:'<div class="pool-short">尚無可對應的候選。<br>保留缺額，不以其他池補數。</div>'}</article>`;
+ return `<article class="pool-candidate"><div class="position">${['PRIMARY / 主選','BACKUP 01 / 備援','BACKUP 02 / 備援'][i]}</div>${p.model?`<div class="model-name">${esc(p.model)}</div><div class="provider">${esc(p.provider||'供應商未綁定')} · ${esc(p.effort||'強度未知')}</div>${badge(poolStatuses[c.status]||c.status,c.status==='pending_unqualified_stale_source'?'red':'amber')}<div class="property"><span>Quality / 原生分數</span><strong>${esc(c.quality)}</strong></div><div class="property"><span>Cost / 報價情境</span><strong>${money(c.quote_usd)}</strong></div><div class="property"><span>Speed / 端點 P50</span><strong>${c.endpoint_p50_ms===undefined||c.endpoint_p50_ms===null?'未知':esc(c.endpoint_p50_ms)+'ms'}</strong></div><div class="property"><span>完整任務成本</span><strong>${money(c.flow_cost_usd)}</strong></div><div class="property"><span>完整任務延遲</span><strong>${c.flow_latency_ms==null?'未知':esc(c.flow_latency_ms)+'ms'}</strong></div>`:'<div class="pool-short">尚無可對應的候選。<br>保留缺額，不以其他池補數。</div>'}${window.CloudyFanCandidates?.row(candidateObservation()?.tiers?.[tier]?.[i],tier,i)||''}</article>`;
 }
 function completenessNotice(completeness) {
  if(!completeness)return '';
@@ -154,11 +160,14 @@ function poolsPage() {
  if(!pool)return heading('CANDIDATE POOLS','23 類候選池視圖','讀取中…');
  const category=pool.categories[selectedCategory]||Object.values(pool.categories)[0];
  const named=Object.values(pool.categories).flatMap(c=>Object.values(c.pools).flat()).filter(c=>c.profile?.model).length;
+ const observed=candidateObservation(), versions=pool.operator_observation?.candidates?.versions||[{pool_id:pool.id}];
  return heading('CANDIDATE POOLS / QUALITY · COST · SPEED','23 類候選池視圖','高、中、低為品質分組；開源候選可與它們重疊。每欄主選與兩個備援，候選資料與執行資格分開。',`<button class="button primary" id="refresh-pools" ${busy||!data.source_refresh_available?'disabled':''}>${busy?'正在取得資料…':'手動更新來源'}</button>`)+
  completenessNotice(refreshCompleteness||pool.completeness)+
  `<div class="notice"><strong>${esc(({historical_local_inventory:'既有歷史盤點',offline_demo_refresh_no_external_get:'模擬更新 · 保留原資料時間',offline_mock_runtime:'模擬路由設定',openrouter_free_get_candidate_proposal:'OpenRouter 候選更新'})[pool.source_kind]||pool.source_kind)}</strong> · 資料時間 ${esc(when(pool.created_at))}<br>具名 ${named} / 276 個位置 · 缺額 ${276-named}。報價情境為 2,000 輸入 + 1,000 輸出 token，並非含升級的完整成本；歷史准入不代表目前可派送。<br><span class="mono">候選 ${esc(pool.id.slice(0,12))} · 路由 ${esc(data.control.routing_pool?.slice(0,12)||'尚未啟用')}</span></div>`+
- `<div class="filters"><label for="category">任務分類</label><select id="category">${options(Object.fromEntries(Object.keys(pool.categories).map(c=>[c,cname(c)+' · '+c])),selectedCategory)}</select><span class="muted">品質單位：${esc(category.unit)}</span><button id="activate-pool" class="button small" ${pool.routing_available?'':'disabled'}>啟用此路由版本</button></div>`+
- `<div class="pool-grid">${Object.entries(candidateTiers).map(([tier,label])=>`<section class="pool-column"><div class="pool-title"><h3>${label}</h3><span class="muted mono">${category.pools[tier].filter(c=>c.profile?.model).length} / 3</span></div>${category.pools[tier].map(candidate).join('')}</section>`).join('')}</div>`+
+ `<div class="filters"><label class="candidate-query-label" for="candidate-version">候選版本<select id="candidate-version">${versions.map(v=>`<option value="${esc(v.pool_id)}" ${v.pool_id===pool.id?'selected':''}>${esc(v.pool_id.slice(0,12))}${v.active?' · 目前執行':''}${v.catalog?' · 目前候選':''}</option>`).join('')}</select></label><label class="candidate-query-label" for="category">任務分類<select id="category">${options(Object.fromEntries(Object.keys(pool.categories).map(c=>[c,cname(c)+' · '+c])),selectedCategory)}</select></label><label class="candidate-query-label" for="candidate-mode">觀測模式<select id="candidate-mode">${options(modes,selectedCandidateMode)}</select></label><span class="muted">品質單位：${esc(category.unit)}</span><button id="activate-pool" class="button small" ${pool.routing_available?'':'disabled'}>啟用此路由版本</button></div>`+
+ (window.CloudyFanCandidates?.context(observed)||'')+
+ `<div class="pool-grid">${Object.entries(candidateTiers).map(([tier,label])=>`<section class="pool-column"><div class="pool-title"><h3>${label}</h3><span class="muted mono">${category.pools[tier].filter(c=>c.profile?.model).length} / 3</span></div>${category.pools[tier].map((c,i)=>candidate(c,i,tier)).join('')}</section>`).join('')}</div>`+
+ (window.CloudyFanCandidates?.excluded(observed)||'')+
  contractMatrix()+
  `<section class="panel mt"><div class="panel-header"><h2>全部分類候選覆蓋</h2><span class="muted">點選類別查看主備模型</span></div><div class="table-wrap"><table class="pool-summary"><thead><tr><th>分類</th>${Object.values(candidateTiers).map(t=>`<th>${t}</th>`).join('')}</tr></thead><tbody>${Object.entries(pool.categories).map(([id,c])=>`<tr><td><button class="text-button" data-category="${esc(id)}"><span class="category-name">${esc(cname(id))}</span><span class="category-id">${esc(id)}</span></button></td>${Object.keys(tiers).map(tier=>`<td><span class="pill-count">${c.pools[tier].filter(p=>p.profile?.model).length}/3</span><br><span class="muted">${esc(c.pools[tier][0]?.profile?.model||'缺額')}</span></td>`).join('')}</tr>`).join('')}</tbody></table></div></section>`;
 }
@@ -186,11 +195,24 @@ function render() {
  if($('#task-search'))$('#task-search').oninput=e=>{search=e.target.value;const at=e.target.selectionStart;render();$('#task-search').focus();$('#task-search').setSelectionRange(at,at);};
  if($('#task-client'))$('#task-client').onchange=e=>{taskFilter=e.target.value;render();};
  if($('#task-mode'))$('#task-mode').onchange=e=>{modeFilter=e.target.value;render();};
- if($('#category'))$('#category').onchange=e=>{selectedCategory=e.target.value;render();};
- document.querySelectorAll('[data-category]').forEach(b=>b.onclick=()=>{selectedCategory=b.dataset.category;render();window.scrollTo(0,0);});
+ if($('#category'))$('#category').onchange=e=>{selectedCategory=e.target.value;loadCandidateView();};
+ if($('#candidate-version'))$('#candidate-version').onchange=e=>{selectedCandidateVersion=e.target.value;loadCandidateView();};
+ if($('#candidate-mode'))$('#candidate-mode').onchange=e=>{selectedCandidateMode=e.target.value;loadCandidateView();};
+ document.querySelectorAll('[data-category]').forEach(b=>b.onclick=()=>{selectedCategory=b.dataset.category;loadCandidateView();window.scrollTo(0,0);});
  document.querySelectorAll('[data-client]').forEach(b=>b.onclick=()=>{selectedClient=b.dataset.client;render();});
  if($('#refresh-pools'))$('#refresh-pools').onclick=refreshPools;
  if($('#activate-pool'))$('#activate-pool').onclick=()=>{const revision=data.control.revision,id=pool.id;confirmAction('啟用新的路由版本','<p>只有已在伺服器註冊執行契約的版本可以啟用。新任務使用新版本，既有任務沿用舊版本。</p>',()=>api('/monitor/pools/activate',{revision,pool:id}));};
+}
+const candidateSelectionKey = () => JSON.stringify([selectedCandidateVersion,selectedCategory,selectedCandidateMode]);
+const candidateQuery = id => '/monitor/pools?'+new URLSearchParams({id,category:selectedCategory,mode:selectedCandidateMode});
+async function loadCandidateView() {
+ const version=authenticationVersion,requestToken=token,selection=candidateSelectionKey(),flight=++candidateFlight;
+ render();
+ try{
+   const nextPool=await api(candidateQuery(selectedCandidateVersion||data.control.catalog_pool));
+   if(!sameLogin(version,requestToken)||flight!==candidateFlight||selection!==candidateSelectionKey())return;
+   pool=nextPool;$('#error').hidden=true;render();
+ }catch(e){if(sameLogin(version,requestToken)&&flight===candidateFlight){error('候選觀測未更新：'+e.message);render();}}
 }
 async function refreshPools() {
  busy=true;render();
@@ -218,8 +240,10 @@ function load(force=false) {
      const next=await api('/monitor/snapshot');
      if(!sameLogin(version,requestToken))return {ok:false,stale:true};
      let nextPool=pool;
-     if(next.control.catalog_pool&&(!nextPool||nextPool.id!==next.control.catalog_pool))nextPool=await api('/monitor/pools');
+     const viewedPool=selectedCandidateVersion||next.control.catalog_pool,selection=candidateSelectionKey();
+     if(viewedPool&&(flight.force||!nextPool||nextPool.id!==viewedPool||!candidateObservation()))nextPool=await api(candidateQuery(viewedPool));
      if(!sameLogin(version,requestToken))return {ok:false,stale:true};
+     if(selection!==candidateSelectionKey())return {ok:false,stale:true};
      data=next;pool=nextPool;
      $('#updated').textContent='更新 '+new Date().toLocaleTimeString('zh-TW',{hour12:false});$('#error').hidden=true;
      if(flight.force||(!['INPUT','SELECT'].includes(document.activeElement?.tagName)&&!$('dialog[open]')))render();
@@ -233,7 +257,7 @@ function load(force=false) {
  return flight.promise;
 }
 $('#reload').onclick=async()=>{await load(true);if(location.hash==='#billing'&&token)await window.CloudyFanBilling.refresh();};
-$('#logout').onclick=()=>{setToken('');data=null;pool=null;refreshCompleteness=null;pendingConfirm=null;expandedTaskTraces.clear();window.CloudyFanBilling.resetView();$('#main').innerHTML='<div class="empty">已清除登入；請重新認證。</div>';$('#login').showModal();};
+$('#logout').onclick=()=>{setToken('');data=null;pool=null;selectedCandidateVersion='';selectedCandidateMode='cloudyfan';candidateFlight+=1;refreshCompleteness=null;pendingConfirm=null;expandedTaskTraces.clear();window.CloudyFanBilling.resetView();$('#main').innerHTML='<div class="empty">已清除登入；請重新認證。</div>';$('#login').showModal();};
 $('#login-form').onsubmit=async e=>{
  e.preventDefault();setToken($('#token').value);const version=authenticationVersion,requestToken=token;
  const result=await load(true);

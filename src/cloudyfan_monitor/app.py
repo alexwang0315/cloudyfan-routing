@@ -10,6 +10,7 @@ from urllib.parse import parse_qs
 from cloudyfan_jev.http_api import ServiceError
 from cloudyfan_jev.identity import IdentityStore
 
+from .candidate_observation import CandidateObserver
 from .pools import differences
 from .store import MonitorError, encode
 
@@ -21,7 +22,8 @@ SECURITY_HEADERS = [("X-Content-Type-Options", "nosniff"), ("Referrer-Policy", "
 
 class App:
     def __init__(self, gateway, *, admin_token, source=None, origin="http://127.0.0.1:8766",
-                 identity_store=None, billing_source=None, ollama_models=None, simulation=None):
+                 identity_store=None, billing_source=None, ollama_models=None, simulation=None,
+                 candidate_observer=None):
         if len(admin_token) < 32:
             raise ValueError("Strong operator token required")
         self.gateway, self.store, self.admin_token = gateway, gateway.store, admin_token
@@ -35,6 +37,9 @@ class App:
             raise ValueError("Controlled identity registry required")
         self.identity_store = identity_store
         self.simulation = simulation
+        if candidate_observer is not None and not isinstance(candidate_observer, CandidateObserver):
+            raise ValueError("Controlled candidate observer required")
+        self.candidate_observer = candidate_observer or CandidateObserver(self.store, gateway.service, gateway.registry)
         self.ollama = None
         if ollama_models is not None:
             from .ollama_gateway import OllamaGateway
@@ -112,6 +117,8 @@ class App:
                       "/billing.css": ("billing.css", "text/css; charset=utf-8"),
                       "/trace.js": ("trace.js", "text/javascript; charset=utf-8"),
                       "/trace.css": ("trace.css", "text/css; charset=utf-8"),
+                      "/candidates.js": ("candidates.js", "text/javascript; charset=utf-8"),
+                      "/candidates.css": ("candidates.css", "text/css; charset=utf-8"),
                       "/style.css": ("style.css", "text/css; charset=utf-8")}
             if method == "GET" and path in static:
                 filename, content_type = static[path]
@@ -181,12 +188,16 @@ class App:
                 view["simulation"] = self.simulation.descriptor()
             return view
         if method == "GET" and path == "/monitor/pools":
-            params = parse_qs(environ.get("QUERY_STRING", ""))
+            params = parse_qs(environ.get("QUERY_STRING", ""), keep_blank_values=True)
+            if set(params) - {"id", "category", "mode"} or any(len(values) != 1 for values in params.values()):
+                raise MonitorError("unsupported_observation_query")
             pool = params.get("id", [self.store.control()["catalog_pool"]])[0]
             if pool is None:
                 raise MonitorError("pool_not_configured", 409)
             view = self.store.pool(pool)
             view["routing_available"] = any(p == pool for p, _, _ in self.gateway.registry)
+            view["operator_observation"] = self.candidate_observer.project(view,
+                category=params.get("category", [None])[0], mode=params.get("mode", [None])[0])
             return view
         if method == "POST" and path == "/monitor/mode":
             body = self._body(environ)

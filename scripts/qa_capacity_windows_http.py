@@ -39,12 +39,14 @@ def build_window_host(output, origin, clock):
     host = assemble_health_host(output / "service", origin, clock=clock)
 
     def upstream(request):
-        payload = json.loads(request.content)
+        payload = json.loads(request.content) if request.content else {}
         number = len(requests) + 1
         requests.append({"method": request.method, "path": request.url.path,
             "wire_sha256": hashlib.sha256(request.content).hexdigest(), "model": payload.get("model")})
         (output / f"private-wire-{number:03d}.bin").write_bytes(request.content)
         host.calls.append({"method": request.method, "path": request.url.path, "payload": payload})
+        if request.method != "POST":
+            return httpx.Response(503, json={"error": "PRIVATE_WINDOW_RECONCILIATION_UNAVAILABLE"})
         if flags["hold"]:
             held.set()
             if not released.wait(45):
@@ -232,4 +234,13 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except BaseException:
+        import traceback
+        if "--output" in sys.argv:
+            target = Path(sys.argv[sys.argv.index("--output") + 1]).resolve()
+            target.mkdir(parents=True, exist_ok=True, mode=0o700)
+            with (target / "private-fixture-failure.txt").open("x") as stream:
+                stream.write(traceback.format_exc())
+        raise

@@ -175,7 +175,7 @@ async function lifecycleMain() {
     checks:[],screenshots:[],page_errors:[],console_errors:[],expected_http_errors:[],http_responses:[],
     blocked_browser_requests:[],boots:[],viewport:{width:1280,height:900},
     visual_regression:{status:'INCONCLUSIVE',reason:'No declared visual baseline; actual images and semantic checks retained'},
-    accessibility_scope:'Keyboard focus/disclosure and responsive viewport checks; no screen-reader or WCAG certification'};
+    accessibility_scope:'Keyboard focus/disclosure at the declared desktop viewport; no screen-reader or WCAG certification'};
   if(process.argv.includes('--focused-restart'))report.scope+='; focused restart slice: >100 paid history and refusal steps explicitly not run';
   let fixture,ready,browser,context,page,boot=0,operator,client,agent;
   const headers=token=>({Authorization:'Bearer '+token});

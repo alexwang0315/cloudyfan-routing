@@ -521,10 +521,15 @@ async function lifecycleMain() {
       const before=await inspect();assert.equal(before.budget['budget-primary.sqlite'].unknown_events,1);
       const cap=await get('/monitor/capacity');assert.equal(cap.dispatch.groups.find(row=>row.group===heldAllocation.groups[0].group).concurrency_used,1);
       const accepted=await api('post','/v1/tasks',client,task('resilience-primary-unknown-stop'));assert.equal(accepted.response.status(),202);
-      const stopped=await run('resilience-primary-unknown-stop');assert.equal(stopped.status,'accounting_interrupted');
+      await inspect({command:'work'});await idle();
+      const stopped=await api('get','/v1/tasks/resilience-primary-unknown-stop',client);
+      assert.equal(stopped.response.status(),202);assert.equal(stopped.body.status,'queued');
+      assert.equal(stopped.body.reason,'queue_waiting_budget');assert.equal(stopped.body.capacity_reason,'capacity_original_budget_denied');
+      assert.equal(stopped.body.queue.deadline,accepted.body.queue.deadline);
       const after=await inspect();assert.deepEqual(after.model_requests,before.model_requests);assert.deepEqual(after.wire_files_sha256,before.wire_files_sha256);
       assert.equal(after.budget['budget-primary.sqlite'].known_usd,primaryKnown);assert.equal(after.budget['budget-primary.sqlite'].unknown_events,1);
       await refresh('CloudyFanQueue');
+      assert.match(await page.locator('[data-queue-run="resilience-primary-unknown-stop"]').innerText(),/等待原費用閘門/);
       await page.locator('[data-queue-run="resilience-primary-unknown-stop"]').screenshot({path:path.join(output,'11-shared-primary-budget-unknown-stop.png')});report.screenshots.push('11-shared-primary-budget-unknown-stop.png');
     });
     await step('localized_new_copy_scope_fault_preserves_originals_and_unaffected_observations',async()=>{

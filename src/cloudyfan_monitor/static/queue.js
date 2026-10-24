@@ -14,6 +14,8 @@ window.CloudyFanQueue = (() => {
     queue_waiting_worker: '工作正在等待受控派送程序領取下一步；等待本身不新增模型請求，已有請求與費用仍保留。',
     queue_waiting_slot: '正在等待執行名額；尚未取得執行名額。',
     queue_waiting_window: '正在等待適用的供應商窗口；等待不占用執行名額。',
+    queue_waiting_budget: '正在等待原費用閘門；尚未取得新的派送名額，原期限不因重啟延長。',
+    capacity_original_budget_denied: '原帳本或費用上界檢查未通過；未新增模型派送，已知費用與未明事件仍保留。',
     queue_full: '已達固定佇列容量，未建立另一筆可派送工作。',
     queue_original_authority_denied: '原任務的授權或固定執行條件未通過；停止新的派送，保留原任務與證據。',
     principal_quota_full: '此客戶端已達固定待處理上限。',

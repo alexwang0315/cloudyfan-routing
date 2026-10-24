@@ -322,6 +322,8 @@ def test_queue_projects_saved_binding_and_tariff_and_captures_original_worker_co
     assert frozen['monitor']['tariff']['revision'] == 0 and frozen['monitor']['tariff']['multiplier'] == '1'
     assert frozen['access_expires_at'] == original['queue']['accepted_at'] + 30 * 86400
     bundle.app.gateway.store.change(revision=bundle.app.gateway.store.control()['revision'], mode='fixed_high')
+    assert operator.post('/monitor/billing/settings', json={'revision': 0, 'enabled': True,
+        'multiplier': '3', 'client_multipliers': {}, 'open_source_prices': {}}).status_code == 200
     def advance(payload):
         local_service.clock.now += 3
     bundle.upstream.before_response = advance
@@ -334,6 +336,38 @@ def test_queue_projects_saved_binding_and_tariff_and_captures_original_worker_co
     assert saved['status'] == 'passed' and saved['generation_attempts'] == 1 and saved['queue']['frozen'] == frozen
     assert saved['updated'] == local_service.clock()
     assert len(bundle.upstream.calls) == 1
+
+
+def test_revoked_original_credential_stops_paid_continuation_even_with_fresh_same_principal_token(local_service):
+    from capacity_queue_fixture import attach_queue
+    import hashlib
+    bundle = local_service.bundle
+    queue = attach_queue(bundle, local_service.clock, rpm=10)
+    local_service.server.set_app(bundle.app)
+    operator, client = local_service.client('operator'), local_service.client()
+    operator.post('/monitor/capacity/activate', json={'revision': 0, 'version': 'synthetic-queued-admission-v1'})
+    payload = {**TASK, 'run_id': 'paid-then-original-credential-revoked'}
+    accepted = client.post('/v1/tasks', json=payload)
+    assert accepted.status_code == 202
+    assert queue.dispatch_next()['status'] == 'queued'
+    receipts = {str(path): hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in (bundle.root / 'receipts').rglob('*.json')}
+    identity = bundle.app.identity_store
+    identity.revoke(bundle.credentials['studio'].id)
+    fresh = identity.issue('studio', scopes={'tasks:read', 'tasks:write', 'models:read'},
+        expires_at=local_service.clock() + 86400)
+    fresh_headers = {'Authorization': 'Bearer ' + fresh.token}
+    assert client.get('/v1/tasks/' + payload['run_id']).status_code == 401
+    assert client.post('/v1/tasks/' + payload['run_id'] + '/resume', json={}, headers=fresh_headers).json()['status'] == 'queued'
+    assert queue.dispatch_next() is None  # A rejection is not a claimed execution.
+    observed = client.get('/v1/tasks/' + payload['run_id'], headers=fresh_headers).json()
+    assert observed['status'] == 'rejected' and observed['capacity_reason'] == 'capacity_credential_inactive'
+    assert observed['queue']['frozen'] == accepted.json()['queue']['frozen']
+    report = queue.service.contracts['demo-cloudyfan'].runner.store.report()
+    assert report['known_usd'] == '0.0001' and report['unknown_events'] == 0 and report['reserved_usd'] == '0'
+    assert len(report['events']) == 1 and len(bundle.upstream.calls) == 1
+    assert receipts == {str(path): hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in (bundle.root / 'receipts').rglob('*.json')}
 
 
 def test_claim_journal_counts_against_original_principal_quota_before_any_capacity_allocation(local_service, monkeypatch):

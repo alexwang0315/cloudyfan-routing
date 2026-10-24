@@ -153,8 +153,13 @@ class CapacityIntegrity:
                         if name == 'capacity_allocations':
                             scopes = [g['physical'] for g in payload['groups']]
                             tasks = [payload['run']]
-                        elif name == 'capacity_window_observations':
+                        elif name in {'capacity_window_observations', 'capacity_window_source_obligations'}:
                             scopes = [payload['physical']]
+                        elif name == 'capacity_source_refreshes':
+                            configuration = json.loads(db.execute('SELECT payload FROM capacity_configurations WHERE version=?',
+                                (value['version'],)).fetchone()[0])
+                            scopes = [_hash(group['scope']) for group in configuration['groups']
+                                if group['id'] == value['group_id']]
                         elif name == 'capacity_adoptions':
                             tasks = [value['run']]
                         elif name == 'capacity_terminal_fences':
@@ -234,16 +239,18 @@ class CapacityIntegrity:
         target = Path(directory).absolute() / ('.capacity-preservation-' + name + '.json')
         with self.lock(write=True):
             try:
-                state, status = self._inspect()
+                state = self._state()
                 value = {'protocol': PROTOCOL, 'identity': state['identity']}
                 if target.exists():
                     if json.loads(_file(target)) != value:
                         raise CapacityIntegrityError('capacity_store_binding_unavailable')
                     return
-                if status['bad'] or state['rows'].get('capacity_preservation_bindings'):
+                state, status = self._inspect()
+                saved = state['rows'].get('capacity_preservation_bindings', {})
+                if status['bad'] or any(row['view']['target'] == str(target) for row in saved.values()):
                     raise CapacityIntegrityError('capacity_store_binding_unavailable')
                 with self.transaction(write=True) as db:
-                    db.execute('CREATE TABLE capacity_preservation_bindings(target TEXT PRIMARY KEY,payload TEXT NOT NULL)')
+                    db.execute('CREATE TABLE IF NOT EXISTS capacity_preservation_bindings(target TEXT PRIMARY KEY,payload TEXT NOT NULL)')
                     db.execute('INSERT INTO capacity_preservation_bindings VALUES(?,?)',
                         (str(target), _encoded(value).decode()))
                     _write(target, value)
@@ -365,7 +372,10 @@ class CapacityIntegrity:
     @contextmanager
     def projection(self, *, current=None):
         """Last independently verified metadata only, never used to grant a POST."""
-        state = self._state()
+        try:
+            state = self._state()
+        except (OSError, ValueError, KeyError, TypeError):
+            raise CapacityIntegrityError() from None
         db = sqlite3.connect(':memory:')
         original = None
         if self.role == 'queue' and current is None:

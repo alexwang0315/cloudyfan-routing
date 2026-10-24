@@ -351,13 +351,19 @@ class CapacityStore:
         configuration = _configuration(configuration)
         encoded = json.dumps(configuration, sort_keys=True, separators=(",", ":"), allow_nan=False)
         digest = hashlib.sha256(encoded.encode()).hexdigest()
+        self._observer_configuration = configuration, digest
         if self.integrity.status()['status'] != 'verified':
             # Reopening the exact frozen host may expose retained evidence.
             # It cannot create/change a policy or certify damaged storage.
-            with self.connection(projection=True) as connection:
-                saved = connection.execute('SELECT digest,payload FROM capacity_configurations WHERE version=?',
-                    (configuration['version'],)).fetchone()
-                active = connection.execute('SELECT version FROM capacity_control WHERE id=1').fetchone()
+            try:
+                with self.connection(projection=True) as connection:
+                    saved = connection.execute('SELECT digest,payload FROM capacity_configurations WHERE version=?',
+                        (configuration['version'],)).fetchone()
+                    active = connection.execute('SELECT version FROM capacity_control WHERE id=1').fetchone()
+            except (RuntimeError, OSError, ValueError, sqlite3.Error):
+                # Runtime host configuration is not historical capacity proof.
+                # Keep the observer available; require() still denies every POST.
+                return digest
             if saved is None or saved != (digest, encoded) or active != (configuration['version'],):
                 self.integrity.require()
             return digest
@@ -418,6 +424,27 @@ class CapacityStore:
         return {"sequence": sequence, **value}
 
     def snapshot(self, version=None):
+        integrity = self.integrity.status()
+        if integrity['status'] != 'verified' and not integrity['retained_verified_metadata']:
+            return self._unavailable_snapshot(integrity)
+        try:
+            return self._snapshot(version)
+        except (RuntimeError, OSError, ValueError, sqlite3.Error):
+            integrity = self.integrity.status()
+            if integrity['status'] == 'verified':
+                raise
+            return self._unavailable_snapshot(integrity)
+
+    def _unavailable_snapshot(self, integrity):
+        configuration, digest = getattr(self, '_observer_configuration', (None, None))
+        return {'schema_version': 'capacity-sources-v1', 'configured': configuration is not None,
+            'configuration_version': configuration['version'] if configuration else None,
+            'configuration_sha256': digest, 'execution_enabled': False,
+            'bindings': configuration['bindings'] if configuration else [], 'groups': [],
+            'integrity': integrity, 'reason_codes': [integrity['reason_code']],
+            'observation_status': 'unavailable', 'retained_verified_metadata': False}
+
+    def _snapshot(self, version=None):
         """Read only saved values; no network, accounting, health or dispatch work."""
         with self.connection(projection=True) as connection:
             saved = connection.execute("SELECT payload,digest FROM capacity_configurations " +

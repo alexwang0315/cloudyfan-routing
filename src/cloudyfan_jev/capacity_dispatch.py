@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 import hashlib
 import json
 import re
+import sqlite3
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -285,6 +286,9 @@ class CapacityController:
         _identity(configuration_version)
         if type(max_seconds) is not int or not 1 <= max_seconds <= 86400 or not routes or len(routes) > 512:
             raise ValueError('Bounded registered dispatch policy required')
+        for route in routes:
+            if type(route) is CapacityRoute:
+                self.store.integrity.bind(route.transport.root, 'capacity')
         config = self.store.snapshot(configuration_version)
         if windows_version is not None:
             _identity(windows_version)
@@ -326,6 +330,10 @@ class CapacityController:
             value['queue_version'] = queue_version
             value['queue_sha256'] = self._queue_backend(queue_version).sha256
         unavailable = self.store.integrity.status()['status'] != 'verified'
+        if unavailable and not self.store.integrity.status()['retained_verified_metadata']:
+            self.routes[version] = tuple(routes)
+            self._route_credentials[version] = tuple(_transport_identity(route.transport) for route in routes)
+            return
         with self.store.connection(write=not unavailable, projection=unavailable) as db:
             if not unavailable:
                 db.execute('BEGIN IMMEDIATE')
@@ -576,6 +584,25 @@ class CapacityController:
         return _CapacityDispatch(self, adoption, *matches[0], windows_version=policy.get('windows_version'))
 
     def snapshot(self):
+        integrity = self.store.integrity.status()
+        if integrity['status'] != 'verified' and not integrity['retained_verified_metadata']:
+            return self._unavailable_snapshot(integrity)
+        try:
+            return self._snapshot()
+        except (RuntimeError, OSError, ValueError, sqlite3.Error):
+            integrity = self.store.integrity.status()
+            if integrity['status'] == 'verified':
+                raise
+            return self._unavailable_snapshot(integrity)
+
+    def _unavailable_snapshot(self, integrity):
+        return {'schema_version': 'capacity-dispatch-v1', 'revision': None, 'active_version': None,
+            'protocol': SERIALIZER, 'registered_policies': [], 'allocation_count': None,
+            'allocation_history_complete': False, 'event_count': None, 'event_history_complete': False,
+            'groups': [], 'allocations': [], 'events': [], 'windows': self.window_snapshot(),
+            'integrity': integrity, 'observation_status': 'unavailable'}
+
+    def _snapshot(self):
         with self.store.connection(projection=True) as db:
             now = self._now(db)
             revision, version = db.execute('SELECT revision,version FROM capacity_dispatch_control WHERE id=1').fetchone()

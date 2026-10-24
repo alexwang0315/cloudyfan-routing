@@ -63,13 +63,15 @@ class QueueScheduler:
         if capacity_protocol is not None:
             value['capacity_preparation'] = capacity_protocol.descriptor()
         config = _encode(value).decode()
-        with self._readonly() if unavailable else self._transaction() as db:
-            if unavailable:
-                old = db.execute('SELECT body FROM configuration').fetchone()
-                if old and old[0] != config:
-                    raise ValueError('Frozen queue configuration changed')
-            else:
-                self._initialize(db, config)
+        observable = not unavailable or self.integrity.status()['retained_verified_metadata']
+        if observable:
+            with self._readonly() if unavailable else self._transaction() as db:
+                if unavailable:
+                    old = db.execute('SELECT body FROM configuration').fetchone()
+                    if old and old[0] != config:
+                        raise ValueError('Frozen queue configuration changed')
+                else:
+                    self._initialize(db, config)
         os.chmod(self.path, 0o600)
         if capacity_protocol is not None:
             service.queue_scheduler = self
@@ -79,6 +81,8 @@ class QueueScheduler:
                 raise ValueError('Retention cannot span independent queue stores')
             if self.path.absolute() not in service.retention_protected_paths:
                 service.retention_protected_paths += (self.path.absolute(),)
+            if self.integrity is not None and self.integrity.root not in service.retention_protected_paths:
+                service.retention_protected_paths += (self.integrity.root,)
             service.retention_guard = self.retention_snapshot
             service.retention_erase_queue = self.retention_erase
             if service.retention_maintenance is None:
@@ -216,8 +220,12 @@ class QueueScheduler:
                 if prior['request'] != encoded:
                     raise ServiceError('frozen_task_changed', 409)
             else:
-                count = db.execute('SELECT COUNT(*) FROM jobs WHERE state IN ("queued","accepting")').fetchone()[0]
-                active = db.execute('SELECT COUNT(*) FROM jobs WHERE principal=? AND state IN ("accepting","queued","claiming","running","interrupted_pending")', (principal,)).fetchone()[0]
+                now = self._now(db)
+                with self.integrity.selection(db) as selection:
+                    count = selection.execute('SELECT COUNT(*) FROM jobs WHERE state IN ("queued","accepting") AND deadline>?', (now,)).fetchone()[0]
+                    active = selection.execute('SELECT COUNT(*) FROM jobs WHERE principal=? AND '
+                        '(state IN ("claiming","running","interrupted_pending") OR '
+                        '(state IN ("accepting","queued") AND deadline>?))', (principal, now)).fetchone()[0]
                 if count >= self.limits.capacity:
                     rejection = 'queue_full'
                 elif active >= self.limits.per_principal:
@@ -341,7 +349,13 @@ class QueueScheduler:
                 selection.row_factory = sqlite3.Row
                 rows = selection.execute('SELECT * FROM jobs WHERE state IN ("queued","accepting") AND deadline<=?', (now,)).fetchall()
             for row in rows:
-                self.integrity.require(task=row['id'])
+                from .capacity_integrity import CapacityIntegrityError
+                try:
+                    self.integrity.require(task=row['id'])
+                except CapacityIntegrityError:
+                    # Preserve the damaged original and its original deadline.
+                    # Expiry of A is not a reason to stop unrelated B or certify A.
+                    continue
                 self._close_waiting(db, row, 'expired', 'queue_deadline_expired', row['deadline'])
 
     def _close_waiting(self, db, row, state, reason, finished):
@@ -378,6 +392,13 @@ class QueueScheduler:
         with self._readonly() as db:
             row = dict(self._job(db, principal, run_id))
             now = self._observed_now(db)
+        if self.capacity_protocol is not None and self.service.retention_policy is not None:
+            lifecycle = self.service.retention.lookup(row['id'])
+            expires = lifecycle['expires_at'] if lifecycle is not None else row['created'] + self.service.retention_policy.ttl_seconds
+            if now >= expires:
+                raise ServiceError('task_expired', 410)
+            if lifecycle is not None:
+                self.service.queue_access(principal, run_id)
         return self._status(row, now)
 
     def _observed_now(self, db):
@@ -441,6 +462,14 @@ class QueueScheduler:
 
     def snapshot(self):
         """Trusted operator projection. No prompts, credentials or body paths."""
+        if self.integrity is not None and not self.integrity.status()['retained_verified_metadata']:
+            return {'schema_version': 'capacity-queue-v1', 'configured': True,
+                'version': self.capacity_protocol.version, 'limits': asdict(self.limits),
+                'now': None, 'jobs': [], 'job_count': None, 'active_count': None, 'retained_active_count': None,
+                'active_history_complete': False, 'rejections': [], 'rejection_count': None,
+                'rejection_history_complete': False, 'history_complete': False,
+                'measurement_kind': self.measurement_kind, 'production_slo_validated': False,
+                'integrity': self.integrity.status(), 'observation_status': 'unavailable'}
         with self._readonly() as db:
             now = self._observed_now(db)
             active = '(state IN ("claiming","running","interrupted_pending") OR (state IN ("accepting","queued") AND deadline>?))'
@@ -566,8 +595,13 @@ class QueueScheduler:
             for value in candidates:
                 row = dict(value)
                 prepared = None
+                from .capacity_integrity import CapacityIntegrityError
                 try:
                     self.integrity.require(task=row['id'])
+                except CapacityIntegrityError:
+                    blocked.update(json.loads(row.get('detail') or '{}').get('groups', []))
+                    continue
+                try:
                     self.service.authorize(row['principal'])
                     self.service.queue_observe(row['principal'], row['run_id'])
                     prepared = self.capacity_protocol.prepare_next(self.service, row)

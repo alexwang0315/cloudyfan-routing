@@ -366,9 +366,13 @@ class TaskService:
 
     def _task_status(self, principal, run_id):
         directory, job = self._job(principal, run_id)
-        return {**_read(directory / 'state.json'), 'costs': self._costs(principal, run_id, job),
-                **({'capacity': self.capacity_controller.own(self.internal_id(principal, run_id))}
-                   if self.capacity_controller is not None else {})}
+        result = {**_read(directory / 'state.json'), 'costs': self._costs(principal, run_id, job)}
+        if self.capacity_controller is not None:
+            try:
+                result['capacity'] = self.capacity_controller.own(self.internal_id(principal, run_id))
+            except (OSError, ValueError, RuntimeError):
+                result['capacity'] = {'status': 'unavailable', 'reason_code': 'capacity_store_integrity_unavailable'}
+        return result
 
     def _registered_contract(self, job):
         contract = self.contracts.get(job['request']['contract_id'])

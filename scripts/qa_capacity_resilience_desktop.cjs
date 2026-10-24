@@ -178,7 +178,7 @@ async function lifecycleMain() {
     accessibility_scope:'Keyboard focus/disclosure at the declared desktop viewport; no screen-reader or WCAG certification'};
   report.planned_check_count=['--queue-fault','--local-fault','--companion-loss'].some(flag=>process.argv.includes(flag))?3:process.argv.includes('--focused-restart')?12:13;
   if(process.argv.includes('--focused-restart'))report.scope+='; focused restart slice: >100 paid history and refusal steps explicitly not run';
-  let fixture,ready,browser,context,page,boot=0,operator,client,agent;
+  let fixture,ready,browser,context,page,boot=0,operator,client,agent,originalWindow;
   const headers=token=>({Authorization:'Bearer '+token});
   const start=async port=>{
     const bootOutput=path.join(output,'boot-'+String(++boot).padStart(2,'0'));
@@ -282,6 +282,20 @@ async function lifecycleMain() {
       assert.deepEqual(state.source_requests,[]);assert.deepEqual(state.accounting_requests,[]);
       const snapshot=await get('/monitor/snapshot');
       await fs.writeFile(path.join(output,'safe-original-fallback.json'),JSON.stringify(snapshot,null,2));
+      const cap=await get('/monitor/capacity');
+      assert.equal(cap.dispatch.windows.event_count,1);
+      originalWindow=cap.dispatch.windows.events[0];
+      assert.equal(originalWindow.status,'wait');assert.equal(originalWindow.source_kind,'original_response');
+      assert.equal(originalWindow.header,'retry-after');assert.equal(originalWindow.observed_at,state.clock);
+      assert.equal(originalWindow.not_before,originalWindow.observed_at+3600);
+      await fs.writeFile(path.join(output,'safe-original-window.json'),JSON.stringify(originalWindow,null,2));
+      await capacityPage();
+      const savedWindow=page.locator('[data-capacity-window="'+originalWindow.id+'"]').first();
+      await savedWindow.locator('summary').click();
+      assert.match(await savedWindow.innerText(),/已保存原回應/);
+      assert.ok(!(await savedWindow.locator('[data-window-time="observed"]').innerText()).includes('未知'));
+      assert.ok(!(await savedWindow.locator('[data-window-time="not-before"]').innerText()).includes('未知'));
+      await shot('02-original-response-window');
       await queuePage();await page.locator('[data-queue-run="resilience-fallback"]').getByText('通過',{exact:true}).waitFor();
       await shot('02-original-fallback-and-fee');
     });
@@ -528,6 +542,7 @@ async function lifecycleMain() {
       const row=await api('get','/v1/tasks/resilience-held',client);assert.equal(row.body.queue.deadline,heldOriginal.queue.deadline);
       assert.equal(row.body.cancellation_requested,true);assert.equal(row.body.costs.unknown_events,1);
       const cap=await get('/monitor/capacity');assert.equal(cap.dispatch.groups.find(row=>row.group===heldAllocation.groups[0].group).concurrency_used,1);
+      assert.deepEqual(cap.dispatch.windows.events.find(row=>row.id===originalWindow.id),originalWindow);
       await inspect({command:'mark_stopped_workers'});
       const marked=await api('get','/v1/tasks/resilience-held',client);assert.equal(marked.body.status,'interrupted_pending');
       const frozen=await inspect();

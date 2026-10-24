@@ -440,7 +440,18 @@ class CapacityController:
                 raise CapacityDenied('capacity_revision_conflict', 409)
             if version is not None and version not in self.routes:
                 raise CapacityDenied('capacity_policy_not_registered', 409)
-            if current[1] != version and _live_capacity(db, now):
+            pending_target = None
+            if current[1] is None and version is not None:
+                policy = json.loads(db.execute('SELECT payload FROM capacity_policies WHERE version=?', (version,)).fetchone()[0])
+                if policy.get('windows_version') is not None:
+                    configuration = json.loads(db.execute('SELECT payload FROM capacity_configurations WHERE version=?', (policy['configuration_version'],)).fetchone()[0])
+                    bound = {route.binding for route in self.routes[version]}
+                    groups = {group for binding in configuration['bindings'] if binding['id'] in bound for group in binding['groups']}
+                    pending_target = {'window_version': policy['windows_version'],
+                        'configuration_version': policy['configuration_version'],
+                        'configuration_sha256': policy['configuration_sha256'],
+                        'physical': {_hash(group['scope']) for group in configuration['groups'] if group['id'] in groups}}
+            if current[1] != version and _live_capacity(db, now, pending_target=pending_target):
                 raise CapacityDenied('capacity_live_state_blocks_change', 409)
             db.execute('UPDATE capacity_dispatch_control SET revision=?,version=? WHERE id=1', (revision + 1, version))
             self._event(db, {'kind': 'activation', 'version': version, 'at': now})

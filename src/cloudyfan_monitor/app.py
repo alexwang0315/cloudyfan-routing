@@ -139,6 +139,8 @@ class App:
                       "/candidates.css": ("candidates.css", "text/css; charset=utf-8"),
                       "/capacity.js": ("capacity.js", "text/javascript; charset=utf-8"),
                       "/capacity.css": ("capacity.css", "text/css; charset=utf-8"),
+                      "/queue.js": ("queue.js", "text/javascript; charset=utf-8"),
+                      "/queue.css": ("queue.css", "text/css; charset=utf-8"),
                       "/style.css": ("style.css", "text/css; charset=utf-8")}
             if method == "GET" and path in static:
                 filename, content_type = static[path]

@@ -172,6 +172,13 @@ class App:
             detail = error.code if path.startswith("/api/") else {"code": error.code}
             status, body = error.status, encode({"error": detail}).encode()
         except Exception as error:
+            from cloudyfan_jev.capacity_integrity import CapacityIntegrityError
+            if isinstance(error, CapacityIntegrityError):
+                body = encode({'error': {'code': error.code}}).encode()
+                start_response(f"{error.status} {HTTPStatus(error.status).phrase}", [
+                    ("Content-Type", content_type), ("Content-Length", str(len(body))),
+                    ("Cache-Control", "no-store"), *SECURITY_HEADERS])
+                return [body]
             if self.capacity_controller is not None:
                 from cloudyfan_jev.capacity_dispatch import CapacityDenied
                 if isinstance(error, CapacityDenied):

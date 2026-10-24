@@ -56,7 +56,8 @@ def _http_date(value):
 class CapacityWindows:
     protocol = PROTOCOL
 
-    def __init__(self, store, *, version, rules, not_applicable=(), max_delay_seconds=86400):
+    def __init__(self, store, *, version, rules, not_applicable=(), max_delay_seconds=86400,
+                 controlled_sources=()):
         if type(store) is not CapacityStore:
             raise ValueError('Shared controlled capacity store required')
         self.store, self.version = store, _identity(version)
@@ -85,19 +86,69 @@ class CapacityWindows:
         self.not_applicable = tuple(_identity(value) for value in not_applicable)
         if set(self.not_applicable) - set(bindings) or set(self.not_applicable) & {r['binding'] for r in self.rules}:
             raise ValueError('Explicit separate not-applicable window bindings required')
+        if not isinstance(controlled_sources, (list, tuple)) or len(controlled_sources) > 128:
+            raise ValueError('Bounded controlled original window sources required')
+        self.controlled_sources = json.loads(_json(controlled_sources))
+        source_ids = set()
+        self._source_records = []
+        for source in self.controlled_sources:
+            if (not isinstance(source, dict) or set(source) != {'binding', 'group', 'scope', 'source_version',
+                    'evidence_ref', 'status', 'observed_at', 'valid_until', 'values'}
+                    or source['binding'] not in bindings
+                    or source['group'] not in bindings[source['binding']]['groups']
+                    or source['status'] != 'rate_limited'):
+                raise ValueError('Exact controlled rate-limited source required')
+            group = next(g for g in self.configuration['groups'] if g['id'] == source['group'])
+            if (source['scope'] != group['scope'] or group['source']['kind'] != 'controlled_import'
+                    or source['source_version'] != group['source']['version']
+                    or not any(r['binding'] == source['binding'] and r['group'] == source['group'] for r in self.rules)):
+                raise ValueError('Exact controlled source scope and rule required')
+            _identity(source['evidence_ref'])
+            _time(source['observed_at'])
+            _time(source['valid_until'])
+            if (not isinstance(source['values'], list) or len(source['values']) > 8
+                    or any(not isinstance(p, list) or len(p) != 2 or p[0] not in HEADERS
+                        or not isinstance(p[1], str) or len(p[1]) > 160 for p in source['values'])):
+                raise ValueError('Bounded allowlisted controlled original headers required')
+            if _hash(source) in source_ids:
+                raise ValueError('Duplicate controlled original source')
+            source_ids.add(_hash(source))
+            for rule in self.rules:
+                if rule['binding'] == source['binding'] and rule['group'] == source['group']:
+                    self._source_records.append({'id': _hash({'source': source, 'version': self.version, 'rule': rule}),
+                        'physical': _hash(source['scope']), 'window_version': self.version,
+                        'configuration_version': self.configuration['configuration_version'],
+                        'configuration_sha256': self.configuration['configuration_sha256'], 'source_id': _hash(source)})
+        if len(self._source_records) > 128:
+            raise ValueError('At most 128 controlled window facts per explicit import')
         definition = {'protocol': PROTOCOL, 'version': version,
             'configuration_sha256': self.configuration['configuration_sha256'],
             'rules': self.rules, 'not_applicable': self.not_applicable, 'max_delay_seconds': max_delay_seconds}
+        if self.controlled_sources:
+            definition['controlled_sources'] = self.controlled_sources
+            definition['controlled_source_ids'] = self._source_records
         with store.connection(write=True) as db:
             db.executescript('''
                 CREATE TABLE IF NOT EXISTS capacity_window_policies(version TEXT PRIMARY KEY,payload TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS capacity_window_observations(id TEXT PRIMARY KEY,physical TEXT,status TEXT,not_before REAL,payload TEXT);
                 CREATE INDEX IF NOT EXISTS capacity_window_physical ON capacity_window_observations(physical,status,not_before);
+                CREATE INDEX IF NOT EXISTS capacity_window_time ON capacity_window_observations(status,not_before,physical);
+                CREATE TABLE IF NOT EXISTS capacity_window_source_obligations(
+                    id TEXT PRIMARY KEY,physical TEXT NOT NULL,window_version TEXT NOT NULL,
+                    configuration_version TEXT NOT NULL,status TEXT NOT NULL,payload TEXT NOT NULL);
             ''')
+            db.execute('BEGIN IMMEDIATE')
             old = db.execute('SELECT payload FROM capacity_window_policies WHERE version=?', (version,)).fetchone()
             if old and old[0] != _json(definition):
                 raise ValueError('Immutable window policy cannot change')
             db.execute('INSERT OR IGNORE INTO capacity_window_policies VALUES(?,?)', (version, _json(definition)))
+            for required in self._source_records:
+                old = db.execute('SELECT payload FROM capacity_window_source_obligations WHERE id=?', (required['id'],)).fetchone()
+                if old and old[0] != _json(required):
+                    raise ValueError('Immutable controlled source obligation changed')
+                db.execute('INSERT OR IGNORE INTO capacity_window_source_obligations VALUES(?,?,?,?,?,?)',
+                    (required['id'], required['physical'], self.version,
+                     required['configuration_version'], 'pending', _json(required)))
 
     def _scope(self, scope, physical_groups):
         if (scope.get('protocol') != PROTOCOL
@@ -134,6 +185,22 @@ class CapacityWindows:
             raise ValueError('capacity_window_time_invalid')
         return _time(until)
 
+    def _source_status(self, db, required):
+        saved = db.execute('SELECT physical,window_version,configuration_version,status,payload '
+            'FROM capacity_window_source_obligations WHERE id=?', (required['id'],)).fetchone()
+        if (saved is None or saved[:3] != (required['physical'], required['window_version'], required['configuration_version'])
+                or saved[3] not in {'pending', 'imported'} or saved[4] != _json(required)):
+            return 'unknown'
+        observation = db.execute('SELECT payload FROM capacity_window_observations WHERE id=?', (required['id'],)).fetchone()
+        if saved[3] == 'pending':
+            return 'pending' if observation is None else 'unknown'
+        if observation is None:
+            return 'unknown'
+        row = json.loads(observation[0])
+        expected = {key: required[key] for key in ('id', 'physical', 'configuration_version', 'configuration_sha256', 'source_id')}
+        expected.update(version=required['window_version'], source_kind='controlled_import')
+        return 'imported' if all(row.get(key) == value for key, value in expected.items()) else 'unknown'
+
     def check(self, db, scope, physical_groups, now):
         try:
             _time(now)
@@ -142,9 +209,16 @@ class CapacityWindows:
             return _decision('unknown', reason='capacity_window_scope_or_clock_invalid')
         selected = {g['physical'] for g in physical_groups}
         revision = db.execute('SELECT COUNT(*) FROM capacity_window_observations').fetchone()[0]
+        for required in self._source_records:
+            if required['physical'] in selected:
+                status = self._source_status(db, required)
+                if status != 'imported':
+                    return _decision('unknown', revision=revision, reason='capacity_window_source_not_imported'
+                        if status == 'pending' else 'capacity_window_source_state_unavailable')
         rows = [json.loads(row[0]) for row in db.execute(
-            "SELECT payload FROM capacity_window_observations WHERE status='unknown' OR not_before>?", (now,))
-            if json.loads(row[0])['physical'] in selected]
+            'SELECT payload FROM capacity_window_observations WHERE physical IN ('
+            + ','.join('?' for _ in selected) + ") AND (status='unknown' OR not_before>?) "
+            "ORDER BY (status='unknown') DESC,not_before DESC,rowid DESC LIMIT 32", (*sorted(selected), now))]
         if rows:
             unknown = [r for r in rows if r['status'] == 'unknown']
             return _decision('unknown' if unknown else 'wait',
@@ -232,19 +306,87 @@ class CapacityWindows:
                 db.execute('INSERT OR IGNORE INTO capacity_window_observations VALUES(?,?,?,?,?)',
                     (row['id'], row['physical'], row['status'], row['not_before'], _json(row)))
 
+    def import_sources(self):
+        """Explicitly import immutable host-supplied rate facts, never USD quotas.
+
+        HTTP callers cannot supply these values. A repeated import is a read of
+        the same original fact, not a refresh of its observation or expiry time.
+        """
+        observations = []
+        with self.store.connection(write=True) as db:
+            db.execute('BEGIN IMMEDIATE')
+            active = db.execute('SELECT version FROM capacity_control WHERE id=1').fetchone()
+            if active is None or active[0] != self.configuration['configuration_version']:
+                raise ValueError('Controlled window source configuration changed')
+            now = _time(self.store.clock())
+            for source in self.controlled_sources:
+                headers = dict(source['values'])
+                valid = (len(headers) == len(source['values'])
+                    and sum(len(k.encode()) + len(v.encode()) for k, v in source['values']) <= 1024
+                    and not any(any(ord(c) < 32 or ord(c) == 127 for c in v) for v in headers.values()))
+                for rule in self.rules:
+                    if rule['binding'] != source['binding'] or rule['group'] != source['group']:
+                        continue
+                    identifier = _hash({'source': source, 'version': self.version, 'rule': rule})
+                    if db.execute('SELECT 1 FROM capacity_window_observations WHERE id=?', (identifier,)).fetchone():
+                        continue
+                    until, reason = None, 'capacity_window_header_invalid'
+                    if valid:
+                        try:
+                            if not source['observed_at'] <= now < source['valid_until']:
+                                raise ValueError('capacity_window_source_stale_or_future')
+                            until = self._until(headers.get(rule['header']), rule['format'], source['observed_at'], headers)
+                            if until > source['valid_until']:
+                                raise ValueError('capacity_window_source_stale_or_future')
+                            reason = 'capacity_window_wait'
+                        except ValueError as error:
+                            until = None
+                            reason = str(error) if re.fullmatch(r'capacity_window_[a-z_]+', str(error)) else 'capacity_window_time_invalid'
+                    observations.append({'id': identifier, 'physical': _hash(source['scope']), 'group': source['group'],
+                        'scope': source['scope'], 'status': 'wait' if until is not None else 'unknown',
+                        'not_before': until, 'observed_at': source['observed_at'], 'source_kind': 'controlled_import',
+                        'source_version': source['source_version'], 'evidence_ref': source['evidence_ref'],
+                        'source_id': _hash(source), 'configuration_sha256': self.configuration['configuration_sha256'],
+                        'header': rule['header'], 'constraint': rule['constraint'], 'version': self.version,
+                        'policy_version': None, 'configuration_version': self.configuration['configuration_version'],
+                        'reason_code': reason, 'reported_not_before': until})
+            grouped = {}
+            for row in observations:
+                grouped.setdefault((row['physical'], row['constraint'], row['observed_at']), []).append(row)
+            for rows in grouped.values():
+                known = [r['not_before'] for r in rows if r['status'] == 'wait']
+                if known and max(known) - min(known) > 1:
+                    for row in rows:
+                        row.update(status='unknown', not_before=None, reason_code='capacity_window_source_contradictory')
+            for row in observations:
+                db.execute('INSERT INTO capacity_window_observations VALUES(?,?,?,?,?)',
+                    (row['id'], row['physical'], row['status'], row['not_before'], _json(row)))
+                db.execute("UPDATE capacity_window_source_obligations SET status='imported' WHERE id=?", (row['id'],))
+        return {'status': 'unknown' if any(r['status'] == 'unknown' for r in observations) else 'available',
+                'imported_count': len(observations), 'network_requests': 0}
+
     def snapshot(self):
         now = _time(self.store.clock())
         with self.store.connection() as db:
             count = db.execute('SELECT COUNT(*) FROM capacity_window_observations').fetchone()[0]
             events = [json.loads(row[0]) for row in db.execute(
                 'SELECT payload FROM capacity_window_observations ORDER BY rowid DESC LIMIT 100')]
-            active = [json.loads(row[0]) for row in db.execute(
-                "SELECT payload FROM capacity_window_observations WHERE status='unknown' OR not_before>?", (now,))]
-        groups = {}
-        for row in active:
-            old = groups.get(row['physical'])
-            if old is None or row['status'] == 'unknown' or old['status'] != 'unknown' and row['not_before'] > old['not_before']:
-                groups[row['physical']] = row
+            group_count = db.execute("SELECT COUNT(DISTINCT physical) FROM capacity_window_observations "
+                "WHERE status='unknown' OR not_before>?", (now,)).fetchone()[0]
+            groups = [json.loads(row[0]) for row in db.execute(
+                'SELECT payload FROM (SELECT payload,physical,ROW_NUMBER() OVER (PARTITION BY physical '
+                "ORDER BY (status='unknown') DESC,not_before DESC,rowid DESC) AS position "
+                "FROM capacity_window_observations WHERE status='unknown' OR not_before>?) "
+                'WHERE position=1 ORDER BY physical LIMIT 128', (now,))]
+            pending = []
+            for required in self._source_records:
+                status = self._source_status(db, required)
+                if status != 'imported':
+                    pending.append({**required, 'status': status, 'source_kind': 'controlled_import',
+                        'reason_code': 'capacity_window_source_not_imported' if status == 'pending'
+                            else 'capacity_window_source_state_unavailable'})
         return {'schema_version': PROTOCOL, 'version': self.version, 'revision': count,
-                'groups': list(groups.values()), 'events': events, 'event_count': count,
-                'event_history_complete': count == len(events)}
+                'groups': groups, 'active_group_count': group_count,
+                'active_group_history_complete': group_count == len(groups),
+                'pending_sources': pending, 'pending_source_count': len(pending),
+                'events': events, 'event_count': count, 'event_history_complete': count == len(events)}

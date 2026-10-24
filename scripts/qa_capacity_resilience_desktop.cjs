@@ -433,8 +433,14 @@ async function lifecycleMain() {
       const accepted=await api('post','/v1/tasks',client,task('resilience-held'));assert.equal(accepted.response.status(),202);
       heldOriginal=accepted.body;
       await inspect({command:'work'});
-      for(let i=0;i<80;i++){const state=await inspect();if(state.model_response_held){heldFacts=state;break;}await page.waitForTimeout(25);}
+      for(let i=0;i<80;i++){
+        const state=await inspect();
+        if(state.model_response_held&&state.model_requests.length===3&&state.raw_mock_metadata_status==='complete'
+          &&state.raw_mock_method_counts?.POST===3){heldFacts=state;break;}
+        await page.waitForTimeout(25);
+      }
       assert.equal(heldFacts?.model_response_held,true);assert.equal(heldFacts.model_requests.length,3);
+      assert.deepEqual(heldFacts.raw_mock_method_counts,{POST:3});
       const requested=await api('post','/v1/tasks/resilience-held/cancel',client,{});
       assert.equal(requested.body.status,'running');assert.equal(requested.body.cancellation_requested,true);
       assert.equal(requested.body.provider_cancellation_confirmed,false);assert.equal(requested.body.costs.complete_api_usd,null);

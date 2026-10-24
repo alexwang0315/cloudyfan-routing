@@ -167,6 +167,122 @@ def test_unknown_stops_new_work_and_preserves_other_inflight(tmp_path):
     assert all((tmp_path / "capture" / job(i).run_id / "calls").exists() for i in range(1, 5))
 
 
+def test_stopped_fifth_call_is_not_completed_when_known_work_frees_a_slot(tmp_path, monkeypatch):
+    import core_bridge
+
+    book = ledger(tmp_path)
+    barrier, count = threading.Barrier(4), []
+    release_unknown, unknown_committed, fifth_intent = (
+        threading.Event(), threading.Event(), threading.Event()
+    )
+    original_unknown, original_write = book.mark_unknown, core_bridge.write_once
+
+    def mark_unknown(cid, reason):
+        original_unknown(cid, reason)
+        if cid == "call-test-1-A":
+            unknown_committed.set()
+
+    def write(path, value):
+        original_write(path, value)
+        if path.name == "intent.json" and value["call_id"] == "call-test-5-A":
+            fifth_intent.set()
+            release_unknown.set()
+            assert unknown_committed.wait(5), "Original unknown transaction did not finish"
+
+    monkeypatch.setattr(book, "mark_unknown", mark_unknown)
+    monkeypatch.setattr(core_bridge, "write_once", write)
+
+    def run(j):
+        def verifier(record):
+            if j.ordinal == 1:
+                assert release_unknown.wait(5), "Fifth original intent did not reach its final gate"
+                return None
+            if j.ordinal in (3, 4):
+                assert unknown_committed.wait(5), "Original unknown transaction did not finish"
+            return proof(record)
+
+        c = client(tmp_path / "capture", book, j.run_id, sender(count, barrier=barrier), verifier=verifier)
+        # A trusted runner may ignore a stopped call's returned record. The
+        # study must still require original dispatch evidence before sealing it.
+        c.call("call-" + j.run_id, CHAT, {"model": "example/low"})
+        return {"final_public_pass": True}
+
+    scheduler = FourSlotScheduler(tmp_path / "study", plan_id="test", ledger=book, runner=run)
+    result = scheduler.run([job(i) for i in range(1, 201)])
+    assert fifth_intent.is_set() and len(count) == 4
+    assert result["newly_completed"] == 3 and result["remaining"] == 197
+    assert any(row["run_id"] == "test-5-A" and row["reason"] == "WORKFLOW_NOT_DISPATCHED"
+               for row in result["failures"])
+    stopped = book.lookup("call-test-5-A")
+    assert stopped["revision_id"] == "not_dispatched" and stopped["cost_usd"] == "0"
+    assert stopped["unknown"] is False and book.snapshot()["unknown_calls"] == 1
+    assert not (scheduler.directory(job(5)) / "terminal.json").exists()
+    response = tmp_path / "capture/test-5-A/calls/call-test-5-A/response.json"
+    assert json.loads(response.read_text())["not_dispatched"] is True
+
+
+def test_legacy_completed_terminal_with_stopped_call_is_rejected_without_rewriting(tmp_path):
+    import hashlib
+    from parallel_runner import write_once
+
+    book = ledger(tmp_path)
+    j = job(1)
+    book.admit(j.run_id, j.forecast_usd, j.generation_cap, j.classifier_cap)
+    c = client(tmp_path / "capture", book, j.run_id, lambda *args: pytest.fail("Expired call sent"))
+    c.clock = lambda: book.deadline
+    assert c.call("stopped", CHAT, {"model": "example/low"})["not_dispatched"] is True
+    scheduler = FourSlotScheduler(tmp_path / "study", plan_id="test", ledger=book,
+        runner=lambda _: pytest.fail("Sealed old result rerun"))
+    directory = scheduler.directory(j)
+    directory.mkdir(parents=True)
+    result_path = directory / "result.json"
+    write_once(result_path, {"plan_id": "test", "job_sha256": j.identity,
+        "result": {"final_public_pass": True}})
+    # Prior publisher format: the financial ledger legitimately knew zero,
+    # but the study incorrectly sealed this explicitly never-sent attempt.
+    terminal = {"plan_id": "test", "job_sha256": j.identity,
+        "result_sha256": hashlib.sha256(result_path.read_bytes()).hexdigest(),
+        "workflow_wall_seconds": 0, "state": "completed", "public_pass": True,
+        "hidden_grading": "not_run", "replayed_result_api_latency": None,
+        "evidence_sha256": file_evidence(tmp_path / "capture" / j.run_id)}
+    book.finish(j.run_id)
+    book.seal_completion(j.run_id, digest(terminal))
+    write_once(directory / "terminal.json", terminal)
+    before = book.snapshot()
+    hashes = {path: hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in tmp_path.rglob("*") if path.is_file()}
+    with pytest.raises(RuntimeError, match="WORKFLOW_NOT_DISPATCHED"):
+        scheduler.run([j])
+    assert book.snapshot() == before
+    assert all(hashlib.sha256(path.read_bytes()).hexdigest() == value
+               for path, value in hashes.items())
+
+
+def test_verified_zero_fee_completion_and_cached_replay_remain_valid(tmp_path):
+    book, calls = ledger(tmp_path), []
+    j = job(1)
+    original_sender = sender(calls)
+
+    def send(*args):
+        record = original_sender(*args)
+        body = json.loads(record["raw"])
+        body["usage"]["cost"] = "0"
+        return {**record, "raw": json.dumps(body)}
+
+    def run(j):
+        client(tmp_path / "capture", book, j.run_id, send).call(
+            "zero-fee", CHAT, {"model": "example/low"})
+        return {"final_public_pass": True}
+
+    scheduler = FourSlotScheduler(tmp_path / "study", plan_id="test", ledger=book, runner=run)
+    assert scheduler.run([j])["newly_completed"] == 1
+    assert book.lookup("zero-fee")["revision_id"] == "usage"
+    assert book.snapshot()["known_cumulative_usd"] == "0"
+    scheduler.runner = lambda _: pytest.fail("Cached zero-fee result rerun")
+    assert scheduler.run([j])["reused_completed"] == 1
+    assert len(calls) == 1
+
+
 def test_paid_response_before_engineering_crash_reuses_without_resend(tmp_path):
     book, count = ledger(tmp_path), []
     j = job(1)

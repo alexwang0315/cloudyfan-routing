@@ -148,6 +148,15 @@ class _RegisteredEnvironment:
             raise PolicyDenied('tool', 'not_registered')
         return self.environment.call(name, arguments)
 
+    def capacity_tool(self, name, arguments):
+        if name not in self.names:
+            raise PolicyDenied('tool', 'not_registered')
+        prepare = getattr(self.environment, 'capacity_tool', None)
+        if not callable(prepare):
+            from .capacity_dispatch import CapacityDenied
+            raise CapacityDenied('capacity_tool_protocol_unavailable')
+        return prepare(name, arguments)
+
     def validate(self, final):
         return self.environment.validate(final)
 
@@ -390,6 +399,7 @@ class TaskService:
                 from .capacity_dispatch import CapacityDenied
                 if isinstance(error, CapacityDenied):
                     state = {'run_id': run_id, 'status': 'capacity_denied', 'error': {'code': error.code}}
+                    self.capacity_controller.refused(self.internal_id(principal, run_id), error.code)
                     self.capacity_controller.terminal(self.internal_id(principal, run_id))
                     _write(directory / 'state.json', state)
                     return self.status(principal, run_id)

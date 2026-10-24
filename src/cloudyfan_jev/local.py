@@ -38,7 +38,7 @@ class LocalBackend(ReceiptStore):
         return all(profile.get(k) == self.config[k] for k in
                    ('model_version', 'quantization', 'engine', 'execution_location'))
 
-    def call(self, cid, payload):
+    def call(self, cid, payload, *, dispatch=None):
         if payload.get('model') != self.config['model_version']:
             raise ValueError('Local request model does not match pinned configuration')
         if payload.get('tools') or any(m.get('role') not in {'system', 'user', 'assistant'} or
@@ -55,23 +55,47 @@ class LocalBackend(ReceiptStore):
                 if (directory / 'response.json').exists():
                     return self._load(directory)
                 raise UnresolvedCallsError('Local request has unresolved execution; not resent')
+            prepared, capacity = None, {}
+            if dispatch is not None:
+                from .capacity_dispatch import prepare_request
+                prepared = prepare_request(self.http, self.config['endpoint'], request)
+                capacity = dispatch.prepare(cid, prepared)
             directory.mkdir(mode=0o700)
             _fsync_dir(directory.parent)
             common = {'execution_kind': 'local', 'call_id': cid, 'local_call_id': cid,
                       'run_id': cid.rsplit('-a', 1)[0].removeprefix('run-'),
                       'request_sha256': fingerprint, 'configuration': self.descriptor()}
             _immutable(directory / 'intent.json', {**common, 'url': self.config['endpoint'],
-                       'payload': request, 'started_at': _now()})
+                       'payload': request, 'started_at': _now(),
+                       **({'dispatch': capacity} if dispatch is not None else {})})
             started = perf_counter()
+            if dispatch is not None:
+                denied_code = None
+                try:
+                    admitted = dispatch.before_post() is True
+                except Exception as error:
+                    from .capacity_dispatch import CapacityDenied
+                    denied_code = error.code if isinstance(error, CapacityDenied) else None
+                    admitted = False
+                if not admitted:
+                    record = {**common, 'http_status': None, 'raw': None, 'not_dispatched': True,
+                              'error': 'enforcement_denied_before_post', 'finished_at': _now()}
+                    if denied_code:
+                        record['capacity_denial_code'] = denied_code
+                    _immutable(directory / 'response.json', record)
+                    dispatch.release()
+                    return record
             try:
-                response = self.http.post(self.config['endpoint'], json=request,
-                                          timeout=180, follow_redirects=False)
+                response = (self.http.send(prepared, follow_redirects=False) if dispatch is not None else
+                    self.http.post(self.config['endpoint'], json=request, timeout=180, follow_redirects=False))
                 record = {**common, 'http_status': response.status_code, 'raw': response.text}
             except Exception:
                 record = {**common, 'http_status': None, 'raw': None, 'interrupted': True,
                           'error': 'local_transport_failure'}
             record.update(elapsed_ms=(perf_counter() - started) * 1000, finished_at=_now())
             _immutable(directory / 'response.json', record)
+            if dispatch is not None:
+                dispatch.complete(record)
             return record
 
     def checked(self, record):

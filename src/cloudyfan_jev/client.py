@@ -260,8 +260,6 @@ class Client(ReceiptStore):
                           "interrupted": True, "error": "transport_failure", "finished_at": _now()}
             # Durable answer/receipt precedes any downstream interpretation.
             _immutable(directory / "response.json", record)
-            if dispatch is not None:
-                dispatch.complete(record)
             gid = usage(record)["generation_id"]
             if gid:
                 duplicate = any(usage(self._load(p.parent))["generation_id"] == gid
@@ -269,6 +267,8 @@ class Client(ReceiptStore):
                 if duplicate:
                     _immutable(directory / "duplicate-generation.json", {"generation_id": gid})
                     record["duplicate_generation_id"] = True
+            if dispatch is not None:
+                dispatch.complete(record)
             return record
 
     def reconcile(self, cid):

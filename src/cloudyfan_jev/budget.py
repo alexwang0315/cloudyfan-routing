@@ -327,7 +327,7 @@ class _BudgetClient:
             from copy import deepcopy
             args = tuple(deepcopy(value) for value in args)
             payload = args[-1]
-            endpoint = args[0] if len(args) > 1 else self.wrapped.configuration['endpoint']
+            endpoint = args[0] if len(args) > 1 else self.wrapped.config['endpoint']
             # Receipt replay is decided inside the real transport, before prepare.
             dispatch = _BudgetDispatch(self, cid, args, endpoint, payload)
             record = self.wrapped.call(cid, *args, dispatch=dispatch)
@@ -404,7 +404,7 @@ class _BudgetDispatch:
 class _BudgetEnvironment:
     def __init__(self, environment, owner, run_id):
         self.environment, self.owner, self.run_id = environment, owner, run_id
-        self.index = 0
+        self.index, self.prepared = 0, None
         self.replayable_tools = frozenset(name for name in getattr(environment, 'replayable_tools', ())
                                          if name in owner.tool_bounds and not owner.tool_bounds[name].external)
 
@@ -419,6 +419,66 @@ class _BudgetEnvironment:
                 raise BudgetError('Tool lacks explicit cost and execution policy')
         return tools
 
+    def prepare_call(self, action_id, name, arguments):
+        from .capacity_dispatch import CapacityDenied, CapacityToolRequest, CapacityToolTransport
+        if self.owner.capacity_controller is None or self.owner._capacity_context['policy_version'] is None:
+            return
+        policy = self.owner.tool_bounds.get(name)
+        if policy is None:
+            raise BudgetError('Tool lacks confirmed upper bound')
+        if not policy.external:
+            # Local deterministic tools have no supplier POST. Explicit host
+            # tool policy and the original privacy/zero-fee gate still apply.
+            self.owner._verify('tool', name, arguments, policy.bound)
+            return
+        self.owner._verify('tool', name, arguments, policy.bound)
+        request = self.environment.capacity_tool(name, arguments)
+        if type(request) is not CapacityToolRequest or type(request.transport) is not CapacityToolTransport:
+            raise CapacityDenied('capacity_tool_protocol_unavailable')
+        wire = request.transport.prepare(action_id, request.payload)
+        dispatch = self.owner.capacity_controller.dispatch(self.owner._capacity_context,
+            request.transport, request.transport.config['endpoint'], {'model': 'tool:' + name},
+            self.owner._capacity_descriptor)
+        dispatch.prepare(action_id, wire)
+        self.prepared = (name, _fingerprint(arguments), action_id, request.transport, wire, dispatch)
+
+    def _controlled_tool(self, name, arguments, policy, event_id):
+        from .capacity_dispatch import CapacityDenied
+        from .client import not_dispatched
+        if self.prepared is None or self.prepared[:2] != (name, _fingerprint(arguments)):
+            raise CapacityDenied('capacity_tool_prepare_required')
+        _, _, action_id, transport, wire, dispatch = self.prepared
+        self.prepared = None
+        try:
+            fresh = self.owner.store.begin_event(self.run_id, event_id, 'tool', money(policy.bound.usd),
+                _fingerprint({'name': name, 'arguments': arguments}))
+            if not fresh:
+                raise BudgetError('External tool replay is forbidden')
+        except BaseException:
+            dispatch.release()
+            raise
+        record = transport.post(action_id, wire, dispatch.before_post)
+        if not_dispatched(record):
+            self.owner.store.record_event(event_id, cost_usd='0', verified=True,
+                receipt_id='not-dispatched:' + _fingerprint(str(transport.root) + ':' + action_id))
+            dispatch.release()
+            raise CapacityDenied(record.get('capacity_denial_code', 'capacity_tool_guard_denied'))
+        try:
+            result = transport.result(record)
+            if not isinstance(result, ToolReceipt):
+                raise BudgetError('External tool omitted billing receipt; cost remains unknown')
+            from .client import _encoded
+            _encoded(result.result)
+            self.owner.store.record_event(event_id, cost_usd=result.cost_usd,
+                verified=result.verified, receipt_id=result.receipt_id)
+            if result.cost_usd is None or not result.receipt_id:
+                raise BudgetError('External tool cost unknown; execution stopped')
+        except BaseException:
+            dispatch._update('uncertain')
+            raise
+        dispatch._update('complete')
+        return result.result
+
     def call(self, name, arguments):
         from .client import _encoded
         policy = self.owner.tool_bounds.get(name)
@@ -427,6 +487,9 @@ class _BudgetEnvironment:
         self.owner._verify('tool', name, arguments, policy.bound)
         event_id = f'tool:{self.run_id}:{self.index}'
         self.index += 1
+        if (policy.external and self.owner.capacity_controller is not None
+                and self.owner._capacity_context['policy_version'] is not None):
+            return self._controlled_tool(name, arguments, policy, event_id)
         fresh = self.owner.store.begin_event(self.run_id, event_id, 'tool', money(policy.bound.usd),
                                              _fingerprint({'name': name, 'arguments': arguments}))
         if not fresh and policy.external:

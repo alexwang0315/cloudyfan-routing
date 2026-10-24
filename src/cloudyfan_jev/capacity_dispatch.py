@@ -10,6 +10,10 @@ from dataclasses import dataclass, field
 import hashlib
 import json
 import re
+from pathlib import Path
+from urllib.parse import urlsplit
+
+from .receipt_store import ReceiptStore, _immutable
 
 from .capacity import CapacityStore, _identity, _time, _live_capacity
 
@@ -71,16 +75,82 @@ class CapacityRoute:
     binding: str
     token_adapter: object = field(default=None, repr=False, compare=False)
     require_supplier: tuple = ()
+    provider_name: str | None = None
+    accepted_models: tuple = ()
 
     def descriptor(self):
         # Hashes bind controlled runtime identity without persisting secret values.
-        credential = getattr(self.transport, 'key', None)
-        config = getattr(self.transport, 'configuration', None)
+        config = getattr(self.transport, 'config', None)
         return {'transport_sha256': _hash({'root': str(self.transport.root.absolute()),
-                    'credential': credential, 'configuration': config}),
+                    'configuration': config}),
                 'endpoint': self.endpoint, 'model': self.model, 'binding': _identity(self.binding),
                 'token_adapter_version': getattr(self.token_adapter, 'version', None),
-                'require_supplier': list(self.require_supplier)}
+                'require_supplier': list(self.require_supplier), 'provider_name': self.provider_name,
+                'accepted_models': list(self.accepted_models)}
+
+
+@dataclass(frozen=True)
+class CapacityToolRequest:
+    """A host environment opts into one registered physical HTTP POST."""
+    transport: object = field(repr=False)
+    payload: dict = field(repr=False)
+
+
+class CapacityToolTransport(ReceiptStore):
+    """Single-send tool adapter with durable private request/response evidence."""
+    def __init__(self, http, root, *, endpoint, version, decode):
+        from .capacity import _private_path
+        parsed = urlsplit(endpoint)
+        if (parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password
+                or parsed.query or parsed.fragment or not callable(decode)):
+            raise ValueError('Controlled HTTPS tool endpoint and decoder required')
+        root = Path(root).absolute()
+        _private_path(root / '.capacity-tool.lock', create=True)
+        super().__init__(root)
+        self.http, self.decode = http, decode
+        self.config = {'protocol': 'capacity-tool-http-v1', 'version': _identity(version), 'endpoint': endpoint}
+
+    def prepare(self, cid, payload):
+        if (self._directory(cid) / 'intent.json').exists():
+            raise CapacityDenied('capacity_tool_replay_forbidden', 409)
+        return prepare_request(self.http, self.config['endpoint'], payload)
+
+    def post(self, cid, request, before_post):
+        from .capacity import _private_path
+        _private_path(self.root / '.capacity-tool.lock')
+        with self._lock():
+            directory = self._directory(cid)
+            if (directory / 'intent.json').exists():
+                raise CapacityDenied('capacity_tool_replay_forbidden', 409)
+            directory.mkdir(mode=0o700)
+            _immutable(directory / 'intent.json', {'call_id': cid, 'configuration': self.config,
+                'wire_sha256': hashlib.sha256(request.content).hexdigest()})
+            denied_code = None
+            try:
+                admitted = before_post() is True
+            except Exception as error:
+                denied_code = error.code if isinstance(error, CapacityDenied) else None
+                admitted = False
+            if not admitted:
+                record = {'call_id': cid, 'http_status': None, 'raw': None,
+                    'not_dispatched': True, 'error': 'enforcement_denied_before_post'}
+                if denied_code:
+                    record['capacity_denial_code'] = denied_code
+            else:
+                try:
+                    response = self.http.send(request, follow_redirects=False)
+                    record = {'call_id': cid, 'http_status': response.status_code, 'raw': response.text}
+                except Exception:
+                    record = {'call_id': cid, 'http_status': None, 'raw': None, 'interrupted': True,
+                              'error': 'capacity_tool_transport_failure'}
+            _immutable(directory / 'response.json', record)
+            return record
+
+    def result(self, record):
+        import httpx
+        if record.get('http_status') is None or record.get('raw') is None:
+            raise CapacityDenied('capacity_tool_result_uncertain')
+        return self.decode(httpx.Response(record['http_status'], text=record['raw']))
 
 
 class CapacityController:
@@ -89,7 +159,7 @@ class CapacityController:
         if type(store) is not CapacityStore or not callable(credential_active):
             raise ValueError('Controlled capacity store and credential verifier required')
         self.store, self.credential_active = store, credential_active
-        self.routes = {}
+        self.routes, self._route_credentials = {}, {}
         with store.connection(write=True) as db:
             db.executescript('''
                 CREATE TABLE IF NOT EXISTS capacity_policies(version TEXT PRIMARY KEY,payload TEXT NOT NULL);
@@ -137,6 +207,9 @@ class CapacityController:
         if not config['configured'] or config['configuration_version'] != configuration_version:
             raise ValueError('Registered capacity configuration required')
         bindings = {binding['id'] for binding in config['bindings']}
+        physical = [_hash(group['scope']) for group in config['groups']]
+        if len(physical) != len(set(physical)):
+            raise ValueError('One capacity group per physical scope required')
         descriptors = []
         for route in routes:
             if type(route) is not CapacityRoute or route.binding not in bindings:
@@ -161,6 +234,7 @@ class CapacityController:
                 raise ValueError('An immutable capacity policy cannot change')
             db.execute('INSERT OR IGNORE INTO capacity_policies VALUES(?,?)', (version, _json(value)))
         self.routes[version] = tuple(routes)
+        self._route_credentials[version] = tuple(getattr(route.transport, 'key', None) for route in routes)
 
     def activate(self, revision, version):
         if type(revision) is not int or revision < 0:
@@ -228,6 +302,15 @@ class CapacityController:
         if adoption['deadline'] is not None and now >= adoption['deadline']:
             raise CapacityDenied('capacity_deadline_exceeded')
 
+    def refused(self, run, code):
+        with self.store.connection(write=True) as db:
+            db.execute('BEGIN IMMEDIATE')
+            now = self._now(db, write=True)
+            row = db.execute('SELECT payload FROM capacity_adoptions WHERE run=?', (run,)).fetchone()
+            if row is not None:
+                value = json.loads(row[0])
+                self._event(db, {'kind': 'refused', 'version': value['policy_version'], 'reason_code': code, 'at': now})
+
     def terminal(self, run):
         with self.store.connection(write=True) as db:
             db.execute('BEGIN IMMEDIATE')
@@ -239,8 +322,12 @@ class CapacityController:
             raise CapacityDenied('capacity_frozen_adoption_changed', 409)
         if adoption['policy_version'] is None:
             return None
-        matches = [route for route in self.routes.get(adoption['policy_version'], ())
-                   if route.endpoint == endpoint and route.model == payload.get('model')
+        with self.store.connection() as db:
+            policy = json.loads(db.execute('SELECT payload FROM capacity_policies WHERE version=?', (adoption['policy_version'],)).fetchone()[0])
+        matches = [route for index, route in enumerate(self.routes.get(adoption['policy_version'], ()))
+                   if route.descriptor() in policy['routes']
+                   and getattr(route.transport, 'key', None) == self._route_credentials[adoption['policy_version']][index]
+                   and route.endpoint == endpoint and route.model == payload.get('model')
                    and route.descriptor()['transport_sha256'] == CapacityRoute(transport, endpoint, payload.get('model'), route.binding).descriptor()['transport_sha256']]
         if len(matches) != 1:
             raise CapacityDenied('capacity_route_not_registered')
@@ -410,7 +497,17 @@ class _CapacityDispatch:
         from .client import usage
         info = usage(record)
         raw = info.get('usage', {})
+        accepted = self.route.accepted_models or (self.route.model,)
+        local = record.get('execution_kind') == 'local'
+        identity = (info.get('model') in accepted and not record.get('duplicate_generation_id')
+            and (record.get('configuration') == self.route.transport.descriptor() if local else
+                 bool(info.get('generation_id')) and info.get('provider') == self.route.provider_name))
         tokens = None
-        if isinstance(raw, dict) and all(type(raw.get(key)) is int and raw[key] >= 0 for key in ('prompt_tokens', 'completion_tokens')):
-            tokens = raw['prompt_tokens'] + raw['completion_tokens']
-        self._update('uncertain' if record.get('interrupted') or info['cost_unknown'] else 'complete', tokens=tokens)
+        if identity and isinstance(raw, dict):
+            pairs = [('prompt_tokens', 'completion_tokens'), ('input_tokens', 'output_tokens')]
+            quantities = [raw[a] + raw[b] for a, b in pairs
+                if all(type(raw.get(key)) is int and raw[key] >= 0 for key in (a, b))]
+            if quantities and len(set(quantities)) == 1 and (
+                    'total_tokens' not in raw or type(raw['total_tokens']) is int and raw['total_tokens'] == quantities[0]):
+                tokens = quantities[0]
+        self._update('uncertain' if record.get('interrupted') or info['cost_unknown'] or not identity else 'complete', tokens=tokens)

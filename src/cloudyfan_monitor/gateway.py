@@ -72,6 +72,10 @@ class Gateway:
         if self.queue is not None and (self.service.capacity_controller.queue_policy() is not None
                 or isinstance(payload, dict) and isinstance(payload.get('run_id'), str)
                 and self.queue.contains(principal, payload['run_id'])):
+            prior = (self.store.existing_binding(principal, payload.get('run_id'))
+                if isinstance(payload, dict) and isinstance(payload.get('run_id'), str) else None)
+            if prior is not None and (expired := self._expiry(prior)):
+                raise ServiceError(expired, 410)
             binding = self.store.bind(principal, payload, self.registry, expected_contract=expected_contract)
             state = self.queue.submit(principal, {'run_id': binding['run'], 'contract_id': binding['contract'],
                                                 'prompt': payload['prompt']})
@@ -150,6 +154,8 @@ class Gateway:
     def execute(self, principal, run):
         self.service.authorize(principal)
         binding = self.store.binding(principal, run)
+        if expired := self._expiry(binding):
+            raise ServiceError(expired, 410)
         if self.queue is not None and self.queue.contains(principal, run):
             return self.queue_view(binding, self.queue.status(principal, run))
         status = self.status(principal, run)

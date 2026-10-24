@@ -24,6 +24,8 @@ def build_resilience_host(root, *, clock, origin, options=None, before_response=
     host.controller = host.bundle.app.capacity_controller
     host.windows = host.controller.window_backend
     host.protected_paths += (host.controller.store.integrity.root,)
+    if host.queue.integrity is not None:
+        host.protected_paths += (host.queue.integrity.root,)
     return host
 
 
@@ -96,15 +98,18 @@ def build_resilience_health_host(root, *, clock, origin, before_response=None):
             'lane': lane, 'wire_sha256': hashlib.sha256(request.content).hexdigest(), 'id': identifier}
         requests.append(record)
         (root / ('private-wire-' + identifier + '.bin')).write_bytes(request.content)
+        record_path = root / ('private-request-' + identifier + '.json')
+        record_path.write_text(json.dumps(record, sort_keys=True))
+        record_path.chmod(0o600)
         host.calls.append({**record, 'payload': payload})
+        if before_response is not None:
+            before_response(request)
         if request.method != 'POST':
             side_requests['accounting'].append(record)
             return httpx.Response(503, json={'error': 'PRIVATE_RESILIENCE_ACCOUNTING_UNAVAILABLE'})
         scenario = flags['scenario'] if lane == 'primary' else 'success'
         if lane == 'primary':
             flags['scenario'] = 'success'
-        if before_response is not None:
-            before_response(request)
         if lane == 'primary' and flags['hold']:
             held.set()
             if not released.wait(600):
@@ -210,6 +215,21 @@ def build_resilience_health_host(root, *, clock, origin, before_response=None):
     host.app = assemble_monitor(store, service, registry, identities, operator_token=OPERATOR, origin=origin,
         demo=True, capacity_observer=observer, capacity_controller=controller, queue=queue,
         ollama_models={'resilience-mrc': {'category': host.category, 'contract_id': 'health-backup-v1'}})
+    from cloudyfan_monitor.openrouter_accounting import OpenRouterAccounting
+    from cloudyfan_monitor.pools import OpenRouterPoolSource
+    from test_sources import fixtures
+    for kind in side_requests:
+        def unexpected(request, source=kind):
+            side_requests[source].append({'method': request.method, 'path': request.url.path})
+            record_path = root / ('private-' + source + '-request-' + uuid4().hex + '.json')
+            record_path.write_text(json.dumps(side_requests[source][-1], sort_keys=True))
+            record_path.chmod(0o600)
+            if before_response is not None:
+                before_response(request)
+            return httpx.Response(503, json={'error': 'PRIVATE_RESILIENCE_OBSERVATION_CANARY'})
+        transports.append(httpx.Client(transport=httpx.MockTransport(unexpected), trust_env=False))
+    host.app.source = OpenRouterPoolSource(transports[-2], fixtures()[2])
+    host.app.gateway.billing.source = OpenRouterAccounting(transports[-1], api_key=uuid4().hex)
     host.service, host.budget, host.pools = service, budgets['primary'], (active, inactive)
     def close():
         released.set()

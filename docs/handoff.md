@@ -643,3 +643,23 @@ The [new selector research contract](jev-selector-research.md) replaces the fixe
 依使用者授權僅提交選擇器、校準契約及可重建的必要支援程式；原始研究／付費結果／失敗紀錄不移入Git、不覆寫。保留工作區SQL資格、Monitor及舊副本。本次額外補上fixture客戶端覆寫防護；SQL合成回歸不再載入外部研究或正式題。實作與離線測試完成不代表實際校準：適用真實條件校準仍0，RG-01凍結、正式資格pending，沒有新付費／部署／推送。提交子集驗證與原dirty工作區70項舊副本失敗分開記於[審閱證據](evidence/jev-selector-commit-review-20261023.json)。
 
 本機審閱完成：最終19檔提交子集103項受影響回歸、Ruff／狀態檢查、2個Mock示範與離線建置通過。曾有狀態測試誤啟用歷史完成工作，已納入測試隔離修正並複驗31項；原失敗與中止完整保留，未稱全工作區全綠。原24,354份研究／題庫／證據不變。真實校準仍0、正式資格pending。
+
+## 2026-10-23 Ollama客戶與Monitor50題接線
+
+本輪新增向下相容的`OllamaApp.submit_task`，讓原生Ollama請求可由Monitor共用Gateway管理客戶、契約、容量及計費。未提供callback時原協定流程維持。實際首輪在第23題回401，22題與瀏覽器中間進度保留，確切根因未知；檢查另確認正常SQLite伴隨檔移除競態與密集並行工程例外。已改單次lstat且只忽略不存在、同registry短交易RLock、Monitor工程錯誤503；無效憑證401、時鐘／scope／私有路徑與未知費停止維持，沒有HTTP或付費重試。
+
+核心受影響identity／native／官方SDK121項通過；隔離1800次並行活動檢查修正後零故障。完整50題、桌機及當前完整凍結驗收以[Monitor模擬文件](../../cloudyfan-monitor/docs/ollama50-simulation.md)與其原始收據為準；本段不預先宣稱全套通過。MONITOR-OLLAMA50-INGRESS僅完成其實作與受影響回歸，保留當前jev-selector-local-review／blocked、正式資格pending、真實校準0、unknown525與其他dirty工作。沒有讀真實憑證、供應商GET／模型POST、commit、推送、部署、手機或刪除。
+
+
+2026-10-23 Ollama50唯讀觀測補充：R2實際SDK／TCP批次已完成50題（40通過／5失敗／5未知，170次合成模型與Jev），但舊Monitor快照逾時。新增host-only`TaskService.observe`，保留原_retained／凍結契約／原Core收據檢查，一次讀結果與一次預算報表，不新增HTTP raw出口；原result回傳相容。principal_active工程例外安全503、真正停用401；同一IdentityStore活動bound method避免重複包裝。核心195項受影響回歸通過／1既有平台lsof跳過，該平台單項後續另1通過；Monitor原證據、期限、契約與觀測23項通過。R3對同一50題資料唯讀桌機5組通過、獨立41檔複審剩餘0，未再派模型。當次50題快照約10.10秒，非通用效能承諾；原Q23原因未知且所有失敗保留。最終2105／235項凍結檢查在Monitor獨立證據中記錄實際結果，不預先宣稱完成或修改主線blocked／正式資格。
+
+2026-10-23 Ollama50最終檢查：Monitor完整235項與12步檢查通過；核心完整2,105項實際為2,055通過／50失敗／2警告，整套gate失敗且沒有更新verified指標。失敗集中SQL凍結suite／plan不符。正確固定凍結來源仍重現；三個代表案例另以只將本輪三個接入檔換回HEAD `610f1ca8` 的版本比較，其餘464檔不變，兩組均有相同三項失敗且未進入ingress／identity／observe；此限定比較不還原整個修改前工作區，也不證明全50根因。兩個既有Mock示範及核心離線建置另行通過，不覆蓋整套失敗。原始失敗、早期中斷、鎖定環境與舊editable路徑注意事項、比較輸出、SDK及桌機證據封存於Monitor `runtime/ollama50-evidence-20261023-final/`，最後清單與封印以其中`index.json`、`seal.json`為準。可操作模擬在 `http://127.0.0.1:18773/`；供應商成本0.1155／客戶扣款0.139128／餘額0.860872 USD皆為合成數字。主線blocked、正式資格pending、真實校準0與原unknown525不變；無真實憑證／供應商請求、提交、推送、部署、手機或刪除。
+
+
+## 2026-10-24 Monitor接入選擇性本機提交
+
+使用者已授權依兩份PR草稿提交到本機Git；之前的「未提交」描述各自擷取時點。本次範圍只有TaskService唯讀觀測／結果選項、Ollama提交回呼、IdentityStore短交易與伴隨檔檢查、RetentionStore非阻塞重入，以及五個Monitor專屬測試。共享work-plan只由HEAD加入三筆MONITOR完成紀錄，coordination與本檔只擷取Monitor段落；其他SQL、評分、研究狀態與安全依賴更新留在原工作區。
+
+選擇性index匯出的200項受影響核心回歸、project-state記錄檢查與Ruff、兩個既有Mock示範及核心離線sdist／wheel均通過。原鎖版整合入口因certifi2026.7.22不在離線快取而在測試前停止；上述檢查另用目前複製的certifi2026.10.19環境，未變更提交中的依賴鎖檔，不能稱原鎖版整套通過。本輪不繞過密鑰掃描或既有hooks。原完整凍結Core 2,055通過／50項SQL失敗與Monitor235通過屬原快照，不能稱這個選擇性提交全套通過。合成50題與私有證據仍留本機，見[Monitor文件](../../cloudyfan-monitor/docs/ollama50-simulation.md)。當前主線blocked／真實校準0／原unknown525不變。無憑證讀取、模型或供應商請求、推送、部署、手機或刪除。
+
+提交與保留核對收據在CloudyFan `.scratch/cloudyfan-monitor-local-commits-20261024/`；本提交識別以本機Git紀錄及收據為準。

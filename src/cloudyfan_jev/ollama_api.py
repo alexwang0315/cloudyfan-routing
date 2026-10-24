@@ -64,13 +64,18 @@ class OllamaApp:
 
     Authentication and a caller-chosen stable X-CloudyFan-Run-ID are required.
     Model listing deliberately omits unobserved local weight metadata.
+    A trusted submit_task callback can replace admission and initial execution.
+    It receives the TaskService payload; validated alias metadata stays request-local.
     """
-    def __init__(self, service, *, models, authenticate, clock=_now, audit=None):
+    def __init__(self, service, *, models, authenticate, clock=_now, audit=None, submit_task=None):
         self.service, self.models = service, dict(models)
         if not self.models or any(not isinstance(k, str) or not k or v not in service.contracts
                                   for k, v in self.models.items()):
             raise ValueError('Model aliases must map to registered validation contracts')
+        if submit_task is not None and not callable(submit_task):
+            raise ValueError('Explicit task submission must be callable')
         self.authenticate, self.clock, self.audit = authenticate, clock, audit
+        self.submit_task = submit_task
         self.tasks = HTTPApp(service, authenticate=authenticate, audit=audit)
 
     def __call__(self, environ, start_response):
@@ -90,11 +95,15 @@ class OllamaApp:
                 if alias not in self.models:
                     raise ServiceError('model_not_registered', 404)
                 run_id = environ.get('HTTP_X_CLOUDYFAN_RUN_ID')
-                state = self.service.create(principal, {'run_id': run_id, 'contract_id': self.models[alias],
-                                                         'prompt': payload['prompt']})
-                # Duplicate native requests are lookups, not implicit resume.
-                if state['status'] == 'ready':
-                    state = self.service.execute(principal, run_id)
+                task = {'run_id': run_id, 'contract_id': self.models[alias], 'prompt': payload['prompt']}
+                if self.submit_task is not None:
+                    environ['cloudyfan.ollama_request'] = {'protocol': 'ollama', 'endpoint': path, 'alias': alias}
+                    state = self.submit_task(principal, task)
+                else:
+                    state = self.service.create(principal, task)
+                    # Duplicate native requests are lookups, not implicit resume.
+                    if state['status'] == 'ready':
+                        state = self.service.execute(principal, run_id)
                 metadata = {'protocol_version': PROTOCOL_VERSION, 'run_id': run_id,
                             'status': state['status'], 'costs': state['costs']}
                 if state['status'] in ('passed', 'failed', 'unverifiable'):

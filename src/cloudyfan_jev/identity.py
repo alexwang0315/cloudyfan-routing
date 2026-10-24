@@ -12,6 +12,7 @@ import re
 import secrets
 import sqlite3
 import stat
+import threading
 import time
 
 
@@ -65,11 +66,13 @@ def _private_path(path, *, create=False):
         raise IdentityError('Identity database must be private, regular and owned')
     for suffix in ('-journal', '-wal', '-shm'):
         sidecar = path.with_name(path.name + suffix)
-        if sidecar.exists() or sidecar.is_symlink():
+        try:
             info = sidecar.lstat()
-            if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
-                    or info.st_mode & 0o077 or info.st_nlink != 1):
-                raise IdentityError('Unsafe identity database companion')
+        except FileNotFoundError:
+            continue
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+                or info.st_mode & 0o077 or info.st_nlink != 1):
+            raise IdentityError('Unsafe identity database companion')
     return path
 
 
@@ -101,6 +104,7 @@ class IdentityStore:
     def __init__(self, path, *, pepper, clock=time.time):
         if not isinstance(pepper, bytes) or len(pepper) < 32 or not callable(clock):
             raise IdentityError('Private pepper of at least 32 bytes and clock required')
+        self._thread_lock = threading.RLock()
         self.path = _private_path(path, create=True)
         self._pepper, self.clock = pepper, clock
         with self._transaction() as db:
@@ -130,21 +134,22 @@ class IdentityStore:
 
     @contextmanager
     def _transaction(self):
-        _private_path(self.path)
-        db = sqlite3.connect(self.path.as_uri() + '?mode=rw', uri=True, isolation_level=None, timeout=5)
-        db.row_factory = sqlite3.Row
-        try:
-            db.execute('PRAGMA foreign_keys=ON')
-            db.execute('PRAGMA journal_mode=DELETE')
-            db.execute('BEGIN IMMEDIATE')
-            yield db
-            db.execute('COMMIT')
-        except BaseException:
-            if db.in_transaction:
-                db.execute('ROLLBACK')
-            raise
-        finally:
-            db.close()
+        with self._thread_lock:
+            _private_path(self.path)
+            db = sqlite3.connect(self.path.as_uri() + '?mode=rw', uri=True, isolation_level=None, timeout=5)
+            db.row_factory = sqlite3.Row
+            try:
+                db.execute('PRAGMA foreign_keys=ON')
+                db.execute('PRAGMA journal_mode=DELETE')
+                db.execute('BEGIN IMMEDIATE')
+                yield db
+                db.execute('COMMIT')
+            except BaseException:
+                if db.in_transaction:
+                    db.execute('ROLLBACK')
+                raise
+            finally:
+                db.close()
 
     def create_principal(self, principal):
         principal = _principal(principal)

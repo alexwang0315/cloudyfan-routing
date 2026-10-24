@@ -141,6 +141,50 @@
       ],
       "consumed_interfaces": [],
       "outcome": "Reviewed19-file local subset:103 affected regressions, Ruff, project records,2Mock demos and offline build passed. Prior2034 full pass retained; rebased full run had a false closed-history fixture conflict, interrupted and preserved, fixed and all31 state regressions passed. Self-contained SQL adapter, Client override guard, real calibration0, RG01 unchanged. No API/deploy/push; local commit only."
+    },
+    {
+      "id": "MONITOR-RETENTION-NONBLOCKING",
+      "owner": "monitor-core-worker",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/retention.py",
+        "tests/test_monitor_retention_concurrency.py"
+      ],
+      "depends_on": [],
+      "consumed_interfaces": [],
+      "outcome": "Nonblocking reentrant retention guard plus cross-thread/process regressions; included in 71 affected core tests passed. Monitor local HTTP/package acceptance passed; no paid calls, no erasure, no changes to unrelated scopes. Post-reboot affected integration gate: 119 tests across six explicit modules, both mock demos and offline build passed; current Monitor gate again 76 passed. Full workspace runs were interrupted and are not certified."
+    },
+    {
+      "id": "MONITOR-OBSERVATION-READ",
+      "owner": "monitor-core-worker",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/http_api.py",
+        "tests/test_monitor_observation.py"
+      ],
+      "depends_on": [
+        "MONITOR-RETENTION-NONBLOCKING"
+      ],
+      "consumed_interfaces": [],
+      "outcome": "Backward-compatible result(refresh=True); refresh=False retains original result/receipt validation and reads existing budget without transport synchronization. Included in 71 affected core tests passed; Monitor package 76 passed. Overall workspace check reported separately. Post-reboot affected integration gate: 119 tests across six explicit modules, both mock demos and offline build passed; current Monitor gate again 76 passed. Full workspace runs were interrupted and are not certified."
+    },
+    {
+      "id": "MONITOR-OLLAMA50-INGRESS",
+      "owner": "monitor-ollama-worker",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/ollama_api.py",
+        "tests/test_monitor_ollama_submit.py",
+        "src/cloudyfan_jev/identity.py",
+        "tests/test_monitor_identity_companion.py",
+        "src/cloudyfan_jev/http_api.py",
+        "tests/test_monitor_task_observation.py"
+      ],
+      "depends_on": [
+        "MONITOR-OBSERVATION-READ"
+      ],
+      "consumed_interfaces": [],
+      "outcome": "Implemented optional native submit callback to Monitor Gateway; safe identity companion checks and per-instance short transactions; host-only TaskService.observe validates original result/receipts once with original retention, frozen-contract, budget, unknown-fee guards. Principal callback engineering failures503/inactive401.195 affected core regressions passed plus1 existing platform-dependent lsof skip; root23 Monitor public/evidence regressions passed. Actual R2 official SDK/TCP50 completed40passed/5failed/5unverifiable/170 mock calls; earlier22-task401 and desktop30s timeout retained, original401 root cause unknown. Read-only repaired50-task snapshot measured10.10s, no new model calls. Final full integration/browser/code review results are recorded in Monitor final evidence, not presumed here. Preserve selector scope blocked/calibration0, unknown525 and all unrelated work; no real API/credentials/commit/push/deploy/mobile/deletion."
     }
   ]
 }

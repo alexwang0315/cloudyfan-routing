@@ -367,3 +367,30 @@ Final scope verification:31 new regressions pass; full dirty workspace2637pass/7
 ## Jev 選擇器本機提交審閱 — 2026-10-23
 
 依使用者授權僅提交選擇器、校準契約及可重建的必要支援程式；原始研究／付費結果／失敗紀錄不移入Git、不覆寫。保留工作區SQL資格、Monitor及舊副本。本次額外補上fixture客戶端覆寫防護；SQL合成回歸不再載入外部研究或正式題。實作與離線測試完成不代表實際校準：適用真實條件校準仍0，RG-01凍結、正式資格pending，沒有新付費／部署／推送。提交子集驗證與原dirty工作區70項舊副本失敗分開記於[審閱證據](evidence/jev-selector-commit-review-20261023.json)。
+
+## Monitor 本機接入：2026-10-22
+
+使用者已確認十二項接入方案並授權本機實作、模擬模型驗收及一次有界來源GET。保留目前離線研究修正及所有不相關dirty內容，不改其帳本、原始收據、狀態scope或付費禁止。monitor-core-worker僅擁有retention.py與新增test_monitor_retention_concurrency.py，修正同程序任務鎖造成監控等待的問題；root整合受影響檢查，其他Monitor套件檔案的分工記於其docs/execution-checkpoint.md。不修改SQL契約、模型資格、BudgetedCore派送規則或原paid研究。
+
+Monitor補充：monitor-core-worker追加擁有http_api.py及新增test_monitor_observation.py，向下相容提供結果讀取不刷新共享帳本的選項；Monitor查詢仍驗原結果與收據，帳本派送阻擋不變。先前retention非阻塞修正及其檔案所有權保留。
+
+## 2026-10-22 Monitor 本機接入範圍完成紀錄
+
+僅 MONITOR-RETENTION-NONBLOCKING 與 MONITOR-OBSERVATION-READ 兩項已完成，受影響核心回歸 71 passed；Monitor 最新完整套件檢查 76 passed，含真正本機 HTTP 與 CategoryCore 接線。桌機 8 項操作已通過，手機製作／測試依使用者新指示停止。詳見 [Monitor接入驗收](../../cloudyfan-monitor/docs/main-thread-integration-acceptance.md)。本次來源 metadata GET 為獨立 15 次嘗試，未呼叫付費模型；主線原未知費停止及其他 scope／blocked 狀態不變。核心一般全工作區與排除既有副本後的檢查另保留原始紀錄，不將 Monitor 通過冒充整個 core 全綠；未改 SQL 規則或其他研究結果。
+
+2026-10-22 重開機後收尾：目前六個受影響核心模組共119 passed，兩個mock示範及離線建置通過（runtime/checks/2c9f1398b3ce46dbacc4c8d4d62224b5）；Monitor目前核心版本再次76 passed。舊兩輪大型檢查由重開機中斷且已出現失敗，保留為未完成；不把指定範圍通過當成整個dirty工作區全綠。目前routing-v2-s50-integration scope與其他任務不變，18767僅恢復合成桌機預覽。
+
+## 2026-10-23 Ollama 客戶50題與 Monitor 模擬接線
+
+使用者明示要求本機模擬客戶透過Ollama送50題，查看MRC路由、Jev與客戶帳務。monitor-ollama-worker僅擁有ollama_api.py及新test_monitor_ollama_submit.py，提供向下相容的明示submit callback；Monitor套件的Gateway／Store預期契約檢查由root整合，桌機trace與模擬fixture各自分工。保留現有jev-selector-local-review與blocked狀態、其他未提交變更及歷史研究；本次不讀真實憑證、不觸發真實模型或供應商GET、不恢復unknown525、不更改派送／費用資格。完整模擬成功不等於主線真實模型服務已部署。
+
+
+2026-10-23 Ollama50實際HTTP首輪在第23題回401，已保留22題與瀏覽器中間進度。monitor-ollama-worker追加擁有identity.py及新test_monitor_identity_companion.py，只修SQLite正常COMMIT使sidecar消失的檔案檢查競態；先以公開身分驗證重現紅燈，保留不安全路徑與時鐘拒絕。App工程失敗須與真正401分開，不繞過驗證或自動重試；原401原因待實際證據，不把競態候選當成已證實原因。
+
+
+Ollama50 R2已完成50題／170次合成呼叫，但桌機快照因每題重複驗證／授權而逾時，不能宣告完整驗收。monitor-ollama-worker追加擁有http_api.py與新test_monitor_task_observation.py：整合同一受授權／retention保護的host-only唯讀觀測，一次讀原Core結果，保留原收據驗證；並區分principal_active工程故障與真正拒絕。root擁有Gateway／integration接線及新公開HTTP回歸；UI worker只修app.js同時只讀一個快照。R1凍結檢查保留其原輸入與結果，修正後另建快照，不用延長timeout或跳過證據當修復。
+
+
+## 2026-10-24 Monitor接入本機提交責任
+
+使用者授權依Monitor／核心PR草稿選擇性提交。root單獨負責兩repo的候選index、共享文件逐段擷取、匯出驗證、Git提交與保留核對；commit_boundary_review只讀檢查並在.scratch產生候選，未改產品／index。既有桌機樣式六個class與style.css、兩張歷史截圖，以及其他研究／SQL／評分／安全依賴變更保留未提交；不重啟付費流程或擴張正式資格。

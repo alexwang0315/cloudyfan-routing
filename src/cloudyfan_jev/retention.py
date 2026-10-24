@@ -90,11 +90,13 @@ class RetentionStore:
         if not isinstance(task_id, str) or not re.fullmatch(r'http-[a-f0-9]{48}', task_id):
             raise RetentionError('invalid_retention_identity', 403)
         # The map mutex never covers task work: unrelated task namespaces must
-        # remain concurrent. Reentrant per-task locks coordinate same-store threads;
+        # remain concurrent. Reentrant per-task locks reject competing store threads;
         # the permanent flock coordinates independent stores/processes.
         with self._threads:
             task_lock = self._task_locks.setdefault(task_id, threading.RLock())
-        with task_lock:
+        if not task_lock.acquire(blocking=False):
+            raise RetentionError('task_busy', 409)
+        try:
             held = getattr(self._local, 'held', set())
             if task_id in held:
                 yield
@@ -116,6 +118,8 @@ class RetentionStore:
                     fcntl.flock(fd, fcntl.LOCK_UN)
             finally:
                 os.close(fd)
+        finally:
+            task_lock.release()
 
     def lookup(self, task_id):
         with self._db() as db:

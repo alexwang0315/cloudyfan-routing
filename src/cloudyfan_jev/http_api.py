@@ -212,11 +212,13 @@ class TaskService:
             contract.descriptor()
 
     def authorize(self, principal):
+        if not isinstance(principal, str) or principal not in self.allowed_principals:
+            raise ServiceError('unauthorized', 401)
         try:
             active = self.principal_active is None or self.principal_active(principal) is True
         except Exception:
-            active = False
-        if not isinstance(principal, str) or principal not in self.allowed_principals or not active:
+            raise ServiceError('principal_authorization_unavailable', 503) from None
+        if not active:
             raise ServiceError('unauthorized', 401)
 
     def internal_id(self, principal, run_id):
@@ -286,21 +288,47 @@ class TaskService:
         directory, job = self._job(principal, run_id)
         return {**_read(directory / 'state.json'), 'costs': self._costs(principal, run_id, job)}
 
-    @_retained
-    def result(self, principal, run_id):
-        directory, job = self._job(principal, run_id)
-        if not (directory / 'outcome.json').exists():
-            raise ServiceError('result_not_available', 409)
+    def _registered_contract(self, job):
         contract = self.contracts.get(job['request']['contract_id'])
         if contract is None or _encode(contract.descriptor()) != _encode(job['registered']):
             raise ServiceError('frozen_configuration_changed', 409)
+        return contract
+
+    def _verified_completed(self, principal, run_id, directory, job):
+        if not (directory / 'outcome.json').exists():
+            raise ServiceError('result_not_available', 409)
+        contract = self._registered_contract(job)
         try:
-            result = contract.runner.core.read_completed(self.internal_id(principal, run_id))
+            return contract.runner.core.read_completed(self.internal_id(principal, run_id))
         except Exception:
             raise ServiceError('result_evidence_unavailable', 503) from None
+
+    @_retained
+    def observe(self, principal, run_id):
+        """Host-only read projection: one completed-evidence validation and budget report.
+
+        Raw completed_result is for a trusted host's public projection, not a new
+        HTTP response. No execution, receipt reconciliation or shared sync occurs.
+        """
+        directory, job = self._job(principal, run_id)
+        state = _read(directory / 'state.json')
+        completed = None
+        if state['status'] in ('passed', 'failed', 'unverifiable'):
+            completed = self._verified_completed(principal, run_id, directory, job)
+        else:
+            self._registered_contract(job)
+        return {'state': {**state, 'costs': self._costs(principal, run_id, job)},
+                'completed_result': completed}
+
+    @_retained
+    def result(self, principal, run_id, *, refresh=True):
+        if type(refresh) is not bool:
+            raise ValueError('Result refresh must be bool')
+        directory, job = self._job(principal, run_id)
+        result = self._verified_completed(principal, run_id, directory, job)
         return {**_read(directory / 'outcome.json'),
                 'provenance': _provenance(result, job['registered']),
-                'costs': self._costs(principal, run_id, job, refresh=True)}
+                'costs': self._costs(principal, run_id, job, refresh=refresh)}
 
     @_retained
     def execute(self, principal, run_id):

@@ -331,8 +331,9 @@ class App:
                 if self.gateway.queue is None:
                     raise MonitorError('capacity_queue_not_configured', 409)
                 state = self.gateway.queue.cancel(principal, match[1])
-                self.gateway.capture(self.store.binding(principal, match[1]))
-                return state
+                binding = self.store.binding(principal, match[1])
+                self.gateway.capture(binding)
+                return self.gateway.queue_view(binding, state)
             if method == "POST" and match[2] == "/resume":
                 if self._body(environ) != {}:
                     raise MonitorError("resume_cannot_change_frozen_settings")

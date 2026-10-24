@@ -22,8 +22,9 @@ def test_queued_acceptance_is_202_idempotent_cancellable_and_never_starts_paid_w
     assert view["queue"]["limits"] == {"capacity": 8, "concurrency": 2, "per_principal": 4, "max_wait_seconds": 120}
     assert client.post("/v1/tasks", json=payload).status_code == 202
     assert client.post("/v1/tasks", json={**payload, "prompt": "changed"}).status_code == 409
-    assert client.post("/v1/tasks/queued-cancelled/cancel", json={}).json()["status"] == "cancelled"
-    assert client.post("/v1/tasks", json=payload).json()["status"] == "cancelled"
+    cancelled = client.post("/v1/tasks/queued-cancelled/cancel", json={}).json()
+    assert cancelled["status"] == "cancelled"
+    assert client.post("/v1/tasks", json=payload).json() == cancelled
     snapshot = operator.get("/monitor/queue").json()
     assert snapshot["jobs"][0]["status"] == "cancelled"
     assert local_service.client("agent").get("/v1/tasks/queued-cancelled").status_code == 404

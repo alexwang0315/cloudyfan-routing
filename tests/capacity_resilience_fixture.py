@@ -89,7 +89,7 @@ def build_resilience_health_host(root, *, clock, origin, before_response=None):
                 health.publish([host.observation(tier, position)])
     flags = {'hold': False, 'scenario': 'success'}
     held, released = threading.Event(), threading.Event()
-    requests, side_requests, transports = [], {'source': [], 'accounting': []}, []
+    requests, side_requests, transports, factory_calls = [], {'source': [], 'accounting': []}, [], []
     boot = uuid4().hex
     def upstream(request, lane):
         payload = json.loads(request.content) if request.content else {}
@@ -133,6 +133,7 @@ def build_resilience_health_host(root, *, clock, origin, before_response=None):
         transports.append(http)
         clients[lane] = client
         def factory(run_id, controlled, local):
+            factory_calls.append({'run_id': run_id, 'receipt_root': str(controlled.root)})
             return BackupCategoryCore(controlled, plan, values['decision'], run_id=run_id, health_store=health,
                 clock=now, limits=Limits(max_turns=1), local_backend=local, execution_policy=values['privacy'],
                 diagnostic_contract=values['diagnostics'])
@@ -237,6 +238,7 @@ def build_resilience_health_host(root, *, clock, origin, before_response=None):
             transport.close()
     return SimpleNamespace(host=host, app=host.app, controller=controller, windows=windows, queue=queue,
         flags=flags, held=held, released=released, requests=requests, side_requests=side_requests,
+        factory_calls=factory_calls,
         clock=clock, budgets=budgets, credentials=credentials, operator_token=OPERATOR, category=host.category,
         policy_version='synthetic-resilience-queued-v1', close=close)
 

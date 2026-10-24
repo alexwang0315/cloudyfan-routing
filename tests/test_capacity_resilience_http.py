@@ -132,6 +132,114 @@ def test_actual_backup_health_queue_factory_preserves_fallback_and_same_identity
         fixture.close()
 
 
+def test_saved_backup_observation_does_not_rebuild_execution_core_while_another_post_is_held(local_service):
+    from concurrent.futures import ThreadPoolExecutor
+    from datetime import datetime
+    import json
+    import time
+    local_service.clock.now = datetime.fromisoformat('2026-10-21T00:00:00+00:00').timestamp()
+    fixture = build_resilience_health_host(local_service.bundle.root / 'observation-read',
+        clock=local_service.clock, origin=local_service.origin)
+    local_service.bundle = fixture.host
+    local_service.server.set_app(fixture.app)
+    operator, client = local_service.client('operator'), local_service.client()
+    running, audit = None, []
+    workers = ThreadPoolExecutor(1)
+    try:
+        assert operator.post('/monitor/capacity/activate', json={
+            'revision': 0, 'version': fixture.policy_version}).status_code == 200
+        payload = {'category': fixture.category, 'prompt': 'Return 1+1.'}
+        assert client.post('/v1/tasks', json={**payload, 'run_id': 'observation-complete'}).status_code == 202
+        assert fixture.queue.dispatch_next()['status'] == 'passed'
+        before = operator.get('/monitor/snapshot')
+        assert before.status_code == 200
+        original_history = before.json()['tasks'][0]['operator_observation']['task_decision']
+        assert original_history['candidate_evidence'] == 'saved_selection'
+        assert original_history['attempts'] and original_history['stages']
+        fixture.flags['hold'] = True
+        assert client.post('/v1/tasks', json={**payload, 'run_id': 'observation-held'}).status_code == 202
+        running = workers.submit(fixture.queue.dispatch_next)
+        assert fixture.held.wait(5)
+        original_factories = list(fixture.factory_calls)
+        originals = {str(p): hashlib.sha256(p.read_bytes()).hexdigest()
+            for directory in (fixture.host.root / 'receipts-primary', fixture.host.root / 'health')
+            for p in directory.rglob('*') if p.is_file()}
+        for _ in range(3):
+            started = time.monotonic()
+            response = operator.get('/monitor/snapshot')
+            audit.append({'status': response.status_code, 'elapsed_seconds': time.monotonic() - started,
+                'factory_calls_before': len(original_factories), 'factory_calls_after': len(fixture.factory_calls),
+                'physical_posts': len(fixture.requests), 'completion_signal_released': fixture.released.is_set()})
+            (fixture.host.root / 'snapshot-read-audit.json').write_text(json.dumps(audit, indent=2))
+            assert response.status_code == 200, response.text
+            completed = next(row for row in response.json()['tasks'] if row['run'] == 'observation-complete')
+            assert completed['status'] == 'passed'
+            assert completed['operator_observation']['task_decision'] == original_history
+            assert fixture.factory_calls == original_factories, 'Pure saved-evidence reads rebuilt an execution Core'
+            assert not fixture.released.is_set() and len(fixture.requests) == 2
+            assert fixture.side_requests == {'source': [], 'accounting': []}
+            assert all(hashlib.sha256(Path(path).read_bytes()).hexdigest() == digest
+                for path, digest in originals.items())
+        internal = fixture.host.service.internal_id('studio', 'observation-complete')
+        manifest = fixture.host.root / 'receipts-primary' / 'runs' / internal / 'manifest.json'
+        retained = manifest.with_name('original-manifest-retained.json')
+        manifest.rename(retained)
+        damaged = json.loads(retained.read_text())
+        damaged['engine_version'] = 'synthetic-changed-configuration'
+        manifest.write_text(json.dumps(damaged))
+        refused = client.get('/v1/tasks/observation-complete/result')
+        assert refused.status_code == 503 and refused.json()['error']['code'] == 'result_evidence_unavailable'
+        assert hashlib.sha256(retained.read_bytes()).hexdigest() == originals[str(manifest)]
+        assert fixture.factory_calls == original_factories and len(fixture.requests) == 2
+        assert fixture.side_requests == {'source': [], 'accounting': []}
+    finally:
+        fixture.released.set()
+        if running is not None:
+            running.result(timeout=20)
+        workers.shutdown()
+        fixture.close()
+
+
+def test_custom_run_dependent_completed_reader_keeps_original_factory_protocol(local_service):
+    from dataclasses import replace
+    from cloudyfan_jev.budget import BudgetedCore
+    from cloudyfan_jev.engine import Core
+    from cloudyfan_monitor.integration import RunBoundCore
+    bundle = local_service.bundle
+    bundle.upstream.fail_tiers = set()
+    service = bundle.app.gateway.service
+    original = service.contracts['demo-cloudyfan']
+    template, calls = original.runner.core, []
+    class CustomReadCore(Core):
+        def __init__(self, *args, run_id, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.read_run_id = run_id
+
+        def _with_costs(self, result):
+            if result['run_id'] != self.read_run_id:
+                raise ValueError('Completed reader requires its actual per-run construction')
+            return super()._with_costs(result)
+
+    def factory(run_id, client, local):
+        calls.append(run_id)
+        return CustomReadCore(client, template.profiles, template.decision, run_id=run_id,
+            limits=template.limits, system=template.system, local_backend=local,
+            diagnostic_contract=template.diagnostic_contract, execution_policy=template.execution_policy)
+    bound_template = factory('custom-reader-template', template.client, template.local_backend)
+    runner = BudgetedCore(RunBoundCore(bound_template, factory), original.runner.store,
+        model_bounds=original.runner.model_bounds, tool_bounds={}, verify_bound=original.runner.verify_bound)
+    service.contracts['demo-cloudyfan'] = replace(original, runner=runner)
+    client = local_service.client()
+    created = client.post('/v1/tasks', json={**TASK, 'run_id': 'custom-reader'})
+    assert created.status_code == 200 and created.json()['status'] == 'passed', created.text
+    before = len(calls)
+    observed = client.get('/v1/tasks/custom-reader/result')
+    assert observed.status_code == 200 and observed.json()['answer'] == '2', observed.text
+    assert len(calls) == before + 1
+    assert calls[-1] == service.internal_id('studio', 'custom-reader')
+    assert len(bundle.upstream.calls) == 1
+
+
 def test_cancelled_acceptance_does_not_reopen_thirty_day_access_on_replay_or_resume(local_service):
     import fcntl
     host = build_resilience_host(local_service.bundle.root / 'expired-acceptance', clock=local_service.clock,

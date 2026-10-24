@@ -72,7 +72,7 @@ class RunBoundCore(Core):
 
 def assemble_monitor(store, service, registry, identities, *, operator_token, source=None,
                      origin="http://127.0.0.1:8766", demo=False, labels=None, billing_source=None,
-                     ollama_models=None, simulation=None):
+                     ollama_models=None, simulation=None, task_observer=None):
     """Consume an explicitly controlled host service; never create qualifications."""
     if (not isinstance(store, Store) or not isinstance(service, TaskService)
             or not isinstance(identities, IdentityStore)):
@@ -92,9 +92,12 @@ def assemble_monitor(store, service, registry, identities, *, operator_token, so
         store.register_principal(principal, (labels or {}).get(principal, principal))
     service.retention_protected_paths = tuple(set(service.retention_protected_paths)
                                                | {identities.path.resolve(), store.path.resolve()})
+    if task_observer is None:
+        from .history_observation import TaskDecisionObserver
+        task_observer = TaskDecisionObserver(service, store, registry)
     return App(Gateway(store, service, registry, demo=demo), admin_token=operator_token,
                source=source, origin=origin, identity_store=identities, billing_source=billing_source,
-               ollama_models=ollama_models, simulation=simulation)
+               ollama_models=ollama_models, simulation=simulation, task_observer=task_observer)
 
 
 @dataclass

@@ -61,7 +61,7 @@ window.CloudyFanCapacity = (() => {
 
   function dispatchUsage(dispatch) {
     const groups = Array.isArray(dispatch.groups) ? dispatch.groups : [];
-    return `<div class="capacity-usage-grid">${groups.map(group => `<article class="capacity-usage" data-capacity-usage="${h(group.group)}"><h3>${h(group.group)}</h3><p class="metadata">${h(scopes[group.scope?.kind] || '範圍未知')} · ${h(group.scope?.ref)}</p><dl><div><dt>RPM · 窗口已記請求</dt><dd data-capacity-counter="rpm">${h(shown(group.rpm_used))}</dd></div><div><dt>TPM · 窗口 token 預留</dt><dd data-capacity-counter="tpm">${h(shown(group.tpm_reserved))}</dd></div><div><dt>目前占用並行名額</dt><dd data-capacity-counter="concurrency">${h(shown(group.concurrency_used))}</dd></div></dl></article>`).join('')}</div><p class="metadata">${groups.length ? '以上是本機保存的窗口用量與占用，不代表供應商剩餘額度。已送出請求保留窗口計數，結果不明的並行名額不會因時間或程序消失自動釋放。' : '尚無保存的逐次派送用量；不能由缺少紀錄推定供應商容量充足。'}</p>`;
+    return `<div class="capacity-usage-grid">${groups.map(group => `<article class="capacity-usage" data-capacity-usage="${h(group.group)}"><h3>${h(group.group)}</h3><p class="metadata">${h(scopes[group.scope?.kind] || '範圍未知')} · ${h(group.scope?.ref)}</p><dl><div><dt>RPM · 保守請求計數</dt><dd data-capacity-counter="rpm">${h(shown(group.rpm_used))}</dd></div><div><dt>TPM · 保守 token 預留</dt><dd data-capacity-counter="tpm">${h(shown(group.tpm_reserved))}</dd></div><div><dt>目前占用並行名額</dt><dd data-capacity-counter="concurrency">${h(shown(group.concurrency_used))}</dd></div></dl></article>`).join('')}</div><p class="metadata">${groups.length ? '以上為本機保守計數與占用，包含未送出的預留、已送出但結果未明的占用，以及完成後仍保留的保守窗口；不代表供應商實際用量、剩餘額度或重置時間保證。未決名額不會因時間或程序消失自動釋放。' : '尚無保存的逐次容量計數；不能由缺少紀錄推定供應商容量充足。'}</p>`;
   }
 
   function admissionHistory(dispatch) {

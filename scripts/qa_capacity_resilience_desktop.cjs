@@ -171,6 +171,7 @@ async function lifecycleMain() {
     blocked_browser_requests:[],boots:[],viewport:{width:1280,height:900},
     visual_regression:{status:'INCONCLUSIVE',reason:'No declared visual baseline; actual images and semantic checks retained'},
     accessibility_scope:'Keyboard focus/disclosure and responsive viewport checks; no screen-reader or WCAG certification'};
+  if(process.argv.includes('--focused-restart'))report.scope+='; focused restart slice: >100 paid history and refusal steps explicitly not run';
   let fixture,ready,browser,context,page,boot=0,operator,client,agent;
   const headers=token=>({Authorization:'Bearer '+token});
   const start=async port=>{
@@ -182,13 +183,25 @@ async function lifecycleMain() {
     report.boots.push({pid:ready.pid,origin:ready.origin,output:path.basename(bootOutput)});
     operator=headers(ready.operator_token);client=headers(ready.credentials.studio);agent=headers(ready.credentials.agent);
   };
-  const inspect=async(command={command:'inspect'})=>{fixture.send(command);return fixture.next();};
+  const inspect=async(command={command:'inspect'})=>{
+    const started=performance.now(),row={command:command.command,started_at:new Date().toISOString()};
+    try {
+      fixture.send(command);const value=await fixture.next();
+      row.response_type=value.type;row.model_request_count=value.model_requests?.length;
+      row.receipt_build_seconds=value.receipt_build_seconds;return value;
+    } catch(error) {row.failure_type=error.name;row.failure_message=error.message;throw error;}
+    finally {row.duration_ms=performance.now()-started;await fs.appendFile(path.join(output,'actual-fixture-durations.jsonl'),JSON.stringify(row)+'\n');}
+  };
   const task=run=>({run_id:run,category:ready.category,prompt:'Return only 1+1. PRIVATE_RESILIENCE_PROMPT_CANARY'});
   const api=async(method,url,auth=operator,data)=>{
-    const response=await context.request[method](ready.origin+url,{headers:auth,...(data===undefined?{}:{data})});
-    const body=await response.json();
-    if(response.status()>=400)report.expected_http_errors.push({method:method.toUpperCase(),path:url,status:response.status(),code:body.error?.code});
-    return {response,body};
+    const started=performance.now(),row={method:method.toUpperCase(),path:url,started_at:new Date().toISOString()};
+    try {
+      const response=await context.request[method](ready.origin+url,{headers:auth,...(data===undefined?{}:{data})});
+      const body=await response.json();row.status=response.status();
+      if(response.status()>=400)report.expected_http_errors.push({method:row.method,path:url,status:response.status(),code:body.error?.code});
+      return {response,body};
+    } catch(error) {row.failure_type=error.name;throw error;}
+    finally {row.duration_ms=performance.now()-started;await fs.appendFile(path.join(output,'actual-client-http-durations.jsonl'),JSON.stringify(row)+'\n');}
   };
   const get=async(url,auth=operator)=>{const row=await api('get',url,auth);assert.equal(row.response.status(),200);return row.body;};
   const shot=async name=>{
@@ -202,7 +215,9 @@ async function lifecycleMain() {
   };
   function unchanged(before,after) {
     for(const key of ['model_requests','source_requests','accounting_requests','budget','health_sqlite_sha256',
-      'capacity_sha256','queue_sha256','original_evidence_sha256','wire_files_sha256'])assert.deepEqual(after[key],before[key],key);
+      'capacity_sha256','queue_sha256','original_evidence_sha256','wire_files_sha256','raw_mock_request_sha256',
+      'raw_mock_method_counts'])assert.deepEqual(after[key],before[key],key);
+    assert.equal(after.raw_mock_metadata_status,'complete');
     assert.ok(Object.keys(after.health_sqlite_sha256).length>0,'Real Health SQLite hash set must be nonempty');
     assert.deepEqual(after.blocked_server_socket_attempts,[]);
   }
@@ -293,6 +308,19 @@ async function lifecycleMain() {
         await fs.writeFile(path.join(output,'safe-local-index-capacity.json'),JSON.stringify(cap,null,2));
         await shot('03-local-index-fault-original-source');
       });
+    } else if(process.argv.includes('--companion-loss')) {
+      await step('lost_companion_has_unknown_policy_and_counts_without_erasing_original_receipts',async()=>{
+        const before=await inspect();await inspect({command:'fault_companion_loss'});
+        const cap=await get('/monitor/capacity');assert.equal(cap.dispatch.integrity.status,'unavailable');
+        assert.equal(cap.dispatch.integrity.retained_verified_metadata,false);
+        assert.equal(cap.dispatch.active_version,null);assert.equal(cap.dispatch.allocation_count,null);
+        const after=await inspect();for(const key of ['budget','model_requests','wire_files_sha256','health_sqlite_sha256','original_evidence_sha256'])assert.deepEqual(after[key],before[key],key);
+        await fs.writeFile(path.join(output,'safe-companion-loss-capacity.json'),JSON.stringify(cap,null,2));
+        await capacityPage();assert.equal(await page.locator('#capacity-active-version').innerText(),'未知');
+        assert.equal(await page.locator('#capacity-policy-revision').innerText(),'未知');
+        assert.ok(!(await page.locator('#capacity-dispatch').innerText()).includes('尚無已登錄容量政策'));
+        await shot('03-no-witness-policy-unknown');
+      });
     } else {
       await lifecycleSteps();
     }
@@ -346,11 +374,13 @@ async function lifecycleMain() {
       assert.equal(await detail.getAttribute('open'),'');
       for(const url of ['/monitor/capacity','/monitor/queue','/monitor/snapshot'])await get(url);
       const after=await inspect();assert.equal(after.model_response_held,true);unchanged(before,after);
+      primaryKnown=after.budget['budget-primary.sqlite'].known_usd;disjointKnown=after.budget['budget-disjoint.sqlite'].known_usd;
       const cap=await get('/monitor/capacity');heldAllocation=cap.dispatch.allocations.find(row=>row.state==='sent');assert.ok(heldAllocation);
       assert.equal(cap.dispatch.groups.find(row=>row.group===heldAllocation.groups[0].group).concurrency_used,1);
       await shot('04-held-poll-focus-cancel-request');
     });
-    await step('over_100_actual_later_paid_histories_do_not_hide_old_held_aggregate',async()=>{
+    if(!process.argv.includes('--focused-restart')) {
+      await step('over_100_actual_later_paid_histories_do_not_hide_old_held_aggregate',async()=>{
       const control=await get('/monitor/snapshot');
       const switched=await api('post','/monitor/mode',operator,{revision:control.control.revision,mode:'open_source_first',client:'agent'});
       assert.equal(switched.response.status(),200);
@@ -390,7 +420,7 @@ async function lifecycleMain() {
       await page.locator('[data-queue-run="resilience-held"]').waitFor();
       await page.locator('[data-queue-run="resilience-held"]').screenshot({path:path.join(output,'05-old-held-row-after-101-paid.png')});report.screenshots.push('05-old-held-row-after-101-paid.png');
     });
-    await step('over_100_actual_quota_refusals_and_cancelled_waiters_preserve_paid_hold',async()=>{
+      await step('over_100_actual_quota_refusals_and_cancelled_waiters_preserve_paid_hold',async()=>{
       const pending=Array.from({length:32},(_,i)=>'resilience-wait-'+String(i).padStart(2,'0'));
       for(const name of pending){const row=await api('post','/v1/tasks',agent,task(name));assert.equal(row.response.status(),202);}
       const before=await inspect();
@@ -404,7 +434,19 @@ async function lifecycleMain() {
       for(const name of pending){const row=await api('post','/v1/tasks/'+name+'/cancel',agent,{});assert.equal(row.body.status,'cancelled');}
       await refresh('CloudyFanQueue');assert.match(await page.locator('.queue-rejection-count').innerText(),/部分歷史/);
       await page.locator('.queue-rejections').screenshot({path:path.join(output,'06-bounded-101-real-refusals.png')});report.screenshots.push('06-bounded-101-real-refusals.png');
-    });
+      });
+    } else {
+      await step('one_actual_disjoint_paid_seed_for_scoped_restart_reads_without_overflow_claim',async()=>{
+        const control=await get('/monitor/snapshot');
+        const switched=await api('post','/monitor/mode',operator,{revision:control.control.revision,mode:'open_source_first',client:'agent'});
+        assert.equal(switched.response.status(),200);
+        const accepted=await api('post','/v1/tasks',agent,task('resilience-history-000'));assert.equal(accepted.response.status(),202);
+        const result=await run('resilience-history-000',agent,1);assert.equal(result.status,'passed');
+        const state=await inspect();assert.equal(state.model_response_held,true);assert.equal(state.model_requests.length,4);
+        primaryKnown=state.budget['budget-primary.sqlite'].known_usd;disjointKnown=state.budget['budget-disjoint.sqlite'].known_usd;
+        assert.equal(disjointKnown,'0.01');
+      });
+    }
     await step('policy_change_is_honestly_refused_while_original_occupancy_lives',async()=>{
       await capacityPage();const before=await inspect();
       await page.locator('#capacity-policy-version').selectOption('synthetic-resilience-queued-v2');
@@ -453,7 +495,9 @@ async function lifecycleMain() {
       const exited=await fixture.stop();report.boots[0].exit=exited;assert.equal(exited.code,86);assert.equal(exited.cleanup_failed,false);
       fixture=null;await start(new URL(oldReady.origin).port);assert.notEqual(ready.pid,oldReady.pid);assert.deepEqual(ready.credentials,oldReady.credentials);
       const after=await inspect();assert.equal(after.model_requests.length,0);
-      for(const key of ['budget','health_sqlite_sha256','wire_files_sha256','receipt_artifacts_sha256','task_jobs_sha256'])assert.deepEqual(after[key],before[key],key);
+      for(const key of ['budget','health_sqlite_sha256','wire_files_sha256','receipt_artifacts_sha256','task_jobs_sha256',
+        'raw_mock_request_sha256','raw_mock_method_counts'])assert.deepEqual(after[key],before[key],key);
+      assert.equal(after.raw_mock_metadata_status,'complete');assert.deepEqual(Object.keys(after.raw_mock_method_counts),['POST']);
       assert.equal(after.budget['budget-primary.sqlite'].known_usd,primaryKnown);
       assert.equal(after.budget['budget-disjoint.sqlite'].known_usd,disjointKnown);
       const row=await api('get','/v1/tasks/resilience-held',client);assert.equal(row.body.queue.deadline,heldOriginal.queue.deadline);
@@ -477,10 +521,15 @@ async function lifecycleMain() {
       const before=await inspect();assert.equal(before.budget['budget-primary.sqlite'].unknown_events,1);
       const cap=await get('/monitor/capacity');assert.equal(cap.dispatch.groups.find(row=>row.group===heldAllocation.groups[0].group).concurrency_used,1);
       const accepted=await api('post','/v1/tasks',client,task('resilience-primary-unknown-stop'));assert.equal(accepted.response.status(),202);
-      await run('resilience-primary-unknown-stop');
+      await inspect({command:'work'});await idle();
+      const stopped=await api('get','/v1/tasks/resilience-primary-unknown-stop',client);
+      assert.equal(stopped.response.status(),202);assert.equal(stopped.body.status,'queued');
+      assert.equal(stopped.body.reason,'queue_waiting_budget');assert.equal(stopped.body.capacity_reason,'capacity_original_budget_denied');
+      assert.equal(stopped.body.queue.deadline,accepted.body.queue.deadline);
       const after=await inspect();assert.deepEqual(after.model_requests,before.model_requests);assert.deepEqual(after.wire_files_sha256,before.wire_files_sha256);
       assert.equal(after.budget['budget-primary.sqlite'].known_usd,primaryKnown);assert.equal(after.budget['budget-primary.sqlite'].unknown_events,1);
       await refresh('CloudyFanQueue');
+      assert.match(await page.locator('[data-queue-run="resilience-primary-unknown-stop"]').innerText(),/等待原費用閘門/);
       await page.locator('[data-queue-run="resilience-primary-unknown-stop"]').screenshot({path:path.join(output,'11-shared-primary-budget-unknown-stop.png')});report.screenshots.push('11-shared-primary-budget-unknown-stop.png');
     });
     await step('localized_new_copy_scope_fault_preserves_originals_and_unaffected_observations',async()=>{
@@ -512,6 +561,7 @@ async function lifecycleMain() {
       assert.equal(after.budget['budget-primary.sqlite'].unknown_events,1);
       assert.equal(after.budget['budget-primary.sqlite'].known_usd,primaryKnown);assert.equal(after.budget['budget-disjoint.sqlite'].known_usd,disjointKnown);
       assert.deepEqual(after.receipt_artifacts_sha256,before.receipt_artifacts_sha256);assert.deepEqual(after.task_jobs_sha256,before.task_jobs_sha256);
+      assert.deepEqual(after.health_sqlite_sha256,before.health_sqlite_sha256);
       assert.deepEqual(after.model_requests,[]);assert.deepEqual(after.source_requests,[]);assert.deepEqual(after.accounting_requests,[]);
       assert.equal(Object.keys(after.preservation_sha256).length,2);
       await queuePage();await page.locator('[data-queue-run="resilience-held"]').getByText('存取已到期',{exact:true}).waitFor();

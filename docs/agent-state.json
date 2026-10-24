@@ -341,6 +341,10 @@
     {
       "path": "docs/evidence/issues29-33-prior-work-plan.json",
       "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/issue35-capacity-admission-offline-20261025.json",
+      "record_kind": "historical"
     }
   ],
   "next_steps": [

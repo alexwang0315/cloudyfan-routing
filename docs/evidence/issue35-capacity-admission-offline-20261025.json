@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "kind": "offline",
+  "result": "passed",
+  "scope": "Issue35 supported immediate capacity admission on Core7cb03b8 and equal integration treef7ce113; original full integration gate, all upstream simulated. Monitor322/full+actual desktop7/source5 separately bound; not all29-33 implementation completion or production qualification.",
+  "tests_passed": 2066,
+  "source_digest": "8929dc1d5fcf4129ea32ef4df7174fa5bba648f08097082ca2530c6fb09d74ba",
+  "check_receipt_sha256": "96ca5373d21877dd531da9f5a721d4eda45c5d2c30586d9acc09c7dbfa86c052",
+  "check_receipt": "Private external .scratch/issues29-33-implementation/issue35/root-core-checks/c6a7383af55947828bb3d0192af5561d/checks.json",
+  "core_implementation_commit": "7cb03b801dca65d8e3a61d6aec6cc1c06733f40f",
+  "core_integration_commit": "f7ce1131679b64f4b6d360fde114f56a93cec520",
+  "monitor_integration_commit": "31b46b369236249d1b14e02b7f7dedcbc9c9c4ae",
+  "monitor_tests_passed": 322,
+  "sealed_index_sha256": "24163fc947dad632303e82aea85553f5019b4a5d29652925f28d79f6fd92e332",
+  "created_at": "2026-10-24T19:27:19.960709+00:00"
+}

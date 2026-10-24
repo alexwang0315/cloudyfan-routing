@@ -5,55 +5,31 @@
   "merger_owner": "integration-merger",
   "shared_interfaces": [
     {
-      "id": "CAPACITY-ADMISSION",
-      "owner": "capacity-dispatch-worker",
+      "id": "CONTROLLED-QUEUE-WINDOW-HOOKS",
+      "owner": "capacity-queue-worker",
       "owned_files": [
         "src/cloudyfan_jev/capacity.py",
-        "src/cloudyfan_jev/capacity_dispatch.py"
-      ],
-      "provided_by": "ISSUE35"
-    },
-    {
-      "id": "TRANSPORT-CAPACITY",
-      "owner": "capacity-dispatch-worker",
-      "owned_files": [
+        "src/cloudyfan_jev/capacity_dispatch.py",
+        "src/cloudyfan_jev/capacity_queue.py",
         "src/cloudyfan_jev/client.py",
-        "src/cloudyfan_jev/local.py"
-      ],
-      "provided_by": "ISSUE35"
-    },
-    {
-      "id": "BUDGET-DISPATCH",
-      "owner": "capacity-dispatch-worker",
-      "owned_files": [
-        "src/cloudyfan_jev/budget.py"
-      ],
-      "provided_by": "ISSUE35"
-    },
-    {
-      "id": "TASK-DISPATCH",
-      "owner": "capacity-dispatch-worker",
-      "owned_files": [
+        "src/cloudyfan_jev/local.py",
+        "src/cloudyfan_jev/budget.py",
         "src/cloudyfan_jev/http_api.py",
-        "src/cloudyfan_jev/ollama_api.py"
+        "src/cloudyfan_jev/ollama_api.py",
+        "src/cloudyfan_jev/engine.py",
+        "src/cloudyfan_jev/scheduler.py",
+        "src/cloudyfan_jev/scores/backup_runtime.py",
+        "src/cloudyfan_jev/scores/category_routing.py"
       ],
-      "provided_by": "ISSUE35"
+      "provided_by": "ISSUE36"
     },
     {
-      "id": "TOOL-DISPATCH-PREFLIGHT",
-      "owner": "capacity-dispatch-worker",
+      "id": "RATE-WINDOW-POLICY",
+      "owner": "capacity-window-worker",
       "owned_files": [
-        "src/cloudyfan_jev/engine.py"
+        "src/cloudyfan_jev/capacity_windows.py"
       ],
-      "provided_by": "ISSUE35"
-    },
-    {
-      "id": "ROUTING-DISPATCH-RECHECK",
-      "owner": "capacity-dispatch-worker",
-      "owned_files": [
-        "src/cloudyfan_jev/scores/backup_runtime.py"
-      ],
-      "provided_by": "ISSUE35"
+      "provided_by": "ISSUE37"
     }
   ],
   "tasks": [
@@ -71,7 +47,7 @@
     {
       "id": "ISSUE35",
       "owner": "capacity-dispatch-worker",
-      "status": "in_progress",
+      "status": "completed",
       "owned_files": [
         "src/cloudyfan_jev/capacity.py",
         "src/cloudyfan_jev/capacity_dispatch.py",
@@ -86,7 +62,46 @@
       "depends_on": [
         "ISSUE34"
       ],
+      "consumed_interfaces": [],
+      "outcome": "Issue35 locally verified: Core2066/full original integration/build; Monitor322/full build; actual Chrome7+source5;37 targeted HTTP/process subset. Immutable external completion/index retained; all upstream MockTransport, no runtime qualification."
+    },
+    {
+      "id": "ISSUE36",
+      "owner": "capacity-queue-worker",
+      "status": "in_progress",
+      "owned_files": [
+        "src/cloudyfan_jev/capacity.py",
+        "src/cloudyfan_jev/capacity_dispatch.py",
+        "src/cloudyfan_jev/capacity_queue.py",
+        "src/cloudyfan_jev/client.py",
+        "src/cloudyfan_jev/local.py",
+        "src/cloudyfan_jev/budget.py",
+        "src/cloudyfan_jev/http_api.py",
+        "src/cloudyfan_jev/ollama_api.py",
+        "src/cloudyfan_jev/engine.py",
+        "src/cloudyfan_jev/scheduler.py",
+        "src/cloudyfan_jev/scores/backup_runtime.py",
+        "src/cloudyfan_jev/scores/category_routing.py"
+      ],
+      "depends_on": [
+        "ISSUE35"
+      ],
       "consumed_interfaces": []
+    },
+    {
+      "id": "ISSUE37",
+      "owner": "capacity-window-worker",
+      "status": "in_progress",
+      "owned_files": [
+        "src/cloudyfan_jev/capacity_windows.py"
+      ],
+      "depends_on": [
+        "ISSUE35",
+        "ISSUE36"
+      ],
+      "consumed_interfaces": [
+        "CONTROLLED-QUEUE-WINDOW-HOOKS"
+      ]
     }
   ]
 }

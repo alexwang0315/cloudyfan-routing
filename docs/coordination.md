@@ -394,3 +394,8 @@ Ollama50 R2已完成50題／170次合成呼叫，但桌機快照因每題重複�
 ## 2026-10-24 Monitor接入本機提交責任
 
 使用者授權依Monitor／核心PR草稿選擇性提交。root單獨負責兩repo的候選index、共享文件逐段擷取、匯出驗證、Git提交與保留核對；commit_boundary_review只讀檢查並在.scratch產生候選，未改產品／index。既有桌機樣式六個class與style.css、兩張歷史截圖，以及其他研究／SQL／評分／安全依賴變更保留未提交；不重啟付費流程或擴張正式資格。
+
+
+## Issues29-33 integration ownership
+
+Root owns current metadata, source preservation and stage verification. capacity-source-worker owns Issue34 capacity.py and its public-boundary tests, in a separate branch/worktree based on this integration. Monitor source/UI/HTTP acceptance ownership is recorded in the external implementation context. integration-merger alone merges worker branches. Child tickets follow the native GitHub dependencies, including strict parent29→30→31→32→33 order; ownership is updated before each shared-interface change. Original canonical checkouts remain untouched.

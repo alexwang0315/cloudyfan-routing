@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "scope": "jev-selector-local-review",
-  "phase": "blocked",
+  "scope": "issues29-33-offline-implementation",
+  "phase": "in_progress",
   "baseline_commit": "9d20072b076bb64c3666cd3d1380dcb5e49bb909",
-  "integration_branch": "codex/implement-routing-spec-1",
+  "integration_branch": "codex/issues-29-33-mrc-integration",
   "constraints": {
     "paid_api": false,
     "deployment": false,
@@ -332,6 +332,14 @@
     },
     {
       "path": "docs/evidence/jev-selector-commit-review-20261023.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/issues29-33-prior-agent-state.json",
+      "record_kind": "historical"
+    },
+    {
+      "path": "docs/evidence/issues29-33-prior-work-plan.json",
       "record_kind": "historical"
     }
   ],

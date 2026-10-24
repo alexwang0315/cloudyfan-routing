@@ -663,3 +663,8 @@ The [new selector research contract](jev-selector-research.md) replaces the fixe
 選擇性index匯出的200項受影響核心回歸、project-state記錄檢查與Ruff、兩個既有Mock示範及核心離線sdist／wheel均通過。原鎖版整合入口因certifi2026.7.22不在離線快取而在測試前停止；上述檢查另用目前複製的certifi2026.10.19環境，未變更提交中的依賴鎖檔，不能稱原鎖版整套通過。本輪不繞過密鑰掃描或既有hooks。原完整凍結Core 2,055通過／50項SQL失敗與Monitor235通過屬原快照，不能稱這個選擇性提交全套通過。合成50題與私有證據仍留本機，見[Monitor文件](../../cloudyfan-monitor/docs/ollama50-simulation.md)。當前主線blocked／真實校準0／原unknown525不變。無憑證讀取、模型或供應商請求、推送、部署、手機或刪除。
 
 提交與保留核對收據在CloudyFan `.scratch/cloudyfan-monitor-local-commits-20261024/`；本提交識別以本機Git紀錄及收據為準。
+
+
+## Issues 29-33 offline implementation — 2026-10-25
+
+User requested implement-spec for the five sequential specifications. The prior current state and ownership plan are preserved in docs/evidence/issues29-33-prior-*.json; prior research, unknown charges and pending production gates are unchanged. Current phase is in_progress, with no current full-verification claim. Initial frontier is Issue34 (supplier source observation); capacity execution remains disabled until its dependent Issue35. Completion requires all20 child tickets, real loopback HTTP and desktop checks with MockTransport only, both full checks and Core integration, two independent review axes, and immutable evidence. No real provider calls, paid requests, source push, deployment or deletion is authorized.

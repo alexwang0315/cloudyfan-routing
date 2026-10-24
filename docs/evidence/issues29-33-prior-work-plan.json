@@ -1,0 +1,190 @@
+{
+  "schema_version": 1,
+  "integration_branch": "codex/implement-routing-spec-1",
+  "baseline_commit": "9d20072b076bb64c3666cd3d1380dcb5e49bb909",
+  "merger_owner": "root",
+  "shared_interfaces": [],
+  "tasks": [
+    {
+      "id": "SQL-LOW-TWO-PREPARE",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/scores/sql_low_preparation.py",
+        "scripts/prepare_sql_low_trial.py",
+        "tests/test_sql_low_preparation.py",
+        "examples/sql-low-two-candidate-input-v1.json",
+        "examples/sql-low-two-candidate-plan-v1.json",
+        "docs/sql-low-two-candidate-plan-20261021.md",
+        "docs/agent-state.json",
+        "docs/work-plan.json",
+        "docs/coordination.md",
+        "docs/handoff.md",
+        "docs/verification.md",
+        "docs/release-readiness.md",
+        "docs/sql-backup-pool-readiness-plan-20261021.md",
+        "docs/evidence/sql-low-two-preparation-offline-20261021.json",
+        "docs/evidence/sql-low-two-preparation-tree-20261021.json",
+        "docs/evidence/sql-low-two-prior-state-20261021.json",
+        "docs/evidence/sql-low-two-prior-plan-20261021.json"
+      ],
+      "depends_on": [],
+      "consumed_interfaces": []
+    },
+    {
+      "id": "SQL-LOW-TWO-REVIEW",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "docs/agent-state.json",
+        "docs/work-plan.json",
+        "docs/coordination.md",
+        "docs/handoff.md",
+        "docs/verification.md",
+        "docs/release-readiness.md",
+        "docs/evidence/sql-low-two-precommit-20261022.json"
+      ],
+      "depends_on": [
+        "SQL-LOW-TWO-PREPARE"
+      ],
+      "consumed_interfaces": []
+    },
+    {
+      "id": "PARALLEL-FOUR-ARM-OFFLINE",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "docs/research-parallel-four-arm.md",
+        "docs/evidence/research-parallel-four-arm-offline-20261022.json"
+      ],
+      "depends_on": [],
+      "consumed_interfaces": [],
+      "outcome": "Offline additive adapter completed:121new+40existing regressions, Ruff,200workflow/550mock-call four-slot and zero-resend replay;115actual archived terminal links+C038paid-answer import with0newcalls.16timing scenarios,3conditionally under30min,not live SLA. Real activation/hosted full fee upper/expired authority remain blocked. Existing global71failures not claimed fixed; two non-owned check-runner files changed and preserved. No API/Git/deploy/push."
+    },
+    {
+      "id": "PARALLEL-FOUR-ARM-LOCAL-REVIEW",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "scripts/research_parallel",
+        "pyproject.toml",
+        "docs/research-parallel-four-arm.md",
+        "docs/evidence/research-parallel-four-arm-commit-review-20261022.json"
+      ],
+      "depends_on": [
+        "PARALLEL-FOUR-ARM-OFFLINE"
+      ],
+      "consumed_interfaces": [],
+      "outcome": "Reviewed selective local delivery:1962 indexed tests including131 research regressions,Ruff,2existing demos,sdist/wheel and independent200flow/550mockcall four-slot replay passed.10 added identity/orphan/I-O regressions.21823 original study/bank/prior files and12 original source files unchanged. Executable/data bytes match tested snapshot. Raw evidence outside Git; local commit authorized; no paid API/deploy/push; qualification pending."
+    },
+    {
+      "id": "MONITOR-RETRO-CHECK-LOGS",
+      "owner": "monitor-tooling",
+      "status": "completed",
+      "owned_files": [
+        "scripts/check.py",
+        "tests/test_check_entrypoint.py",
+        "docs/checks.md"
+      ],
+      "depends_on": [],
+      "consumed_interfaces": [],
+      "outcome": "Streaming check orchestration and owned process-group interruption verified through10 affected CLI tests, Ruff and preserved red/green logs. No src, research, qualification or authority changes. Root will run a separately frozen integration gate for the full delivered scope."
+    },
+    {
+      "id": "MONITOR-RETRO-REVIEW-FIXES",
+      "owner": "monitor-tooling",
+      "status": "completed",
+      "owned_files": [
+        "scripts/check.py",
+        "tests/test_check_entrypoint.py",
+        "docs/checks.md"
+      ],
+      "depends_on": [],
+      "consumed_interfaces": [],
+      "outcome": "Shared lifecycle and denied-query cleanup verified through 13 core CLI cases: query denial retains bounded owned-group escalation, while actual termination denial fails with 127. Monitor regressions cover fixed historical scope, root configuration inventory, output seals and a pinned offline uv environment. Full acceptance and independent review are recorded separately in Monitor tooling; original failed attempts and research authority are preserved."
+    },
+    {
+      "id": "JEV-SELECTOR-RESEARCH-REPAIR",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/scores/selector_research.py",
+        "tests/test_selector_research.py",
+        "docs/jev-selector-research.md",
+        "docs/evidence/jev-selector-research-offline-20261023.json"
+      ],
+      "depends_on": [],
+      "consumed_interfaces": [],
+      "outcome": "Opt-in evidence selectors and actual SQL adapter replace unconditional direct decisions. Two parsed selectors, latest diagnosis, cost reservations, strict fixture transports and zero-resend replay verified offline. Current exact observed conditional calibration samples remain zero; missing/uncertain evidence stops preparation, not an economic rejection. No paid calls, formal qualification, deployment, push or Git commit."
+    },
+    {
+      "id": "JEV-SELECTOR-LOCAL-REVIEW",
+      "owner": "root",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/recovery_prompts.py",
+        "src/cloudyfan_jev/scores/workflow_research.py",
+        "src/cloudyfan_jev/scores/selector_research.py",
+        "src/cloudyfan_jev/scores/sql_selector_research.py",
+        "src/cloudyfan_jev/scores/_sql_research_support.py",
+        "src/cloudyfan_jev/scores/backup_runtime.py",
+        "tests/test_selector_research.py",
+        "tests/test_sql_selector_research.py",
+        "tests/test_workflow_research.py",
+        "tests/test_recovery_prompts.py",
+        "docs/jev-selector-research.md",
+        "docs/evidence/jev-selector-commit-review-20261023.json",
+        "tests/test_project_state.py"
+      ],
+      "depends_on": [
+        "JEV-SELECTOR-RESEARCH-REPAIR"
+      ],
+      "consumed_interfaces": [],
+      "outcome": "Reviewed19-file local subset:103 affected regressions, Ruff, project records,2Mock demos and offline build passed. Prior2034 full pass retained; rebased full run had a false closed-history fixture conflict, interrupted and preserved, fixed and all31 state regressions passed. Self-contained SQL adapter, Client override guard, real calibration0, RG01 unchanged. No API/deploy/push; local commit only."
+    },
+    {
+      "id": "MONITOR-RETENTION-NONBLOCKING",
+      "owner": "monitor-core-worker",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/retention.py",
+        "tests/test_monitor_retention_concurrency.py"
+      ],
+      "depends_on": [],
+      "consumed_interfaces": [],
+      "outcome": "Nonblocking reentrant retention guard plus cross-thread/process regressions; included in 71 affected core tests passed. Monitor local HTTP/package acceptance passed; no paid calls, no erasure, no changes to unrelated scopes. Post-reboot affected integration gate: 119 tests across six explicit modules, both mock demos and offline build passed; current Monitor gate again 76 passed. Full workspace runs were interrupted and are not certified."
+    },
+    {
+      "id": "MONITOR-OBSERVATION-READ",
+      "owner": "monitor-core-worker",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/http_api.py",
+        "tests/test_monitor_observation.py"
+      ],
+      "depends_on": [
+        "MONITOR-RETENTION-NONBLOCKING"
+      ],
+      "consumed_interfaces": [],
+      "outcome": "Backward-compatible result(refresh=True); refresh=False retains original result/receipt validation and reads existing budget without transport synchronization. Included in 71 affected core tests passed; Monitor package 76 passed. Overall workspace check reported separately. Post-reboot affected integration gate: 119 tests across six explicit modules, both mock demos and offline build passed; current Monitor gate again 76 passed. Full workspace runs were interrupted and are not certified."
+    },
+    {
+      "id": "MONITOR-OLLAMA50-INGRESS",
+      "owner": "monitor-ollama-worker",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/ollama_api.py",
+        "tests/test_monitor_ollama_submit.py",
+        "src/cloudyfan_jev/identity.py",
+        "tests/test_monitor_identity_companion.py",
+        "src/cloudyfan_jev/http_api.py",
+        "tests/test_monitor_task_observation.py"
+      ],
+      "depends_on": [
+        "MONITOR-OBSERVATION-READ"
+      ],
+      "consumed_interfaces": [],
+      "outcome": "Implemented optional native submit callback to Monitor Gateway; safe identity companion checks and per-instance short transactions; host-only TaskService.observe validates original result/receipts once with original retention, frozen-contract, budget, unknown-fee guards. Principal callback engineering failures503/inactive401.195 affected core regressions passed plus1 existing platform-dependent lsof skip; root23 Monitor public/evidence regressions passed. Actual R2 official SDK/TCP50 completed40passed/5failed/5unverifiable/170 mock calls; earlier22-task401 and desktop30s timeout retained, original401 root cause unknown. Read-only repaired50-task snapshot measured10.10s, no new model calls. Final full integration/browser/code review results are recorded in Monitor final evidence, not presumed here. Preserve selector scope blocked/calibration0, unknown525 and all unrelated work; no real API/credentials/commit/push/deploy/mobile/deletion."
+    }
+  ]
+}

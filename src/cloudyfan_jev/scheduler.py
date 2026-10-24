@@ -35,6 +35,7 @@ class QueueScheduler:
     def __init__(self, service, path, *, limits, clock=time, measurement_kind="unqualified", capacity_protocol=None):
         self.service, self.path, self.limits, self.clock = service, Path(path), limits, clock
         self.capacity_protocol = capacity_protocol
+        self.transition_observer = None  # Optional trusted host projection only.
         if capacity_protocol is not None:
             from .capacity_queue import QueuePreparation
             if (type(capacity_protocol) is not QueuePreparation or service.capacity_controller is None
@@ -209,6 +210,11 @@ class QueueScheduler:
                     self.service.mark_queued(principal, payload['run_id'])
             except ServiceError as error:
                 if error.code != 'task_busy':
+                    if error.code in {'queue_environment_contract_changed', 'queue_preparation_contract_changed'}:
+                        with self._transaction() as db:
+                            row = dict(self._job(db, principal, payload['run_id']))
+                            if row['state'] == 'accepting':
+                                self._close_waiting(db, row, 'rejected', error.code, self._now(db))
                     raise
                 # The committed original acceptance is still being completed
                 # under its original nonblocking service/retention lock. This
@@ -252,7 +258,7 @@ class QueueScheduler:
                         'bytes': 0, 'evidence_ref': 'queue-job-missing'}
             raw = row['request'].encode()
             parsed = json.loads(row['request'])
-            return {'terminal': row['state'] in {'completed', 'cancelled', 'expired'},
+            return {'terminal': row['state'] in {'completed', 'cancelled', 'expired', 'rejected'},
                     'request_erased': parsed.get('retired') is True,
                     'request_sha256': (parsed.get('request_sha256') if parsed.get('retired') is True
                                        else hashlib.sha256(raw).hexdigest()),
@@ -265,7 +271,7 @@ class QueueScheduler:
             raise ServiceError('retention_approval_required', 403)
         with self._transaction() as db:
             row = db.execute('SELECT request,state FROM jobs WHERE id=?', (internal_id,)).fetchone()
-            if row is None or row['state'] not in {'completed', 'cancelled', 'expired'}:
+            if row is None or row['state'] not in {'completed', 'cancelled', 'expired', 'rejected'}:
                 raise ServiceError('retention_queue_not_terminal', 409)
             if hashlib.sha256(row['request'].encode()).hexdigest() != expected_request_sha256:
                 raise ServiceError('retention_queue_changed', 409)
@@ -331,7 +337,7 @@ class QueueScheduler:
             raise ServiceError('queue_clock_invalid', 503)
         return now
 
-    def _status(self, row, now):
+    def _status(self, row, now, *, unavailable=None):
         principal, run_id = row['principal'], row['run_id']
         waiting_since = row.get('waiting_since')
         elapsed_wait = row.get('wait_seconds') or 0
@@ -340,7 +346,9 @@ class QueueScheduler:
             elapsed_wait += max(0, min(now, row['deadline'])-since)
         if row['state'] in {'queued', 'accepting'} and now >= row['deadline']:
             row = {**row, 'state': 'expired', 'reason': 'queue_deadline_expired', 'finished': row['deadline']}
-        if row['state'] == 'accepting':
+        if unavailable is not None:
+            task = {'status': row['state'], 'costs': {'complete_api_usd': None, 'known_api_usd': None, 'unknown_events': None}}
+        elif row['state'] == 'accepting':
             task = {'status': 'accepting', 'costs': {'complete_api_usd': None, 'known_api_usd': '0', 'unknown_events': 0}}
         else:
             task = (self.service.queue_observe(principal, run_id) if self.capacity_protocol is not None
@@ -357,6 +365,22 @@ class QueueScheduler:
                 'limits': asdict(self.limits), 'accepted_at': row['created'], 'deadline': row['deadline'],
                 'waiting_seconds': elapsed_wait,
                 'effective_expiry_only': row['state'] == 'expired' and row['finished'] == row['deadline']}
+            try:
+                directory, job = self.service._job(principal, run_id)
+                adoption = self.service.capacity_controller.context(row['id'], principal, job['registered'])
+                with self.service.capacity_controller.store.connection() as db:
+                    policy_row = db.execute('SELECT payload FROM capacity_policies WHERE version=?', (adoption['policy_version'],)).fetchone()
+                policy = json.loads(policy_row[0]) if policy_row is not None else {}
+                lifecycle = self.service.retention.lookup(row['id']) if self.service.retention is not None else None
+                view['queue']['frozen'] = {'contract_id': job['request']['contract_id'],
+                    'contract_version': job['registered']['version'], 'registered_sha256': hashlib.sha256(_encode(job['registered'])).hexdigest(),
+                    'mode': job['registered']['mode'], 'access_expires_at': lifecycle['expires_at'] if lifecycle else None,
+                    'capacity': {'policy_version': adoption['policy_version'], **{key: policy[key] for key in
+                        ('configuration_version', 'configuration_sha256', 'queue_version', 'windows_version') if key in policy}}}
+            except (ServiceError, ValueError, KeyError):
+                view['queue']['frozen'] = {'status': 'unavailable'}
+            if unavailable is not None:
+                view['observation_error'] = unavailable
             detail = json.loads(row.get('detail') or '{}')
             view['capacity_reason'] = detail.get('code')
             if row['state'] in {'queued', 'accepting', 'claiming', 'running', 'interrupted_pending'}:
@@ -367,8 +391,13 @@ class QueueScheduler:
         """Trusted operator projection. No prompts, credentials or body paths."""
         with self._readonly() as db:
             now = self._observed_now(db)
-            rows = [dict(row) for row in db.execute('SELECT * FROM jobs ORDER BY created,rowid DESC LIMIT 100')]
+            active = '(state IN ("claiming","running","interrupted_pending") OR (state IN ("accepting","queued") AND deadline>?))'
+            rows = [dict(row) for row in db.execute('SELECT * FROM jobs ORDER BY ' + active + ' DESC,created DESC,rowid DESC LIMIT 100', (now,))]
             total = db.execute('SELECT COUNT(*) FROM jobs').fetchone()[0]
+            active_count = db.execute('SELECT COUNT(*) FROM jobs WHERE ' + active, (now,)).fetchone()[0]
+            retained_active = db.execute('SELECT COUNT(*) FROM jobs WHERE state IN ("accepting","queued","claiming","running","interrupted_pending")').fetchone()[0]
+            rejections = [dict(row) for row in db.execute('SELECT principal AS client,run_id,reason,at FROM rejections ORDER BY rowid DESC LIMIT 100')]
+            rejection_count = db.execute('SELECT COUNT(*) FROM rejections').fetchone()[0]
         jobs = []
         for row in rows:
             try:
@@ -376,13 +405,25 @@ class QueueScheduler:
                 view['physical_groups'] = json.loads(row.get('detail') or '{}').get('groups', [])
                 jobs.append({'client': row['principal'], **view})
             except ServiceError as error:
-                jobs.append({'client': row['principal'], 'run_id': row['run_id'],
-                             'status': row['state'], 'reason': error.code})
+                jobs.append({'client': row['principal'], **self._status(row, now, unavailable=error.code)})
         return {'schema_version': 'capacity-queue-v1', 'configured': self.capacity_protocol is not None,
                 'version': self.capacity_protocol.version if self.capacity_protocol is not None else None,
                 'limits': asdict(self.limits), 'now': now, 'jobs': jobs, 'job_count': total,
+                'active_count': active_count, 'retained_active_count': retained_active,
+                'active_history_complete': active_count == sum(row['state'] in {'claiming', 'running', 'interrupted_pending'}
+                    or row['state'] in {'accepting', 'queued'} and row['deadline'] > now for row in rows),
+                'rejections': rejections, 'rejection_count': rejection_count,
+                'rejection_history_complete': rejection_count == len(rejections),
                 'history_complete': total == len(rows), 'measurement_kind': self.measurement_kind,
                 'production_slo_validated': False}
+
+    def _notify_transition(self, row):
+        if callable(self.transition_observer):
+            try:
+                self.transition_observer(row['principal'], row['run_id'])
+            except Exception:
+                # Projection failure cannot change original dispatch/receipts.
+                pass
 
     def result(self, principal, run_id):
         with self._readonly() as db: self._job(db, principal, run_id)
@@ -479,6 +520,7 @@ class QueueScheduler:
                     prepared['dispatch'].prepare(prepared['request']['call_id'], prepared['wire'], reserve=False)
                     runner = prepared['contract'].runner
                     runner.store.queue_admission(row['id'], runner._admit(prepared['contract'].mode))
+                    runner.queue_preflight(prepared['transport'], prepared['request']['endpoint'], prepared['request']['payload'])
                 except (CapacityDenied, ServiceError, BudgetError, QueueWaiting) as error:
                     code = getattr(error, 'code', 'capacity_original_budget_denied')
                     groups = prepared['groups'] if prepared is not None else set()
@@ -487,9 +529,8 @@ class QueueScheduler:
                         or code in {'capacity_credential_inactive', 'capacity_deadline_exceeded',
                                     'capacity_adoption_unavailable', 'capacity_queue_contract_changed', 'capacity_original_deadline_exceeded'})
                     if terminal:
-                        db.execute('UPDATE jobs SET state="rejected",reason="queue_original_authority_denied",detail=?,finished=? WHERE id=?',
-                            (_encode(detail).decode(), self._now(db), row['id']))
-                        self.service.capacity_controller.terminal(row['id'])
+                        db.execute('UPDATE jobs SET detail=? WHERE id=?', (_encode(detail).decode(), row['id']))
+                        self._close_waiting(db, row, 'rejected', 'queue_original_authority_denied', self._now(db))
                     else:
                         reason = ('queue_waiting_budget' if isinstance(error, BudgetError) else
                                   'queue_waiting_window' if 'window' in code else 'queue_waiting_capacity')
@@ -531,13 +572,14 @@ class QueueScheduler:
                 raise ServiceError('queue_claim_changed', 409)
             if current['cancel_requested'] or now >= current['deadline']:
                 dispatch.release()
-                state, reason = ('cancelled', 'cancelled_before_dispatch') if current['cancel_requested'] else ('expired', 'queue_deadline_expired')
-                db.execute('UPDATE jobs SET state=?,reason=?,finished=? WHERE id=?', (state, reason, now, row['id']))
-                self.service.capacity_controller.terminal(row['id'])
+                state, reason = (('cancelled', 'cancelled_before_next_dispatch' if current['started'] is not None else 'cancelled_before_dispatch')
+                    if current['cancel_requested'] else ('expired', 'queue_deadline_expired'))
+                self._close_waiting(db, current, state, reason, now)
                 return self._status(dict(db.execute('SELECT * FROM jobs WHERE id=?', (row['id'],)).fetchone()), now)
             since = current['waiting_since'] if current['waiting_since'] is not None else current['created'] if current['started'] is None else now
             db.execute('UPDATE jobs SET state="running",started=COALESCE(started,?),reason=NULL,wait_seconds=wait_seconds+?,waiting_since=NULL WHERE id=?',
                        (now, max(0, now-since), row['id']))
+        self._notify_transition(row)
         try:
             with self.capacity_protocol.running(self, row, prepared, claim) as execution:
                 execution['evidence'] = evidence
@@ -555,6 +597,7 @@ class QueueScheduler:
             reason = error.code if isinstance(error, ServiceError) else 'execution_interrupted'
             with self._transaction() as db:
                 db.execute('UPDATE jobs SET state="interrupted_pending",reason=? WHERE id=? AND claim=?', (reason, row['id'], claim))
+        self._notify_transition(row)
         return self.status(row['principal'], row['run_id'])
 
 

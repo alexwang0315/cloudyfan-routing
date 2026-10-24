@@ -669,6 +669,25 @@ class BudgetedCore:
         if self.verify_bound is None or self.verify_bound(kind, identity, payload, bound) is not True:
             raise BudgetError('Enforceable upper bound unconfirmed; estimates are not caps')
 
+    def queue_preflight(self, transport, endpoint, payload):
+        """Recheck actual-request fee authority before claiming an execution slot.
+
+        This creates no event/reserve. The original transport repeats these
+        checks at its final POST boundary; this is not a replacement permission.
+        """
+        bound = self.model_bounds.get(payload.get('model'))
+        if bound is None:
+            raise BudgetError('No confirmed model upper bound')
+        verifier = getattr(self.verify_bound, 'verify_dispatch', None)
+        if callable(verifier):
+            if verifier(transport, endpoint, payload, bound) is not True:
+                raise BudgetError('Enforceable dispatch upper bound unconfirmed')
+        else:
+            self._verify('model', payload['model'], payload, bound)
+        verifier = getattr(self.verify_bound, 'verify_post', None)
+        if callable(verifier) and verifier(transport, endpoint, payload, bound) is not True:
+            raise BudgetError('Original POST fee authority denied')
+
     def _admit(self, mode):
         from .engine import generation_tiers
         phases = generation_tiers(mode)

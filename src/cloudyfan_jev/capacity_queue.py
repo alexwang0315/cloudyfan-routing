@@ -10,6 +10,8 @@ from copy import deepcopy
 import hashlib
 import json
 import re
+from pathlib import Path
+import tempfile
 
 from .engine import Core
 
@@ -150,6 +152,11 @@ class QueuePreparation:
     def accept(self, service, row):
         directory, job = service._job(row['principal'], row['run_id'])
         contract = service._registered_contract(job)
+        # The host explicitly registered this environment's pure preparation
+        # and deterministic local replay contract. Check its actual schema
+        # before accepting work; registration is not proof of Python purity.
+        workspace = Path(tempfile.mkdtemp(prefix='queue-preparation-', dir=directory))
+        self.verify_environment(job['request']['contract_id'], contract.environment_factory(workspace))
         core, task = contract.runner.core.queue_binding(row['id'], {'prompt': job['request']['prompt']})
         core.queue_accept(row['id'], row['created'])
 

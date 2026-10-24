@@ -2,6 +2,7 @@
 import hashlib
 from test_local_http_integration import local_service as local_service, loopback_network as loopback_network, TASK
 from capacity_admission_fixture import attach_admission
+from test_candidate_health_http import health_http as health_http
 
 
 def test_operator_optin_atomically_refuses_second_request_without_paid_unknown_and_replay_is_readonly(local_service):
@@ -380,3 +381,276 @@ def test_bounded_capacity_history_keeps_exact_hot_totals_and_readonly_bytes(loca
         assert operator.get("/monitor/capacity").json()["dispatch"] == view
     assert hashlib.sha256(controller.store.path.read_bytes()).hexdigest() == before
     assert len(bundle.upstream.calls) == 3
+
+
+def test_original_accepted_credential_revocation_stops_classifier_and_alternate_resume_is_readonly(local_service):
+    bundle = local_service.bundle
+    attach_admission(bundle, local_service.clock, rpm=10)
+    local_service.server.set_app(bundle.app)
+    operator, client = local_service.client("operator"), local_service.client()
+    original = bundle.credentials["studio"]
+    alternate = bundle.identity.issue("studio", scopes={"tasks:read", "tasks:write"}, expires_at=local_service.clock() + 600)
+    bundle.upstream.before_response = lambda _: bundle.identity.revoke(original.id)
+    assert operator.post("/monitor/capacity/activate", json={"revision": 0, "version": "synthetic-admission-v1"}).status_code == 200
+    result = client.post("/v1/tasks", json={**TASK, "run_id": "revoked-original"})
+    assert result.status_code == 429 and result.json()["error"]["code"] == "capacity_credential_inactive"
+    assert len(bundle.upstream.calls) == 1
+    assert operator.get("/monitor/snapshot").json()["ledger"]["unknown_events"] == 0
+    bundle.credentials["studio"] = alternate
+    fresh = local_service.client()
+    state = fresh.get("/v1/tasks/revoked-original").json()
+    assert state["capacity"]["policy_version"] == "synthetic-admission-v1"
+    for _ in range(2):
+        assert fresh.post("/v1/tasks/revoked-original/resume", json={}).json() == state
+        assert fresh.post("/v1/tasks", json={**TASK, "run_id": "revoked-original"}).json() == state
+    assert len(bundle.upstream.calls) == 1
+
+
+def test_historical_policy_binding_survives_safe_disable_after_window_and_direct_service_has_no_bypass(local_service):
+    import pytest
+    from cloudyfan_jev.http_api import ServiceError
+    from cloudyfan_jev.capacity_dispatch import CapacityDenied
+    from cloudyfan_jev.demo import ArithmeticEnvironment
+    bundle = local_service.bundle
+    bundle.upstream.fail_tiers = set()
+    controller = attach_admission(bundle, local_service.clock, rpm=10)
+    local_service.server.set_app(bundle.app)
+    operator, client = local_service.client("operator"), local_service.client()
+    assert operator.post("/monitor/capacity/activate", json={"revision": 0, "version": "synthetic-admission-v1"}).status_code == 200
+    accepted = client.post("/v1/tasks", json={**TASK, "run_id": "frozen-policy"}).json()
+    assert accepted["status"] == "passed"
+    assert operator.post("/monitor/capacity/activate", json={"revision": 1, "version": None}).status_code == 409
+    local_service.clock.now += 61
+    assert operator.post("/monitor/capacity/activate", json={"revision": 1, "version": None}).status_code == 200
+    assert client.post("/v1/tasks", json={**TASK, "run_id": "frozen-policy"}).json() == accepted
+    assert client.post("/v1/tasks/frozen-policy/resume", json={}).json() == accepted
+    disabled = client.post("/v1/tasks", json={**TASK, "run_id": "disabled-new"})
+    assert disabled.status_code == 200 and disabled.json()["capacity"]["policy_version"] is None
+    assert len(bundle.upstream.calls) == 2
+    assert len(operator.get("/monitor/capacity").json()["dispatch"]["allocations"]) == 1
+    service = bundle.app.gateway.service
+    contract_id = next(iter(service.contracts))
+    with pytest.raises(ServiceError, match="capacity_authenticated_ingress_required"):
+        service.create("studio", {"run_id": "direct-bypass", "contract_id": contract_id, "prompt": "2"})
+    runner = service.contracts[contract_id].runner
+    with pytest.raises(CapacityDenied, match="capacity_adoption_missing"):
+        runner.run("direct-bypass", {"prompt": "2"}, ArithmeticEnvironment, contract_version="direct")
+    assert controller.own("direct-bypass") is None
+    assert len(bundle.upstream.calls) == 2
+
+
+def test_native_ingress_uses_same_frozen_admission_and_safe_refusal(local_service):
+    from cloudyfan_monitor.ollama_gateway import OllamaGateway
+    bundle = local_service.bundle
+    bundle.upstream.fail_tiers = set()
+    attach_admission(bundle, local_service.clock, rpm=1)
+    bundle.app.ollama = OllamaGateway(bundle.app.gateway, models={"cloudyfan/arithmetic:v1": {
+        "category": TASK["category"], "contract_id": "demo-cloudyfan"}}, authenticate=bundle.app._native_authenticate)
+    local_service.server.set_app(bundle.app)
+    operator, client = local_service.client("operator"), local_service.client()
+    assert operator.post("/monitor/capacity/activate", json={"revision": 0, "version": "synthetic-admission-v1"}).status_code == 200
+    payload = {"model": "cloudyfan/arithmetic:v1", "prompt": TASK["prompt"], "stream": False}
+    first = client.post("/api/generate", headers={"X-CloudyFan-Run-ID": "native-capacity-one"}, json=payload)
+    assert first.status_code == 200 and first.json()["response"] == "2"
+    second = client.post("/api/generate", headers={"X-CloudyFan-Run-ID": "native-capacity-full"}, json=payload)
+    assert second.status_code == 429 and second.json()["error"] == "capacity_rpm_exhausted"
+    assert len(bundle.upstream.calls) == 1
+    state = client.get("/v1/tasks/native-capacity-full").json()
+    assert state["status"] == "capacity_denied" and state["capacity"]["policy_version"] == "synthetic-admission-v1"
+    assert client.post("/v1/tasks/native-capacity-full/resume", json={}).json() == state
+    assert len(bundle.upstream.calls) == 1
+
+
+def test_final_health_guard_rechecks_real_store_after_paid_intent_before_post(health_http):
+    import httpx
+    host, operator = health_http
+    class CloseHealthAfterIntent:
+        def __call__(self, *args):
+            return True
+        def verify_dispatch(self, *args):
+            return True
+        def verify_post(self, *args):
+            for tier, records in host.values["plan"]["pools"].items():
+                for position in range(len(records)):
+                    observed = host.observation(tier, position)
+                    for number in (1, 2):
+                        host.health.record(f"synthetic-postguard-{tier}-{position}-{number}",
+                            observed["configuration_sha256"], observed["provider"])
+            return True
+    for contract in host.service.contracts.values():
+        contract.runner.verify_bound = CloseHealthAfterIntent()
+    attach_admission(host, host.clock, rpm=10)
+    host.server.set_app(host.app)
+    assert operator.post("/monitor/capacity/activate", json={"revision": 0, "version": "synthetic-admission-v1"}).status_code == 200
+    with httpx.Client(base_url=host.app.origin, headers={"Authorization": "Bearer " + host.credentials["studio"].token}, trust_env=False) as client:
+        response = client.post("/v1/tasks", json={"run_id": "postguard-health", "category": host.category, "prompt": TASK["prompt"]})
+    assert response.status_code == 429 and response.json()["error"]["code"] == "capacity_original_gate_denied"
+    assert host.calls == []
+    assert response.json()["costs"]["unknown_events"] == 0
+    view = operator.get("/monitor/capacity").json()["dispatch"]
+    assert view["allocations"][0]["state"] == "released"
+    assert operator.get("/monitor/snapshot").json()["ledger"]["rows"][0]["cost_source"] == "not_dispatched"
+
+
+def test_invalid_token_time_is_safe_preintent_refusal_without_fee_unknown(local_service):
+    from cloudyfan_jev.capacity_dispatch import TokenUpperBound
+    class InvalidTimeProof:
+        version = "synthetic-invalid-time-v1"
+        def __call__(self, body, scope):
+            return TokenUpperBound(100, scope["wire_sha256"], scope["scope_sha256"], self.version,
+                                   "synthetic-invalid-time", float("nan"))
+    bundle = local_service.bundle
+    attach_admission(bundle, local_service.clock, rpm=10, tpm=1000, token_adapter=InvalidTimeProof())
+    local_service.server.set_app(bundle.app)
+    operator, client = local_service.client("operator"), local_service.client()
+    assert operator.post("/monitor/capacity/activate", json={"revision": 0, "version": "synthetic-admission-v1"}).status_code == 200
+    response = client.post("/v1/tasks", json={**TASK, "run_id": "invalid-token-time"})
+    assert response.status_code == 429 and response.json()["error"]["code"] == "capacity_token_bound_invalid"
+    assert bundle.upstream.calls == [] and response.json()["costs"]["unknown_events"] == 0
+    view = operator.get("/monitor/capacity").json()["dispatch"]
+    assert view["allocations"] == []
+
+
+def test_all_original_generation_and_classifier_attempt_limits_remain_shared(local_service):
+    bundle = local_service.bundle
+    attach_admission(bundle, local_service.clock, rpm=10)
+    local_service.server.set_app(bundle.app)
+    operator, client = local_service.client("operator"), local_service.client()
+    assert operator.post("/monitor/capacity/activate", json={"revision": 0, "version": "synthetic-admission-v1"}).status_code == 200
+    response = client.post("/v1/tasks", json={**TASK, "run_id": "original-global-limits"})
+    assert response.status_code == 200 and response.json()["status"] == "passed"
+    assert len(bundle.upstream.calls) == 5
+    assert [payload["model"] for payload in bundle.upstream.calls if "questions" not in payload] == ["example/open_source", "example/mid", "example/high"]
+    assert sum("questions" in payload for payload in bundle.upstream.calls) == 2
+    result = client.get("/v1/tasks/original-global-limits/result").json()
+    assert len(result["provenance"]["attempts"]) == 3 and len(result["provenance"]["classifier_calls"]) == 2
+    before = operator.get("/monitor/capacity").json()["dispatch"]
+    assert len(before["allocations"]) == 5 and before["groups"][0]["rpm_used"] == 5
+    assert before["groups"][0]["concurrency_used"] == 0
+    assert client.post("/v1/tasks/original-global-limits/resume", json={}).json() == response.json()
+    assert operator.get("/monitor/capacity").json()["dispatch"] == before and len(bundle.upstream.calls) == 5
+
+
+def test_original_whole_task_deadline_is_rechecked_after_intent_before_post(health_http):
+    import httpx
+    host, operator = health_http
+    class CrossOriginalDeadline:
+        def __call__(self, *args):
+            return True
+        def verify_dispatch(self, *args):
+            return True
+        def verify_post(self, *args):
+            host.clock.now += 10000
+            return True
+    for contract in host.service.contracts.values():
+        contract.runner.verify_bound = CrossOriginalDeadline()
+    attach_admission(host, host.clock, rpm=10, seconds=86400)
+    host.server.set_app(host.app)
+    assert operator.post("/monitor/capacity/activate", json={"revision": 0, "version": "synthetic-admission-v1"}).status_code == 200
+    with httpx.Client(base_url=host.app.origin, headers={"Authorization": "Bearer " + host.credentials["studio"].token}, trust_env=False) as client:
+        response = client.post("/v1/tasks", json={"run_id": "postguard-original-deadline", "category": host.category, "prompt": TASK["prompt"]})
+    assert response.status_code == 429 and response.json()["error"]["code"] == "capacity_original_deadline_exceeded"
+    assert host.calls == [] and response.json()["costs"]["unknown_events"] == 0
+    assert operator.get("/monitor/capacity").json()["dispatch"]["allocations"][0]["state"] == "released"
+
+
+def test_capacity_available_does_not_override_private_location_or_client_policy_input(local_service):
+    from dataclasses import replace
+    bundle = local_service.bundle
+    for contract in bundle.app.gateway.service.contracts.values():
+        contract.runner.core.execution_policy = replace(contract.runner.core.execution_policy, mode="local_only")
+    attach_admission(bundle, local_service.clock, rpm=10)
+    local_service.server.set_app(bundle.app)
+    operator, client = local_service.client("operator"), local_service.client()
+    assert operator.post("/monitor/capacity/activate", json={"revision": 0, "version": "synthetic-admission-v1"}).status_code == 200
+    override = client.post("/v1/tasks", json={**TASK, "run_id": "client-policy-override", "capacity": {"enabled": False, "tokens": 0}})
+    assert override.status_code == 422
+    denied = client.post("/v1/tasks", json={**TASK, "run_id": "private-location"})
+    assert denied.status_code == 403 and denied.json()["status"] == "policy_denied"
+    assert denied.json()["costs"]["unknown_events"] == 0 and bundle.upstream.calls == []
+    assert operator.get("/monitor/capacity").json()["dispatch"]["allocations"] == []
+
+
+def test_required_supplier_proof_is_not_inferred_from_local_caps(local_service):
+    from dataclasses import replace
+    bundle = local_service.bundle
+    controller = attach_admission(bundle, local_service.clock, rpm=10)
+    controller.register("synthetic-require-supplier-v2", configuration_version="synthetic-admission-config-v1",
+        routes=[replace(route, require_supplier=("rpm",)) for route in controller.routes["synthetic-admission-v1"]], max_seconds=300)
+    local_service.server.set_app(bundle.app)
+    operator, client = local_service.client("operator"), local_service.client()
+    assert operator.post("/monitor/capacity/activate", json={"revision": 0, "version": "synthetic-require-supplier-v2"}).status_code == 200
+    response = client.post("/v1/tasks", json={**TASK, "run_id": "supplier-proof-missing"})
+    assert response.status_code == 429 and response.json()["error"]["code"] == "capacity_supplier_evidence_unavailable"
+    assert response.json()["costs"]["unknown_events"] == 0 and bundle.upstream.calls == []
+    assert operator.get("/monitor/capacity").json()["dispatch"]["allocations"] == []
+
+
+def test_optin_rejects_mutating_http_hooks_before_paid_intent(local_service):
+    bundle = local_service.bundle
+    def forbidden_hook(request):
+        request.url = "https://different-account.invalid/changed"
+    for contract in bundle.app.gateway.service.contracts.values():
+        contract.runner.client.http.event_hooks["request"] = [forbidden_hook]
+    attach_admission(bundle, local_service.clock, rpm=10)
+    local_service.server.set_app(bundle.app)
+    operator, client = local_service.client("operator"), local_service.client()
+    assert operator.post("/monitor/capacity/activate", json={"revision": 0, "version": "synthetic-admission-v1"}).status_code == 200
+    response = client.post("/v1/tasks", json={**TASK, "run_id": "unsupported-hook"})
+    assert response.status_code == 429 and response.json()["error"]["code"] == "capacity_transport_protocol_unsupported"
+    assert response.json()["costs"]["unknown_events"] == 0 and bundle.upstream.calls == []
+
+
+def test_rate_window_starts_at_actual_post_after_guard_delay(local_service):
+    bundle = local_service.bundle
+    bundle.upstream.fail_tiers = set()
+    start = local_service.clock()
+    class DelayFirstPost:
+        calls = 0
+        def __call__(self, *args):
+            return True
+        def verify_dispatch(self, *args):
+            return True
+        def verify_post(self, *args):
+            self.calls += 1
+            if self.calls == 1:
+                local_service.clock.now += 30
+            return True
+    verifier = DelayFirstPost()
+    for contract in bundle.app.gateway.service.contracts.values():
+        contract.runner.verify_bound = verifier
+    attach_admission(bundle, local_service.clock, rpm=1, concurrency=2)
+    local_service.server.set_app(bundle.app)
+    operator, client = local_service.client("operator"), local_service.client()
+    assert operator.post("/monitor/capacity/activate", json={"revision": 0, "version": "synthetic-admission-v1"}).status_code == 200
+    assert client.post("/v1/tasks", json={**TASK, "run_id": "delayed-post"}).json()["status"] == "passed"
+    assert local_service.clock() == start + 30
+    local_service.clock.now = start + 61
+    denied = client.post("/v1/tasks", json={**TASK, "run_id": "inside-real-window"})
+    assert denied.status_code == 429 and denied.json()["error"]["code"] == "capacity_rpm_exhausted"
+    assert len(bundle.upstream.calls) == 1
+    local_service.clock.now = start + 91
+    assert client.post("/v1/tasks", json={**TASK, "run_id": "after-real-window"}).json()["status"] == "passed"
+    assert len(bundle.upstream.calls) == 2
+
+
+def test_optin_rejects_retrying_http_client_subclass_before_any_physical_post(local_service):
+    import httpx
+    bundle = local_service.bundle
+    bundle.upstream.fail_tiers = set()
+    class RetryingClient(httpx.Client):
+        def send(self, request, **kwargs):
+            response = super().send(request, **kwargs)
+            return super().send(request, **kwargs) if response.status_code == 503 else response
+    def upstream(request):
+        response = bundle.upstream(request)
+        return httpx.Response(503 if len(bundle.upstream.calls) == 1 else 200, json=response.json())
+    for contract in bundle.app.gateway.service.contracts.values():
+        contract.runner.client.http = RetryingClient(transport=httpx.MockTransport(upstream), trust_env=False)
+    attach_admission(bundle, local_service.clock, rpm=1)
+    local_service.server.set_app(bundle.app)
+    operator, client = local_service.client("operator"), local_service.client()
+    assert operator.post("/monitor/capacity/activate", json={"revision": 0, "version": "synthetic-admission-v1"}).status_code == 200
+    response = client.post("/v1/tasks", json={**TASK, "run_id": "retrying-subclass"})
+    assert response.status_code == 429 and response.json()["error"]["code"] == "capacity_transport_protocol_unsupported"
+    assert bundle.upstream.calls == [] and response.json()["costs"]["unknown_events"] == 0

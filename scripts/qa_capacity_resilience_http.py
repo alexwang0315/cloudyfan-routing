@@ -75,13 +75,14 @@ def main():
         queue, controller = controlled.queue, controlled.controller
         flags = {"read_failure": None}
         transports = []
-        for kind in side_requests:
-            def unexpected(request, source=kind):
-                side_requests[source].append({"method": request.method, "path": request.url.path})
-                return httpx.Response(503, json={"error": "PRIVATE_RESILIENCE_SOURCE_CANARY"})
-            transports.append(httpx.Client(transport=httpx.MockTransport(unexpected), trust_env=False))
-        host.app.source = OpenRouterPoolSource(transports[0], fixtures()[2])
-        host.app.gateway.billing.source = OpenRouterAccounting(transports[1], api_key=uuid4().hex)
+        if args.minimal:
+            for kind in side_requests:
+                def unexpected(request, source=kind):
+                    side_requests[source].append({"method": request.method, "path": request.url.path})
+                    return httpx.Response(503, json={"error": "PRIVATE_RESILIENCE_SOURCE_CANARY"})
+                transports.append(httpx.Client(transport=httpx.MockTransport(unexpected), trust_env=False))
+            host.app.source = OpenRouterPoolSource(transports[0], fixtures()[2])
+            host.app.gateway.billing.source = OpenRouterAccounting(transports[1], api_key=uuid4().hex)
 
         def inventory():
             folders = {host.app.gateway.service.root}
@@ -94,11 +95,20 @@ def main():
                 for path in sorted(paths) if path.is_file()}
 
         def receipt():
+            receipt_started = time.monotonic()
             budgets = {str(contract.runner.store.path.relative_to(host.root)): contract.runner.store.report()
                 for contract in host.app.gateway.service.contracts.values()}
             health = {} if args.minimal else hashes([host.health.path])
             if not args.minimal and (not health or host.health.path.stat().st_size == 0):
                 raise AssertionError("A real nonempty HealthStore SQLite is required")
+            raw_status = "complete"
+            try:
+                raw_requests = [json.loads(path.read_text()) for path in sorted(host.root.glob("private-request-*.json"))]
+                method_counts = {method: sum(row["method"] == method for row in raw_requests)
+                    for method in sorted({row["method"] for row in raw_requests})}
+            except (OSError, ValueError):
+                # A still-writing controlled receipt is unknown, never zero hidden calls.
+                raw_status, method_counts = "incomplete", None
             return {"schema_version": 1, "pid": os.getpid(), "origin": origin, "clock": clock(),
                 "scope": "initial queue preservation slice; no Health" if args.minimal else
                     "actual BackupCategoryCore/BudgetedCore/TaskService/Identity/Health/Queue/Capacity/Windows; MockTransport only",
@@ -109,6 +119,9 @@ def main():
                 "queue_sha256": hashlib.sha256(queue.path.read_bytes()).hexdigest(),
                 "health_sqlite_sha256": health,
                 "wire_files_sha256": hashes(host.root.glob("private-wire-*.bin")),
+                "raw_mock_request_sha256": hashes(host.root.glob("private-request-*.json")),
+                "raw_mock_method_counts": method_counts,
+                "raw_mock_metadata_status": raw_status,
                 "receipt_artifacts_sha256": hashes(path for folder in host.root.glob("receipts-*")
                     for path in folder.rglob("*.json")),
                 "task_jobs_sha256": hashes((host.root / "tasks").rglob("job.json")),
@@ -120,7 +133,8 @@ def main():
                 "worker_results": list(results),
                 "wall_elapsed_seconds": time.monotonic() - started,
                 "blocked_server_socket_attempts": [str(item) for item in boundary.blocked],
-                "server_socket_attempts": [str(item) for item in boundary.connected]}
+                "server_socket_attempts": [str(item) for item in boundary.connected],
+                "receipt_build_seconds": time.monotonic() - receipt_started}
 
         def save():
             with lock:
@@ -136,15 +150,20 @@ def main():
             def start(status, headers, exc_info=None):
                 row["status"] = int(status.split()[0])
                 return start_response(status, headers, exc_info)
-            if flags["read_failure"] == row["path"] and row["method"] == "GET":
-                body = b'{"error":{"code":"monitor_or_source_unavailable"}}'
-                start("503 Service Unavailable", [("Content-Type", "application/json"), ("Content-Length", str(len(body)))])
-                value = [body]
-            else:
-                value = host.app(environ, start)
-            row["duration_seconds"] = time.monotonic() - read_started
-            responses.append(row)
-            return value
+            try:
+                if flags["read_failure"] == row["path"] and row["method"] == "GET":
+                    body = b'{"error":{"code":"monitor_or_source_unavailable"}}'
+                    start("503 Service Unavailable", [("Content-Type", "application/json"), ("Content-Length", str(len(body)))])
+                    return [body]
+                return host.app(environ, start)
+            except BaseException as error:
+                row["exception_type"] = type(error).__name__
+                raise
+            finally:
+                row["duration_seconds"] = time.monotonic() - read_started
+                responses.append(row)
+                with (output / "actual-http-durations.jsonl").open("a") as stream:
+                    stream.write(json.dumps(row) + "\n")
 
         server.set_app(app)
         serving = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": .01}, daemon=True)

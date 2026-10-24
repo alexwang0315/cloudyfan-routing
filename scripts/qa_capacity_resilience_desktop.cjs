@@ -171,6 +171,7 @@ async function lifecycleMain() {
     blocked_browser_requests:[],boots:[],viewport:{width:1280,height:900},
     visual_regression:{status:'INCONCLUSIVE',reason:'No declared visual baseline; actual images and semantic checks retained'},
     accessibility_scope:'Keyboard focus/disclosure and responsive viewport checks; no screen-reader or WCAG certification'};
+  if(process.argv.includes('--focused-restart'))report.scope+='; focused restart slice: >100 paid history and refusal steps explicitly not run';
   let fixture,ready,browser,context,page,boot=0,operator,client,agent;
   const headers=token=>({Authorization:'Bearer '+token});
   const start=async port=>{
@@ -182,13 +183,25 @@ async function lifecycleMain() {
     report.boots.push({pid:ready.pid,origin:ready.origin,output:path.basename(bootOutput)});
     operator=headers(ready.operator_token);client=headers(ready.credentials.studio);agent=headers(ready.credentials.agent);
   };
-  const inspect=async(command={command:'inspect'})=>{fixture.send(command);return fixture.next();};
+  const inspect=async(command={command:'inspect'})=>{
+    const started=performance.now(),row={command:command.command,started_at:new Date().toISOString()};
+    try {
+      fixture.send(command);const value=await fixture.next();
+      row.response_type=value.type;row.model_request_count=value.model_requests?.length;
+      row.receipt_build_seconds=value.receipt_build_seconds;return value;
+    } catch(error) {row.failure_type=error.name;row.failure_message=error.message;throw error;}
+    finally {row.duration_ms=performance.now()-started;await fs.appendFile(path.join(output,'actual-fixture-durations.jsonl'),JSON.stringify(row)+'\n');}
+  };
   const task=run=>({run_id:run,category:ready.category,prompt:'Return only 1+1. PRIVATE_RESILIENCE_PROMPT_CANARY'});
   const api=async(method,url,auth=operator,data)=>{
-    const response=await context.request[method](ready.origin+url,{headers:auth,...(data===undefined?{}:{data})});
-    const body=await response.json();
-    if(response.status()>=400)report.expected_http_errors.push({method:method.toUpperCase(),path:url,status:response.status(),code:body.error?.code});
-    return {response,body};
+    const started=performance.now(),row={method:method.toUpperCase(),path:url,started_at:new Date().toISOString()};
+    try {
+      const response=await context.request[method](ready.origin+url,{headers:auth,...(data===undefined?{}:{data})});
+      const body=await response.json();row.status=response.status();
+      if(response.status()>=400)report.expected_http_errors.push({method:row.method,path:url,status:response.status(),code:body.error?.code});
+      return {response,body};
+    } catch(error) {row.failure_type=error.name;throw error;}
+    finally {row.duration_ms=performance.now()-started;await fs.appendFile(path.join(output,'actual-client-http-durations.jsonl'),JSON.stringify(row)+'\n');}
   };
   const get=async(url,auth=operator)=>{const row=await api('get',url,auth);assert.equal(row.response.status(),200);return row.body;};
   const shot=async name=>{
@@ -346,11 +359,13 @@ async function lifecycleMain() {
       assert.equal(await detail.getAttribute('open'),'');
       for(const url of ['/monitor/capacity','/monitor/queue','/monitor/snapshot'])await get(url);
       const after=await inspect();assert.equal(after.model_response_held,true);unchanged(before,after);
+      primaryKnown=after.budget['budget-primary.sqlite'].known_usd;disjointKnown=after.budget['budget-disjoint.sqlite'].known_usd;
       const cap=await get('/monitor/capacity');heldAllocation=cap.dispatch.allocations.find(row=>row.state==='sent');assert.ok(heldAllocation);
       assert.equal(cap.dispatch.groups.find(row=>row.group===heldAllocation.groups[0].group).concurrency_used,1);
       await shot('04-held-poll-focus-cancel-request');
     });
-    await step('over_100_actual_later_paid_histories_do_not_hide_old_held_aggregate',async()=>{
+    if(!process.argv.includes('--focused-restart')) {
+      await step('over_100_actual_later_paid_histories_do_not_hide_old_held_aggregate',async()=>{
       const control=await get('/monitor/snapshot');
       const switched=await api('post','/monitor/mode',operator,{revision:control.control.revision,mode:'open_source_first',client:'agent'});
       assert.equal(switched.response.status(),200);
@@ -390,7 +405,7 @@ async function lifecycleMain() {
       await page.locator('[data-queue-run="resilience-held"]').waitFor();
       await page.locator('[data-queue-run="resilience-held"]').screenshot({path:path.join(output,'05-old-held-row-after-101-paid.png')});report.screenshots.push('05-old-held-row-after-101-paid.png');
     });
-    await step('over_100_actual_quota_refusals_and_cancelled_waiters_preserve_paid_hold',async()=>{
+      await step('over_100_actual_quota_refusals_and_cancelled_waiters_preserve_paid_hold',async()=>{
       const pending=Array.from({length:32},(_,i)=>'resilience-wait-'+String(i).padStart(2,'0'));
       for(const name of pending){const row=await api('post','/v1/tasks',agent,task(name));assert.equal(row.response.status(),202);}
       const before=await inspect();
@@ -404,7 +419,19 @@ async function lifecycleMain() {
       for(const name of pending){const row=await api('post','/v1/tasks/'+name+'/cancel',agent,{});assert.equal(row.body.status,'cancelled');}
       await refresh('CloudyFanQueue');assert.match(await page.locator('.queue-rejection-count').innerText(),/部分歷史/);
       await page.locator('.queue-rejections').screenshot({path:path.join(output,'06-bounded-101-real-refusals.png')});report.screenshots.push('06-bounded-101-real-refusals.png');
-    });
+      });
+    } else {
+      await step('one_actual_disjoint_paid_seed_for_scoped_restart_reads_without_overflow_claim',async()=>{
+        const control=await get('/monitor/snapshot');
+        const switched=await api('post','/monitor/mode',operator,{revision:control.control.revision,mode:'open_source_first',client:'agent'});
+        assert.equal(switched.response.status(),200);
+        const accepted=await api('post','/v1/tasks',agent,task('resilience-history-000'));assert.equal(accepted.response.status(),202);
+        const result=await run('resilience-history-000',agent,1);assert.equal(result.status,'passed');
+        const state=await inspect();assert.equal(state.model_response_held,true);assert.equal(state.model_requests.length,4);
+        primaryKnown=state.budget['budget-primary.sqlite'].known_usd;disjointKnown=state.budget['budget-disjoint.sqlite'].known_usd;
+        assert.equal(disjointKnown,'0.01');
+      });
+    }
     await step('policy_change_is_honestly_refused_while_original_occupancy_lives',async()=>{
       await capacityPage();const before=await inspect();
       await page.locator('#capacity-policy-version').selectOption('synthetic-resilience-queued-v2');
@@ -512,6 +539,7 @@ async function lifecycleMain() {
       assert.equal(after.budget['budget-primary.sqlite'].unknown_events,1);
       assert.equal(after.budget['budget-primary.sqlite'].known_usd,primaryKnown);assert.equal(after.budget['budget-disjoint.sqlite'].known_usd,disjointKnown);
       assert.deepEqual(after.receipt_artifacts_sha256,before.receipt_artifacts_sha256);assert.deepEqual(after.task_jobs_sha256,before.task_jobs_sha256);
+      assert.deepEqual(after.health_sqlite_sha256,before.health_sqlite_sha256);
       assert.deepEqual(after.model_requests,[]);assert.deepEqual(after.source_requests,[]);assert.deepEqual(after.accounting_requests,[]);
       assert.equal(Object.keys(after.preservation_sha256).length,2);
       await queuePage();await page.locator('[data-queue-run="resilience-held"]').getByText('存取已到期',{exact:true}).waitFor();

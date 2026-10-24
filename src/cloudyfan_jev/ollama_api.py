@@ -106,7 +106,12 @@ class OllamaApp:
                         state = self.service.execute(principal, run_id)
                 metadata = {'protocol_version': PROTOCOL_VERSION, 'run_id': run_id,
                             'status': state['status'], 'costs': state['costs']}
-                if state['status'] in ('passed', 'failed', 'unverifiable'):
+                if state.get('queue') is not None and state['status'] in ('queued', 'accepting', 'running', 'interrupted_pending'):
+                    code = 202
+                    metadata.update(pending=True, queue=state['queue'], reason=state.get('reason'),
+                                    task_url='/v1/tasks/' + run_id)
+                    body = {'model': alias, 'created_at': self.clock(), 'done': False, 'cloudyfan': metadata}
+                elif state['status'] in ('passed', 'failed', 'unverifiable'):
                     result = self.service.result(principal, run_id)
                     metadata['costs'] = result['costs']
                     metadata['provenance'] = result['provenance']

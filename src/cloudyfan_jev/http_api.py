@@ -173,6 +173,11 @@ def _retained(method):
         internal = self.internal_id(principal, run_id)
         if self.retention is None:
             return method(self, principal, *args, **kwargs)
+        queue = getattr(self, 'queue_scheduler', None)
+        if (method.__name__ in {'status', 'observe', 'result'} and queue is not None
+                and queue.capacity_protocol is not None and queue.contains(principal, run_id)):
+            self.queue_access(principal, run_id)
+            return method(self, principal, *args, **kwargs)
         try:
             with self.retention.guard(internal):
                 self.authorize(principal)
@@ -194,6 +199,7 @@ class TaskService:
     def __init__(self, root, *, contracts, allowed_principal=None, allowed_principals=None, retention_policy=None,
                  principal_active=None, clock=time.time, retention_protected_paths=(), capacity_controller=None):
         self.capacity_controller = capacity_controller
+        self.queue_scheduler = None
         self.root = Path(root)
         if allowed_principal is not None and allowed_principals is not None:
             raise ValueError('Supply one server principal allowlist')
@@ -252,6 +258,12 @@ class TaskService:
     @_retained
     def create(self, principal, payload):
         self.authorize(principal)
+        if self.capacity_controller is not None and self.capacity_controller.queue_policy() is not None:
+            from .capacity_queue import QueuePreparation
+            if self.queue_scheduler is None:
+                raise ServiceError('capacity_queue_backend_unavailable', 503)
+            if not QueuePreparation.is_accepting(self.queue_scheduler):
+                return self.queue_scheduler.submit(principal, payload)
         if not isinstance(payload, dict) or set(payload) != {'run_id', 'contract_id', 'prompt'}:
             raise ServiceError('unsupported_task_fields')
         if (not isinstance(payload['prompt'], str) or not payload['prompt'].strip()
@@ -303,6 +315,39 @@ class TaskService:
 
     @_retained
     def status(self, principal, run_id):
+        if self.queue_scheduler is not None and self.queue_scheduler.contains(principal, run_id):
+            return self.queue_scheduler.status(principal, run_id)
+        return self.queue_task_status(principal, run_id)
+
+    @_retained
+    def queue_task_status(self, principal, run_id):
+        """Original task-owned fields for the controlled queue projection."""
+        return self._task_status(principal, run_id)
+
+    def queue_access(self, principal, run_id):
+        """Read-only original access policy; polling never expires or renews it."""
+        import math
+        self.authorize(principal)
+        if self.retention is not None:
+            internal = self.internal_id(principal, run_id)
+            lifecycle = self.retention.lookup(internal)
+            if lifecycle is None:
+                raise ServiceError('retention_metadata_missing', 409)
+            now = self.retention.clock()
+            if isinstance(now, bool) or not isinstance(now, (int, float)) or not math.isfinite(now):
+                raise ServiceError('retention_clock_invalid', 503)
+            if lifecycle['policy'] != self.retention_policy.descriptor():
+                raise ServiceError('retention_policy_changed', 409)
+            if lifecycle['state'] == 'retired':
+                raise ServiceError('task_retired', 410)
+            if lifecycle['state'] != 'active' or now >= lifecycle['expires_at']:
+                raise ServiceError('task_expired', 410)
+
+    def queue_observe(self, principal, run_id):
+        self.queue_access(principal, run_id)
+        return self._task_status(principal, run_id)
+
+    def _task_status(self, principal, run_id):
         directory, job = self._job(principal, run_id)
         return {**_read(directory / 'state.json'), 'costs': self._costs(principal, run_id, job),
                 **({'capacity': self.capacity_controller.own(self.internal_id(principal, run_id))}
@@ -354,6 +399,13 @@ class TaskService:
     def execute(self, principal, run_id):
         directory, job = self._job(principal, run_id)
         internal = self.internal_id(principal, run_id)
+        if self.capacity_controller is not None and self.capacity_controller.queue_policy(internal) is not None:
+            from .capacity_queue import QueuePreparation
+            execution = QueuePreparation.execution()
+            if execution is None or execution.get('scheduler') is not self.queue_scheduler or execution.get('run') != internal:
+                if self.queue_scheduler is None:
+                    raise ServiceError('capacity_queue_backend_unavailable', 503)
+                return self.queue_scheduler.status(principal, run_id)
         with _lock(directory):
             contract = self.contracts.get(job['request']['contract_id'])
             if contract is None or _encode(contract.descriptor()) != _encode(job['registered']):
@@ -407,17 +459,22 @@ class TaskService:
                     except BudgetError:
                         state = {'run_id': run_id, 'status': 'accounting_interrupted', 'error': {'code': 'unknown_cost'}}
                         _write(directory / 'state.json', state)
-                        return self.status(principal, run_id)
+                        return self.queue_task_status(principal, run_id)
                     state = {'run_id': run_id, 'status': 'capacity_denied', 'error': {'code': error.code}}
                     self.capacity_controller.refused(internal, error.code)
                     self.capacity_controller.terminal(internal)
                     _write(directory / 'state.json', state)
-                    return self.status(principal, run_id)
+                    return self.queue_task_status(principal, run_id)
+                from .capacity_queue import QueueWaiting
+                if isinstance(error, QueueWaiting):
+                    state = {'run_id': run_id, 'status': 'queued'}
+                    _write(directory / 'state.json', state)
+                    return self.queue_task_status(principal, run_id)
                 unknown = contract.runner.store.report()['unknown_events']
                 state = {'run_id': run_id, 'status': 'accounting_interrupted' if unknown else 'engineering_interrupted',
                          'error': {'code': 'unknown_cost' if unknown else 'execution_interrupted'}}
             _write(directory / 'state.json', state)
-            return self.status(principal, run_id)
+            return self.queue_task_status(principal, run_id)
 
 
     def mark_queued(self, principal, run_id):
@@ -683,7 +740,7 @@ class HTTPApp:
             else:
                 raise ServiceError('endpoint_not_supported', 404)
             code = {'policy_denied': 403, 'accounting_interrupted': 409,
-                    'engineering_interrupted': 503}.get(body.get('status'), 200)
+                    'engineering_interrupted': 503, 'queued': 202, 'accepting': 202}.get(body.get('status'), 200)
         except ServiceError as error:
             code, body = error.status, error.body()
         except Exception:

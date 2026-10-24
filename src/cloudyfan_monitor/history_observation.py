@@ -127,6 +127,30 @@ def _saved_health_matches(health_store, assessment, policy, cache):
     return observation in cache[snapshot_id].get("observations", [])
 
 
+def _historical_candidate(row, observation, tier, health_store, policy, cache):
+    result = {"tier": tier, "config_id": identifier(row["entry"]["config_id"]),
+              "configuration_sha256": row["configuration_sha256"],
+              "configuration": configuration(row["entry"]["profile"])}
+    try:
+        assessment = observation["assessment"]
+        observed = assessment.get("observation")
+        if (not _saved_health_matches(health_store, assessment, policy, cache)
+                or observed and (observed["configuration_sha256"] != row["configuration_sha256"]
+                or observed["provider"] != row["entry"]["profile"]["provider"])):
+            raise ValueError("Historical observation differs")
+        reasons = observation["reasons"]
+        if not isinstance(reasons, list) or any(not isinstance(reason, str) for reason in reasons):
+            raise ValueError("Historical reason shape differs")
+        result.update(state="excluded_before_dispatch" if reasons else "considered_not_selected",
+            reasons=[reason if reason in REASONS else "saved_reason_unknown" for reason in reasons],
+            health={"snapshot_id": identifier(assessment.get("snapshot_id")),
+                "observed_at": identifier(observed.get("observed_at")) if observed else None,
+                "cooldown_until": identifier(assessment.get("circuit", {}).get("cooldown_until"))})
+    except Exception:
+        result.update(state="unknown", reasons=["saved_candidate_unverifiable"], health={})
+    return result
+
+
 def _backup_stages(directory, manifest, completed, health_store):
     plan = manifest["backup_plan"]
     verify_backup_pools(plan, now=None)
@@ -165,23 +189,16 @@ def _backup_stages(directory, manifest, completed, health_store):
                     if pair[tier] != ranked:
                         raise ValueError("Historical candidate differs")
                 for row, observation in zip(pool, observations):
-                    assessment = observation["assessment"]
-                    observed = assessment.get("observation")
-                    if (not _saved_health_matches(health_store, assessment, manifest["health_policy"], health_snapshots)
-                            or observed and (observed["configuration_sha256"] != row["configuration_sha256"]
-                            or observed["provider"] != row["entry"]["profile"]["provider"])):
-                        raise ValueError("Historical observation differs")
-                    reasons = observation["reasons"]
-                    if not isinstance(reasons, list) or any(not isinstance(reason, str) for reason in reasons):
-                        raise ValueError("Historical reason shape differs")
-                    rows.append({"tier": tier, "config_id": identifier(row["entry"]["config_id"]),
-                        "configuration_sha256": row["configuration_sha256"],
-                        "configuration": configuration(row["entry"]["profile"]),
-                        "state": "excluded_before_dispatch" if reasons else "considered_not_selected",
-                        "reasons": [reason if reason in REASONS else "saved_reason_unknown" for reason in reasons],
-                        "health": {"snapshot_id": identifier(assessment.get("snapshot_id")),
-                            "observed_at": identifier(observed.get("observed_at")) if observed else None,
-                            "cooldown_until": identifier(assessment.get("circuit", {}).get("cooldown_until"))}})
+                    rows.append(_historical_candidate(row, observation, tier, health_store,
+                                                       manifest["health_policy"], health_snapshots))
+            if any(row["state"] == "unknown" for row in rows):
+                for row in rows:
+                    if row["state"] != "unknown":
+                        row["state"] = "health_recorded"
+                partial = True
+                stages.append({"index": index, "state": "unknown", "reason": "saved_selection_unverifiable",
+                               "candidates": rows, "economics": {"status": "unknown"}})
+                break  # A choice cannot be linked across an unverified candidate.
             expected, economics = _economic(plan, manifest["decision"], stage, public_previous, pair)
             if saved["economic"] != expected:
                 raise ValueError("Historical economics differs")

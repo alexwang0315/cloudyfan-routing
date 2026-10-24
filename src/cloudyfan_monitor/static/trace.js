@@ -119,6 +119,7 @@ window.CloudyFanTrace = (() => {
     local_backend_not_registered:'當時未登錄符合設定的本地服務',
     cloud_free_trial_not_explicitly_authorized:'當時沒有明示允許此雲端免費試用路徑',
     remaining_task_time_insufficient:'當時任務剩餘時間不足',
+    saved_candidate_unverifiable:'這一候選的歷史證據無法確認，選擇關係維持未知',
     saved_reason_unknown:'已保存原因不在可辨識清單，內容維持未知'
   };
   const historyReason = value => labelFrom(historyReasons,value);
@@ -130,7 +131,7 @@ window.CloudyFanTrace = (() => {
   };
   function historicalCandidates(candidates) {
     if(!Array.isArray(candidates)||!candidates.length) return '';
-    const states={dispatched:'已派送',excluded_before_dispatch:'派送前排除',considered_not_selected:'當時考慮但未選',unknown:'證據未知'};
+    const states={health_recorded:'原健康證據已保存，選擇關係未知',dispatched:'已派送',excluded_before_dispatch:'派送前排除',considered_not_selected:'當時考慮但未選',unknown:'證據未知'};
     return `<div class="table-wrap"><table class="trace-call-table"><thead><tr><th>當時候選設定</th><th>狀態</th><th>當時原因</th><th>原健康觀測</th></tr></thead><tbody>${candidates.filter(record).map(candidate=>{
       const health=record(candidate.health)?candidate.health:{};
       const reasons=Array.isArray(candidate.reasons)?candidate.reasons:[];

@@ -81,7 +81,9 @@ class BackupHost:
     root: Path
     values: dict
     calls: list = field(default_factory=list)
+    requests: list = field(default_factory=list)
     scenario: str = "direct"
+    before_response: object = None
     operator_token: str = field(default=OPERATOR, repr=False)
 
 
@@ -104,9 +106,12 @@ def assemble_backup_host(root, origin, *, classifiers=(), economic=True):
     host = BackupHost(None, None, None, health, credentials, root, values)
 
     def upstream(request):
+        host.requests.append({"method": request.method, "path": request.url.path})
         assert request.method == "POST"
         payload = json.loads(request.content)
         host.calls.append(payload)
+        if host.before_response is not None:
+            host.before_response(request)
         n = len(host.calls)
         if "questions" in payload:
             stage = next(iter(payload["questions"]))
@@ -118,7 +123,8 @@ def assemble_backup_host(root, origin, *, classifiers=(), economic=True):
         initial = payload["model"].startswith("example/open_source")
         fails = (initial and host.scenario not in ("first_pass", "availability")) or (
             host.scenario == "quality_chain" and not payload["model"].startswith("example/high"))
-        return values["module"].response(payload, n, answer="bad" if fails else "2",
+        answer = "PRIVATE_RESILIENCE_ANSWER" if host.scenario == "private_answer" and initial else "bad" if fails else "2"
+        return values["module"].response(payload, n, answer=answer,
             status=503 if host.scenario == "availability" and n == 1 else 200)
 
     client = Client(httpx.Client(transport=httpx.MockTransport(upstream)), "synthetic-only", root / "receipts")

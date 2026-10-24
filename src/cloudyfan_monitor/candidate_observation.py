@@ -96,7 +96,8 @@ def _interval(value):
     if not isinstance(value, dict):
         return None
     lower, upper = _amount(value.get("lower")), _amount(value.get("upper"))
-    return {"lower": lower, "upper": upper} if lower is not None and upper is not None else None
+    return ({"lower": lower, "upper": upper} if lower is not None and upper is not None
+            and Decimal(lower) <= Decimal(upper) else None)
 
 
 def _speed(value):
@@ -185,6 +186,13 @@ class CandidateObserver:
                     "reason_codes": ["candidate_identity_mismatch", "formal_qualification_not_evaluated"]}
         valid_until = _time(provenance.get("valid_until"))
         retrieved_at = _time(provenance.get("retrieved_at"))
+        cost, speed = _interval(evidence.get("complete_cost_usd")), _speed(evidence.get("speed"))
+        if (not _hash(provenance.get("raw_sha256")) or not _identifier(provenance.get("workload_id"))
+                or valid_until is None or retrieved_at is None or valid_until < retrieved_at
+                or evidence.get("quality_sufficient") is not True or cost is None
+                or speed is None or any(value is None for value in speed.values())):
+            return {"status": "unverifiable", "formal_status": "unknown", "evidence": None,
+                    "reason_codes": ["candidate_evidence_unavailable", "formal_qualification_not_evaluated"]}
         if retrieved_at is not None and retrieved_at > observed_at:
             return {"status": "unverifiable", "formal_status": "unknown", "evidence": None,
                     "reason_codes": ["qualification_evidence_from_future", "formal_qualification_not_evaluated"]}
@@ -196,8 +204,8 @@ class CandidateObserver:
                     "category_id": _identifier(provenance.get("category_id")),
                     "observed_at": retrieved_at, "valid_until": valid_until,
                     "quality_sufficient": evidence.get("quality_sufficient") is True,
-                    "complete_cost_usd": _interval(evidence.get("complete_cost_usd")),
-                    "speed": _speed(evidence.get("speed")),
+                    "complete_cost_usd": cost,
+                    "speed": speed,
                     "basis": "registered_core_qcs_evidence"},
                 "reason_codes": ["qualification_evidence_expired" if status == "expired" else
                                  "candidate_evidence_recorded", "formal_qualification_not_evaluated"]}
@@ -238,6 +246,7 @@ class CandidateObserver:
             "reason_codes": reasons, "endpoint_metrics": _endpoint_metrics(observation)}
 
     def _candidate(self, candidate, position, tier, view, descriptor, records, observed_at, registered, category, core):
+        candidate = candidate if isinstance(candidate, dict) else {}
         raw_profile = candidate.get("profile") if isinstance(candidate, dict) else None
         profile = _profile(raw_profile)
         listed = profile["model"] is not None
@@ -289,6 +298,30 @@ class CandidateObserver:
                 "quota": {"status": "unknown"}, "dispatch_authorization": {"status": "not_checked"},
                 "reason_codes": reasons}
 
+    def _safe_candidate(self, candidate, position, tier, view, descriptor, records, observed_at, category, core):
+        try:
+            return self._candidate(candidate, position, tier, view, descriptor, records,
+                                   observed_at, descriptor is not None, category, core)
+        except Exception:
+            # Preserve only the original listing identity when its qualification
+            # cannot be verified. No other row or source exception is copied.
+            candidate = candidate if isinstance(candidate, dict) else {}
+            profile = _profile(candidate.get("profile"))
+            return {"position": position, "role": "primary" if position == 0 else "backup",
+                "listing_status": "listed" if profile["model"] else "unknown",
+                "scope": _scope(view, profile),
+                "configuration": {"config_id": _identifier(candidate.get("config_id")),
+                                  "configuration_sha256": None, **profile},
+                "identity": {"status": "unverifiable", "missing_fields": []},
+                "registration": {"status": "registered" if descriptor else "unknown",
+                                 "candidate_matches_contract": None},
+                "qualification": {"status": "unverifiable", "formal_status": "unknown", "evidence": None,
+                                  "reason_codes": ["candidate_evidence_unavailable"]},
+                "health": {"status": "unverifiable", "policy_eligible": None,
+                           "reason_codes": ["health_identity_unverifiable"]},
+                "quota": {"status": "unknown"}, "dispatch_authorization": {"status": "not_checked"},
+                "reason_codes": ["candidate_evidence_unavailable"]}
+
     def project(self, view, *, category=None, mode=None):
         control = self.store.control()
         try:
@@ -301,20 +334,35 @@ class CandidateObserver:
         if category not in view["categories"]:
             raise MonitorError("unknown_observation_category")
         observed_at = _time(self.store.clock())
-        contract_id, descriptor, core = self._contract(view["id"], category, mode)
-        records, excluded = self._records(descriptor)
+        context = {"pool_id": view["id"], "active_pool_id": control["routing_pool"],
+            "catalog_pool_id": control["catalog_pool"], "active": view["id"] == control["routing_pool"],
+            "category": category, "mode": mode, "contract_id": None,
+            "contract_registered": None, "contract_version": None}
+        try:
+            contract_id, descriptor, core = self._contract(view["id"], category, mode)
+            records, excluded = self._records(descriptor)
+            versions = self._versions(control)
+        except Exception:
+            return {"schema_version": SCHEMA, "candidates": {
+                "status": "unavailable", "reason": "candidate_observation_unavailable",
+                "observed_at": None, "attempted_at": observed_at, "context": context,
+                "versions": [{"pool_id": view["id"], "active": context["active"]}],
+                "tiers": None, "excluded": None,
+                "notice": "registration_not_execution_authorization"}}
+        context.update(contract_id=contract_id, contract_registered=descriptor is not None,
+                       contract_version=_identifier((descriptor or {}).get("version")))
+        tiers = {tier: [self._safe_candidate(candidate, index, tier, view, descriptor, records,
+                                            observed_at, category, core)
+                       for index, candidate in enumerate(view["categories"][category]["pools"][tier])]
+                 for tier in TIERS}
+        partial = any(row["qualification"]["status"] == "unverifiable"
+                      or row["health"]["status"] in ("unavailable", "unverifiable")
+                      for rows in tiers.values() for row in rows)
         return {"schema_version": SCHEMA, "candidates": {
-            "status": "available", "observed_at": observed_at,
-            "context": {"pool_id": view["id"], "active_pool_id": control["routing_pool"],
-                "catalog_pool_id": control["catalog_pool"], "active": view["id"] == control["routing_pool"],
-                "category": category, "mode": mode, "contract_id": contract_id,
-                "contract_registered": descriptor is not None,
-                "contract_version": _identifier((descriptor or {}).get("version"))},
-            "versions": self._versions(control),
-            "tiers": {tier: [self._candidate(candidate, index, tier, view, descriptor, records,
-                                             observed_at, descriptor is not None, category, core)
-                             for index, candidate in enumerate(view["categories"][category]["pools"][tier])]
-                      for tier in TIERS},
+            "status": "partial" if partial else "available", "observed_at": observed_at,
+            "context": context,
+            "versions": versions,
+            "tiers": tiers,
             "excluded": [{"tier": row.get("tier") if row.get("tier") in TIERS else None,
                 "config_id": _identifier(row.get("config_id")), "reason_codes": [_code(row.get("reason"))]}
                 for row in excluded if isinstance(row, dict)],

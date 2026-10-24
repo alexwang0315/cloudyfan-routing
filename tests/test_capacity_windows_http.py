@@ -141,3 +141,62 @@ def test_long_window_blocks_policy_disable_and_rebinding_after_ordinary_rate_hor
         controller.store.configure(renamed)
     assert operator.get("/monitor/capacity").json() == original
     assert len(bundle.upstream.calls) == 1
+
+
+def test_explicit_refresh_imports_exact_controlled_rate_source_without_any_upstream_call(local_service):
+    bundle = local_service.bundle
+    start = local_service.clock()
+    source = {"binding": "synthetic-binding", "group": "shared",
+        "scope": {"kind": "account", "ref": "synthetic-shared-account"},
+        "source_version": "synthetic-reviewed-v1", "evidence_ref": "synthetic-original-rate-source-v1",
+        "status": "rate_limited", "observed_at": start, "valid_until": start + 300,
+        "values": [["retry-after", "30"]]}
+    controller, _ = attach_windows(bundle, local_service.clock, controlled_sources=[source])
+    local_service.server.set_app(bundle.app)
+    operator, client = local_service.client("operator"), local_service.client()
+    assert operator.post("/monitor/capacity/activate", json={"revision": 0,
+        "version": "synthetic-window-admission-v1"}).status_code == 200
+    original = hashlib.sha256(controller.store.path.read_bytes()).hexdigest()
+    for _ in range(2):
+        assert operator.get("/monitor/capacity").json()["dispatch"]["windows"]["groups"] == []
+    assert hashlib.sha256(controller.store.path.read_bytes()).hexdigest() == original
+    pending = client.post("/v1/tasks", json={**TASK, "run_id": "source-not-yet-imported"})
+    assert pending.status_code == 429 and pending.json()["error"]["code"] == "capacity_window_source_not_imported"
+    assert bundle.upstream.calls == []
+    disabled = operator.post("/monitor/capacity/activate", json={"revision": 1, "version": None})
+    assert disabled.status_code == 409 and disabled.json()["error"]["code"] == "capacity_live_state_blocks_change"
+    refreshed = operator.post("/monitor/capacity/refresh", json={})
+    assert refreshed.status_code == 200 and refreshed.json()["request_count"] == 0
+    response = client.post("/v1/tasks", json={**TASK, "run_id": "controlled-source-exclusion"})
+    assert response.status_code == 429 and response.json()["error"]["code"] == "capacity_window_wait"
+    event = operator.get("/monitor/capacity").json()["dispatch"]["windows"]["events"][0]
+    assert event["source_kind"] == "controlled_import" and event["source_version"] == source["source_version"]
+    assert event["observed_at"] == start and event["not_before"] == start + 30
+    assert response.json()["costs"]["unknown_events"] == 0 and bundle.upstream.calls == []
+    imported = operator.get("/monitor/capacity").json()["dispatch"]["windows"]
+    assert operator.post("/monitor/capacity/refresh", json={}).json()["window_import"]["imported_count"] == 0
+    assert operator.get("/monitor/capacity").json()["dispatch"]["windows"] == imported
+
+
+def test_many_original_constraints_keep_bounded_reason_refs_without_opening_the_group(local_service):
+    bundle = local_service.bundle
+    start = local_service.clock()
+    source = {"binding": "synthetic-binding", "group": "shared",
+        "scope": {"kind": "account", "ref": "synthetic-shared-account"},
+        "source_version": "synthetic-reviewed-v1", "evidence_ref": "synthetic-many-constraints-v1",
+        "status": "rate_limited", "observed_at": start, "valid_until": start + 300,
+        "values": [["retry-after", "30"]]}
+    attach_windows(bundle, local_service.clock, controlled_sources=[source], rules=[
+        {"binding": "synthetic-binding", "group": "shared", "header": "retry-after",
+         "format": "retry_after", "constraint": f"requests-{number:03d}"} for number in range(128)])
+    local_service.server.set_app(bundle.app)
+    operator, client = local_service.client("operator"), local_service.client()
+    assert operator.post("/monitor/capacity/activate", json={"revision": 0,
+        "version": "synthetic-window-admission-v1"}).status_code == 200
+    assert operator.post("/monitor/capacity/refresh", json={}).json()["window_import"]["imported_count"] == 128
+    denied = client.post("/v1/tasks", json={**TASK, "run_id": "bounded-original-constraints"})
+    assert denied.status_code == 429 and denied.json()["error"]["code"] == "capacity_window_wait"
+    view = operator.get("/monitor/capacity").json()["dispatch"]["windows"]
+    assert view["event_count"] == 128 and len(view["events"]) == 100 and view["event_history_complete"] is False
+    assert len(view["groups"]) == 1 and view["groups"][0]["not_before"] == start + 30
+    assert bundle.upstream.calls == []

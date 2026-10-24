@@ -84,3 +84,35 @@ def test_unknown_original_fee_stops_without_accounting_get_or_fallback(backup_wi
     fixture.operator.get("/monitor/snapshot").raise_for_status()
     fixture.client.post("/v1/tasks/unknown-original-fee/resume", json={})
     assert len(methods) == before
+
+
+def test_window_expiry_cannot_heal_an_open_health_circuit_or_change_old_choices(backup_windows_http):
+    fixture = backup_windows_http
+    assert fixture.operator.post("/monitor/capacity/activate", json={"revision": 0,
+        "version": "synthetic-window-admission-v1"}).status_code == 200
+    for index in range(2):
+        fixture.flags["scenario"] = "window"
+        assert submit(fixture, f"original-window-failure-{index}")["status"] == "passed"
+        if index == 0:
+            fixture.clock.now += 30
+    old = json.dumps(history(fixture, "original-window-failure-0")[1], sort_keys=True)
+    assert len(fixture.requests) == 4
+    fixture.clock.now += 60
+    windows = fixture.operator.get("/monitor/capacity").json()["dispatch"]["windows"]
+    assert windows["groups"] == [] and windows["event_count"] == 2
+    pool = fixture.operator.get("/monitor/pools", params={"id": fixture.host.pools[0],
+        "category": fixture.host.category, "mode": "cloudyfan"}).json()
+    candidate = pool["operator_observation"]["candidates"]["tiers"]["open_source"][0]
+    assert candidate["health"]["status"] == "recovery_required"
+    assert candidate["health"]["circuit"]["open"] is True
+    health_before = fixture.host.health.path.read_bytes()
+    assert json.dumps(history(fixture, "original-window-failure-0")[1], sort_keys=True) == old
+    assert fixture.host.health.path.read_bytes() == health_before
+    assert submit(fixture, "window-ended-still-health-gated")["status"] == "passed"
+    task, saved = history(fixture, "window-ended-still-health-gated")
+    skipped = saved["stages"][0]["candidates"][0]
+    assert skipped["capacity_window"]["status"] == "open" and "recovery_required" in skipped["reasons"]
+    assert skipped["state"] == "excluded_before_dispatch"
+    assert task["generation_attempts"] == 1 and len(fixture.requests) == 5
+    assert fixture.requests[-1]["model"] == "example/open_source-1"
+    assert fixture.side_requests == {"source": [], "accounting": []}

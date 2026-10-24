@@ -85,6 +85,14 @@ def prepare_request(http, endpoint, payload, *, headers=None):
     return request
 
 
+def require_model_transport(transport):
+    """Opt-in supports the audited receipt/admission call protocol only."""
+    from .client import Client
+    from .local import LocalBackend
+    if type(transport) not in {Client, LocalBackend} or 'call' in vars(transport):
+        raise CapacityDenied('capacity_transport_protocol_unsupported')
+
+
 @dataclass(frozen=True)
 class TokenUpperBound:
     """Trusted adapter result for these exact bytes and frozen route, not an estimate."""
@@ -181,6 +189,12 @@ class CapacityToolTransport(ReceiptStore):
             from .budget import BudgetError
             raise BudgetError('External tool result unknown; execution stopped')
         return self.decode(httpx.Response(record['http_status'], text=record['raw']))
+
+
+def require_tool_transport(transport):
+    if (type(transport) is not CapacityToolTransport
+            or any(name in vars(transport) for name in ('prepare', 'post', 'result'))):
+        raise CapacityDenied('capacity_transport_protocol_unsupported')
 
 
 class CapacityController:

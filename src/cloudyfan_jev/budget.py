@@ -351,6 +351,8 @@ class _BudgetClient:
     def call(self, cid, *args):
         if self.owner.capacity_controller is not None and self.owner._capacity_context['policy_version'] is not None:
             from copy import deepcopy
+            from .capacity_dispatch import require_model_transport
+            require_model_transport(self.wrapped)
             args = tuple(deepcopy(value) for value in args)
             payload = args[-1]
             endpoint = args[0] if len(args) > 1 else self.wrapped.config['endpoint']
@@ -474,7 +476,7 @@ class _BudgetEnvironment:
         return tools
 
     def prepare_capacity_call(self, action_id, name, arguments, *, execution_guard=None):
-        from .capacity_dispatch import CapacityDenied, CapacityToolRequest, CapacityToolTransport
+        from .capacity_dispatch import CapacityDenied, CapacityToolRequest, CapacityToolTransport, require_tool_transport
         if self.owner.capacity_controller is None or self.owner._capacity_context['policy_version'] is None:
             return
         policy = self.owner.tool_bounds.get(name)
@@ -489,6 +491,7 @@ class _BudgetEnvironment:
         request = self.environment.capacity_tool(name, arguments)
         if type(request) is not CapacityToolRequest or type(request.transport) is not CapacityToolTransport:
             raise CapacityDenied('capacity_tool_protocol_unavailable')
+        require_tool_transport(request.transport)
         wire = request.transport.prepare(action_id, request.payload)
         dispatch = self.owner.capacity_controller.dispatch(self.owner._capacity_context,
             request.transport, request.transport.config['endpoint'], {'model': 'tool:' + name},
@@ -502,13 +505,14 @@ class _BudgetEnvironment:
             self.prepared = None
 
     def _controlled_tool(self, name, arguments, policy, event_id):
-        from .capacity_dispatch import CapacityDenied
+        from .capacity_dispatch import CapacityDenied, require_tool_transport
         from .client import not_dispatched
         if self.prepared is None or self.prepared[:2] != (name, _fingerprint(arguments)):
             raise CapacityDenied('capacity_tool_prepare_required')
         _, _, action_id, transport, wire, dispatch, execution_guard = self.prepared
         self.prepared = None
         try:
+            require_tool_transport(transport)
             fresh = self.owner.store.begin_event(self.run_id, event_id, 'tool', money(policy.bound.usd),
                 _fingerprint({'name': name, 'arguments': arguments}))
             if not fresh:

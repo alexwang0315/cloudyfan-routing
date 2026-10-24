@@ -37,9 +37,11 @@ class QueuePreparation:
         self.version, self.contracts = version, dict(contracts)
         self.tools, self.replayable = deepcopy(tools), deepcopy(replayable_tools or {})
         frozen = {}
+        from .scores.backup_runtime import BackupCategoryCore
+        from .scores.category_routing import CategoryCore
         for name, contract in self.contracts.items():
-            if type(contract.runner.core) is not Core:
-                raise ValueError('This preparation version supports original Core only')
+            if type(contract.runner.core.queue_template()) not in {Core, BackupCategoryCore, CategoryCore}:
+                raise ValueError('A supported original Core preparation protocol is required')
             schema = self.tools[name]
             names = [tool.get('function', {}).get('name') for tool in schema]
             replayable = self.replayable.get(name, [])
@@ -104,6 +106,7 @@ class QueuePreparation:
         contract_id = job['request']['contract_id']
         contract = service._registered_contract(job)
         self.verify_contract(contract_id, contract)
+        core, task = contract.runner.core.queue_binding(row['id'], {'prompt': job['request']['prompt']})
         pointer = directory / 'queue-next.json'
         if pointer.exists():
             reference = _read(pointer)
@@ -111,8 +114,12 @@ class QueuePreparation:
             if hashlib.sha256(encoded(next_request)).hexdigest() != reference['sha256']:
                 raise ServiceError('queue_continuation_changed', 409)
         else:
-            initial = contract.runner.core.queue_initial(row['id'], {'prompt': job['request']['prompt']},
-                mode=contract.mode, tools=self.tools[contract_id])
+            adoption = service.capacity_controller.context(row['id'], row['principal'], job['registered'])
+            def check_window(profile):
+                transport = contract.runner.local_backend if profile.get('backend') == 'local' else contract.runner.client
+                return service.capacity_controller.candidate_window(adoption, transport, profile, job['registered'])
+            initial = core.queue_initial(row['id'], task, mode=contract.mode,
+                tools=self.tools[contract_id], candidate_window=check_window)
             endpoint = (contract.runner.local_backend.config['endpoint'] if initial['local'] else
                         'https://openrouter.ai/api/v1/chat/completions')
             transport = contract.runner.local_backend if initial['local'] else contract.runner.client
@@ -128,6 +135,7 @@ class QueuePreparation:
                 or next_request['version'] != self.version or next_request['preparation_sha256'] != self.sha256
                 or next_request['registered_sha256'] != hashlib.sha256(encoded(job['registered'])).hexdigest()):
             raise ServiceError('queue_continuation_changed', 409)
+        core.queue_validate(next_request)
         transport, wire = self._transport(contract.runner, next_request)
         adoption = service.capacity_controller.context(row['id'], row['principal'], job['registered'])
         if adoption.get('queue_version') != self.version or adoption.get('queue_sha256') != self.sha256:
@@ -138,6 +146,12 @@ class QueuePreparation:
         _, groups = service.capacity_controller.window_scope(adoption, dispatch.route, snapshot, next_request['wire_sha256'])
         return {'request': next_request, 'transport': transport, 'wire': wire, 'dispatch': dispatch,
                 'groups': {group['physical'] for group in groups}, 'contract': contract}
+
+    def accept(self, service, row):
+        directory, job = service._job(row['principal'], row['run_id'])
+        contract = service._registered_contract(job)
+        core, task = contract.runner.core.queue_binding(row['id'], {'prompt': job['request']['prompt']})
+        core.queue_accept(row['id'], row['created'])
 
     def save_boundary(self, service, row, next_request):
         from .http_api import _write
@@ -164,7 +178,7 @@ class QueuePreparation:
         finally:
             _EXECUTING.reset(token)
 
-    def consume(self, owner, transport, cid, endpoint, payload, wire):
+    def consume(self, owner, transport, cid, endpoint, payload, wire, *, gate=None):
         from .capacity_dispatch import CapacityDenied
         execution = self.execution()
         if execution is None or execution['controller'] is not owner.capacity_controller or execution['run'] != owner._capacity_context['run']:
@@ -175,10 +189,16 @@ class QueuePreparation:
         actual = {**request, 'call_id': cid, 'endpoint': endpoint, 'payload': deepcopy(payload),
                   'payload_json': json.dumps(payload, ensure_ascii=False, allow_nan=False),
                   'local': hasattr(transport, 'config'), 'wire_sha256': hashlib.sha256(wire.content).hexdigest()}
+        actual.pop('gate', None)
+        if gate is not None:
+            actual['gate'] = deepcopy(gate)
         if execution['consumed']:
             self.save_boundary(scheduler.service, row, actual)
             raise QueueWaiting()
         if actual != request or execution['prepared']['transport'] is not transport:
+            from .receipt_store import _immutable
+            _immutable(scheduler.service.root / row['id'] / ('queue-refusal-' + execution['claim'] + '.json'),
+                {'protocol': self.protocol, 'expected': request, 'actual': actual})
             raise CapacityDenied('capacity_queue_request_changed', 409)
         dispatch = execution['prepared']['dispatch']
         if dispatch.id is None:
@@ -186,6 +206,21 @@ class QueuePreparation:
         execution['consumed'] = True
         return dispatch, {'protocol': 'httpx-prepared-json-v1', 'wire_sha256': request['wire_sha256'],
             'scope_sha256': execution['evidence']['scope_sha256'], 'capacity_allocation': dispatch.id}
+
+    def ordered_payload(self, cid, endpoint, payload):
+        """Retain only ordering from the original never-dispatched boundary.
+
+        Engine replay can read canonical sorted checkpoints. Values, canonical
+        intent and identity must still match; this never substitutes new content.
+        The real HTTPx builder below serializes these exact frozen ordered bytes.
+        """
+        execution = self.execution()
+        if execution is None or execution['consumed']:
+            return payload
+        request = execution['prepared']['request']
+        if cid != request['call_id'] or endpoint != request['endpoint'] or payload != request['payload']:
+            return payload
+        return json.loads(request['payload_json'])
 
     def verify_environment(self, contract_id, environment):
         tools = environment.tools_schema()

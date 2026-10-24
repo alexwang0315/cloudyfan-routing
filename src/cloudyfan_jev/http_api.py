@@ -336,6 +336,11 @@ class TaskService:
             now = self.retention.clock()
             if isinstance(now, bool) or not isinstance(now, (int, float)) or not math.isfinite(now):
                 raise ServiceError('retention_clock_invalid', 503)
+            import sqlite3
+            with sqlite3.connect(self.retention.path.resolve().as_uri() + '?mode=ro', uri=True) as db:
+                floor = db.execute('SELECT observed FROM clock WHERE singleton=1').fetchone()
+            if floor is not None and now < floor[0]:
+                raise ServiceError('retention_clock_rollback', 503)
             if lifecycle['policy'] != self.retention_policy.descriptor():
                 raise ServiceError('retention_policy_changed', 409)
             if lifecycle['state'] == 'retired':
@@ -713,8 +718,8 @@ class HTTPApp:
             principal = self.authenticate(environ)
             self.service.authorize(principal)
             method, path = environ['REQUEST_METHOD'], environ.get('PATH_INFO', '')
-            match = re.fullmatch(r'/v1/tasks/([A-Za-z0-9][A-Za-z0-9_-]{0,63})(/result|/resume)?', path)
-            if method == 'POST' and (path == '/v1/tasks' or (match and match[2] == '/resume')):
+            match = re.fullmatch(r'/v1/tasks/([A-Za-z0-9][A-Za-z0-9_-]{0,63})(/result|/resume|/cancel)?', path)
+            if method == 'POST' and (path == '/v1/tasks' or (match and match[2] in ('/resume', '/cancel'))):
                 if environ.get('CONTENT_TYPE', '').split(';')[0] != 'application/json':
                     raise ServiceError('json_required', 415)
                 try:
@@ -733,8 +738,13 @@ class HTTPApp:
                 else:
                     if payload != {}:
                         raise ServiceError('resume_does_not_accept_configuration')
-                    body = self.service.execute(principal, match[1])
-            elif method == 'GET' and match and match[2] != '/resume':
+                    if match[2] == '/cancel':
+                        if self.service.queue_scheduler is None:
+                            raise ServiceError('capacity_queue_not_configured', 409)
+                        body = self.service.queue_scheduler.cancel(principal, match[1])
+                    else:
+                        body = self.service.execute(principal, match[1])
+            elif method == 'GET' and match and match[2] not in ('/resume', '/cancel'):
                 body = (self.service.result(principal, match[1]) if match[2] == '/result'
                         else self.service.status(principal, match[1]))
             else:

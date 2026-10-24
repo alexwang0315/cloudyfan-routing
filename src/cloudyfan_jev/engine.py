@@ -270,7 +270,43 @@ class Core:
             payload.update(tools=deepcopy(tools), tool_choice='auto')
         return payload
 
-    def queue_initial(self, run_id, task, *, mode, tools):
+    def queue_template(self):
+        return self
+
+    def queue_binding(self, run_id, task):
+        return self, deepcopy(task)
+
+    def queue_accept(self, run_id, accepted_at):
+        """Base Core has no separate absolute flow deadline to initialize."""
+
+    def queue_validate(self, next_request):
+        """Original privacy and final dispatch guards still run during execution."""
+        if self.execution_policy is None:
+            return
+        if next_request['endpoint'] == transport.DECISIONS:
+            location = self.execution_policy.classifier
+            self.execution_policy.require('classifier', location)
+            if not location.startswith('cloud:'):
+                raise PolicyDenied('classifier', 'backend_location_mismatch')
+        else:
+            profile = next((profile for profile in self.profiles.values()
+                            if request_model(profile) == next_request['payload']['model']), None)
+            if profile is None:
+                raise PolicyDenied('generation', 'unknown_profile')
+            self._queue_location(profile)
+
+    def _queue_location(self, profile):
+        if self.execution_policy is None:
+            return
+        location = profile.get('execution_location')
+        self.execution_policy.require('generation', location)
+        if profile.get('backend') == 'local':
+            if self.local_backend is None or not self.local_backend.matches_profile(profile):
+                raise PolicyDenied('generation', 'backend_location_mismatch')
+        elif not location.startswith('cloud:'):
+            raise PolicyDenied('generation', 'backend_location_mismatch')
+
+    def queue_initial(self, run_id, task, *, mode, tools, candidate_window=None):
         profile = self.profiles[INITIAL[mode]]
         prefix = 'run-' + run_id
         messages = [{'role': 'system', 'content': self.system}, {'role': 'user', 'content': task['prompt']}]

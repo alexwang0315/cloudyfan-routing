@@ -132,7 +132,12 @@ async function storageMain() {
     report.status='failed';report.failure={name:error.name,message:error.message,stack:error.stack};process.exitCode=1;
     if(page)await save('failure').catch(()=>{});
   } finally {
-    if(browser)await browser.close();
+    if(browser){
+      const started=performance.now();report.browser_close={attempted:true,resolved:false};
+      try{await browser.close();report.browser_close.resolved=true;}
+      catch(error){report.browser_close.error_type=error.name;report.status='failed';process.exitCode=1;}
+      finally{report.browser_close.duration_ms=performance.now()-started;}
+    }
     report.fixture_stop=await fixture.stop();
     if(report.fixture_stop.code!==0||report.fixture_stop.cleanup_failed){report.status='failed';process.exitCode=1;}
     if(report.source_before) {
@@ -331,7 +336,12 @@ async function lifecycleMain() {
     report.status='failed';report.failure={name:error.name,message:error.message,stack:error.stack};process.exitCode=1;
     if(page)await shot('failure').catch(()=>{});
   } finally {
-    if(browser)await browser.close();
+    if(browser){
+      const started=performance.now();report.browser_close={attempted:true,resolved:false};
+      try{await browser.close();report.browser_close.resolved=true;}
+      catch(error){report.browser_close.error_type=error.name;report.status='failed';process.exitCode=1;}
+      finally{report.browser_close.duration_ms=performance.now()-started;}
+    }
     if(fixture){const result=await fixture.stop();report.fixture_stop=result;if(result.code!==0||result.cleanup_failed){report.status='failed';process.exitCode=1;}}
     if(report.source_before){report.source_after={monitor:await capture(root,owned),core:await capture(core)};
       report.source_inputs_unchanged=JSON.stringify(report.source_before)===JSON.stringify(report.source_after);

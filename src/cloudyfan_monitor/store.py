@@ -263,7 +263,9 @@ class Store:
         # Only allow explicit public counters/identities. No prompt, answer, diagnosis prose or raw receipts.
         fields = ("status", "first_pass", "final_pass", "generation_attempts", "classifier_calls",
                   "wall_seconds", "known_api_usd", "complete_api_usd", "unknown_events", "path", "error_code",
-                  "completed_status", "access_expired", "observation", "trace", "ingress")
+                  "completed_status", "access_expired", "observation", "trace", "ingress",
+                  "queue", "queue_state", "reason", "queue_seconds", "end_to_end_seconds",
+                  "cancellation_requested", "provider_cancellation_confirmed")
         with self.db() as db:
             previous = db.execute("SELECT data FROM tasks WHERE client=? AND run=?",
                                   (binding["client"], binding["run"])).fetchone()

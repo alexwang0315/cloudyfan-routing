@@ -2,6 +2,7 @@
 window.CloudyFanCapacity = (() => {
   let root = null, context = null, data = null, readState = 'idle', generation = 0, flight = null;
   let requestVersion = 0, policySelection = null, mutationBusy = false, activationError = '';
+  let historyTasks = null, historyState = 'idle';
   const h = value => context.esc(value);
   const dimensions = { rpm: 'RPM · 請求數', tpm: 'TPM · token 數', concurrency: '並行數', usd: '美元限制' };
   const statuses = { known: '已記錄', unknown: '未知', unsupported: '未支援', not_applicable: '不適用',
@@ -53,11 +54,81 @@ window.CloudyFanCapacity = (() => {
     capacity_route_not_registered: '這次請求不在原政策的已登錄派送範圍，停止派送。',
     capacity_frozen_adoption_changed: '保存的任務容量版本或設定無法核對，停止派送。',
     capacity_transport_protocol_unsupported: '這個 transport 尚無適用容量檢查協定，不能依新政策派送。',
+    capacity_window_wait: '原記錄顯示適用共用群組處於限流窗口；新派送仍須另經原資格、健康與費用閘門。',
+    capacity_window_unknown: '窗口狀態無法確認，保留限制並停止適用的新派送。',
+    capacity_window_header_invalid: '原回應的限流時間無法可信換算，不能當作零或自動清除暫停。',
+    capacity_window_header_missing: '原限流回應缺少政策要求的時間欄位，不能推定窗口為零。',
+    capacity_window_clock_reference_unknown: '原回應的時間參考無法確認，保留未知窗口，不以現在時間補造重置時間。',
+    capacity_window_time_invalid: '原回應的窗口時間不合法或超出可信範圍，不解除暫停。',
+    capacity_window_scope_or_clock_invalid: '窗口範圍或時鐘無法確認，不放行新的派送。',
+    capacity_window_scope_unsupported: '這個適用範圍尚無明示窗口規則，不推定為可用。',
+    capacity_window_backend_unavailable: '已登錄的窗口檢查目前不可用，不能略過限制。',
+    capacity_window_state_unavailable: '保存的窗口資料無法確認，停止適用的新派送。',
+    capacity_window_observation_unavailable: '原回應的窗口證據保存未確認，保留原收據與保守占用。',
+    capacity_window_source_contradictory: '保存來源的窗口時間互相矛盾，不清除原暫停。',
+    capacity_window_clock_backwards: '時鐘倒退，不能用目前時間清除原窗口。',
+    capacity_window_source_not_imported: '這筆受控來源尚未明示匯入；只影響原適用範圍的候選，查詢不解除這項限制。',
+    capacity_window_source_state_unavailable: '受控來源的匯入狀態無法確認，適用候選保持未知，不自動清除來源。',
+    capacity_window_open: '這次保存的檢查未排除候選；仍須通過其他原閘門。',
+    capacity_window_not_applicable: '原政策明示未採用這項窗口檢查。',
   };
   const reason = code => reasons[code] || '來源資料無法確認，保留安全原因供查核。';
-  const stamp = value => value === null || value === undefined ? '未知' : new Date(value * 1000).toLocaleString('zh-TW', { hour12: false });
+  const stamp = value => typeof value !== 'number' || !Number.isFinite(value) || value < 0 || !Number.isFinite(new Date(value * 1000).getTime()) ? '未知' : new Date(value * 1000).toLocaleString('zh-TW', { hour12: false });
   const period = value => ({ daily: '每日', weekly: '每週', monthly: '每月' }[value] || '未知');
   const shown = value => value === null || value === undefined ? '未知' : String(value);
+
+  function windowCard(row, historical = false) {
+    if (!row || typeof row !== 'object') return '<p class="capacity-warning">一筆原窗口資料無法確認，不據此解除適用限制。</p>';
+    const state = row.status === 'wait' ? '原窗口要求等待' : '未知，停止適用派送';
+    const source = row.source_kind === 'original_response' ? '已保存原回應' : row.source_kind === 'controlled_import' ? '已明示匯入的受控保存來源' : '來源尚未確認';
+    return `<details class="capacity-window" data-capacity-window="${h(row.id)}" data-capacity-detail="${h((historical ? 'window-history:' : 'window:') + row.id)}"><summary><span><strong>${h(row.group || '群組未知')}</strong><small>${h(scopes[row.scope?.kind] || '範圍未知')} · ${h(row.scope?.ref || '未知')}</small></span><span class="badge amber">${h(state)}</span></summary><div class="capacity-window-body"><dl><div><dt>原觀測時間</dt><dd data-window-time="observed">${h(stamp(row.observed_at))}</dd></div><div><dt>原限制最早可再評估時間</dt><dd data-window-time="not-before">${h(stamp(row.not_before))}</dd></div>${Object.hasOwn(row, 'reported_not_before') ? `<div><dt>來源原報告的窗口時間</dt><dd>${h(stamp(row.reported_not_before))}<br><small>原報告值不是目前放行時間；來源矛盾時仍保留未知限制。</small></dd></div>` : ''}<div><dt>可信來源 / 時間欄位</dt><dd>${h(source)} · <code>${h(row.header || '未知')}</code>${row.source_kind === 'controlled_import' ? `<br>來源版本 <code>${h(row.source_version || '未知')}</code><br>原證據 <code>${h(row.evidence_ref || '未知')}</code>` : ''}</dd></div><div><dt>限制維度</dt><dd>${h(row.constraint === 'requests' ? '請求數' : row.constraint === 'tokens' ? 'token 數' : '未知')}</dd></div><div><dt>原窗口 / 容量政策版本</dt><dd><code>${h(row.version || '未知')}</code><br><code>${h(row.policy_version || '未知')}</code></dd></div><div><dt>原限額設定版本</dt><dd><code>${h(row.configuration_version || '未知')}</code></dd></div></dl><p class="capacity-reason">${h(reason(row.reason_code))}<small class="mono">${h(row.reason_code || 'capacity_window_unknown')}</small></p><p class="metadata">${historical ? '此處保留原事件，包含已經過的窗口；目前狀態不回填或改寫這筆紀錄。' : '時間經過只解除這項容量時間限制，不自動恢復健康熔斷、補造資格或保證下次可派送。'} 未知時間不等於立即可用，窗口與 API 費用分別保存。</p></div></details>`;
+  }
+
+  function windowsPanel() {
+    const dispatch = data?.dispatch, windows = dispatch?.windows;
+    if (!dispatch || !windows) return '';
+    if (windows.schema_version !== 'capacity-windows-v1') return '<section class="panel capacity-windows" id="capacity-windows"><h2>限流窗口</h2><p class="metadata">尚無可確認的窗口資料；不據此推定限制已解除，派送仍依伺服器原閘門。</p></section>';
+    const groups = Array.isArray(windows.groups) ? windows.groups : [], events = Array.isArray(windows.events) ? windows.events : [];
+    const pendingKnown = Array.isArray(windows.pending_sources);
+    const hasPending = pendingKnown && windows.pending_sources.length > 0 || Number.isSafeInteger(windows.pending_source_count) && windows.pending_source_count > 0;
+    const groupCount = Number.isSafeInteger(windows.active_group_count) && windows.active_group_count >= 0 ? windows.active_group_count : null;
+    const groupCoverage = windows.active_group_history_complete === false || groupCount !== null && groupCount > groups.length ? '本頁不是完整清單，還有生效群組未列出；不能由本頁推定其他群組可派送。' : windows.active_group_history_complete === true ? '本頁涵蓋這次快照列出的生效群組；新派送仍需伺服器核對。' : '來源未提供清單完整性，不依本頁推定其他群組可派送。';
+    const policy = (Array.isArray(dispatch.registered_policies) ? dispatch.registered_policies : []).find(row => row.version === dispatch.active_version);
+    const adoption = !dispatch.active_version ? '新任務未啟用容量政策' : !policy || !Object.hasOwn(policy, 'windows_version') ? '目前政策的窗口採用狀態尚未提供' : policy.windows_version === windows.version ? '新任務已採用登錄窗口版本' : policy.windows_version ? '目前政策與窗口後端版本不同，不能推定已採用' : '目前政策未採用窗口檢查';
+    return `<section class="panel capacity-windows" id="capacity-windows"><div class="capacity-dispatch-heading"><h2>限流窗口與原始回應</h2><span class="badge ${groups.length || hasPending || !pendingKnown ? 'amber' : 'blue'}">${hasPending ? '有待匯入或未知來源' : !pendingKnown ? '受控來源狀態尚未提供' : groups.length ? '本頁列有適用限制' : '本頁沒有列出的生效窗口'}</span></div><p>${h(adoption)}。後端版本 <code>${h(windows.version || '未知')}</code>；修訂 ${h(shown(windows.revision))}。</p><p class="metadata">只讀原始回應或受控保存來源，不重試、不探測、不自動更新來源。沒有列出的窗口不代表健康、資格或額度充足。</p><p class="metadata" data-window-coverage>生效群組總數：${h(shown(groupCount))}；本頁 ${groups.length} 筆。${h(groupCoverage)}</p>${pendingSources(windows)}<div class="capacity-window-grid">${groups.length ? groups.map(row => windowCard(row)).join('') : '<p class="metadata">本頁沒有列出生效群組；新派送仍須由伺服器核對全部適用限制，不能由此推定可用。</p>'}</div><details id="capacity-window-history" data-capacity-detail="window-history"><summary>查看原始限流窗口歷史</summary><p class="metadata">${Number.isSafeInteger(windows.event_count) ? `共 ${h(windows.event_count)} 筆；` : '保存總數未知；'}本頁 ${events.length} 筆${windows.event_history_complete === false ? '，較早事件未完整列出' : ''}。原來源時間與版本固定保存。</p><div class="capacity-window-grid">${events.length ? events.map(row => windowCard(row, true)).join('') : '<p class="metadata">尚無可確認的原窗口事件。</p>'}</div></details></section>`;
+  }
+
+  function pendingSources(windows) {
+    const sources = Array.isArray(windows.pending_sources) ? windows.pending_sources : null;
+    const count = Number.isSafeInteger(windows.pending_source_count) ? windows.pending_source_count : null;
+    return `<details id="capacity-pending-sources" data-capacity-detail="pending-window-sources"><summary>查看受控來源的待匯入狀態</summary><p class="metadata">待匯入或尚無法確認的來源共 ${h(shown(count))} 筆；本頁 ${sources?.length ?? '未知'} 筆。只有明示更新來源才匯入原保存資料；GET／輪詢不匯入、不建立新的來源時間。這些限制只適用原登錄範圍，不推定其他候選可派送。</p>${sources === null ? '<p class="capacity-warning">未提供受控來源匯入狀態，不由缺值推定已匯入。</p>' : sources.length ? sources.map(source => `<article class="capacity-window capacity-pending-source" data-capacity-pending-source="${h(source.id)}"><h3>${source.status === 'pending' ? '尚未明示匯入' : '匯入狀態無法確認'}</h3><p class="capacity-reason">${h(reason(source.reason_code))}<small class="mono">${h(source.reason_code)}</small></p><dl><div><dt>原窗口 / 限額設定版本</dt><dd><code>${h(source.window_version || '未知')}</code><br><code>${h(source.configuration_version || '未知')}</code></dd></div><div><dt>受控來源安全識別</dt><dd><code>${h(source.source_id || '未知')}</code></dd></div><div><dt>原適用範圍安全識別</dt><dd><code>${h(source.physical || '未知')}</code></dd></div><div><dt>來源時間</dt><dd>原時間尚未匯入；不以本次查詢時間替代。</dd></div></dl></article>`).join('') : '<p class="metadata">這次快照沒有列出的待匯入來源；新的派送仍依伺服器原閘門判定。</p>'}</details>`;
+  }
+
+  function windowDecisions() {
+    if (data?.dispatch?.windows?.schema_version !== 'capacity-windows-v1') return '';
+    const tasks = Array.isArray(historyTasks) ? historyTasks.slice(0, 30) : [];
+    const transitions = { initial: '首次實際派送', availability_fallback: '可用性備援：原已送出請求受限或不可用，沿原規則使用同池候選。',
+      quality_recovery: '公開驗收未通過或未知後的品質補救；是否完成仍依原公開驗收。' };
+    const triggers = { initial: '首次候選檢查', availability_failure: '已送出後的供應商可用性故障',
+      public_validation_failed: '公開驗收未通過', public_validation_unavailable: '公開驗收結果未知' };
+    const states = { dispatched: '已實際派送', excluded_before_dispatch: '派送前排除 · 未增加模型嘗試',
+      considered_not_selected: '已檢查，未選用', unknown: '原候選證據無法確認' };
+    const taskStates = { passed: '公開驗收通過', failed: '公開驗收未通過', unverifiable: '公開驗收未知',
+      bound: '已接受', ready: '等待派送', running: '執行中', queued: '排隊中', waiting: '等待原准入條件',
+      accounting_interrupted: '費用待核，停止派送', engineering_interrupted: '執行中斷，待查核',
+      capacity_denied: '容量派送已拒絕', policy_denied: '原執行政策拒絕', expired: '任務已到期',
+      cancelled: '任務已取消', cancel_requested: '已請求取消，結果仍待確認' };
+    const note = historyState === 'stale' ? '<p class="capacity-warning" role="status">任務理由本次讀取失敗，保留上次保存的理由；沒有重新判定候選。</p>' : historyState === 'unavailable' ? '<p class="capacity-warning" role="status">任務理由目前無法讀取，不能推定候選沒有被排除。</p>' : '';
+    return `<section class="panel capacity-windows" id="capacity-window-decisions"><h2>原任務的候選排除與備援理由</h2><p class="metadata">只讀任務當時保存的選擇。派送前排除與已送出後的 429／5xx 分開；可用性備援不等於公開驗收通過或內容品質改善。本頁列出最多 30 筆任務。</p>${note}${tasks.length ? tasks.map(task => {
+      const decision = task.operator_observation?.task_decision;
+      const attempts = Array.isArray(decision?.attempts) ? decision.attempts : [];
+      const stages = Array.isArray(decision?.stages) ? decision.stages : [];
+      return `<details class="capacity-window-task" data-window-task="${h(task.client + ':' + task.run)}" data-window-task-status="${h(task.status)}" data-capacity-detail="${h('window-task:' + task.client + ':' + task.run)}"><summary><span><strong>${h(task.run)}</strong><small>${h(task.client)} · ${h(taskStates[task.status] || '原任務狀態未知')}</small></span><span class="badge">${decision?.status === 'available' ? '原決策已保存' : decision?.status === 'partial' ? '原證據部分可讀' : '原決策尚無法確認'}</span></summary><div class="capacity-window-body">${attempts.length ? `<ol class="capacity-window-attempts">${attempts.map(attempt => `<li data-window-transition="${h(attempt.transition)}"><strong>${h(transitions[attempt.transition] || '原派送轉換原因未知')}</strong><br><code>${h(attempt.configuration?.model_version || '精確模型未知')}</code> · ${h(attempt.configuration?.provider_name || '供應商未知')} · ${attempt.passed === true ? '公開驗收通過' : attempt.passed === false ? '公開驗收未通過' : '公開驗收未知'}</li>`).join('')}</ol>` : '<p class="metadata">尚無可核對的實際派送轉換；不能由缺值推定零次或已成功備援。</p>'}${stages.map(stage => stage.state === 'not_entered' && stage.reason === 'public_validation_passed' ? '<section class="capacity-window-stage"><h3>公開驗收已通過，未進入後續選池</h3><p class="metadata">原任務不需要這段後續候選檢查，沒有新的模型嘗試或窗口判定。</p></section>' : `<section class="capacity-window-stage"><h3>${h(triggers[stage.trigger] || '原檢查觸發原因未知')}</h3>${stage.state !== 'recorded' ? '<p class="capacity-warning">這段原決策尚無法完整核對。</p>' : ''}${Array.isArray(stage.candidates) && stage.candidates.length ? `<div class="table-wrap"><table><thead><tr><th>原候選 / 精確設定</th><th>原選擇狀態</th><th>保存的窗口檢查與排除原因</th></tr></thead><tbody>${stage.candidates.map(candidate => {
+        const window = candidate.capacity_window;
+        return `<tr data-window-candidate="${h(candidate.config_id)}"><td><code>${h(candidate.configuration?.model_version || '未知')}</code><br>${h(candidate.configuration?.provider_name || '未知')}<br><small>${h(candidate.config_id || '設定識別未知')}</small></td><td>${h(states[candidate.state] || '原狀態未知')}</td><td>${window ? `<span data-window-candidate-status="${h(window.status)}">${h(window.status === 'wait' ? '原窗口要求等待' : window.status === 'open' ? '當時窗口未排除' : window.status === 'not_applicable' ? '當時未採用窗口檢查' : '原窗口未知，不能放行')}</span><br>原最早可再評估：${h(stamp(window.not_before))}<br><code>${h(window.reason_code || 'capacity_window_unknown')}</code>${window.evidence_refs?.length ? `<br><small>原證據：${window.evidence_refs.map(value => h(value)).join('、')}</small>` : ''}` : '<span class="metadata">未提供可核對的原窗口檢查；不以目前窗口回填。</span>'}${(candidate.reasons || []).map(code => `<p class="capacity-reason">${h(reasons[code] || '原候選依當時規則排除；安全代碼保留供查核。')}<small class="mono">${h(code)}</small></p>`).join('')}</td></tr>`;
+      }).join('')}</tbody></table></div>` : '<p class="metadata">原逐候選證據尚未提供。</p>'}</section>`).join('')}</div></details>`;
+    }).join('') : '<p class="metadata">尚無可讀的原任務候選紀錄。</p>'}</section>`;
+  }
 
   function dispatchUsage(dispatch) {
     const groups = Array.isArray(dispatch.groups) ? dispatch.groups : [];
@@ -131,7 +202,7 @@ window.CloudyFanCapacity = (() => {
     const focusedDetail = active?.tagName === 'SUMMARY' ? detailKey(active.closest('details')) : null;
     const focusId = root.contains(active) ? active.id : null;
     const issue = readState === 'stale' ? '<p class="capacity-warning" role="status">本次讀取失敗，保留上次畫面與原始時間。</p>' : readState === 'unavailable' ? '<p class="capacity-warning" role="status">容量資料目前無法讀取；未派送或更新來源。</p>' : '';
-    root.innerHTML = `<div id="capacity-page"><div class="page-heading"><div><div class="eyebrow">SUPPLIER CAPACITY</div><h1>供應商限額來源</h1><p>分開查看供應商限制、本機上限及未知資料。來源更新只在操作員明示確認後執行。</p></div><button class="button" id="capacity-refresh-sources" ${!data?.configured || mutationBusy ? 'disabled' : ''}>明示更新限額來源</button></div>${context.demo ? '<p class="capacity-warning">合成驗收環境 · 未建立真實供應商容量、吞吐或 SLO 資格。</p>' : ''}${issue}${dispatchPanel()}${!data ? '<div class="panel empty">正在讀取已保存的容量資料…</div>' : !data.configured ? '<div class="panel empty">尚未配置供應商容量來源，沒有自動查詢或可用容量承諾。</div>' : `<p class="metadata">設定版本：<span class="mono">${h(data.configuration_version)}</span></p><section class="panel capacity-bindings" id="capacity-bindings"><h2>伺服器綁定與共用群組</h2><p class="metadata">不同 credential reference 可共用同一帳號限額。頁面不能新增 key、解除群組或擴大上限。</p><div class="table-wrap"><table><thead><tr><th>綁定</th><th>供應商 / 帳號</th><th>Credential reference / 端點</th><th>所有適用群組</th></tr></thead><tbody>${data.bindings.map(binding => `<tr><td class="mono">${h(binding.id)}</td><td>${h(binding.provider)}<br>${h(binding.account_ref)}</td><td>${h(binding.credential_ref)}<br>${h(binding.endpoint_ref)}</td><td>${binding.groups.map(value => `<span class="badge">${h(value)}</span>`).join(' ')}</td></tr>`).join('')}</tbody></table></div></section><div class="capacity-groups">${data.groups.map(group).join('')}</div>`}</div>`;
+    root.innerHTML = `<div id="capacity-page"><div class="page-heading"><div><div class="eyebrow">SUPPLIER CAPACITY</div><h1>供應商限額來源</h1><p>分開查看供應商限制、本機上限及未知資料。來源更新只在操作員明示確認後執行。</p></div><button class="button" id="capacity-refresh-sources" ${!data?.configured || mutationBusy ? 'disabled' : ''}>明示更新限額來源</button></div>${context.demo ? '<p class="capacity-warning">合成驗收環境 · 未建立真實供應商容量、吞吐或 SLO 資格。</p>' : ''}${issue}${dispatchPanel()}${windowsPanel()}${windowDecisions()}${!data ? '<div class="panel empty">正在讀取已保存的容量資料…</div>' : !data.configured ? '<div class="panel empty">尚未配置供應商容量來源，沒有自動查詢或可用容量承諾。</div>' : `<p class="metadata">設定版本：<span class="mono">${h(data.configuration_version)}</span></p><section class="panel capacity-bindings" id="capacity-bindings"><h2>伺服器綁定與共用群組</h2><p class="metadata">不同 credential reference 可共用同一帳號限額。頁面不能新增 key、解除群組或擴大上限。</p><div class="table-wrap"><table><thead><tr><th>綁定</th><th>供應商 / 帳號</th><th>Credential reference / 端點</th><th>所有適用群組</th></tr></thead><tbody>${data.bindings.map(binding => `<tr><td class="mono">${h(binding.id)}</td><td>${h(binding.provider)}<br>${h(binding.account_ref)}</td><td>${h(binding.credential_ref)}<br>${h(binding.endpoint_ref)}</td><td>${binding.groups.map(value => `<span class="badge">${h(value)}</span>`).join(' ')}</td></tr>`).join('')}</tbody></table></div></section><div class="capacity-groups">${data.groups.map(group).join('')}</div>`}</div>`;
     root.querySelectorAll('details').forEach(node => { node.open = opened.has(detailKey(node)); });
     const target = focusedDetail ? Array.from(root.querySelectorAll('details')).find(node => detailKey(node) === focusedDetail)?.querySelector('summary') : focusId ? root.querySelector('#' + CSS.escape(focusId)) : null;
     if (focusedDetail || focusId) {
@@ -144,8 +215,8 @@ window.CloudyFanCapacity = (() => {
     const activation = root.querySelector('#capacity-activate-policy');
     if (activation) activation.onclick = activatePolicy;
     root.querySelector('#capacity-refresh-sources').onclick = () => context.confirmAction('明示更新供應商限額來源',
-      '<p>使用伺服器配置的來源，在固定時間與請求數上限內查詢 key 限額；不讀取帳號 credits、不發送模型請求，也不修改客戶帳務或派送政策。失敗的來源保留原資料與原時間。</p>',
-      async () => { await context.api('/monitor/capacity/refresh', {}); await refresh(); }, '限額來源查核已完成；詳情與未知事項見各群組。');
+      `<p>使用伺服器配置的來源，在固定時間與請求數上限內查詢 key 限額。${data?.dispatch?.windows?.schema_version === 'capacity-windows-v1' ? '也會匯入伺服器登錄的受控保存來源，保留原觀測時間、版本與證據；一般查詢不匯入。' : ''}不讀取帳號 credits、不發送模型請求，也不修改客戶帳務或派送政策。失敗的來源保留原資料與原時間。</p>`,
+      async () => { await context.api('/monitor/capacity/refresh', {}); await refresh(true); }, '限額來源查核已完成；詳情與未知事項見各群組。');
   }
 
   function refresh(force = false) {
@@ -155,8 +226,19 @@ window.CloudyFanCapacity = (() => {
     const pending = (async () => {
       try {
         const next = await context.api('/monitor/capacity');
+        let tasks = null, taskRead = 'idle';
+        if (next?.dispatch?.windows?.schema_version === 'capacity-windows-v1') {
+          try {
+            const snapshot = await context.api('/monitor/snapshot');
+            if (!Array.isArray(snapshot.tasks)) throw Error('Saved task projection unavailable');
+            tasks = snapshot.tasks; taskRead = 'current';
+          } catch { taskRead = 'failed'; }
+        }
         if (generation !== currentGeneration || currentRequest !== requestVersion || !root?.querySelector('#capacity-page')) return;
-        data = next; readState = 'current'; render();
+        data = next; readState = 'current';
+        if (taskRead === 'failed') historyState = historyTasks ? 'stale' : 'unavailable';
+        else { historyTasks = tasks; historyState = taskRead; }
+        render();
       } catch {
         if (generation !== currentGeneration || currentRequest !== requestVersion || !root?.querySelector('#capacity-page')) return;
         readState = data ? 'stale' : 'unavailable'; render();
@@ -169,11 +251,11 @@ window.CloudyFanCapacity = (() => {
   function mount(node, nextContext) {
     context = nextContext;
     if (root === node && root.querySelector('#capacity-page')) return;
-    generation += 1; root = node; data = null; flight = null; readState = 'idle'; policySelection = null; mutationBusy = false; activationError = '';
+    generation += 1; root = node; data = null; flight = null; readState = 'idle'; policySelection = null; mutationBusy = false; activationError = ''; historyTasks = null; historyState = 'idle';
     root.innerHTML = '<div id="capacity-page"></div>';
     render(); refresh();
   }
-  function resetView() { generation += 1; requestVersion += 1; root = null; context = null; data = null; flight = null; readState = 'idle'; policySelection = null; mutationBusy = false; activationError = ''; }
+  function resetView() { generation += 1; requestVersion += 1; root = null; context = null; data = null; flight = null; readState = 'idle'; policySelection = null; mutationBusy = false; activationError = ''; historyTasks = null; historyState = 'idle'; }
   setInterval(() => refresh(), 5000);
   return { mount, refresh, resetView };
 })();

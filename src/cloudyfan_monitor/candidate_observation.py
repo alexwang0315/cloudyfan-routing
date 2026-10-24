@@ -1,0 +1,239 @@
+"""Allowlisted operator evidence; registration never grants dispatch authority.
+
+Only registered server-side Core descriptors may supply candidate qualification
+references. Public catalog flags and browser query fields cannot create evidence.
+This projection does not run, refresh, reconcile or mutate any Core state.
+"""
+from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation
+import re
+
+from cloudyfan_jev.scores.categories import resolve_category
+from cloudyfan_jev.scores.configuration import configuration_digest
+
+from .store import MODES, TIERS, MonitorError
+
+SCHEMA = "mrc-observation-v1"
+PROFILE_FIELDS = ("model", "model_version", "effort", "provider", "quantization", "backend")
+REQUIRED_IDENTITY = ("model", "model_version", "effort", "provider")
+REASONS = {
+    "candidate_qualification_not_provided", "candidate_identity_incomplete", "candidate_identity_mismatch",
+    "contract_not_registered", "candidate_position_missing", "candidate_evidence_recorded",
+    "formal_qualification_not_evaluated", "candidate_observation_not_supported", "qualification_evidence_expired",
+    "qualification_category_mismatch",
+    "quality_evidence_insufficient",
+    "qualification_evidence_from_future",
+    "duplicate_model_identity", "qualified_beyond_target", "missing_or_invalid_dimensions",
+    "capability_context_or_provider_mismatch", "candidate_evidence_unavailable",
+}
+
+
+def _identifier(value):
+    if (isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:/@+ -]{0,199}", value)
+            and not value.lower().startswith(("users/", "private/", "tmp/", "bearer ", "https:", "http:"))):
+        return value
+    return None
+
+
+def _hash(value):
+    return value if isinstance(value, str) and re.fullmatch(r"[a-f0-9]{64}", value) else None
+
+
+def _time(value):
+    try:
+        stamp = (datetime.fromtimestamp(value, timezone.utc) if type(value) in (int, float)
+                 else datetime.fromisoformat(value.replace("Z", "+00:00")))
+        if stamp.tzinfo is None:
+            return None
+        return stamp.astimezone(timezone.utc).isoformat()
+    except (TypeError, ValueError, AttributeError, OverflowError):
+        return None
+
+
+def _profile(value):
+    value = value if isinstance(value, dict) else {}
+    return {key: _identifier(value.get(key)) for key in PROFILE_FIELDS}
+
+
+def _scope(view, profile=None, status=None):
+    source = view.get("source_kind", "")
+    model = (profile or {}).get("model") or ""
+    if (isinstance(source, str) and any(tag in source for tag in ("synthetic", "mock", "fixture", "demo"))) or model.startswith("example/"):
+        return "synthetic"
+    return "research" if status == "research_admitted_only" else "unverified"
+
+
+def _code(value):
+    if value == "Task quality sufficiency unproven":
+        return "quality_evidence_insufficient"
+    return value if isinstance(value, str) and value in REASONS else "candidate_evidence_unavailable"
+
+
+def _amount(value):
+    if not isinstance(value, str) or len(value) > 80:
+        return None
+    try:
+        parsed = Decimal(value)
+        return value if parsed.is_finite() and parsed >= 0 else None
+    except InvalidOperation:
+        return None
+
+
+def _interval(value):
+    if not isinstance(value, dict):
+        return None
+    lower, upper = _amount(value.get("lower")), _amount(value.get("upper"))
+    return {"lower": lower, "upper": upper} if lower is not None and upper is not None else None
+
+
+def _speed(value):
+    if not isinstance(value, dict):
+        return None
+    return {"metric": value.get("metric") if value.get("metric") in ("flow_ms", "whole_task_flow_ms") else None,
+            "statistic": value.get("statistic") if value.get("statistic") in ("mean", "p50", "p95", "p99") else None,
+            "upper": _amount(value.get("upper"))}
+
+
+class CandidateObserver:
+    """Read current candidate metadata against the host's exact registered contract."""
+    def __init__(self, store, service, registry):
+        self.store, self.service, self.registry = store, service, dict(registry)
+
+    def _versions(self, control):
+        with self.store.db() as db:
+            rows = [dict(row) for row in db.execute("SELECT id,created FROM pools ORDER BY created DESC,id")]
+        return [{"pool_id": row["id"], "saved_at": _time(row["created"]),
+                 "active": row["id"] == control["routing_pool"],
+                 "catalog": row["id"] == control["catalog_pool"]} for row in rows if _hash(row["id"])]
+
+    def _contract(self, pool, category, mode):
+        contract_id = self.registry.get((pool, category, mode))
+        contract = self.service.contracts.get(contract_id)
+        if contract is None:
+            return None, None
+        # Validate the real registered contract; never copy paths/system/payloads
+        # from the returned descriptor into a public response.
+        descriptor = contract.descriptor()
+        if descriptor.get("mode") != mode:
+            raise ValueError("Registered mode differs")
+        return _identifier(contract_id), descriptor
+
+    def _records(self, descriptor):
+        if not descriptor:
+            return {}, []
+        backup = descriptor.get("backup_plan")
+        if isinstance(backup, dict):
+            return {tier: backup.get("pools", {}).get(tier, []) for tier in TIERS}, backup.get("excluded", [])
+        plan = descriptor.get("selection_policy")
+        if isinstance(plan, dict):
+            records = {}
+            for tier, profile in plan.get("profiles", {}).items():
+                selection = profile.get("capability_card", {}).get("score_selection", {})
+                records[tier] = [{"entry": {"profile": profile, "config_id": selection.get("config_id")},
+                                  "evidence": plan.get("records", {}).get(tier, {})}]
+            return records, plan.get("excluded", [])
+        return {}, []
+
+    def _qualification(self, profile, record, observed_at, category):
+        if record is None:
+            return {"status": "not_provided", "formal_status": "unknown", "evidence": None,
+                    "reason_codes": ["candidate_qualification_not_provided", "formal_qualification_not_evaluated"]}
+        evidence = record.get("evidence", {})
+        provenance = evidence.get("provenance", {})
+        if provenance.get("category_id") != category:
+            return {"status": "unverifiable", "formal_status": "unknown", "evidence": None,
+                    "reason_codes": ["qualification_category_mismatch", "formal_qualification_not_evaluated"]}
+        exact = configuration_digest({"profile": profile})
+        if evidence.get("configuration_sha256") != exact:
+            return {"status": "unverifiable", "formal_status": "unknown", "evidence": None,
+                    "reason_codes": ["candidate_identity_mismatch", "formal_qualification_not_evaluated"]}
+        valid_until = _time(provenance.get("valid_until"))
+        retrieved_at = _time(provenance.get("retrieved_at"))
+        if retrieved_at is not None and retrieved_at > observed_at:
+            return {"status": "unverifiable", "formal_status": "unknown", "evidence": None,
+                    "reason_codes": ["qualification_evidence_from_future", "formal_qualification_not_evaluated"]}
+        status = "expired" if valid_until is not None and valid_until <= observed_at else "evidence_recorded"
+        return {"status": status, "formal_status": "unknown",
+                "evidence": {"configuration_sha256": exact,
+                    "raw_sha256": _hash(provenance.get("raw_sha256")),
+                    "workload_id": _identifier(provenance.get("workload_id")),
+                    "category_id": _identifier(provenance.get("category_id")),
+                    "observed_at": retrieved_at, "valid_until": valid_until,
+                    "quality_sufficient": evidence.get("quality_sufficient") is True,
+                    "complete_cost_usd": _interval(evidence.get("complete_cost_usd")),
+                    "speed": _speed(evidence.get("speed")),
+                    "basis": "registered_core_qcs_evidence"},
+                "reason_codes": ["qualification_evidence_expired" if status == "expired" else
+                                 "candidate_evidence_recorded", "formal_qualification_not_evaluated"]}
+
+    def _candidate(self, candidate, position, tier, view, descriptor, records, observed_at, registered, category):
+        raw_profile = candidate.get("profile") if isinstance(candidate, dict) else None
+        profile = _profile(raw_profile)
+        listed = profile["model"] is not None
+        missing = [key for key in REQUIRED_IDENTITY if profile[key] is None]
+        raw_profile = raw_profile if isinstance(raw_profile, dict) else {}
+        matched = None
+        for record in records.get(tier, []):
+            target = record.get("entry", {}).get("profile", {})
+            if listed and configuration_digest({"profile": raw_profile}) == configuration_digest({"profile": target}):
+                matched = record
+                break
+        runtime_profile = (descriptor or {}).get("profiles", {}).get(tier)
+        runtime_match = matched is not None or (listed and isinstance(runtime_profile, dict)
+            and configuration_digest({"profile": raw_profile}) == configuration_digest({"profile": runtime_profile}))
+        qualification = self._qualification(raw_profile, matched, observed_at, category) if listed else {
+            "status": "not_applicable", "formal_status": "not_applicable", "evidence": None,
+            "reason_codes": ["candidate_position_missing"]}
+        reasons = list(qualification["reason_codes"])
+        if listed and missing:
+            reasons.append("candidate_identity_incomplete")
+        if not registered:
+            reasons.append("contract_not_registered")
+        elif listed and not runtime_match:
+            reasons.append("candidate_identity_mismatch")
+        config_id = candidate.get("config_id") if isinstance(candidate, dict) else None
+        if matched is not None:
+            config_id = matched.get("entry", {}).get("config_id")
+        return {"position": position, "role": "primary" if position == 0 else "backup",
+                "listing_status": "listed" if listed else "missing", "scope": _scope(view, profile, candidate.get("status")),
+                "configuration": {"config_id": _identifier(config_id),
+                    "configuration_sha256": configuration_digest({"profile": raw_profile}) if listed and not missing else None,
+                    **profile},
+                "identity": {"status": "complete" if listed and not missing else "incomplete" if listed else "not_applicable",
+                             "missing_fields": missing if listed else []},
+                "registration": {"status": "registered" if registered else "not_registered",
+                                 "candidate_matches_contract": runtime_match if registered and listed else None},
+                "qualification": qualification, "health": {"status": "not_provided"},
+                "quota": {"status": "unknown"}, "dispatch_authorization": {"status": "not_checked"},
+                "reason_codes": reasons}
+
+    def project(self, view, *, category=None, mode=None):
+        control = self.store.control()
+        try:
+            category = resolve_category(category or "artificial-analysis:coding_index")
+        except ValueError:
+            raise MonitorError("unknown_observation_category") from None
+        mode = mode or control["mode"]
+        if mode not in MODES:
+            raise MonitorError("unsupported_mode")
+        if category not in view["categories"]:
+            raise MonitorError("unknown_observation_category")
+        observed_at = _time(self.store.clock())
+        contract_id, descriptor = self._contract(view["id"], category, mode)
+        records, excluded = self._records(descriptor)
+        return {"schema_version": SCHEMA, "candidates": {
+            "status": "available", "observed_at": observed_at,
+            "context": {"pool_id": view["id"], "active_pool_id": control["routing_pool"],
+                "catalog_pool_id": control["catalog_pool"], "active": view["id"] == control["routing_pool"],
+                "category": category, "mode": mode, "contract_id": contract_id,
+                "contract_registered": descriptor is not None,
+                "contract_version": _identifier((descriptor or {}).get("version"))},
+            "versions": self._versions(control),
+            "tiers": {tier: [self._candidate(candidate, index, tier, view, descriptor, records,
+                                             observed_at, descriptor is not None, category)
+                             for index, candidate in enumerate(view["categories"][category]["pools"][tier])]
+                      for tier in TIERS},
+            "excluded": [{"tier": row.get("tier") if row.get("tier") in TIERS else None,
+                "config_id": _identifier(row.get("config_id")), "reason_codes": [_code(row.get("reason"))]}
+                for row in excluded if isinstance(row, dict)],
+            "notice": "registration_not_execution_authorization"}}

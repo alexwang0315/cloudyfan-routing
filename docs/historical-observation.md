@@ -23,6 +23,9 @@ hash, original policy and observation membership must match. This never asks for
 the latest health observation, assesses present health, records an event or
 recovers a circuit. A damaged supplemental stage is unknown; previously verified
 stages and the existing call trace remain visible.
+If one named historical health row cannot be verified, independent rows stay
+visible with their saved health evidence while selection/economics are unknown.
+That does not reconstruct the missing choice or imply dispatch eligibility.
 
 Economic amounts come only from the exact frozen calibration and saved decision.
 Historical arithmetic is checked for consistency with that calibration. Only
@@ -44,3 +47,6 @@ installed Chrome and the matching `qa_history_http.py` host. Set
 directory. Model-call records, screenshots, accessibility snapshots, source
 hashes and receipts distinguish this local synthetic acceptance from deployment
 or actual supplier/quality/savings evidence.
+
+See [resilient observation](resilient-observation.md) for combined failures,
+long-task responsiveness, access boundaries and desktop polling behavior.

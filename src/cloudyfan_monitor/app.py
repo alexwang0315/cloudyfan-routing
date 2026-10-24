@@ -37,9 +37,13 @@ class App:
             raise ValueError("Controlled identity registry required")
         self.identity_store = identity_store
         self.simulation = simulation
+        from .history_observation import TaskDecisionObserver
+        for observer, kind in ((candidate_observer, CandidateObserver), (task_observer, TaskDecisionObserver)):
+            if observer is not None and (type(observer) is not kind
+                    or observer.store is not self.store or observer.service is not gateway.service
+                    or observer.registry != dict(gateway.registry)):
+                raise ValueError("Controlled observation must belong to the same host")
         self.task_observer = task_observer
-        if candidate_observer is not None and not isinstance(candidate_observer, CandidateObserver):
-            raise ValueError("Controlled candidate observer required")
         self.candidate_observer = candidate_observer or CandidateObserver(self.store, gateway.service, gateway.registry)
         self.ollama = None
         if ollama_models is not None:

@@ -49,12 +49,16 @@ async function main() {
     await page.locator('#candidate-version').waitFor();
     const evidence = page.locator('[data-candidate-evidence="open_source:0"]');
     const waitHealth = state => evidence.locator(`[data-candidate-health-status="${state}"]`).waitFor();
+    const openEvidence = async () => {
+      if (await evidence.locator('details').getAttribute('open') === null) {
+        await evidence.locator('summary').focus(); await page.keyboard.press('Enter');
+      }
+    };
     const screenshot = async (name, fullPage = false) => {
       await page.screenshot({ path: path.join(output, name), fullPage }); report.screenshots.push(name);
     };
     await waitHealth('healthy');
-    await evidence.locator('summary').focus();
-    await page.keyboard.press('Enter');
+    await openEvidence();
     assert.match(await evidence.innerText(), /健康條件通過/);
     assert.match(await evidence.innerText(), /正式資格未知/);
     assert.match(await evidence.innerText(), /配額未知/);
@@ -70,7 +74,7 @@ async function main() {
     await waitHealth('stale');
     assert.equal(await page.locator('#candidate-version').inputValue(), ready.pools[0]);
     assert.match(await page.locator('#candidate-context').innerText(), new RegExp(ready.pools[0]));
-    await evidence.locator('summary').focus(); await page.keyboard.press('Enter');
+    await openEvidence();
     assert.match(await evidence.innerText(), /observation_stale/);
     await evidence.locator('[data-candidate-health-status]').scrollIntoViewIfNeeded();
     await screenshot('02-stale-viewport.png');
@@ -78,7 +82,7 @@ async function main() {
 
     await command('publish_healthy'); await waitHealth('healthy');
     await command('availability_failures'); await waitHealth('cooldown');
-    await evidence.locator('summary').focus(); await page.keyboard.press('Enter');
+    await openEvidence();
     assert.match(await evidence.innerText(), /cooldown_active/);
     await evidence.locator('[data-candidate-health-status]').scrollIntoViewIfNeeded();
     await screenshot('03-cooldown-viewport.png');
@@ -91,7 +95,7 @@ async function main() {
     const unchanged = await command('inspect');
     assert.equal(unchanged.health_store_sha256, pending.health_store_sha256);
     report.observations.push({ stage: 'recovery_required', before: pending.health_store_sha256, after: unchanged.health_store_sha256 });
-    await evidence.locator('summary').focus(); await page.keyboard.press('Enter');
+    await openEvidence();
     assert.match(await evidence.innerText(), /recovery_required/);
     await evidence.locator('[data-candidate-health-status]').scrollIntoViewIfNeeded();
     await screenshot('04-recovery-required-viewport.png');
@@ -99,7 +103,7 @@ async function main() {
     report.checks.push({ behavior: 'cooldown_and_recovery_required_stay_open_until_explicit_fixture_recovery', passed: true });
 
     await command('degrade_endpoint'); await waitHealth('degraded');
-    await evidence.locator('summary').focus(); await page.keyboard.press('Enter');
+    await openEvidence();
     const visible = await evidence.innerText();
     for (const code of ['status_degraded', 'uptime_last_5m_below_minimum', 'latency_outside_limit', 'throughput_outside_limit']) assert.ok(visible.includes(code));
     await evidence.locator('.candidate-health-reasons').scrollIntoViewIfNeeded();

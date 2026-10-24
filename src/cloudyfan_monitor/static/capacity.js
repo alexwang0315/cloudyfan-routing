@@ -54,7 +54,7 @@ window.CloudyFanCapacity = (() => {
     capacity_route_not_registered: '這次請求不在原政策的已登錄派送範圍，停止派送。',
     capacity_frozen_adoption_changed: '保存的任務容量版本或設定無法核對，停止派送。',
     capacity_transport_protocol_unsupported: '這個 transport 尚無適用容量檢查協定，不能依新政策派送。',
-    capacity_window_wait: '適用共用群組仍在原限流窗口內；時間解除後仍須通過原資格、健康與費用閘門。',
+    capacity_window_wait: '原記錄顯示適用共用群組處於限流窗口；新派送仍須另經原資格、健康與費用閘門。',
     capacity_window_unknown: '窗口狀態無法確認，保留限制並停止適用的新派送。',
     capacity_window_header_invalid: '原回應的限流時間無法可信換算，不能當作零或自動清除暫停。',
     capacity_window_header_missing: '原限流回應缺少政策要求的時間欄位，不能推定窗口為零。',
@@ -85,7 +85,7 @@ window.CloudyFanCapacity = (() => {
   function windowsPanel() {
     const dispatch = data?.dispatch, windows = dispatch?.windows;
     if (!dispatch || !windows) return '';
-    if (windows.schema_version !== 'capacity-windows-v1') return '<section class="panel capacity-windows" id="capacity-windows"><h2>限流窗口</h2><p class="metadata">未接入可確認的窗口資料；保留原容量政策與派送語意。</p></section>';
+    if (windows.schema_version !== 'capacity-windows-v1') return '<section class="panel capacity-windows" id="capacity-windows"><h2>限流窗口</h2><p class="metadata">尚無可確認的窗口資料；不據此推定限制已解除，派送仍依伺服器原閘門。</p></section>';
     const groups = Array.isArray(windows.groups) ? windows.groups : [], events = Array.isArray(windows.events) ? windows.events : [];
     const policy = (Array.isArray(dispatch.registered_policies) ? dispatch.registered_policies : []).find(row => row.version === dispatch.active_version);
     const adoption = !dispatch.active_version ? '新任務未啟用容量政策' : !policy || !Object.hasOwn(policy, 'windows_version') ? '目前政策的窗口採用狀態尚未提供' : policy.windows_version === windows.version ? '新任務已採用登錄窗口版本' : policy.windows_version ? '目前政策與窗口後端版本不同，不能推定已採用' : '目前政策未採用窗口檢查';

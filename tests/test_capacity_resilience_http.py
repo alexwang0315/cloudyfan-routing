@@ -44,6 +44,49 @@ def test_missing_saved_response_window_is_not_a_fresh_free_store(local_service):
     assert receipts == {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in (bundle.root / 'receipts').rglob('*.json') if str(p) in receipts}
 
 
+def test_metadata_observation_is_read_only_and_later_http_authorization_inspects_again(local_service):
+    import sqlite3
+    import pytest
+    from cloudyfan_jev.capacity_integrity import CapacityIntegrityError
+    bundle = local_service.bundle
+    bundle.upstream.fail_tiers = set()
+    controller, _ = attach_windows(bundle, local_service.clock)
+    local_service.server.set_app(bundle.app)
+    operator, client = local_service.client('operator'), local_service.client()
+    assert operator.post('/monitor/capacity/activate', json={
+        'revision': 0, 'version': 'synthetic-window-admission-v1'}).status_code == 200
+    first = client.post('/v1/tasks', json={**TASK, 'run_id': 'read-scope-original'})
+    assert first.status_code == 200 and first.json()['status'] == 'passed', first.text
+    before = operator.get('/monitor/capacity').json()['dispatch']
+    assert before['integrity']['status'] == 'verified'
+    copied_database_fault(controller.store.path, bundle.root / 'read-scope-retained-original', updates=[(
+        "UPDATE capacity_allocations SET state='sent',horizon=9999999999", ())])
+    after = operator.get('/monitor/capacity').json()['dispatch']
+    assert after['integrity']['status'] == 'unavailable'
+    assert after['groups'][0]['observation_status'] == 'unavailable'
+    original_bytes = {str(path): hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in (controller.store.path, controller.store.integrity.head)}
+    with sqlite3.connect(controller.store.path.as_uri() + '?mode=ro', uri=True) as db:
+        original_allocations = db.execute('SELECT * FROM capacity_allocations ORDER BY id').fetchall()
+    with controller.store.integrity.observation():
+        with controller.store.connection(projection=True) as db:
+            assert db.execute('PRAGMA query_only').fetchone()[0] == 1
+            with pytest.raises(sqlite3.OperationalError):
+                db.execute('UPDATE capacity_allocations SET horizon=0')
+        with pytest.raises(CapacityIntegrityError) as error:
+            with controller.store.connection(write=True):
+                raise AssertionError('Read observation authorized a metadata write')
+        assert error.value.code == 'capacity_store_lock_upgrade_denied'
+    assert all(hashlib.sha256(Path(path).read_bytes()).hexdigest() == digest
+        for path, digest in original_bytes.items())
+    refused = client.post('/v1/tasks', json={**TASK, 'run_id': 'read-scope-after-fault'})
+    assert refused.status_code in (429, 503), refused.text
+    assert len(bundle.upstream.calls) == 1
+    with sqlite3.connect(controller.store.path.as_uri() + '?mode=ro', uri=True) as db:
+        assert db.execute('SELECT * FROM capacity_allocations ORDER BY id').fetchall() == original_allocations
+    assert operator.get('/monitor/capacity').json()['dispatch']['integrity']['status'] == 'unavailable'
+
+
 def test_accepting_cancel_before_original_job_exists_is_a_durable_readable_tombstone(local_service):
     import fcntl
     import sqlite3

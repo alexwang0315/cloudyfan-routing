@@ -6,11 +6,11 @@ from cloudyfan_monitor.integration import assemble_monitor
 from capacity_sources_fixture import limit
 
 
-def attach_admission(bundle, clock, *, rpm=1, tpm=None, concurrency=1, token_adapter=None, seconds=300):
+def attach_admission(bundle, clock, *, rpm=1, tpm=None, concurrency=1, token_adapter=None, seconds=300, config=None):
     old = bundle.app
     scope = {"kind": "account", "ref": "synthetic-shared-account"}
     store = CapacityStore(bundle.root / "capacity.sqlite", clock=clock)
-    store.configure({"schema_version": 1, "version": "synthetic-admission-config-v1",
+    store.configure(config or {"schema_version": 1, "version": "synthetic-admission-config-v1",
         "bindings": [{"id": "synthetic-binding", "provider": "openrouter", "account_ref": scope["ref"],
             "credential_ref": "synthetic-upstream-key", "endpoint_ref": "openrouter-chat", "groups": ["shared"]}],
         "groups": [{"id": "shared", "scope": scope,
@@ -30,10 +30,13 @@ def attach_admission(bundle, clock, *, rpm=1, tpm=None, concurrency=1, token_ada
         runner = contract.runner
         for profile in [*runner.profiles.values(), runner.decision]:
             model = profile.get("model_version", profile.get("version"))
-            endpoint = "https://openrouter.ai/api/alpha/decisions" if profile is runner.decision else "https://openrouter.ai/api/v1/chat/completions"
-            key = (str(runner.client.root), model, endpoint)
+            local = profile.get("backend") == "local"
+            transport = runner.local_backend if local else runner.client
+            endpoint = (transport.config['endpoint'] if local else
+                "https://openrouter.ai/api/alpha/decisions" if profile is runner.decision else "https://openrouter.ai/api/v1/chat/completions")
+            key = (str(transport.root), model, endpoint)
             if key not in seen:
-                routes.append(CapacityRoute(runner.client, endpoint, model, "synthetic-binding", token_adapter=token_adapter))
+                routes.append(CapacityRoute(transport, endpoint, model, "synthetic-binding", token_adapter=token_adapter, provider_name=profile.get("provider_name")))
                 seen.add(key)
     controller.register("synthetic-admission-v1", configuration_version="synthetic-admission-config-v1",
         routes=routes, max_seconds=seconds)

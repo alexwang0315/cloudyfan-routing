@@ -32,6 +32,105 @@ def test_queued_acceptance_is_202_idempotent_cancellable_and_never_starts_paid_w
     assert ledger["rows"] == [] and ledger["reserved_usd"] == "0"
 
 
+def test_worker_claims_original_exact_request_before_execution_and_duplicate_is_read_only(local_service):
+    from capacity_queue_fixture import attach_queue
+    import hashlib
+    import json
+    bundle = local_service.bundle
+    bundle.upstream.fail_tiers = set()
+    queue = attach_queue(bundle, local_service.clock)
+    local_service.server.set_app(bundle.app)
+    operator, client = local_service.client("operator"), local_service.client()
+    operator.post("/monitor/capacity/activate", json={"revision": 0, "version": "synthetic-queued-admission-v1"})
+    payload = {**TASK, "run_id": "queued-completed"}
+    assert client.post("/v1/tasks", json=payload).status_code == 202
+    # A direct service execution is a lookup, never a queue bypass.
+    assert queue.service.execute("studio", payload["run_id"])["status"] == "queued"
+    assert bundle.upstream.calls == []
+    completed = queue.dispatch_next()
+    assert completed["status"] == "passed"
+    assert len(bundle.upstream.calls) == 1
+    saved = next((bundle.root / "receipts/calls").glob("*/intent.json"))
+    intent = json.loads(saved.read_text())
+    assert intent["dispatch"]["capacity_allocation"]
+    allocation = operator.get("/monitor/capacity").json()["dispatch"]["allocations"][0]
+    assert allocation["state"] == "complete"
+    assert allocation["wire_sha256"] == intent["dispatch"]["wire_sha256"]
+    before = hashlib.sha256(saved.read_bytes()).hexdigest()
+    assert client.post("/v1/tasks", json=payload).json()["status"] == "passed"
+    assert client.post("/v1/tasks/queued-completed/resume", json={}).json()["status"] == "passed"
+    assert queue.dispatch_next() is None
+    assert len(bundle.upstream.calls) == 1 and hashlib.sha256(saved.read_bytes()).hexdigest() == before
+    assert client.get("/v1/tasks/queued-completed/result").json()["answer"] == "2"
+
+
+def test_sequential_waits_before_next_intent_preserving_original_reserve_and_global_counts(local_service):
+    from capacity_queue_fixture import attach_queue
+    import hashlib
+    bundle = local_service.bundle
+    queue = attach_queue(bundle, local_service.clock, rpm=1)
+    local_service.server.set_app(bundle.app)
+    operator, client = local_service.client("operator"), local_service.client()
+    operator.post("/monitor/capacity/activate", json={"revision": 0, "version": "synthetic-queued-admission-v1"})
+    payload = {**TASK, "run_id": "queued-sequential"}
+    assert client.post("/v1/tasks", json=payload).status_code == 202
+    first = queue.dispatch_next()
+    assert first["status"] == "queued" and len(bundle.upstream.calls) == 1
+    assert list((bundle.root / "receipts/calls").glob("*/intent.json"))[0].parent.name.endswith("-a0-t0")
+    assert queue.dispatch_next() is None
+    waiting = client.get("/v1/tasks/queued-sequential").json()
+    assert waiting["reason"] == "queue_waiting_capacity" and waiting["capacity_reason"] == "capacity_rpm_exhausted"
+    report = queue.service.contracts["demo-cloudyfan"].runner.store.report()
+    assert len(report["reservations"]) == 1 and len(report["events"]) == 1 and report["unknown_events"] == 0
+    files = [queue.path, bundle.root / "capacity.sqlite", bundle.root / "budget.sqlite",
+             *[path for path in (bundle.root / "receipts").rglob("*") if path.is_file()]]
+    before = {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in files}
+    for _ in range(3):
+        client.get("/v1/tasks/queued-sequential")
+        operator.get("/monitor/queue")
+        client.post("/v1/tasks", json=payload)
+        client.post("/v1/tasks/queued-sequential/resume", json={})
+    assert before == {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in files}
+    assert len(bundle.upstream.calls) == 1
+    # Queue's original120s deadline, not a new per-call timeout, stays fixed.
+    local_service.clock.now += 61
+    second = queue.dispatch_next()
+    assert second["status"] == "queued" and len(bundle.upstream.calls) == 2
+    assert "questions" in bundle.upstream.calls[-1]
+    assert second["queue"]["deadline"] == first["queue"]["deadline"]
+    assert queue.dispatch_next() is None
+    local_service.clock.now += 60
+    assert client.get("/v1/tasks/queued-sequential").json()["status"] == "expired"
+    assert queue.dispatch_next() is None and len(bundle.upstream.calls) == 2
+
+
+def test_shared_host_reopen_retains_original_identity_configuration_and_next_request(local_service):
+    from capacity_queue_fixture import build_queue_host
+    host = build_queue_host(local_service.bundle.root / 'reopened', clock=local_service.clock,
+                            origin=local_service.origin, options={'separate_budgets': True})
+    local_service.bundle = host.bundle
+    local_service.server.set_app(host.app)
+    operator, client = local_service.client('operator'), local_service.client()
+    operator.post('/monitor/capacity/activate', json={'revision': 0, 'version': 'synthetic-queued-admission-v1'})
+    assert client.post('/v1/tasks', json={**TASK, 'run_id': 'reopened-queue'}).status_code == 202
+    original = client.get('/v1/tasks/reopened-queue').json()
+    local_service.clock.now += 10
+    reopened = build_queue_host(host.bundle.root, clock=local_service.clock,
+                                origin=local_service.origin, options={'separate_budgets': True})
+    try:
+        assert reopened.credential == host.credential
+        assert reopened.queue.path == host.queue.path and reopened.queue.service.root == host.queue.service.root
+        local_service.bundle = reopened.bundle
+        local_service.server.set_app(reopened.app)
+        assert client.get('/v1/tasks/reopened-queue').json()['queue']['accepted_at'] == original['queue']['accepted_at']
+        assert reopened.queue.dispatch_next()['status'] == 'passed'
+        assert len(reopened.upstream.calls) == 1 and len(host.upstream.calls) == 0
+        assert client.get('/v1/tasks/reopened-queue/result').json()['answer'] == '2'
+    finally:
+        host.close()
+        reopened.close()
+
+
 def test_window_protocol_is_explicitly_not_applicable_on_original_immediate_policy(local_service):
     bundle = local_service.bundle
     attach_admission(bundle, local_service.clock)

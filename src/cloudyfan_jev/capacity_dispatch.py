@@ -226,6 +226,7 @@ class CapacityController:
                 CREATE TABLE IF NOT EXISTS capacity_dispatch_control(id INTEGER PRIMARY KEY CHECK(id=1),revision INTEGER NOT NULL,version TEXT);
                 INSERT OR IGNORE INTO capacity_dispatch_control VALUES(1,0,NULL);
                 CREATE TABLE IF NOT EXISTS capacity_adoptions(run TEXT PRIMARY KEY,payload TEXT NOT NULL,terminal INTEGER NOT NULL);
+                CREATE TABLE IF NOT EXISTS capacity_terminal_fences(run TEXT PRIMARY KEY);
                 CREATE TABLE IF NOT EXISTS capacity_allocations(id TEXT PRIMARY KEY,payload TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS capacity_dispatch_events(sequence INTEGER PRIMARY KEY AUTOINCREMENT,payload TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS capacity_invalid_policies(version TEXT PRIMARY KEY,reason TEXT NOT NULL);
@@ -253,6 +254,13 @@ class CapacityController:
         if write:
             db.execute('INSERT OR REPLACE INTO capacity_dispatch_metadata VALUES(1,?)', (now,))
         return now
+
+    def require_integrity(self, **scope):
+        from .capacity_integrity import CapacityIntegrityError
+        try:
+            self.store.integrity.require(**scope)
+        except CapacityIntegrityError as error:
+            raise CapacityDenied(error.code, error.status) from None
 
     @contextmanager
     def request(self):
@@ -323,7 +331,7 @@ class CapacityController:
                 db.execute('BEGIN IMMEDIATE')
             prior = db.execute('SELECT payload FROM capacity_policies WHERE version=?', (version,)).fetchone()
             if unavailable and prior is None:
-                self.store.integrity.require()
+                self.require_integrity()
             if prior and prior[0] != _json(value):
                 raise ValueError('An immutable capacity policy cannot change')
             if not unavailable:
@@ -339,7 +347,7 @@ class CapacityController:
         return backend
 
     def queue_policy(self, run=None):
-        self.store.integrity.require(groups=[])
+        self.require_integrity(groups=[])
         with self.store.connection() as db:
             if run is not None:
                 row = db.execute('SELECT payload FROM capacity_adoptions WHERE run=?', (run,)).fetchone()
@@ -418,7 +426,7 @@ class CapacityController:
 
     def window_snapshot(self):
         if self.window_backend is None:
-            with self.store.connection() as db:
+            with self.store.connection(projection=True) as db:
                 configured = any(json.loads(row[0]).get('windows_version') is not None
                     for row in db.execute('SELECT payload FROM capacity_policies'))
             if configured:
@@ -436,7 +444,7 @@ class CapacityController:
                     'reason_code': 'capacity_window_state_unavailable'}
 
     def activate(self, revision, version):
-        self.store.integrity.require()
+        self.require_integrity()
         if type(revision) is not int or revision < 0:
             raise CapacityDenied('capacity_revision_conflict', 409)
         if version is not None:
@@ -471,13 +479,15 @@ class CapacityController:
         db.execute('INSERT INTO capacity_dispatch_events(payload) VALUES(?)', (_json(event),))
 
     def adopt(self, run, principal, descriptor):
-        self.store.integrity.require(groups=[], task=run)
+        self.require_integrity(groups=[], task=run)
         ingress = _INGRESS.get()
         if ingress is None or ingress[0] is not self or ingress[1]['principal'] != principal:
             raise CapacityDenied('capacity_authenticated_ingress_required', 403)
         with self.store.connection(write=True) as db:
             db.execute('BEGIN IMMEDIATE')
             now = self._now(db, write=True)
+            if db.execute('SELECT 1 FROM capacity_terminal_fences WHERE run=?', (run,)).fetchone():
+                raise CapacityDenied('capacity_acceptance_closed', 409)
             prior = db.execute('SELECT payload FROM capacity_adoptions WHERE run=?', (run,)).fetchone()
             if prior:
                 value = json.loads(prior[0])
@@ -499,7 +509,7 @@ class CapacityController:
             return value
 
     def context(self, run, principal, descriptor):
-        self.store.integrity.require(task=run)
+        self.require_integrity(task=run)
         with self.store.connection() as db:
             row = db.execute('SELECT payload FROM capacity_adoptions WHERE run=?', (run,)).fetchone()
         if row is None:
@@ -510,7 +520,7 @@ class CapacityController:
         return value
 
     def verify(self, adoption):
-        self.store.integrity.require(task=adoption['run'])
+        self.require_integrity(task=adoption['run'])
         with self.store.connection() as db:
             row = db.execute('SELECT payload,terminal FROM capacity_adoptions WHERE run=?', (adoption['run'],)).fetchone()
             now = self._now(db)
@@ -540,6 +550,7 @@ class CapacityController:
     def terminal(self, run):
         with self.store.connection(write=True) as db:
             db.execute('BEGIN IMMEDIATE')
+            db.execute('INSERT OR IGNORE INTO capacity_terminal_fences VALUES(?)', (run,))
             db.execute('UPDATE capacity_adoptions SET terminal=1 WHERE run=?', (run,))
 
     def dispatch(self, adoption, transport, endpoint, payload, descriptor):
@@ -585,6 +596,12 @@ class CapacityController:
                     out['rpm_used'] += group['caps']['rpm'] is not None and (held or now < group['rpm_until'])
                     out['tpm_reserved'] += group['tokens'] if held or now < group['tpm_until'] else 0
                     out['concurrency_used'] += item['state'] in {'prepared', 'sent', 'uncertain'}
+        integrity = self.store.integrity.status()
+        for physical, group in groups.items():
+            if integrity['status'] != 'verified' and (integrity['affected_groups'] is None
+                    or physical in integrity['affected_groups']):
+                group.update(observation_status='unavailable', current_failure=integrity['reason_code'],
+                    retained_verified_metadata=True)
         return {'schema_version': 'capacity-dispatch-v1', 'revision': revision, 'active_version': version,
                 'protocol': SERIALIZER, 'registered_policies': [{
                     **{key: p[key] for key in ('version', 'configuration_version', 'max_seconds')},
@@ -592,7 +609,7 @@ class CapacityController:
                 'allocation_count': allocation_count, 'allocation_history_complete': allocation_count == len(allocations),
                 'event_count': event_count, 'event_history_complete': event_count == len(events),
                 'groups': list(groups.values()), 'allocations': [{key: row[key] for key in ('id', 'policy_version', 'state', 'wire_sha256', 'serializer', 'groups')} for row in allocations],
-                'events': events, 'windows': self.window_snapshot(), 'integrity': self.store.integrity.status()}
+                'events': events, 'windows': self.window_snapshot(), 'integrity': integrity}
 
     def own(self, run):
         with self.store.connection(projection=True) as db:
@@ -721,7 +738,7 @@ class _CapacityDispatch:
                 'caps': {key: item['value'] if item else None for key, item in limits.items()}})
         identifier = _hash([adoption['run'], call_id, route.descriptor()])
         window_scope, physical_groups = controller.window_scope(adoption, route, snapshot, wire)
-        controller.store.integrity.require(groups=[g['physical'] for g in physical_groups], task=adoption['run'])
+        controller.require_integrity(groups=[g['physical'] for g in physical_groups], task=adoption['run'])
         with controller.store.connection(write=reserve) as db:
             if reserve:
                 db.execute('BEGIN IMMEDIATE')
@@ -733,9 +750,10 @@ class _CapacityDispatch:
                 raise CapacityDenied('capacity_token_bound_expired')
             if db.execute('SELECT 1 FROM capacity_allocations WHERE id=?', (identifier,)).fetchone():
                 raise CapacityDenied('capacity_dispatch_already_prepared', 409)
-            prior = [json.loads(row[0]) for row in db.execute(
-                "SELECT payload FROM capacity_allocations WHERE state IN ('prepared','sent','uncertain') OR (state='complete' AND horizon>?) LIMIT ?",
-                (now, controller.max_live_allocations + 1))]
+            with controller.store.integrity.selection(db) as selection:
+                prior = [json.loads(row[0]) for row in selection.execute(
+                    "SELECT payload FROM capacity_allocations WHERE state IN ('prepared','sent','uncertain') OR (state='complete' AND horizon>?) LIMIT ?",
+                    (now, controller.max_live_allocations + 1))]
             if len(prior) >= controller.max_live_allocations:
                 raise CapacityDenied('capacity_live_state_limit_exceeded')
             for group in groups:
@@ -766,6 +784,7 @@ class _CapacityDispatch:
     def _update(self, state, *, tokens=None, bound_violation=False):
         if self.id is None:
             return
+        self.controller.require_integrity(task=self.adoption['run'])
         with self.controller.store.connection(write=True) as db:
             db.execute('BEGIN IMMEDIATE')
             row = db.execute('SELECT payload FROM capacity_allocations WHERE id=?', (self.id,)).fetchone()
@@ -792,9 +811,10 @@ class _CapacityDispatch:
                     raise CapacityDenied('capacity_token_bound_expired')
                 if value.get('evidence_valid_until') is not None and now >= value['evidence_valid_until']:
                     raise CapacityDenied('capacity_evidence_changed_or_expired')
-                prior = [json.loads(row[0]) for row in db.execute(
-                    "SELECT payload FROM capacity_allocations WHERE id!=? AND (state IN ('prepared','sent','uncertain') OR (state='complete' AND horizon>?)) LIMIT ?",
-                    (self.id, now, self.controller.max_live_allocations + 1))]
+                with self.controller.store.integrity.selection(db) as selection:
+                    prior = [json.loads(row[0]) for row in selection.execute(
+                        "SELECT payload FROM capacity_allocations WHERE id!=? AND (state IN ('prepared','sent','uncertain') OR (state='complete' AND horizon>?)) LIMIT ?",
+                        (self.id, now, self.controller.max_live_allocations + 1))]
                 if len(prior) >= self.controller.max_live_allocations:
                     raise CapacityDenied('capacity_live_state_limit_exceeded')
                 for group in value['groups']:
@@ -827,7 +847,7 @@ class _CapacityDispatch:
             self.controller._event(db, {'kind': state, 'allocation': self.id, 'at': now})
 
     def before_post(self):
-        self.controller.store.integrity.require(task=self.adoption['run'])
+        self.controller.require_integrity(task=self.adoption['run'])
         self.controller.verify(self.adoption)
         _require_http_protocol(self.route.transport.http)
         if _transport_identity(self.route.transport) != self._credential_pin:

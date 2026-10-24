@@ -449,6 +449,7 @@ class CapacityStore:
         except ValueError:
             now = None
         groups = []
+        integrity = self.integrity.status()
         for group in configuration["groups"]:
             history, successful, count = refreshes[group["id"]]
             supplier = successful["observations"] if successful else group["supplier_limits"]
@@ -461,8 +462,14 @@ class CapacityStore:
                 "local_limits": _limits(group["local_limits"], group["scope"], now, local=True),
                 "last_refresh": summaries[-1] if summaries else None, "refresh_history": summaries,
                 "refresh_history_count": count, "refresh_history_complete": count == len(summaries),
-                "retained_after_refresh_failure": bool(last and last["status"] == "unavailable" and successful)})
+                "retained_after_refresh_failure": bool(last and last["status"] == "unavailable" and successful),
+                **({'observation_status': 'unavailable', 'current_failure': integrity['reason_code'],
+                    'retained_verified_metadata': True} if integrity['status'] != 'verified' and (
+                        integrity['affected_groups'] is None or hashlib.sha256(json.dumps(group['scope'],
+                            sort_keys=True, separators=(',', ':')).encode()).hexdigest() in integrity['affected_groups']) else {})})
         return {"schema_version": "capacity-sources-v1", "configured": True,
                 "configuration_version": configuration["version"], "configuration_sha256": digest,
                 "execution_enabled": False, "bindings": configuration["bindings"],
-                "groups": groups, "reason_codes": [] if now is not None else ["capacity_clock_invalid"]}
+                "groups": groups, 'integrity': integrity,
+                "reason_codes": ([] if now is not None else ["capacity_clock_invalid"])
+                    + ([integrity['reason_code']] if integrity['status'] != 'verified' else [])}

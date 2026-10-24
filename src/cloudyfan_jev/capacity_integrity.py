@@ -18,6 +18,7 @@ import uuid
 PROTOCOL = 'capacity-preservation-v1'
 MAX_BYTES = 64 * 1024 * 1024
 MAX_ROWS = 50000
+MAX_TRANSACTIONS = 50000
 _LOCAL = threading.local()
 
 
@@ -73,6 +74,7 @@ class CapacityIntegrity:
     """
     def __init__(self, path, *, fresh=False, role='capacity'):
         self.path, self.role = Path(path).absolute(), role
+        self.binding_error = None
         self.root = self.path.with_name(self.path.name + '.preservation')
         self.root.mkdir(mode=0o700, exist_ok=True)
         info = self.root.lstat()
@@ -127,8 +129,8 @@ class CapacityIntegrity:
             _file(self.path)
             db = sqlite3.connect(self.path.as_uri() + '?mode=ro', uri=True)
         try:
-            schema = db.execute("SELECT type,name,tbl_name,sql FROM sqlite_master "
-                "WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY type,name").fetchall()
+            schema = [tuple(row) for row in db.execute("SELECT type,name,tbl_name,sql FROM sqlite_master "
+                "WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY type,name")]
             rows, total = {}, 0
             for kind, name, _, _ in schema:
                 if kind != 'table':
@@ -154,6 +156,8 @@ class CapacityIntegrity:
                         elif name == 'capacity_window_observations':
                             scopes = [payload['physical']]
                         elif name == 'capacity_adoptions':
+                            tasks = [value['run']]
+                        elif name == 'capacity_terminal_fences':
                             tasks = [value['run']]
                         elif name == 'jobs':
                             scopes = json.loads(value.get('detail') or '{}').get('groups', [])
@@ -187,7 +191,13 @@ class CapacityIntegrity:
         owned = getattr(_LOCAL, 'capacity_transactions', {}).get(str(self.path))
         if owned is not None:
             return owned
+        if self.binding_error is not None:
+            raise CapacityIntegrityError(self.binding_error)
         state = self._state()
+        for record in state['rows'].get('capacity_preservation_bindings', {}).values():
+            value = record['view']
+            if json.loads(_file(Path(value['target']))) != json.loads(value['payload']):
+                raise CapacityIntegrityError('capacity_store_binding_unavailable')
         if (self.root / 'pending.json').exists():
             raise CapacityIntegrityError('capacity_store_commit_pending')
         if hashlib.sha256(_file(self.path)).hexdigest() == state['database_sha256']:
@@ -214,6 +224,32 @@ class CapacityIntegrity:
         return state, {'status': 'unavailable' if bad else 'verified', 'groups': sorted(groups),
             'tasks': sorted(tasks), 'bad': bad}
 
+    def bind(self, directory, name):
+        """Cross-link the original service and the store incarnation once.
+
+        A new empty DB and companion cannot replace an established store while
+        its original TaskService still retains this independent private link.
+        Failure leaves the observer usable, but never establishes new authority.
+        """
+        target = Path(directory).absolute() / ('.capacity-preservation-' + name + '.json')
+        with self.lock(write=True):
+            try:
+                state, status = self._inspect()
+                value = {'protocol': PROTOCOL, 'identity': state['identity']}
+                if target.exists():
+                    if json.loads(_file(target)) != value:
+                        raise CapacityIntegrityError('capacity_store_binding_unavailable')
+                    return
+                if status['bad'] or state['rows'].get('capacity_preservation_bindings'):
+                    raise CapacityIntegrityError('capacity_store_binding_unavailable')
+                with self.transaction(write=True) as db:
+                    db.execute('CREATE TABLE capacity_preservation_bindings(target TEXT PRIMARY KEY,payload TEXT NOT NULL)')
+                    db.execute('INSERT INTO capacity_preservation_bindings VALUES(?,?)',
+                        (str(target), _encoded(value).decode()))
+                    _write(target, value)
+            except (OSError, ValueError, KeyError, TypeError, sqlite3.Error, CapacityIntegrityError):
+                self.binding_error = 'capacity_store_binding_unavailable'
+
     def status(self):
         with self.lock():
             try:
@@ -222,12 +258,22 @@ class CapacityIntegrity:
                     'reason_code': 'capacity_store_scope_unavailable' if status['bad'] else None,
                     'affected_groups': status['groups'], 'affected_task_count': len(status['tasks']),
                     'revision': state['revision'], 'metadata_rows': sum(map(len, state['rows'].values())),
+                    'bounds': {'database_bytes': MAX_BYTES, 'metadata_rows': MAX_ROWS,
+                        'transaction_records': MAX_TRANSACTIONS},
+                    'retained_verified_metadata': True,
                     'witness_retention_days_minimum': 365, 'automatic_repair': False}
             except (OSError, ValueError, KeyError, TypeError, sqlite3.Error, CapacityIntegrityError) as error:
+                try:
+                    retained = self.binding_error is None and bool(self._state())
+                except (OSError, ValueError, KeyError, TypeError, CapacityIntegrityError):
+                    retained = False
                 return {'protocol': PROTOCOL, 'status': 'unavailable',
                     'reason_code': error.code if isinstance(error, CapacityIntegrityError) else 'capacity_store_integrity_unavailable',
                     'affected_groups': None, 'affected_task_count': None, 'revision': None,
-                    'metadata_rows': None, 'witness_retention_days_minimum': 365, 'automatic_repair': False}
+                    'metadata_rows': None, 'retained_verified_metadata': retained,
+                    'bounds': {'database_bytes': MAX_BYTES, 'metadata_rows': MAX_ROWS,
+                        'transaction_records': MAX_TRANSACTIONS},
+                    'witness_retention_days_minimum': 365, 'automatic_repair': False}
 
     def require(self, *, groups=None, task=None):
         with self.lock():
@@ -257,6 +303,11 @@ class CapacityIntegrity:
             token = uuid.uuid4().hex
             before = self._scan() if write else None
             if write:
+                journal = self.root / 'journal'
+                journal.mkdir(mode=0o700, exist_ok=True)
+                with os.scandir(journal) as records:
+                    if sum(1 for _, _record in zip(range(MAX_TRANSACTIONS), records)) >= MAX_TRANSACTIONS:
+                        raise CapacityIntegrityError('capacity_store_witness_bound_exceeded')
                 _write(self.root / 'pending.json', {'protocol': PROTOCOL, 'transaction': token,
                     'previous_revision': state['revision'], 'previous_state_sha256': _hash(state)})
             db = sqlite3.connect(self.path.as_uri() + ('?mode=rw' if write else '?mode=ro'), uri=True, timeout=5)
@@ -296,20 +347,55 @@ class CapacityIntegrity:
         (self.root / 'pending.json').replace(journal / (token + '-' + outcome + '.json'))
 
     @contextmanager
-    def projection(self):
+    def selection(self, current):
+        """Exclude tampered selectors from unrelated capacity calculations.
+
+        Global loss is refused by require() before any authorization. With an
+        identifiable damaged row its original scope remains blocked, while this
+        independently verified metadata prevents that row poisoning another
+        scope. This view never certifies or writes a damaged original row.
+        """
+        _, status = self._inspect()
+        if not status['bad']:
+            yield current
+        else:
+            with self.projection(current=current) as db:
+                yield db
+
+    @contextmanager
+    def projection(self, *, current=None):
         """Last independently verified metadata only, never used to grant a POST."""
         state = self._state()
         db = sqlite3.connect(':memory:')
+        original = None
+        if self.role == 'queue' and current is None:
+            try:
+                original = sqlite3.connect(self.path.as_uri() + '?mode=ro', uri=True)
+                current = original
+            except sqlite3.Error:
+                pass
         try:
             for kind, name, _, sql in sorted(state['schema'], key=lambda r: r[0] != 'table'):
                 if kind != 'table' or name not in state['rows']:
                     continue
                 db.execute(sql)
                 for record in state['rows'][name].values():
-                    view = record['view']
+                    view = dict(record['view'])
+                    if self.role == 'queue' and name == 'jobs' and current is not None:
+                        try:
+                            columns = [r[1] for r in current.execute('PRAGMA table_info(jobs)')]
+                            actual = current.execute('SELECT * FROM jobs WHERE id=?', (view['id'],)).fetchone()
+                            if actual is not None:
+                                value = dict(zip(columns, actual))
+                                if _hash(value) == record['digest']:
+                                    view['request'] = value['request']
+                        except sqlite3.Error:
+                            pass
                     columns = list(view)
                     db.execute('INSERT INTO "' + name + '" (' + ','.join('"' + k + '"' for k in columns)
                         + ') VALUES (' + ','.join('?' for _ in columns) + ')', tuple(view.values()))
             yield db
         finally:
             db.close()
+            if original is not None:
+                original.close()

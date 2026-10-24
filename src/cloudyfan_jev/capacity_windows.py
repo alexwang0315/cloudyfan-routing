@@ -206,6 +206,10 @@ class CapacityWindows:
         return 'imported' if all(row.get(key) == value for key, value in expected.items()) else 'unknown'
 
     def check(self, db, scope, physical_groups, now):
+        with self.store.integrity.selection(db) as selection:
+            return self._check(selection, scope, physical_groups, now)
+
+    def _check(self, db, scope, physical_groups, now):
         self.store.integrity.require(groups=[g['physical'] for g in physical_groups])
         try:
             _time(now)
@@ -409,6 +413,12 @@ class CapacityWindows:
                     pending.append({**required, 'status': status, 'source_kind': 'controlled_import',
                         'reason_code': 'capacity_window_source_not_imported' if status == 'pending'
                             else 'capacity_window_source_state_unavailable'})
+        integrity = self.store.integrity.status()
+        for group in groups:
+            if integrity['status'] != 'verified' and (integrity['affected_groups'] is None
+                    or group['physical'] in integrity['affected_groups']):
+                group.update(observation_status='unavailable', current_failure=integrity['reason_code'],
+                    retained_verified_metadata=integrity['retained_verified_metadata'])
         return {'schema_version': PROTOCOL, 'version': self.version, 'revision': count,
                 'groups': groups, 'active_group_count': group_count,
                 'active_group_history_complete': group_count == len(groups),

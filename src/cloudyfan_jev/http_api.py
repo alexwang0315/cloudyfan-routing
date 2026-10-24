@@ -196,6 +196,16 @@ class TaskService:
     Separating creation and execution lets an outer scheduler queue a frozen job.
     Every execution gets a fresh private workspace for deterministic local replay.
     """
+    @property
+    def capacity_controller(self):
+        return self._capacity_controller
+
+    @capacity_controller.setter
+    def capacity_controller(self, controller):
+        self._capacity_controller = controller
+        if controller is not None and hasattr(self, 'root'):
+            controller.store.integrity.bind(self.root, 'capacity')
+
     def __init__(self, root, *, contracts, allowed_principal=None, allowed_principals=None, retention_policy=None,
                  principal_active=None, clock=time.time, retention_protected_paths=(), capacity_controller=None):
         self.capacity_controller = capacity_controller
@@ -218,6 +228,8 @@ class TaskService:
         self.allowed_principals = frozenset(principals)
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
         os.chmod(self.root, 0o700)
+        if capacity_controller is not None:
+            capacity_controller.store.integrity.bind(self.root, 'capacity')
         self.contracts = dict(contracts)
         self.allowed_principal, self.retention_policy = allowed_principal, retention_policy
         self.retention = (RetentionStore(self.root / '.retention', retention_policy, clock=clock)

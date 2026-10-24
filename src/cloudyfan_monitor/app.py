@@ -23,7 +23,7 @@ SECURITY_HEADERS = [("X-Content-Type-Options", "nosniff"), ("Referrer-Policy", "
 class App:
     def __init__(self, gateway, *, admin_token, source=None, origin="http://127.0.0.1:8766",
                  identity_store=None, billing_source=None, ollama_models=None, simulation=None,
-                 candidate_observer=None, task_observer=None, capacity_observer=None):
+                 candidate_observer=None, task_observer=None, capacity_observer=None, capacity_controller=None):
         if len(admin_token) < 32:
             raise ValueError("Strong operator token required")
         self.gateway, self.store, self.admin_token = gateway, gateway.store, admin_token
@@ -41,7 +41,7 @@ class App:
             from .capacity import CapacityObserver
             if type(capacity_observer) is not CapacityObserver:
                 raise ValueError("Controlled capacity observer required")
-        self.capacity_observer = capacity_observer
+        self.capacity_observer, self.capacity_controller = capacity_observer, capacity_controller
         from .history_observation import TaskDecisionObserver
         for observer, kind in ((candidate_observer, CandidateObserver), (task_observer, TaskDecisionObserver)):
             if observer is not None and (type(observer) is not kind
@@ -73,6 +73,8 @@ class App:
         if principal is None:
             raise MonitorError("unauthorized", 401)
         self.gateway.service.authorize(principal)
+        if self.capacity_controller is not None:
+            self.capacity_controller.authenticated(principal, token, scope or ("tasks:read" if method == "GET" else "tasks:write"))
         self.store.touch_client(principal)
         return principal
 
@@ -114,6 +116,12 @@ class App:
             raise MonitorError("unsupported_fields")
 
     def __call__(self, environ, start_response):
+        if self.capacity_controller is not None:
+            with self.capacity_controller.request():
+                return self._request(environ, start_response)
+        return self._request(environ, start_response)
+
+    def _request(self, environ, start_response):
         status, content_type = 200, "application/json; charset=utf-8"
         method, path = environ.get("REQUEST_METHOD"), environ.get("PATH_INFO", "")
         try:
@@ -155,13 +163,21 @@ class App:
                 else:
                     raise MonitorError("endpoint_not_supported", 404)
                 status = {"accounting_interrupted": 409, "engineering_interrupted": 503,
-                          "policy_denied": 403, "expired": 410, "retired": 410,
+                          "policy_denied": 403, "capacity_denied": 429, "expired": 410, "retired": 410,
                           "source_refresh_failed": 503}.get(body.get("status"), 200)
                 body = encode(body).encode()
         except (MonitorError, ServiceError) as error:
             detail = error.code if path.startswith("/api/") else {"code": error.code}
             status, body = error.status, encode({"error": detail}).encode()
-        except Exception:
+        except Exception as error:
+            if self.capacity_controller is not None:
+                from cloudyfan_jev.capacity_dispatch import CapacityDenied
+                if isinstance(error, CapacityDenied):
+                    body = encode({"error": {"code": error.code}}).encode()
+                    start_response(f"{error.status} {HTTPStatus(error.status).phrase}", [
+                        ("Content-Type", content_type), ("Content-Length", str(len(body))),
+                        ("Cache-Control", "no-store"), *SECURITY_HEADERS])
+                    return [body]
             detail = "monitor_or_source_unavailable" if path.startswith("/api/") else {"code": "monitor_or_source_unavailable"}
             status, body = 503, encode({"error": detail}).encode()
         headers = [("Content-Type", content_type), ("Content-Length", str(len(body))),
@@ -170,11 +186,21 @@ class App:
         return [body]
 
     def _admin(self, method, path, environ):
+        if method == "POST" and path == "/monitor/capacity/activate":
+            body = self._body(environ)
+            self._fields(body, {"revision", "version"})
+            if self.capacity_controller is None:
+                raise MonitorError("capacity_dispatch_not_configured", 409)
+            return self.capacity_controller.activate(body["revision"], body["version"])
         if method == "GET" and path == "/monitor/capacity":
             if environ.get("QUERY_STRING"):
                 raise MonitorError("unsupported_capacity_query")
             if self.capacity_observer is not None:
-                return self.capacity_observer.snapshot()
+                snapshot = self.capacity_observer.snapshot()
+                if self.capacity_controller is not None:
+                    snapshot['dispatch'] = self.capacity_controller.snapshot()
+                    snapshot['execution_enabled'] = snapshot['dispatch']['active_version'] is not None
+                return snapshot
             return {"schema_version": "capacity-sources-v1", "configured": False,
                     "execution_enabled": False, "configuration_version": None,
                     "bindings": [], "groups": [], "reason_codes": ["capacity_not_configured"]}

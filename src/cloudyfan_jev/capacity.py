@@ -320,7 +320,12 @@ def _live_capacity(connection, now, *, pending_target=None):
 class CapacityStore:
     """Shared immutable configuration/evidence store; never a fee or slot ledger."""
     def __init__(self, path, *, clock=time.time):
+        from .capacity_integrity import CapacityIntegrity
+        fresh = not Path(path).exists()
         self.path, self.clock = _private_path(path, create=True), clock
+        self.integrity = CapacityIntegrity(self.path, fresh=fresh)
+        if self.integrity.status()['affected_groups'] is None:
+            return  # Retain failed established storage; the host can expose safe observation.
         with self.connection(write=True) as connection:
             connection.executescript("""
                 CREATE TABLE IF NOT EXISTS capacity_configurations (
@@ -333,28 +338,29 @@ class CapacityStore:
             """)
 
     @contextmanager
-    def connection(self, *, write=False):
+    def connection(self, *, write=False, projection=False):
         _private_path(self.path)
-        connection = sqlite3.connect(self.path.as_uri() + ('?mode=rw' if write else '?mode=ro'),
-                                     uri=True, timeout=5)
-        try:
+        with self.integrity.transaction(write=write, projection=projection) as connection:
             if write:
                 connection.execute("PRAGMA journal_mode=DELETE")
             yield connection
-            if write:
-                connection.commit()
-        except BaseException:
-            connection.rollback()
-            raise
-        finally:
-            connection.close()
-            _private_path(self.path)
+        _private_path(self.path)
 
     def configure(self, configuration):
         """Import trusted host configuration atomically; versions cannot be rewritten."""
         configuration = _configuration(configuration)
         encoded = json.dumps(configuration, sort_keys=True, separators=(",", ":"), allow_nan=False)
         digest = hashlib.sha256(encoded.encode()).hexdigest()
+        if self.integrity.status()['status'] != 'verified':
+            # Reopening the exact frozen host may expose retained evidence.
+            # It cannot create/change a policy or certify damaged storage.
+            with self.connection(projection=True) as connection:
+                saved = connection.execute('SELECT digest,payload FROM capacity_configurations WHERE version=?',
+                    (configuration['version'],)).fetchone()
+                active = connection.execute('SELECT version FROM capacity_control WHERE id=1').fetchone()
+            if saved is None or saved != (digest, encoded) or active != (configuration['version'],):
+                self.integrity.require()
+            return digest
         with self.connection(write=True) as connection:
             connection.execute("BEGIN IMMEDIATE")
             active = connection.execute("SELECT version FROM capacity_control WHERE id=1").fetchone()
@@ -413,7 +419,7 @@ class CapacityStore:
 
     def snapshot(self, version=None):
         """Read only saved values; no network, accounting, health or dispatch work."""
-        with self.connection() as connection:
+        with self.connection(projection=True) as connection:
             saved = connection.execute("SELECT payload,digest FROM capacity_configurations " +
                 ("WHERE version=(SELECT version FROM capacity_control WHERE id=1)" if version is None else "WHERE version=?"),
                 () if version is None else (_identity(version),)).fetchone()

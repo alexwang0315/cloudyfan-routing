@@ -218,6 +218,8 @@ class CapacityController:
         self.store, self.credential_active = store, credential_active
         self.routes, self._route_credentials = {}, {}
         self.window_backend = window_backend
+        if store.integrity.status()['affected_groups'] is None:
+            return
         with store.connection(write=True) as db:
             db.executescript('''
                 CREATE TABLE IF NOT EXISTS capacity_policies(version TEXT PRIMARY KEY,payload TEXT NOT NULL);
@@ -315,12 +317,17 @@ class CapacityController:
         if queue_version is not None:
             value['queue_version'] = queue_version
             value['queue_sha256'] = self._queue_backend(queue_version).sha256
-        with self.store.connection(write=True) as db:
-            db.execute('BEGIN IMMEDIATE')
+        unavailable = self.store.integrity.status()['status'] != 'verified'
+        with self.store.connection(write=not unavailable, projection=unavailable) as db:
+            if not unavailable:
+                db.execute('BEGIN IMMEDIATE')
             prior = db.execute('SELECT payload FROM capacity_policies WHERE version=?', (version,)).fetchone()
+            if unavailable and prior is None:
+                self.store.integrity.require()
             if prior and prior[0] != _json(value):
                 raise ValueError('An immutable capacity policy cannot change')
-            db.execute('INSERT OR IGNORE INTO capacity_policies VALUES(?,?)', (version, _json(value)))
+            if not unavailable:
+                db.execute('INSERT OR IGNORE INTO capacity_policies VALUES(?,?)', (version, _json(value)))
         self.routes[version] = tuple(routes)
         self._route_credentials[version] = tuple(_transport_identity(route.transport) for route in routes)
 
@@ -332,6 +339,7 @@ class CapacityController:
         return backend
 
     def queue_policy(self, run=None):
+        self.store.integrity.require(groups=[])
         with self.store.connection() as db:
             if run is not None:
                 row = db.execute('SELECT payload FROM capacity_adoptions WHERE run=?', (run,)).fetchone()
@@ -428,6 +436,7 @@ class CapacityController:
                     'reason_code': 'capacity_window_state_unavailable'}
 
     def activate(self, revision, version):
+        self.store.integrity.require()
         if type(revision) is not int or revision < 0:
             raise CapacityDenied('capacity_revision_conflict', 409)
         if version is not None:
@@ -462,6 +471,7 @@ class CapacityController:
         db.execute('INSERT INTO capacity_dispatch_events(payload) VALUES(?)', (_json(event),))
 
     def adopt(self, run, principal, descriptor):
+        self.store.integrity.require(groups=[], task=run)
         ingress = _INGRESS.get()
         if ingress is None or ingress[0] is not self or ingress[1]['principal'] != principal:
             raise CapacityDenied('capacity_authenticated_ingress_required', 403)
@@ -489,6 +499,7 @@ class CapacityController:
             return value
 
     def context(self, run, principal, descriptor):
+        self.store.integrity.require(task=run)
         with self.store.connection() as db:
             row = db.execute('SELECT payload FROM capacity_adoptions WHERE run=?', (run,)).fetchone()
         if row is None:
@@ -499,6 +510,7 @@ class CapacityController:
         return value
 
     def verify(self, adoption):
+        self.store.integrity.require(task=adoption['run'])
         with self.store.connection() as db:
             row = db.execute('SELECT payload,terminal FROM capacity_adoptions WHERE run=?', (adoption['run'],)).fetchone()
             now = self._now(db)
@@ -553,7 +565,7 @@ class CapacityController:
         return _CapacityDispatch(self, adoption, *matches[0], windows_version=policy.get('windows_version'))
 
     def snapshot(self):
-        with self.store.connection() as db:
+        with self.store.connection(projection=True) as db:
             now = self._now(db)
             revision, version = db.execute('SELECT revision,version FROM capacity_dispatch_control WHERE id=1').fetchone()
             policies = [json.loads(row[0]) for row in db.execute('SELECT payload FROM capacity_policies ORDER BY version')]
@@ -580,10 +592,10 @@ class CapacityController:
                 'allocation_count': allocation_count, 'allocation_history_complete': allocation_count == len(allocations),
                 'event_count': event_count, 'event_history_complete': event_count == len(events),
                 'groups': list(groups.values()), 'allocations': [{key: row[key] for key in ('id', 'policy_version', 'state', 'wire_sha256', 'serializer', 'groups')} for row in allocations],
-                'events': events, 'windows': self.window_snapshot()}
+                'events': events, 'windows': self.window_snapshot(), 'integrity': self.store.integrity.status()}
 
     def own(self, run):
-        with self.store.connection() as db:
+        with self.store.connection(projection=True) as db:
             row = db.execute('SELECT payload FROM capacity_adoptions WHERE run=?', (run,)).fetchone()
         if row is None:
             return None
@@ -709,6 +721,7 @@ class _CapacityDispatch:
                 'caps': {key: item['value'] if item else None for key, item in limits.items()}})
         identifier = _hash([adoption['run'], call_id, route.descriptor()])
         window_scope, physical_groups = controller.window_scope(adoption, route, snapshot, wire)
+        controller.store.integrity.require(groups=[g['physical'] for g in physical_groups], task=adoption['run'])
         with controller.store.connection(write=reserve) as db:
             if reserve:
                 db.execute('BEGIN IMMEDIATE')
@@ -814,6 +827,7 @@ class _CapacityDispatch:
             self.controller._event(db, {'kind': state, 'allocation': self.id, 'at': now})
 
     def before_post(self):
+        self.controller.store.integrity.require(task=self.adoption['run'])
         self.controller.verify(self.adoption)
         _require_http_protocol(self.route.transport.http)
         if _transport_identity(self.route.transport) != self._credential_pin:

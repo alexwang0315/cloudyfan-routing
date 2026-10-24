@@ -176,7 +176,9 @@ class CapacityWindows:
         if grammar == 'unix_seconds' or grammar == 'retry_after' and not digits:
             if 'date' not in headers:
                 raise ValueError('capacity_window_clock_reference_unknown')
-            until = _time(int(value)) if grammar == 'unix_seconds' and digits else _http_date(value)
+            if grammar == 'unix_seconds' and not digits:
+                raise ValueError('capacity_window_time_invalid')
+            until = _time(int(value)) if grammar == 'unix_seconds' else _http_date(value)
         elif grammar in {'retry_after', 'delta_seconds'} and digits:
             until = observed + int(value)
         else:
@@ -236,11 +238,29 @@ class CapacityWindows:
             raise ValueError('Controlled original receipt reference required')
         _, intent = _read(root / 'calls' / cid / 'intent.json')
         encoded, response = _read(root / 'calls' / cid / 'response.json')
+        with self.store.connection() as db:
+            policy = json.loads(db.execute('SELECT payload FROM capacity_policies WHERE version=?',
+                (scope['policy_version'],)).fetchone()[0])
+        routes = [route for route in policy['routes'] if route['endpoint'] == scope['endpoint']
+            and route['model'] == scope['model'] and route['binding'] == scope['binding']['id']]
+        configuration = intent.get('configuration')
+        tool = isinstance(configuration, dict) and configuration.get('protocol') == 'capacity-tool-http-v1'
+        frozen_transport = _hash({'root': str(root.absolute()), 'configuration': configuration})
+        if (len(routes) != 1 or routes[0]['transport_sha256'] != frozen_transport
+                or policy.get('windows_version') != self.version):
+            raise ValueError('Original window transport differs from registered route')
+        if tool:
+            linked = (scope['model'].startswith('tool:') and configuration.get('endpoint') == scope['endpoint']
+                and intent.get('wire_sha256') == scope['wire_sha256'])
+        else:
+            linked = (intent.get('url') == scope['endpoint'] and intent.get('payload', {}).get('model') == scope['model']
+                and intent.get('dispatch', {}).get('wire_sha256') == scope['wire_sha256']
+                and isinstance(intent.get('request_sha256'), str)
+                and re.fullmatch(r'[a-f0-9]{64}', intent['request_sha256'])
+                and response.get('request_sha256') == intent['request_sha256'])
         if (hashlib.sha256(encoded).hexdigest() != receipt_ref['response_sha256']
                 or response.get('call_id') != cid or intent.get('call_id') != cid
-                or intent.get('url') != scope['endpoint'] or intent.get('payload', {}).get('model') != scope['model']
-                or intent.get('dispatch', {}).get('wire_sha256') != scope['wire_sha256']
-                or response.get('request_sha256') != intent.get('request_sha256')):
+                or not linked):
             raise ValueError('Original window receipt differs from frozen scope')
         if response.get('http_status') != 429 and not (
                 type(response.get('http_status')) is int and 500 <= response['http_status'] <= 599):

@@ -34,7 +34,8 @@
       "id": "TASK-DISPATCH",
       "owner": "capacity-dispatch-worker",
       "owned_files": [
-        "src/cloudyfan_jev/http_api.py"
+        "src/cloudyfan_jev/http_api.py",
+        "src/cloudyfan_jev/ollama_api.py"
       ],
       "provided_by": "ISSUE35"
     },
@@ -78,6 +79,7 @@
         "src/cloudyfan_jev/local.py",
         "src/cloudyfan_jev/budget.py",
         "src/cloudyfan_jev/http_api.py",
+        "src/cloudyfan_jev/ollama_api.py",
         "src/cloudyfan_jev/engine.py",
         "src/cloudyfan_jev/scores/backup_runtime.py"
       ],

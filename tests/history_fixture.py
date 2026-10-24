@@ -2,73 +2,35 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
-import importlib.util
 import json
 from pathlib import Path
-import sys
 
 import httpx
-import cloudyfan_jev
 from cloudyfan_jev.budget import Authorization, BudgetedCore, BudgetStore, EnforcedBound
 from cloudyfan_jev.client import Client
-from cloudyfan_jev.demo import ArithmeticEnvironment, example_config
+from cloudyfan_jev.demo import ArithmeticEnvironment
 from cloudyfan_jev.diagnostics import DiagnosticContract
-from cloudyfan_jev.engine import Core, Limits
+from cloudyfan_jev.engine import Limits
 from cloudyfan_jev.http_api import RegisteredContract, TaskService
 from cloudyfan_jev.identity import IdentityStore
-from cloudyfan_jev.privacy import ExecutionPolicy
-from cloudyfan_jev.scores.backup_runtime import BackupCategoryCore, backup_pool_contract_hash
-from cloudyfan_jev.scores.catalog import digest
+from cloudyfan_jev.scores.backup_runtime import BackupCategoryCore
 from cloudyfan_jev.scores.health import HealthStore
 
 from cloudyfan_monitor.integration import ACCESS_POLICY, RunBoundCore, assemble_monitor
 from cloudyfan_monitor.pools import empty_view
 from cloudyfan_monitor.store import Store
 
+from _backup_fixture import prepare_backup_values
+
 OPERATOR = "synthetic-history-host-operator-not-a-secret"
 CONTRACT = "synthetic-history-public-v1"
 
 
 def backup_fixture(classifiers=(), *, economic=True):
-    core_tests = Path(cloudyfan_jev.__file__).resolve().parents[2] / "tests"
-    spec = importlib.util.spec_from_file_location("_monitor_history_backup_fixture", core_tests / "test_backup_runtime.py")
-    module = importlib.util.module_from_spec(spec)
-    original = sys.path[:]
-    try:
-        sys.path.insert(0, str(core_tests))
-        spec.loader.exec_module(module)
-    finally:
-        sys.path[:] = original
-    plan = module.plan_for(classifiers=classifiers, count=2)
-
-    def execution_locations(value):
-        if isinstance(value, dict):
-            if isinstance(value.get("profile"), dict):
-                value["profile"]["execution_location"] = "cloud:fixture"
-            for child in value.values():
-                execution_locations(child)
-        elif isinstance(value, list):
-            for child in value:
-                execution_locations(child)
-
-    execution_locations(plan)
-    snapshot = plan["snapshot"]
-    snapshot["snapshot_id"] = digest({k: v for k, v in snapshot.items() if k != "snapshot_id"})
-    plan["snapshot_id"] = snapshot["snapshot_id"]
-    privacy = ExecutionPolicy("unrestricted", "home:fixture", "cloud:typesafe")
-    diagnostics = DiagnosticContract("synthetic-history-v1", "synthetic-history-validator")
-    _, decision = example_config()
-    profiles = {tier: rows[0]["entry"]["profile"] for tier, rows in plan["pools"].items()}
-    plan["qcs_policy"]["execution_contract"] = Core(None, profiles, decision, limits=Limits(max_turns=1),
-        execution_policy=privacy, diagnostic_contract=diagnostics).execution_contract_descriptor(CONTRACT)
-    for stage in plan["qcs_policy"]["stages"].values():
-        for variant in stage["variants"].values():
-            variant["calibration"]["pool_contract_sha256"] = backup_pool_contract_hash(plan)
-            if not economic:
-                variant["classifier_cost_usd"] = {"lower": ".2", "upper": ".2"}
-    module.rebind(plan)
-    return {"plan": plan, "module": module, "privacy": privacy, "diagnostics": diagnostics,
-            "decision": decision, "now": datetime.fromisoformat(module.NOW)}
+    values = prepare_backup_values(contract=CONTRACT,
+        diagnostics=DiagnosticContract("synthetic-history-v1", "synthetic-history-validator"),
+        count=2, classifiers=classifiers, economic=economic)
+    return {**values, "now": datetime.fromisoformat(values["now"])}
 
 
 @dataclass

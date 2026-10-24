@@ -14,6 +14,7 @@ from cloudyfan_monitor.integration import assemble_monitor, build_local_integrat
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tests"))
 from history_fixture import OPERATOR, assemble_backup_host  # noqa: E402
+from candidate_observation_fixture import assemble_candidate_host  # noqa: E402
 from test_local_http_integration import (  # noqa: E402
     LoopbackEvidence, QuietHandler, ThreadedServer, configure_loopback_network,
 )
@@ -25,10 +26,12 @@ class HistoricalFixture:
     hosts: dict
     base: object
     legacy: object
+    categories: dict
 
     def state(self):
-        return {"model_mock_calls": sum(len(host.calls) for host in self.hosts.values()) + len(self.legacy.upstream.calls),
-                "budgets": {key: host.budget.report() for key, host in self.hosts.items()},
+        hosts = {**self.hosts, **self.categories}
+        return {"model_mock_calls": sum(len(host.calls) for host in hosts.values()) + len(self.legacy.upstream.calls),
+                "budgets": {key: host.budget.report() for key, host in hosts.items()},
                 "scope": "synthetic offline evidence; actual Core, BudgetedCore, TaskService and HealthStore"}
 
 
@@ -50,6 +53,18 @@ def assemble_history_fixture(root, origin):
         view["source_kind"] = "synthetic_history_" + name
         pool = store.save_pool(view)
         registry[(pool, host.values["plan"]["category_id"], "cloudyfan")] = contract_id
+    categories = {}
+    for name, classify in (("qcs-direct", False), ("qcs-classified", True)):
+        host = assemble_candidate_host(root / name, origin, clock=lambda: base.values["now"].timestamp(),
+            fail_first=True, classify=classify)
+        categories[name] = host
+        contract_id = "history-" + name
+        service.contracts[contract_id] = host.service.contracts["category-host-v1"]
+        view = host.app.store.pool(host.pools[0])
+        view.pop("id")
+        view["source_kind"] = "synthetic_history_" + name
+        pool = store.save_pool(view)
+        registry[(pool, host.category, "cloudyfan")] = contract_id
     legacy = build_local_integration(root / "legacy", origin=origin, clock=lambda: base.values["now"].timestamp())
     legacy.upstream.fail_tiers = set()
     service.contracts["history-legacy"] = legacy.app.gateway.service.contracts["demo-cloudyfan"]
@@ -60,7 +75,7 @@ def assemble_history_fixture(root, origin):
     registry[(pool, base.values["plan"]["category_id"], "cloudyfan")] = "history-legacy"
     app = assemble_monitor(store, service, registry, base.app.identity_store,
         operator_token=OPERATOR, origin=origin, demo=True)
-    return HistoricalFixture(app, hosts, base, legacy)
+    return HistoricalFixture(app, hosts, base, legacy, categories)
 
 
 def main():

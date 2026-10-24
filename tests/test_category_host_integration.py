@@ -22,6 +22,8 @@ from cloudyfan_jev.privacy import ExecutionPolicy
 from cloudyfan_jev.scores.categories import compile_category_matrix
 from cloudyfan_jev.scores.category_routing import CategoryCore
 from cloudyfan_jev.scores.configuration import configuration_digest
+from cloudyfan_jev.scores.category_routing import prepare_category_selection
+from cloudyfan_jev.scores.qcs import classifier_contract_hash
 
 from cloudyfan_monitor.integration import ACCESS_POLICY, RunBoundCore, assemble_monitor
 from cloudyfan_monitor.pools import empty_view
@@ -32,7 +34,7 @@ CONTRACT = "synthetic-category-host-arithmetic-v1"
 OPERATOR = "synthetic-category-host-operator-not-a-real-secret"
 
 
-def category_values():
+def category_values(*, classify=False):
     """Reuse existing offline evidence instead of inventing real model admission data."""
     core_tests = Path(cloudyfan_jev.__file__).resolve().parents[2] / "tests"
     spec = importlib.util.spec_from_file_location(
@@ -61,6 +63,25 @@ def category_values():
     policy["execution_contract"] = Core(None, profiles, decision, limits=limits,
         execution_policy=privacy, diagnostic_contract=diagnostics).execution_contract_descriptor(CONTRACT)
     module.bind(matrix, module.CATEGORY, requirements, evidence, policy)
+    if classify:
+        # Existing synthetic conditional population; no real admission evidence.
+        evidence["low"]["generation_cost_usd"] = {"lower": ".01", "upper": ".01"}
+        evidence["low"]["complete_cost_usd"] = {"lower": ".2", "upper": ".2"}
+        policy["classifier_version"] = decision["version"]
+        forecast = policy["stages"]["low_mid"]
+        forecast.update(classifier_cost_usd={"lower": ".001", "upper": ".001"},
+            lower_probability={"lower": ".9", "upper": ".9"}, classify_flow_ms_upper="110")
+        forecast["paths"]["low"]["cost_usd"] = {"lower": ".2", "upper": ".2"}
+        module.bind(matrix, module.CATEGORY, requirements, evidence, policy)
+        profiles = prepare_category_selection(matrix, module.CATEGORY, requirements, evidence, policy,
+            now=module.NOW)["qcs_plan"]["profiles"]
+        forecast["classified_calibration"] = {**policy["calibration"], "classifier_version": decision["version"],
+            "stage": "low_mid", "previous_tier": "open_source", "context": "public_failure_or_unknown",
+            "effective_probability_includes_fallback": True,
+            "contract_sha256": classifier_contract_hash(profiles, decision["version"], "low_mid", "open_source")}
+        forecast["classified_paths"] = {"low": {"cost_usd": {"lower": ".01", "upper": ".01"}},
+                                         "mid": {"cost_usd": {"lower": ".1", "upper": ".1"}}}
+        module.bind(matrix, module.CATEGORY, requirements, evidence, policy)
     return {"matrix": matrix, "requirements": requirements, "evidence": evidence, "policy": policy,
             "decision": decision, "limits": limits, "privacy": privacy, "diagnostics": diagnostics,
             "category": module.CATEGORY, "now": module.NOW}
@@ -71,7 +92,7 @@ def category_fixture():
     return category_values()
 
 
-def assemble_category_host(root, values, requests, *, clock=None):
+def assemble_category_host(root, values, requests, *, clock=None, fail_first=False):
     instant = datetime.fromisoformat(values["now"])
     if clock is None:
         clock = lambda: instant.timestamp()
@@ -89,12 +110,18 @@ def assemble_category_host(root, values, requests, *, clock=None):
 
     def upstream(request):
         assert request.method == "POST"
-        assert not request.url.path.endswith("/decisions")
         payload = json.loads(request.content)
         requests.append(payload)
+        if "questions" in payload:
+            stage = next(iter(payload["questions"]))
+            return httpx.Response(200, json={"id": f"gen-category-host-{len(requests)}",
+                "model": payload["model"], "provider": "TypeSafe",
+                "usage": {"cost": .001, "input_tokens": 1, "output_tokens": 1}, "answers": {stage: {
+                    "type": "choice", "choice": "low", "probabilities": {"low": .9, "mid": .1}}}})
         return httpx.Response(200, json={"id": f"gen-category-host-{len(requests)}",
             "model": payload["model"], "provider": "Example", "usage": {"cost": ".01"},
-            "choices": [{"message": {"role": "assistant", "content": "2"}}]})
+            "choices": [{"message": {"role": "assistant", "content":
+                "bad" if fail_first and len(requests) == 1 else "2"}}]})
 
     client = Client(httpx.Client(transport=httpx.MockTransport(upstream)), "synthetic-only", root / "receipts")
 

@@ -101,6 +101,11 @@ window.CloudyFanTrace = (() => {
     candidate_history_not_provided:'未提供逐候選歷史證據；沒有紀錄不能推定未呼叫',
     runner_observation_not_provided:'此 runner 未提供歷史觀測；既有明細仍可查看',
     saved_historical_selection:'依原任務凍結候選與已保存選擇紀錄呈現',
+    saved_qcs_selection:'依原任務保存的三維選模決策呈現，未保存的健康與估計仍為未知',
+    classified_flow_estimate_unknown:'已保存成本比較，但缺少完整分類流程耗時估計，採直接路徑',
+    classification_estimate_unknown:'缺少分類費或分布估計，採直接路徑',
+    classification_exceeds_speed_limit:'完整分類流程耗時超出原限制，採直接路徑',
+    single_eligible_candidate:'當時只有一個符合資格的選項，採直接路徑',
     saved_selection_unverifiable:'部分選擇證據無法確認，其餘已確認明細保留',
     exact_classifier_calibration_missing:'缺少精確分類校準，不能確認支付分類費是否有利，採直接路徑',
     classification_not_economic:'已有校準，但保守淨節省不足或耗時未達限制，採直接路徑',
@@ -140,9 +145,9 @@ window.CloudyFanTrace = (() => {
   }
   function historicalEconomics(stage) {
     const economics=record(stage.economics)?stage.economics:{};
-    if(economics.status!=='available')return `<p class="metadata muted">完整流程估計：${economics.status==='not_applicable'?'此階段不適用':'未提供可安全對應的完整比較資料'}。分類實付 API 費用：${estimateAmount(stage.classifier_api_usd)}。</p>`;
+    if(!['available','partial'].includes(economics.status))return `<p class="metadata muted">完整流程估計：${economics.status==='not_applicable'?'此階段不適用':'未提供可安全對應的完整比較資料'}。分類實付 API 費用：${estimateAmount(stage.classifier_api_usd)}。</p>`;
     const paths=(value)=>record(value)?Object.entries(value).filter(([tier])=>knownTier(tier)).map(([tier,value])=>`${tierName(tier)} ${interval(value)}`).join('；'):'未知';
-    return `<dl class="trace-facts"><div><dt>直接路徑完整流程估計 · USD</dt><dd>${paths(economics.direct_paths_usd)}</dd></div><div><dt>分類後完整流程估計 · USD</dt><dd>${paths(economics.classified_paths_usd)}</dd></div><div><dt>分類費估計 · USD</dt><dd>${interval(economics.classifier_fee_estimate_usd)}</dd></div><div><dt>保守淨節省估計 · USD</dt><dd>${estimateAmount(economics.net_saving_lower_usd)}</dd></div><div><dt>分類實付 API 費用 · USD</dt><dd>${estimateAmount(stage.classifier_api_usd)}</dd></div><div><dt>原分類校準版本</dt><dd><code>${knownText(economics.calibration_version)}</code></dd></div></dl><p class="metadata muted">以上區間是原完整流程估計，實付沿用原核帳，不重複加總。分類分布不是答對機率。</p>`;
+    return `<dl class="trace-facts"><div><dt>直接路徑完整流程估計 · USD</dt><dd>${paths(economics.direct_paths_usd)}</dd></div><div><dt>分類後完整流程估計 · USD</dt><dd>${paths(economics.classified_paths_usd)}</dd></div><div><dt>分類費估計 · USD</dt><dd>${interval(economics.classifier_fee_estimate_usd)}</dd></div><div><dt>保守淨節省估計 · USD</dt><dd>${estimateAmount(economics.net_saving_lower_usd)}</dd></div><div><dt>分類實付 API 費用 · USD</dt><dd>${estimateAmount(stage.classifier_api_usd)}</dd></div><div><dt>原分類校準版本</dt><dd><code>${knownText(economics.calibration_version)}</code></dd></div><div><dt>原校準證據指紋</dt><dd><code>${knownText(economics.calibration_evidence_sha256)}</code></dd></div><div><dt>原分類協定指紋</dt><dd><code>${knownText(economics.classifier_contract_sha256)}</code></dd></div></dl><p class="metadata muted">以上區間是原完整流程估計，實付沿用原核帳，不重複加總。分類分布不是答對機率。</p>`;
   }
   function historySection(task) {
     const envelope=record(task.operator_observation)?task.operator_observation:{};

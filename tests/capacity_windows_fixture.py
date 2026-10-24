@@ -27,11 +27,12 @@ def window_configuration(now):
             "local_limits": [limit("rpm", 100, now), limit("tpm", None, now, status="not_applicable"), limit("concurrency", 2, now)]}]}
 
 
-def attach_windows(bundle, clock, *, rules=None):
+def attach_windows(bundle, clock, *, rules=None, controlled_sources=None):
     original = attach_admission(bundle, clock, config=window_configuration(clock()))
     windows = CapacityWindows(original.store, version="synthetic-windows-v1", rules=rules or [
         {"binding": "synthetic-binding", "group": "shared", "header": "retry-after",
-         "format": "retry_after", "constraint": "requests"}])
+         "format": "retry_after", "constraint": "requests"}],
+        **({"controlled_sources": controlled_sources} if controlled_sources is not None else {}))
     controller = CapacityController(original.store, credential_active=original.credential_active,
         window_backend=windows)
     controller.register("synthetic-window-admission-v1", configuration_version="synthetic-admission-config-v1",
@@ -39,7 +40,8 @@ def attach_windows(bundle, clock, *, rules=None):
     old = bundle.app
     bundle.app = assemble_monitor(old.store, old.gateway.service, old.gateway.registry, old.identity_store,
         operator_token=bundle.operator_token, source=old.source, origin=old.origin, demo=True,
-        capacity_observer=CapacityObserver(original.store, sources={}), capacity_controller=controller)
+        capacity_observer=CapacityObserver(original.store, sources={},
+            **({"window_backend": windows} if controlled_sources is not None else {})), capacity_controller=controller)
     return controller, windows
 
 

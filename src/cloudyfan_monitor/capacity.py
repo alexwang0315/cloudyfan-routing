@@ -4,6 +4,7 @@ import math
 import time
 
 from cloudyfan_jev.capacity import CapacityStore
+from cloudyfan_jev.capacity_windows import CapacityWindows
 
 from .openrouter_accounting import AccountingError, OpenRouterAccounting
 from .store import MonitorError
@@ -11,10 +12,13 @@ from .store import MonitorError
 
 class CapacityObserver:
     def __init__(self, store, *, sources=None, max_requests=8, max_seconds=10, source_ttl=300,
-                 monotonic=time.monotonic):
+                 monotonic=time.monotonic, window_backend=None):
         if type(store) is not CapacityStore:
             raise ValueError("Controlled persisted capacity source store required")
         self.store = store
+        if window_backend is not None and (type(window_backend) is not CapacityWindows or window_backend.store is not store):
+            raise ValueError("Same controlled store and saved window backend required")
+        self.window_backend = window_backend
         self.sources = dict(sources or {})
         if any(type(source) is not OpenRouterAccounting for source in self.sources.values()):
             raise ValueError("Existing controlled OpenRouter accounting sources required")
@@ -99,7 +103,8 @@ class CapacityObserver:
                 status=status, observations=items, error_code=error_code, request_count=requests)
             failed += status == "unavailable"
             available += status == "available"
+        imported = self.window_backend.import_sources() if self.window_backend is not None else None
         return {"status": "partial" if available and failed else "unavailable" if failed else "available",
                 "request_count": count, "max_requests": self.max_requests, "max_seconds": self.max_seconds,
                 "elapsed_seconds": max(0, self.monotonic() - started), "execution_enabled": False,
-                "snapshot": self.snapshot()}
+                "snapshot": self.snapshot(), **({"window_import": imported} if imported is not None else {})}

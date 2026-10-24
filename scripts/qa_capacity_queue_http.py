@@ -15,7 +15,9 @@ from uuid import uuid4
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
-    output = parser.parse_args().output.resolve()
+    parser.add_argument("--retry-after-seconds", type=int, choices=[30])
+    arguments = parser.parse_args()
+    output = arguments.output.resolve()
     package = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(package / "tests"))
     import httpx
@@ -52,7 +54,9 @@ def main():
                     raise httpx.ReadTimeout("Synthetic queue completion gate timed out")
         controlled = build_queue_host(output / "service", clock=clock, origin=origin,
             options={"limits": {"capacity": 4, "concurrency": 1, "per_principal": 2, "max_wait_seconds": 120},
-                "rpm": 10, "seconds": 300}, before_response=observe_model)
+                "rpm": 10, "seconds": 300,
+                **({"retry_after_seconds": arguments.retry_after_seconds} if arguments.retry_after_seconds is not None else {})},
+            before_response=observe_model)
         host, queue = controlled.bundle, controlled.queue
         controller = host.app.capacity_controller
         budget = next(iter(host.app.gateway.service.contracts.values())).runner.store
@@ -70,10 +74,13 @@ def main():
             original = {str(path.relative_to(host.root)): hashlib.sha256(path.read_bytes()).hexdigest()
                 for folder in (host.root / "receipts", host.root / "tasks")
                 for path in sorted(folder.rglob("*.json"))}
+            with lock:
+                model_requests = list(requests)
+                model_response_held = held.is_set() and not released.is_set()
             return {"schema_version": 1, "pid": os.getpid(), "origin": origin,
                 "scope": "actual original Core/BudgetedCore/TaskService/IdentityStore/Store/QueueScheduler/CapacityStore; loopback HTTP; MockTransport only",
                 "http_responses": list(responses), "fixture_commands": list(commands),
-                "model_requests": list(requests), "source_requests": list(side_requests["source"]),
+                "model_requests": model_requests, "source_requests": list(side_requests["source"]),
                 "accounting_requests": list(side_requests["accounting"]),
                 "budget": budget.report(), "billing": host.app.gateway.billing.snapshot(),
                 "control": host.app.store.control(),
@@ -81,7 +88,7 @@ def main():
                 "capacity_sha256": hashlib.sha256(controller.store.path.read_bytes()).hexdigest(),
                 "original_evidence_sha256": original, "worker_results": list(worker_results),
                 "worker_running": any(worker.is_alive() for worker in workers),
-                "model_response_held": held.is_set() and not released.is_set(),
+                "model_response_held": model_response_held,
                 "blocked_server_socket_attempts": [str(item) for item in boundary.blocked],
                 "server_socket_attempts": [str(item) for item in boundary.connected]}
 

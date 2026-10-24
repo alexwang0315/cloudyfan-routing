@@ -39,17 +39,48 @@ window.CloudyFanQueue = (() => {
   const seconds = (value, missing = '未知') => finite(value) ? value.toFixed(2) + ' 秒' : missing;
   const money = value => typeof value === 'string' && /^\d+(?:\.\d+)?$/.test(value) ? '$' + value : '未知';
 
+  function rejection(item) {
+    const known = typeof item.reason === 'string' && Object.hasOwn(reasons, item.reason);
+    return `<article class="queue-rejection" data-queue-rejection="${h(item.run_id)}"><div><strong class="mono">${h(item.run_id)}</strong><p>客戶端 <span class="mono">${h(item.client)}</span> · 原拒絕時間 ${h(stamp(item.at))}</p></div><p class="queue-reason">${h(known ? reasons[item.reason] : '目前沒有可核對的安全原因，請由操作員查核原保存證據。')}${known ? `<small class="mono">${h(item.reason)}</small>` : ''}</p></article>`;
+  }
+
+  function binding(queue) {
+    const frozen = queue.frozen || {}, monitor = frozen.monitor || {}, capacity = frozen.capacity || {}, tariff = monitor.tariff || {};
+    const text = value => typeof value === 'string' && value ? value : '未知';
+    const field = (label, key, value) => `<div><dt>${h(label)}</dt><dd data-queue-frozen="${key}">${h(value)}</dd></div>`;
+    return `<h3 class="queue-binding-heading">入列時保存的執行設定</h3><p class="metadata">以下沿用這筆任務的原設定；不以目前控制台的模式、費率或版本替代。</p><dl class="queue-properties queue-binding">${[
+      field('原執行契約', 'contract', text(frozen.contract_id)),
+      field('原契約版本', 'contract-version', text(frozen.contract_version)),
+      field('原契約核對值', 'registered-sha', text(frozen.registered_sha256)),
+      field('原路由模式', 'mode', text(monitor.mode || frozen.mode)),
+      field('原候選池版本', 'pool', text(monitor.pool_version)),
+      field('原任務分類', 'category', text(monitor.category)),
+      field('原費率修訂', 'tariff-revision', shown(tariff.revision)),
+      field('原客戶端費率倍率', 'tariff-multiplier', text(tariff.multiplier)),
+      field('原費率收費設定', 'tariff-enabled', tariff.enabled === true ? '已啟用' : tariff.enabled === false ? '未啟用' : '未知'),
+      field('原費率與自訂報價核對值', 'tariff-sha', text(monitor.tariff_sha256)),
+      field('原容量政策版本', 'capacity-policy', text(capacity.policy_version)),
+      field('原容量設定版本', 'capacity-configuration', text(capacity.configuration_version)),
+      field('原容量設定核對值', 'configuration-sha', text(capacity.configuration_sha256)),
+      field('原排隊版本', 'queue-version', text(capacity.queue_version)),
+      field('原窗口版本', 'windows-version', text(capacity.windows_version)),
+      field('原任務存取期限', 'access-expiry', stamp(frozen.access_expires_at)),
+    ].join('')}</dl>`;
+  }
+
   function job(item) {
-    const state = item.reason === 'task_expired' ? ['存取已到期', 'amber'] :
+    const accessExpired = item.reason === 'task_expired' || item.observation_error === 'task_expired';
+    const state = accessExpired ? ['存取已到期', 'amber'] :
+      item.observation_error ? ['原證據無法核對', 'amber'] :
       item.status === 'cancelled' && item.reason === 'cancelled_before_dispatch' ? ['派送前已取消', ''] :
       item.status === 'cancelled' && item.reason === 'cancelled_before_next_dispatch' ? ['已取消後續等待', ''] :
-      states[item.status] || ['狀態無法確認', 'amber'];
+      Object.hasOwn(states, item.status) ? states[item.status] : ['狀態無法確認', 'amber'];
     const queue = item.queue || {}, costs = item.costs || {};
-    const codes = [...new Set([item.reason, item.capacity_reason].filter(code => typeof code === 'string' && code))];
+    const codes = [...new Set((accessExpired ? ['task_expired'] : [item.reason, item.capacity_reason, item.observation_error]).filter(code => typeof code === 'string' && code))];
     const knownCodes = codes.filter(code => Object.hasOwn(reasons, code));
     const reasonRows = knownCodes.map(code => `<p class="queue-reason">${h(reasons[code])}<small class="mono">${h(code)}</small></p>`).join('') +
       (knownCodes.length < codes.length ? '<p class="queue-reason">目前沒有可核對的安全原因，請由操作員查核原保存證據。</p>' : '');
-    return `<article class="panel queue-job" data-queue-run="${h(item.run_id)}"><div class="queue-job-heading"><div><h2 class="mono">${h(item.run_id)}</h2><p>客戶端 <span class="mono">${h(item.client)}</span></p></div><span class="badge ${state[1]}">${h(state[0])}</span></div>${reasonRows}${item.cancellation_requested ? `<p class="queue-warning">${item.queue_state === 'cancelled' ? item.reason === 'cancelled_before_dispatch' ? '派送前取消已記錄。' : '後續等待已取消，既有請求、費用與未決狀態仍保留。' : '已提出取消要求；未確認供應商停止，不代表退款或可安全重送。'}</p>` : ''}<dl class="queue-timings"><div><dt>入列至首次執行</dt><dd data-queue-timing="queue">${h(seconds(item.queue_seconds, item.queue_state === 'queued' ? '尚未開始' : '未知'))}</dd></div><div><dt>累計等待時間</dt><dd data-queue-timing="waiting">${h(seconds(queue.waiting_seconds))}</dd></div><div><dt>完整流程耗時</dt><dd data-queue-timing="end_to_end">${h(seconds(item.end_to_end_seconds, ['queued', 'accepting', 'claiming', 'running', 'interrupted_pending'].includes(item.queue_state) ? '尚未完成' : '未知'))}</dd></div></dl><details data-queue-detail="${h(JSON.stringify([item.client, item.run_id]))}"><summary>查看原期限、版本與費用</summary><dl class="queue-properties"><div><dt>原入列時間</dt><dd>${h(stamp(queue.accepted_at))}</dd></div><div><dt>原等待期限</dt><dd>${h(stamp(queue.deadline))}</dd></div><div><dt>固定排隊版本</dt><dd class="mono">${h(queue.version || '未知')}</dd></div><div><dt>完整 API 費用</dt><dd>${h(money(costs.complete_api_usd))}</dd></div><div><dt>已知 API 費用</dt><dd>${h(money(costs.known_api_usd))}</dd></div><div><dt>費用未明事件</dt><dd>${h(shown(costs.unknown_events))}</dd></div></dl>${queue.effective_expiry_only ? '<p class="metadata">目前依原期限顯示到期；此唯讀觀測不代表派送程序已寫入新的狀態。</p>' : ''}</details></article>`;
+    return `<article class="panel queue-job" data-queue-run="${h(item.run_id)}"><div class="queue-job-heading"><div><h2 class="mono">${h(item.run_id)}</h2><p>客戶端 <span class="mono">${h(item.client)}</span></p></div><span class="badge ${state[1]}">${h(state[0])}</span></div>${reasonRows}${item.cancellation_requested ? `<p class="queue-warning">${item.queue_state === 'cancelled' ? item.reason === 'cancelled_before_dispatch' ? '派送前取消已記錄。' : '後續等待已取消，既有請求、費用與未決狀態仍保留。' : '已提出取消要求；未確認供應商停止，不代表退款或可安全重送。'}</p>` : ''}<dl class="queue-timings"><div><dt>入列至首次執行</dt><dd data-queue-timing="queue">${h(seconds(item.queue_seconds, item.queue_state === 'queued' ? '尚未開始' : '未知'))}</dd></div><div><dt>累計等待時間</dt><dd data-queue-timing="waiting">${h(seconds(queue.waiting_seconds))}</dd></div><div><dt>完整流程耗時</dt><dd data-queue-timing="end_to_end">${h(seconds(item.end_to_end_seconds, ['queued', 'accepting', 'claiming', 'running', 'interrupted_pending'].includes(item.queue_state) ? '尚未完成' : '未知'))}</dd></div></dl><details data-queue-detail="${h(JSON.stringify([item.client, item.run_id]))}"><summary>查看原期限、版本與費用</summary><dl class="queue-properties"><div><dt>原入列時間</dt><dd>${h(stamp(queue.accepted_at))}</dd></div><div><dt>原等待期限</dt><dd>${h(stamp(queue.deadline))}</dd></div><div><dt>固定排隊版本</dt><dd class="mono">${h(queue.version || '未知')}</dd></div><div><dt>完整 API 費用</dt><dd>${h(money(costs.complete_api_usd))}</dd></div><div><dt>已知 API 費用</dt><dd>${h(money(costs.known_api_usd))}</dd></div><div><dt>費用未明事件</dt><dd>${h(shown(costs.unknown_events))}</dd></div></dl>${binding(queue)}${queue.effective_expiry_only ? '<p class="metadata">目前依原期限顯示到期；此唯讀觀測不代表派送程序已寫入新的狀態。</p>' : ''}</details></article>`;
   }
 
   function render() {
@@ -58,8 +89,8 @@ window.CloudyFanQueue = (() => {
     const active = document.activeElement;
     const focusedDetail = root.contains(active) && active?.tagName === 'SUMMARY' ? active.closest('details')?.dataset.queueDetail : null;
     const issue = readState === 'unauthorized' ? '<p class="queue-warning" role="status">操作員授權已失效，已清除這個排隊畫面；請重新認證。</p>' : readState === 'stale' ? '<p class="queue-warning" role="status">本次讀取失敗，保留上次畫面與原始觀測時間。</p>' : readState === 'unavailable' ? '<p class="queue-warning" role="status">排隊資料目前無法讀取；本頁沒有派送或重新入列。</p>' : '';
-    const limits = data?.limits || {}, jobs = Array.isArray(data?.jobs) ? data.jobs : [];
-    root.innerHTML = `<div id="queue-page"><div class="page-heading"><div><div class="eyebrow">BOUNDED TASK QUEUE</div><h1>排隊與任務生命週期</h1><p>分清等待名額、等待窗口與執行狀態；查詢不派送、不刷新供應商來源。</p></div></div><p class="notice queue-client-notice" role="note">客戶端需支援 202 排隊狀態與後續查詢；只接受立即答案的客戶端需先調整。</p>${context.demo ? '<p class="queue-warning">合成驗收環境 · 耗時只描述本次合成流程，未建立真實供應商吞吐或 SLO 資格。</p>' : ''}${issue}${!data ? `<div class="panel empty">${readState === 'unauthorized' ? '重新認證後才能讀取排隊工作。' : '正在讀取已保存的排隊資料…'}</div>` : !data.configured ? '<div class="panel empty">尚未接入版本化有界佇列；保留原同步入口規則。</div>' : `<section class="panel queue-configuration"><h2>固定的等待範圍</h2><p>排隊版本 <code>${h(data.version)}</code> · 原觀測時間 <span id="queue-observed-at">${h(stamp(data.now))}</span></p><dl class="queue-limits"><div><dt>佇列容量</dt><dd data-queue-limit="capacity">${h(shown(limits.capacity))}</dd></div><div><dt>執行並行數</dt><dd data-queue-limit="concurrency">${h(shown(limits.concurrency))}</dd></div><div><dt>每客戶端待處理上限</dt><dd data-queue-limit="per_principal">${h(shown(limits.per_principal))}</dd></div><div><dt>最長等待</dt><dd data-queue-limit="max_wait_seconds">${h(shown(limits.max_wait_seconds))}${finite(limits.max_wait_seconds) ? ' 秒' : ''}</dd></div></dl><p class="metadata">以上為伺服器固定設定；本頁只讀。取消由原客戶端提出，執行中取消僅記錄要求，不承諾供應商停止或退款。排隊與接續不延長原任務存取期限。</p></section><p class="metadata queue-count">保存 ${h(shown(data.job_count))} 件工作；本頁列出 ${jobs.length} 件${data.history_complete === false ? '，僅為部分歷史，不能由此推定全部占用。' : '。'}</p><div class="queue-jobs">${jobs.map(job).join('') || '<div class="panel empty">尚無可讀取的排隊工作。</div>'}</div>`}</div>`;
+    const limits = data?.limits || {}, jobs = Array.isArray(data?.jobs) ? data.jobs : [], refused = Array.isArray(data?.rejections) ? data.rejections : [];
+    root.innerHTML = `<div id="queue-page"><div class="page-heading"><div><div class="eyebrow">BOUNDED TASK QUEUE</div><h1>排隊與任務生命週期</h1><p>分清等待名額、等待窗口與執行狀態；查詢不派送、不刷新供應商來源。</p></div></div><p class="notice queue-client-notice" role="note">客戶端需支援 202 排隊狀態與後續查詢；只接受立即答案的客戶端需先調整。</p>${context.demo ? '<p class="queue-warning">合成驗收環境 · 耗時只描述本次合成流程，未建立真實供應商吞吐或 SLO 資格。</p>' : ''}${issue}${!data ? `<div class="panel empty">${readState === 'unauthorized' ? '重新認證後才能讀取排隊工作。' : '正在讀取已保存的排隊資料…'}</div>` : !data.configured ? '<div class="panel empty">尚未接入版本化有界佇列；保留原同步入口規則。</div>' : `<section class="panel queue-configuration"><h2>固定的等待範圍</h2><p>排隊版本 <code>${h(data.version)}</code> · 原觀測時間 <span id="queue-observed-at">${h(stamp(data.now))}</span></p><dl class="queue-limits"><div><dt>佇列容量</dt><dd data-queue-limit="capacity">${h(shown(limits.capacity))}</dd></div><div><dt>執行並行數</dt><dd data-queue-limit="concurrency">${h(shown(limits.concurrency))}</dd></div><div><dt>每客戶端待處理上限</dt><dd data-queue-limit="per_principal">${h(shown(limits.per_principal))}</dd></div><div><dt>最長等待</dt><dd data-queue-limit="max_wait_seconds">${h(shown(limits.max_wait_seconds))}${finite(limits.max_wait_seconds) ? ' 秒' : ''}</dd></div></dl><p class="metadata">以上為伺服器固定設定；本頁只讀。取消由原客戶端提出，執行中取消僅記錄要求，不承諾供應商停止或退款。排隊與接續不延長原任務存取期限。</p></section><p class="metadata queue-active-count">目前占用待處理名額 ${h(shown(data.active_count))} 件；保存中的待處理紀錄 ${h(shown(data.retained_active_count))} 件${data.active_history_complete === false ? '，本頁未列出全部待處理工作。' : '。'}</p><p class="metadata queue-count">保存 ${h(shown(data.job_count))} 件工作；本頁列出 ${jobs.length} 件${data.history_complete === false ? '，僅為部分歷史，不能由此推定全部占用。' : '。'}</p><section class="panel queue-rejections"><h2>未入列的拒絕紀錄</h2><p class="metadata queue-rejection-count">保存 ${h(shown(data.rejection_count))} 件拒絕紀錄；本頁列出 ${refused.length} 件${data.rejection_history_complete === false ? '，僅為部分歷史。' : '。'}</p>${refused.map(rejection).join('') || '<p class="metadata">目前沒有可讀取的拒絕紀錄。</p>'}</section><div class="queue-jobs">${jobs.map(job).join('') || '<div class="panel empty">尚無可讀取的排隊工作。</div>'}</div>`}</div>`;
     root.querySelectorAll('details').forEach(node => { node.open = opened.has(node.dataset.queueDetail); });
     if (focusedDetail) {
       const target = Array.from(root.querySelectorAll('details')).find(node => node.dataset.queueDetail === focusedDetail)?.querySelector('summary');

@@ -15,5 +15,9 @@
 #queue-page details>summary{cursor:pointer;color:var(--blue);padding:4px 0;outline-offset:4px}
 #queue-page details>summary:focus-visible{outline:2px solid var(--mint)}
 #queue-page .queue-properties{grid-template-columns:repeat(3,minmax(0,1fr));font-size:12px}
+#queue-page .queue-rejections{padding:20px;margin-top:18px}
+#queue-page .queue-rejection{padding:14px 0;border-top:1px solid var(--border);overflow-wrap:anywhere}
+#queue-page .queue-rejection>div p{font-size:11px;color:var(--muted);margin-top:6px}
+#queue-page .queue-binding-heading{margin-top:20px;font-size:13px}
 @media(max-width:1000px){#queue-page .queue-limits{grid-template-columns:repeat(2,minmax(0,1fr))}#queue-page .queue-properties{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:600px){#queue-page .queue-job,#queue-page .queue-configuration{padding:16px}#queue-page .queue-timings,#queue-page .queue-properties{grid-template-columns:1fr}#queue-page .queue-job-heading{flex-wrap:wrap}}

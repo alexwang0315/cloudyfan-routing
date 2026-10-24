@@ -7,21 +7,21 @@ const {createHash,randomUUID} = require('node:crypto');
 const {startFixture} = require('./qa_fixture_ipc.cjs');
 
 async function main() {
-  const root=path.resolve(__dirname,'..'),core=process.env.CLOUDYFAN_CORE_ROOT;
+  const root=path.resolve(__dirname,'..'),core=process.env.CLOUDYFAN_CORE_ROOT,windowScenario=process.argv.includes('--windows');
   assert.ok(core,'Use an explicitly matched Core root');
   const {chromium}=require(process.env.PLAYWRIGHT_PATH||'/Users/alexwang0315/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
   const output=process.argv[2]?path.resolve(process.argv[2]):path.join(root,'runtime/capacity-queue-desktop',randomUUID().slice(0,12));
   await fs.mkdir(path.dirname(output),{recursive:true});await fs.mkdir(output,{recursive:false,mode:0o700});
-  const report={schema_version:1,status:'incomplete',viewport:{width:1280,height:800},checks:[],screenshots:[],
+  const report={schema_version:1,status:'incomplete',scenario:windowScenario?'actual-response-window':'lifecycle',viewport:{width:1280,height:800},checks:[],screenshots:[],
     http_responses:[],page_errors:[],console_errors:[],expected_http_errors:[],blocked_browser_requests:[],
     scope:'actual Chrome + loopback HTTP; real synthetic controlled queue host; MockTransport only; no supplier qualification or SLO claim'};
   const fixture=startFixture(process.env.CLOUDYFAN_QA_PYTHON||path.join(core,'.venv/bin/python'),
-    [path.join(__dirname,'qa_capacity_queue_http.py'),'--output',output],{cwd:root,
+    [path.join(__dirname,'qa_capacity_queue_http.py'),'--output',output,...(windowScenario?['--retry-after-seconds','30']:[])],{cwd:root,
       env:{...process.env,PYTHONDONTWRITEBYTECODE:'1',PYTHONPATH:[path.join(root,'src'),path.join(core,'src')].join(path.delimiter)}});
   let browser,page;
   const inspect=async(command={command:'inspect'})=>{fixture.send(command);return fixture.next();};
   const step=async(name,action)=>{await action();report.checks.push({name,passed:true});console.log('PASS '+name);};
-  const shot=async name=>{await page.screenshot({path:path.join(output,name+'.png'),fullPage:true});report.screenshots.push(name+'.png');
+  const shot=async(name,{fullPage=true}={})=>{await page.screenshot({path:path.join(output,name+'.png'),fullPage});report.screenshots.push(name+'.png');
     await fs.writeFile(path.join(output,name+'.aria.txt'),await page.locator('body').ariaSnapshot());};
   const hash=async file=>createHash('sha256').update(await fs.readFile(file)).digest('hex');
   const sourceFiles=async(directory,prefix='')=>{
@@ -63,6 +63,89 @@ async function main() {
     assert.equal(original.status,'queued');assert.equal(original.reason,'queue_waiting_worker');
     report.initial_acceptance={status:accepted.status(),run_id:original.run_id,status_value:original.status,reason:original.reason};
     await page.goto(ready.origin+'/#queue');
+    if(windowScenario) {
+      const waitWorker=async()=>{
+        for(let attempt=0;attempt<80;attempt++) {const state=await inspect();if(!state.worker_running)return state;await page.waitForTimeout(25);}
+        throw new Error('Controlled queue worker did not finish');
+      };
+      await step('saved_actual_429_with_known_fee_moves_next_dispatch_to_a_real_window_wait',async()=>{
+        await page.locator('[data-queue-run="queue-desktop-one"]').waitFor();
+        assert.equal((await inspect()).model_requests.length,0);
+        await inspect({command:'advance',seconds:2});await inspect({command:'dispatch'});
+        const first=await waitWorker();assert.equal(first.model_requests.length,1);
+        assert.equal(Object.keys(first.original_evidence_sha256).filter(name=>name.endsWith('/response.json')).length,1);
+        await inspect({command:'dispatch'});const waiting=await waitWorker();assert.equal(waiting.model_requests.length,1);
+        assert.equal(waiting.worker_results.at(-1).claimed,false);
+        const own=await context.request.get(ready.origin+'/v1/tasks/'+task.run_id,{headers});
+        assert.equal(own.status(),202);const state=await own.json();
+        assert.equal(state.reason,'queue_waiting_window');assert.equal(state.capacity_reason,'capacity_window_wait');
+        assert.equal(state.costs.unknown_events,0);assert.notEqual(state.costs.known_api_usd,'0');
+        assert.equal(state.queue_seconds,2);assert.equal(state.end_to_end_seconds,null);
+        assert.equal(state.queue.deadline,original.queue.deadline);assert.deepEqual(state.queue.frozen,original.queue.frozen);
+        const capacity=await context.request.get(ready.origin+'/monitor/capacity',{headers:{Authorization:'Bearer '+ready.operator_token}});
+        assert.equal(capacity.status(),200);const window=(await capacity.json()).dispatch.windows;
+        assert.equal(window.groups[0].not_before,original.queue.accepted_at+32);
+        const read=page.waitForResponse(response=>response.url().endsWith('/monitor/queue'));
+        await page.locator('#reload').click();await (await read).finished();
+        const job=page.locator('[data-queue-run="queue-desktop-one"]');
+        await job.getByText('queue_waiting_window',{exact:true}).waitFor();
+        await job.getByText('capacity_window_wait',{exact:true}).waitFor();
+        assert.match(await job.innerText(),/等待適用的供應商窗口/);
+        assert.ok(!(await job.innerText()).includes('queue_waiting_slot'));
+        const detail=job.locator('details');await detail.locator('summary').focus();await page.keyboard.press('Enter');
+        assert.equal(await detail.locator('[data-queue-frozen="windows-version"]').innerText(),original.queue.frozen.capacity.windows_version);
+        assert.match(await detail.innerText(),/完整 API 費用\s+未知/);
+        report.response_window={known_api_usd:state.costs.known_api_usd,not_before:window.groups[0].not_before,
+          first_queue_seconds:state.queue_seconds,frozen_windows_version:original.queue.frozen.capacity.windows_version};
+        await shot('14-actual-response-window-wait');
+      });
+      await step('ordinary_window_reads_and_original_resume_preserve_receipts_and_never_dispatch',async()=>{
+        const before=await inspect();
+        const polled=page.waitForResponse(response=>response.url().endsWith('/monitor/queue'));
+        await (await polled).finished();
+        await page.waitForFunction(()=>document.activeElement?.closest('[data-queue-detail]')?.open===true);
+        const replay=await context.request.post(ready.origin+'/v1/tasks',{headers,data:task});
+        const resume=await context.request.post(ready.origin+'/v1/tasks/'+task.run_id+'/resume',{headers,data:{}});
+        assert.equal(replay.status(),202);assert.equal(resume.status(),202);
+        assert.equal((await replay.json()).reason,'queue_waiting_window');assert.equal((await resume.json()).reason,'queue_waiting_window');
+        const after=await inspect();assert.deepEqual(after.model_requests,before.model_requests);
+        assert.deepEqual(after.budget,before.budget);assert.equal(after.queue_sha256,before.queue_sha256);
+        assert.equal(after.capacity_sha256,before.capacity_sha256);assert.deepEqual(after.original_evidence_sha256,before.original_evidence_sha256);
+        await inspect({command:'advance',seconds:29});await inspect({command:'dispatch'});
+        const early=await waitWorker();assert.equal(early.worker_results.at(-1).claimed,false);assert.equal(early.model_requests.length,1);
+        const still=await context.request.get(ready.origin+'/v1/tasks/'+task.run_id,{headers});
+        assert.equal(still.status(),202);assert.equal((await still.json()).reason,'queue_waiting_window');
+        report.response_window.early_dispatch_after_seconds=29;
+        await shot('15-window-poll-keeps-original-fee');
+      });
+      await step('only_an_explicit_worker_after_the_saved_window_advances_original_classifier_and_answer',async()=>{
+        await inspect({command:'advance',seconds:1});const before=await inspect();
+        const read=await context.request.get(ready.origin+'/v1/tasks/'+task.run_id,{headers});
+        assert.equal(read.status(),202);assert.equal((await read.json()).queue.deadline,original.queue.deadline);
+        assert.deepEqual((await inspect()).model_requests,before.model_requests);
+        await inspect({command:'dispatch'});const classifier=await waitWorker();assert.equal(classifier.model_requests.length,2);
+        await inspect({command:'dispatch'});const final=await waitWorker();assert.equal(final.model_requests.length,3);
+        const result=await context.request.get(ready.origin+'/v1/tasks/'+task.run_id,{headers});
+        assert.equal(result.status(),200);const state=await result.json();assert.equal(state.status,'passed');
+        assert.equal(state.queue_seconds,2);assert.equal(state.end_to_end_seconds,32);assert.equal(state.queue.waiting_seconds,32);
+        assert.equal(state.queue.deadline,original.queue.deadline);assert.deepEqual(state.queue.frozen,original.queue.frozen);
+        assert.equal(state.costs.unknown_events,0);assert.ok(state.costs.complete_api_usd);
+        const saved=await inspect();
+        const replay=await context.request.post(ready.origin+'/v1/tasks',{headers,data:task});
+        assert.equal(replay.status(),200);assert.deepEqual(await replay.json(),state);
+        const reload=page.waitForResponse(response=>response.url().endsWith('/monitor/queue'));
+        await page.locator('#reload').click();await (await reload).finished();
+        const job=page.locator('[data-queue-run="queue-desktop-one"]');await job.getByText('通過',{exact:true}).waitFor();
+        assert.equal(await job.locator('[data-queue-timing="waiting"]').innerText(),'32.00 秒');
+        assert.equal(await job.locator('[data-queue-timing="end_to_end"]').innerText(),'32.00 秒');
+        assert.ok(!(await page.locator('#queue-page').innerText()).includes('PRIVATE_'));
+        const after=await inspect();assert.deepEqual(after.model_requests,saved.model_requests);assert.deepEqual(after.budget,saved.budget);
+        assert.equal(after.queue_sha256,saved.queue_sha256);assert.equal(after.capacity_sha256,saved.capacity_sha256);
+        assert.deepEqual(after.original_evidence_sha256,saved.original_evidence_sha256);
+        report.response_window.final_post_count=3;report.response_window.end_to_end_seconds=state.end_to_end_seconds;
+        await shot('16-window-original-completion');
+      });
+    } else {
     await step('real_202_queue_shows_fixed_limits_and_own_original_job_without_paid_dispatch',async()=>{
       await page.locator('#queue-page').waitFor();
       assert.equal(await page.locator('[data-queue-limit="capacity"]').innerText(),'4');
@@ -81,9 +164,84 @@ async function main() {
       assert.deepEqual(after.original_evidence_sha256,before.original_evidence_sha256);
       await shot('01-real-queued-limits');
     });
+    await step('original_quota_and_queue_full_refusals_are_bounded_readonly_and_do_not_create_paid_work',async()=>{
+      const studioExtra={...task,run_id:'queue-desktop-quota-held'};
+      assert.equal((await context.request.post(ready.origin+'/v1/tasks',{headers,data:studioExtra})).status(),202);
+      const quotaTask={...task,run_id:'queue-desktop-quota-refused'};
+      const quota=await context.request.post(ready.origin+'/v1/tasks',{headers,data:quotaTask});
+      assert.equal(quota.status(),429);assert.equal((await quota.json()).error.code,'principal_quota_full');
+      const batchHeaders={Authorization:'Bearer '+ready.credentials.batch};
+      const batchTasks=['queue-desktop-full-one','queue-desktop-full-two'].map(run_id=>({...task,run_id}));
+      for(const next of batchTasks)assert.equal((await context.request.post(ready.origin+'/v1/tasks',{headers:batchHeaders,data:next})).status(),202);
+      const fullTask={...task,run_id:'queue-desktop-full-refused'};
+      const full=await context.request.post(ready.origin+'/v1/tasks',{headers:{Authorization:'Bearer '+ready.credentials.agent},data:fullTask});
+      assert.equal(full.status(),429);assert.equal((await full.json()).error.code,'queue_full');
+      const before=await inspect();assert.equal(before.model_requests.length,0);assert.deepEqual(before.budget.reservations,[]);
+      const viewResponse=await context.request.get(ready.origin+'/monitor/queue',{headers:{Authorization:'Bearer '+ready.operator_token}});
+      assert.equal(viewResponse.status(),200);const view=await viewResponse.json();
+      assert.equal(view.rejection_count,2);assert.equal(view.rejection_history_complete,true);
+      assert.equal(view.active_count,4);assert.equal(view.retained_active_count,4);assert.equal(view.active_history_complete,true);
+      const read=page.waitForResponse(response=>response.url().endsWith('/monitor/queue'));
+      await page.locator('#reload').click();await (await read).finished();
+      await page.locator('[data-queue-rejection="queue-desktop-quota-refused"]').getByText('principal_quota_full',{exact:true}).waitFor();
+      await page.locator('[data-queue-rejection="queue-desktop-full-refused"]').getByText('queue_full',{exact:true}).waitFor();
+      assert.match(await page.locator('.queue-rejection-count').innerText(),/保存 2 件拒絕紀錄；本頁列出 2 件/);
+      assert.match(await page.locator('.queue-active-count').innerText(),/目前占用待處理名額 4 件/);
+      assert.equal(await page.locator('[data-queue-run="queue-desktop-quota-refused"]').count(),0);
+      assert.equal(await page.locator('[data-queue-run="queue-desktop-full-refused"]').count(),0);
+      const after=await inspect();assert.equal(after.queue_sha256,before.queue_sha256);assert.equal(after.capacity_sha256,before.capacity_sha256);
+      assert.deepEqual(after.original_evidence_sha256,before.original_evidence_sha256);assert.deepEqual(after.budget,before.budget);
+      report.refusals={quota_status:quota.status(),full_status:full.status(),count:view.rejection_count,active:view.active_count};
+      await shot('12-original-quota-and-full-refusals');
+      assert.equal((await context.request.post(ready.origin+'/v1/tasks/'+studioExtra.run_id+'/cancel',{headers,data:{}})).status(),200);
+      for(const next of batchTasks)assert.equal((await context.request.post(ready.origin+'/v1/tasks/'+next.run_id+'/cancel',{headers:batchHeaders,data:{}})).status(),200);
+    });
+    await step('saved_original_mode_pool_tariff_and_capacity_binding_survive_current_control_changes',async()=>{
+      const frozen=original.queue.frozen;
+      assert.equal(frozen.monitor.mode,'cloudyfan');assert.equal(frozen.monitor.tariff.multiplier,'1');
+      assert.equal(frozen.access_expires_at,original.queue.accepted_at+30*86400);
+      const before=await inspect(),operatorHeaders={Authorization:'Bearer '+ready.operator_token};
+      const changedMode=await context.request.post(ready.origin+'/monitor/mode',{headers:operatorHeaders,
+        data:{revision:before.control.revision,mode:'fixed_high'}});
+      assert.equal(changedMode.status(),200);assert.equal((await changedMode.json()).mode,'fixed_high');
+      const changedTariff=await context.request.post(ready.origin+'/monitor/billing/settings',{headers:operatorHeaders,
+        data:{...before.billing.settings,multiplier:'2'}});
+      assert.equal(changedTariff.status(),200);const newTariff=await changedTariff.json();assert.equal(newTariff.multiplier,'2');
+      try {
+        const own=await context.request.get(ready.origin+'/v1/tasks/'+task.run_id,{headers});
+        assert.equal(own.status(),202);assert.deepEqual((await own.json()).queue.frozen,frozen);
+        const beforeRead=await inspect();
+        const read=page.waitForResponse(response=>response.url().endsWith('/monitor/queue'));
+        await page.locator('#reload').click();await (await read).finished();
+        const detail=page.locator('[data-queue-run="queue-desktop-one"] details');
+        await detail.locator('summary').focus();await page.keyboard.press('Enter');
+        assert.equal(await detail.locator('[data-queue-frozen="mode"]').innerText(),'cloudyfan');
+        assert.equal(await detail.locator('[data-queue-frozen="pool"]').innerText(),frozen.monitor.pool_version);
+        assert.equal(await detail.locator('[data-queue-frozen="category"]').innerText(),ready.category);
+        assert.equal(await detail.locator('[data-queue-frozen="contract"]').innerText(),frozen.contract_id);
+        assert.equal(await detail.locator('[data-queue-frozen="tariff-multiplier"]').innerText(),'1');
+        assert.equal(await detail.locator('[data-queue-frozen="tariff-sha"]').innerText(),frozen.monitor.tariff_sha256);
+        assert.equal(await detail.locator('[data-queue-frozen="capacity-policy"]').innerText(),frozen.capacity.policy_version);
+        assert.equal(await detail.locator('[data-queue-frozen="capacity-configuration"]').innerText(),frozen.capacity.configuration_version);
+        assert.equal(await detail.locator('[data-queue-frozen="configuration-sha"]').innerText(),frozen.capacity.configuration_sha256);
+        assert.equal(await detail.locator('[data-queue-frozen="registered-sha"]').innerText(),frozen.registered_sha256);
+        const afterRead=await inspect();assert.deepEqual(afterRead.model_requests,beforeRead.model_requests);
+        assert.equal(afterRead.queue_sha256,beforeRead.queue_sha256);assert.equal(afterRead.capacity_sha256,beforeRead.capacity_sha256);
+        assert.deepEqual(afterRead.original_evidence_sha256,beforeRead.original_evidence_sha256);assert.deepEqual(afterRead.budget,beforeRead.budget);
+        report.frozen_binding={saved:frozen,current_mode:'fixed_high',current_tariff_multiplier:newTariff.multiplier};
+        await shot('13-saved-original-binding');
+      } finally {
+        const current=await inspect();
+        assert.equal((await context.request.post(ready.origin+'/monitor/mode',{headers:operatorHeaders,
+          data:{revision:current.control.revision,mode:before.control.mode}})).status(),200);
+        assert.equal((await context.request.post(ready.origin+'/monitor/billing/settings',{headers:operatorHeaders,
+          data:{...before.billing.settings,revision:newTariff.revision}})).status(),200);
+      }
+    });
     await step('real_poll_preserves_keyboard_details_and_waiting_cancel_is_terminal_without_POST',async()=>{
       const job=page.locator('[data-queue-run="queue-desktop-one"]');
-      const detail=job.locator('details');await detail.locator('summary').focus();await page.keyboard.press('Enter');
+      const detail=job.locator('details');await detail.locator('summary').focus();
+      if(await detail.getAttribute('open')===null)await page.keyboard.press('Enter');
       assert.equal(await detail.getAttribute('open'),'');
       const before=await inspect();
       const polled=page.waitForResponse(response=>response.url().endsWith('/monitor/queue')&&response.request().method()==='GET');
@@ -354,6 +512,42 @@ async function main() {
       assert.equal(after.capacity_sha256,before.capacity_sha256);assert.deepEqual(after.original_evidence_sha256,before.original_evidence_sha256);
       await shot('09-original-expiry-is-readonly');
     });
+    await step('bounded_history_totals_are_honest_and_a_naturally_removed_focused_row_falls_back_to_reload',async()=>{
+      const operatorHeaders={Authorization:'Bearer '+ready.operator_token};
+      const batchHeaders={Authorization:'Bearer '+ready.credentials.batch};
+      const initial=await context.request.get(ready.origin+'/monitor/queue',{headers:operatorHeaders});
+      assert.equal(initial.status(),200);const initialCount=(await initial.json()).job_count;
+      const perishable={...task,run_id:'queue-desktop-history-focus'};
+      assert.equal((await context.request.post(ready.origin+'/v1/tasks',{headers:batchHeaders,data:perishable})).status(),202);
+      assert.equal((await context.request.post(ready.origin+'/v1/tasks/'+perishable.run_id+'/cancel',{headers:batchHeaders,data:{}})).status(),200);
+      const firstRead=page.waitForResponse(response=>response.url().endsWith('/monitor/queue'));
+      await page.locator('#reload').click();await (await firstRead).finished();
+      const detail=page.locator('[data-queue-run="queue-desktop-history-focus"] details');
+      await detail.locator('summary').focus();await page.keyboard.press('Enter');
+      await page.waitForFunction(()=>document.activeElement?.closest('[data-queue-run]')?.dataset.queueRun==='queue-desktop-history-focus');
+      const before=await inspect();
+      for(let number=0;number<100;number++) {
+        const next={...task,run_id:'queue-desktop-history-'+String(number).padStart(3,'0')};
+        assert.equal((await context.request.post(ready.origin+'/v1/tasks',{headers:batchHeaders,data:next})).status(),202);
+        assert.equal((await context.request.post(ready.origin+'/v1/tasks/'+next.run_id+'/cancel',{headers:batchHeaders,data:{}})).status(),200);
+      }
+      const snapshot=await context.request.get(ready.origin+'/monitor/queue',{headers:operatorHeaders,timeout:20000});
+      assert.equal(snapshot.status(),200);const view=await snapshot.json();
+      assert.equal(view.job_count,initialCount+101);assert.equal(view.jobs.length,100);assert.equal(view.history_complete,false);
+      assert.ok(!view.jobs.some(item=>item.run_id===perishable.run_id));
+      const lastRead=page.waitForResponse(response=>response.url().endsWith('/monitor/queue'),{timeout:20000});
+      await (await lastRead).finished();
+      await page.waitForFunction(()=>document.querySelectorAll('#queue-page [data-queue-run]').length===100,null,{timeout:20000});
+      await page.waitForFunction(()=>!document.querySelector('[data-queue-run="queue-desktop-history-focus"]'),null,{timeout:20000});
+      assert.match(await page.locator('.queue-count').innerText(),new RegExp('保存 '+(initialCount+101)+' 件工作；本頁列出 100 件'));
+      assert.match(await page.locator('.queue-count').innerText(),/僅為部分歷史/);
+      await page.waitForFunction(()=>document.activeElement?.id==='reload',null,{timeout:20000});
+      const after=await inspect();assert.deepEqual(after.model_requests,before.model_requests);assert.deepEqual(after.budget,before.budget);
+      report.bounded_history={total:view.job_count,visible:view.jobs.length,history_complete:view.history_complete,
+        real_unpaid_cancelled_jobs:101,fixture_read_timeout_ms:20000,retained_run:'queue-desktop-history-099',
+        focus_fallback_trigger:'ordinary periodic poll after genuine history truncation'};
+      await shot('11-bounded-history-focus-fallback',{fullPage:false});
+    });
     await step('thirty_day_access_is_not_extended_by_waiting_replay_or_resume_and_retained_view_stays_safe',async()=>{
       await inspect({command:'advance',seconds:30*86400+1});const before=await inspect();
       const originalRunning={...task,run_id:'queue-desktop-running'};
@@ -365,18 +559,25 @@ async function main() {
       assert.equal(replay.status(),410);assert.equal((await replay.json()).error.code,'task_expired');
       const resume=await context.request.post(ready.origin+'/v1/tasks/'+originalRunning.run_id+'/resume',{headers,data:{}});
       assert.equal(resume.status(),410);assert.equal((await resume.json()).error.code,'task_expired');
-      const refreshed=page.waitForResponse(response=>response.url().endsWith('/monitor/queue'));
+      const projection=await context.request.get(ready.origin+'/monitor/queue',{
+        headers:{Authorization:'Bearer '+ready.operator_token},timeout:20000});
+      assert.equal(projection.status(),200);
+      const retained=(await projection.json()).jobs.find(item=>item.run_id===report.bounded_history.retained_run);
+      assert.ok(retained);assert.equal(retained.observation_error,'task_expired');
+      const refreshed=page.waitForResponse(response=>response.url().endsWith('/monitor/queue'),{timeout:20000});
       await page.locator('#reload').click();await (await refreshed).finished();
-      const expired=page.locator('[data-queue-run="queue-desktop-original-deadline"]');
+      const expired=page.locator('[data-queue-run="'+(report.bounded_history?.retained_run||'queue-desktop-original-deadline')+'"]');
       await expired.getByText('存取已到期',{exact:true}).waitFor();
       assert.match(await expired.innerText(),/task_expired/);assert.ok(!(await expired.innerText()).includes('排隊中'));
       assert.ok(!(await page.locator('#queue-page').innerText()).includes('PRIVATE_'));
       const after=await inspect();assert.deepEqual(after.model_requests,before.model_requests);assert.deepEqual(after.budget,before.budget);
       assert.equal(after.queue_sha256,before.queue_sha256);assert.equal(after.capacity_sha256,before.capacity_sha256);
       assert.deepEqual(after.original_evidence_sha256,before.original_evidence_sha256);
-      report.retention={access_seconds:30*86400,status:status.status(),result:result.status(),replay:replay.status(),resume:resume.status()};
-      await shot('10-retained-metadata-access-expired');
+      report.retention={access_seconds:30*86400,status:status.status(),result:result.status(),replay:replay.status(),resume:resume.status(),
+        retained_historical_reason:retained.reason,observation_error:retained.observation_error};
+      await shot('10-retained-metadata-access-expired',{fullPage:false});
     });
+    }
     const final=await inspect();
     assert.deepEqual(final.source_requests,[]);assert.deepEqual(final.accounting_requests,[]);
     assert.deepEqual(final.blocked_server_socket_attempts,[]);assert.equal(final.worker_running,false);

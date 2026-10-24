@@ -671,3 +671,10 @@ User requested implement-spec for the five sequential specifications. The prior 
 
 
 Issue34 source observation completed and integrated as6ac8a3d; root fresh original Core integration2066 tests/8steps passed at runtime/checks/18f1cd786fc04e84a60341d9cc5f9f81. Monitor285/full build and desktop5 are separate same-input proofs. Original first failures preserved under external issue34 context. Issue35 now owns per-request capacity admission interfaces; no waiting execution is implemented yet. Current broad scope remains in_progress and has no current_verification claim.
+
+
+## Joint36/37 original Core check follow-up — 2026-10-25
+
+The first frozen original Core gate on0dd8a55 produced2064 passed/2 failed and stopped before integration demos/build. Preserve its original receipts and private temporary data in the external issue36/root-core-integration-final-01 directory. The readonly queue-expiry/retention regression is being fixed by the queue owner without changing original tests. Independent fixed-source experiments reproduce the separate parallel-study late-unknown completion misclassification on both0dd8a55 and accepted Issue35f7ce113: the fifth dispatch is correctly intercepted beforePOST and explicitly records not_dispatched/knownzero, but the injected runner's success is incorrectly sealed as completed. Normal and controlled schedules are distinct evidence; this does not show an extra physical model request.
+
+Before any additional source edit, work-plan declares parallel-check-worker as the exclusive owner of the three existing scripts/research_parallel ledger/runner/test files. Add only a workflow-scoped readonly explicit stopped-dispatch predicate and completion/reuse guard, plus a deterministic additive regression. Preserve legitimate cached resumes and real zero-fee calls, existing tests, immutable reports and all financial records. The current broad phase remains in_progress/current_verification null; fresh original full/integration is required after fixes. This declaration grants no external action or production authority.

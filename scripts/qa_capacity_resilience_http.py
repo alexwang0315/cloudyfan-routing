@@ -218,6 +218,26 @@ def main():
                     copied_database_fault(queue.path,
                         output / "PRIVATE_RESILIENCE_PATH_CANARY-preserved-queue",
                         omit=("jobs",))
+                elif name == "fault_companion_loss" and not args.minimal:
+                    if any(worker.is_alive() for worker in workers):
+                        raise ValueError("Fault copies require no active worker")
+                    archive = output / "PRIVATE_RESILIENCE_PATH_CANARY-preserved-companion"
+                    copied_database_fault(controller.store.path, archive)
+                    original = controller.store.integrity.root
+                    before = {str(path.relative_to(original)): hashlib.sha256(path.read_bytes()).hexdigest()
+                        for path in original.rglob("*") if path.is_file()}
+                    retained = archive / original.name
+                    original.rename(retained)
+                    original.mkdir(mode=0o700)
+                    descriptor = os.open(original / "lock", os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+                    os.close(descriptor)
+                    after = {str(path.relative_to(retained)): hashlib.sha256(path.read_bytes()).hexdigest()
+                        for path in retained.rglob("*") if path.is_file()}
+                    if before != after:
+                        raise AssertionError("Original companion changed while retaining fault evidence")
+                    (archive / "companion-receipt.json").write_text(json.dumps({
+                        "original_unchanged": True, "original_files_sha256": before,
+                        "replacement": "new empty companion; no saved witness copied"}, indent=2))
                 elif name == "fault_allocation_index" and not args.minimal:
                     import sqlite3
                     if any(worker.is_alive() for worker in workers):

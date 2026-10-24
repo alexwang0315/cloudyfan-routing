@@ -215,7 +215,9 @@ async function lifecycleMain() {
   };
   function unchanged(before,after) {
     for(const key of ['model_requests','source_requests','accounting_requests','budget','health_sqlite_sha256',
-      'capacity_sha256','queue_sha256','original_evidence_sha256','wire_files_sha256'])assert.deepEqual(after[key],before[key],key);
+      'capacity_sha256','queue_sha256','original_evidence_sha256','wire_files_sha256','raw_mock_request_sha256',
+      'raw_mock_method_counts'])assert.deepEqual(after[key],before[key],key);
+    assert.equal(after.raw_mock_metadata_status,'complete');
     assert.ok(Object.keys(after.health_sqlite_sha256).length>0,'Real Health SQLite hash set must be nonempty');
     assert.deepEqual(after.blocked_server_socket_attempts,[]);
   }
@@ -305,6 +307,19 @@ async function lifecycleMain() {
         assert.match(await group.innerText(),/本次.*無法核對.*原保存/s);
         await fs.writeFile(path.join(output,'safe-local-index-capacity.json'),JSON.stringify(cap,null,2));
         await shot('03-local-index-fault-original-source');
+      });
+    } else if(process.argv.includes('--companion-loss')) {
+      await step('lost_companion_has_unknown_policy_and_counts_without_erasing_original_receipts',async()=>{
+        const before=await inspect();await inspect({command:'fault_companion_loss'});
+        const cap=await get('/monitor/capacity');assert.equal(cap.dispatch.integrity.status,'unavailable');
+        assert.equal(cap.dispatch.integrity.retained_verified_metadata,false);
+        assert.equal(cap.dispatch.active_version,null);assert.equal(cap.dispatch.allocation_count,null);
+        const after=await inspect();for(const key of ['budget','model_requests','wire_files_sha256','health_sqlite_sha256','original_evidence_sha256'])assert.deepEqual(after[key],before[key],key);
+        await fs.writeFile(path.join(output,'safe-companion-loss-capacity.json'),JSON.stringify(cap,null,2));
+        await capacityPage();assert.equal(await page.locator('#capacity-active-version').innerText(),'未知');
+        assert.equal(await page.locator('#capacity-policy-revision').innerText(),'未知');
+        assert.ok(!(await page.locator('#capacity-dispatch').innerText()).includes('尚無已登錄容量政策'));
+        await shot('03-no-witness-policy-unknown');
       });
     } else {
       await lifecycleSteps();
@@ -480,7 +495,9 @@ async function lifecycleMain() {
       const exited=await fixture.stop();report.boots[0].exit=exited;assert.equal(exited.code,86);assert.equal(exited.cleanup_failed,false);
       fixture=null;await start(new URL(oldReady.origin).port);assert.notEqual(ready.pid,oldReady.pid);assert.deepEqual(ready.credentials,oldReady.credentials);
       const after=await inspect();assert.equal(after.model_requests.length,0);
-      for(const key of ['budget','health_sqlite_sha256','wire_files_sha256','receipt_artifacts_sha256','task_jobs_sha256'])assert.deepEqual(after[key],before[key],key);
+      for(const key of ['budget','health_sqlite_sha256','wire_files_sha256','receipt_artifacts_sha256','task_jobs_sha256',
+        'raw_mock_request_sha256','raw_mock_method_counts'])assert.deepEqual(after[key],before[key],key);
+      assert.equal(after.raw_mock_metadata_status,'complete');assert.deepEqual(Object.keys(after.raw_mock_method_counts),['POST']);
       assert.equal(after.budget['budget-primary.sqlite'].known_usd,primaryKnown);
       assert.equal(after.budget['budget-disjoint.sqlite'].known_usd,disjointKnown);
       const row=await api('get','/v1/tasks/resilience-held',client);assert.equal(row.body.queue.deadline,heldOriginal.queue.deadline);
@@ -504,7 +521,7 @@ async function lifecycleMain() {
       const before=await inspect();assert.equal(before.budget['budget-primary.sqlite'].unknown_events,1);
       const cap=await get('/monitor/capacity');assert.equal(cap.dispatch.groups.find(row=>row.group===heldAllocation.groups[0].group).concurrency_used,1);
       const accepted=await api('post','/v1/tasks',client,task('resilience-primary-unknown-stop'));assert.equal(accepted.response.status(),202);
-      await run('resilience-primary-unknown-stop');
+      const stopped=await run('resilience-primary-unknown-stop');assert.equal(stopped.status,'accounting_interrupted');
       const after=await inspect();assert.deepEqual(after.model_requests,before.model_requests);assert.deepEqual(after.wire_files_sha256,before.wire_files_sha256);
       assert.equal(after.budget['budget-primary.sqlite'].known_usd,primaryKnown);assert.equal(after.budget['budget-primary.sqlite'].unknown_events,1);
       await refresh('CloudyFanQueue');

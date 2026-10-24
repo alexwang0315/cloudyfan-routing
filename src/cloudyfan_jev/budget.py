@@ -182,6 +182,23 @@ class BudgetStore:
                        (event_id, run_id, kind, str(bound), fingerprint))
             return True
 
+    def verify_event_before_post(self, run_id, event_id):
+        """Recheck original spending authority, excluding this one pending event."""
+        with self._transaction() as db:
+            auth = self._authorization(db)
+            event = db.execute('SELECT * FROM events WHERE id=?', (event_id,)).fetchone()
+            reservation = db.execute('SELECT * FROM reservations WHERE run=?', (run_id,)).fetchone()
+            if (event is None or event['run'] != run_id or event['cost'] is not None
+                    or reservation is None or reservation['status'] != 'active'
+                    or db.execute('SELECT 1 FROM violations LIMIT 1').fetchone()
+                    or self._unbounded_history(db)
+                    or db.execute('SELECT 1 FROM events WHERE cost IS NULL AND id!=? LIMIT 1', (event_id,)).fetchone()):
+                raise BudgetError('Original spending authority no longer permits dispatch')
+            reserved = _exact(money(row[0]) for row in db.execute('SELECT amount FROM reservations WHERE status="active"'))
+            if _exact((reserved, self._settled_cost(db), self._provisional_hold(db))) > money(auth['total']):
+                raise BudgetError('Shared exposure exceeds original authorization')
+        return True
+
     def record_event(self, event_id, *, cost_usd, verified=False, receipt_id=None):
         cost = None if cost_usd is None else str(money(cost_usd))
         breached = False
@@ -299,9 +316,18 @@ def _fingerprint(value):
 class _BudgetClient:
     def __init__(self, wrapped, owner, run_id):
         self.wrapped, self.owner, self.run_id = wrapped, owner, run_id
+        self._dispatch_guard = None
 
     def __getattr__(self, name):
         return getattr(self.wrapped, name)
+
+    @contextmanager
+    def guard_dispatch(self, guard):
+        previous, self._dispatch_guard = self._dispatch_guard, guard
+        try:
+            yield
+        finally:
+            self._dispatch_guard = previous
 
     def _event_id(self, cid):
         return 'model:' + _fingerprint(str(self.wrapped.root.resolve())) + ':' + cid
@@ -323,6 +349,21 @@ class _BudgetClient:
         return record
 
     def call(self, cid, *args):
+        if self.owner.capacity_controller is not None and self.owner._capacity_context['policy_version'] is not None:
+            from copy import deepcopy
+            from .capacity_dispatch import require_model_transport
+            require_model_transport(self.wrapped)
+            args = tuple(deepcopy(value) for value in args)
+            payload = args[-1]
+            endpoint = args[0] if len(args) > 1 else self.wrapped.config['endpoint']
+            # Receipt replay is decided inside the real transport, before prepare.
+            dispatch = _BudgetDispatch(self, cid, args, endpoint, payload)
+            record = self.wrapped.call(cid, *args, dispatch=dispatch)
+            self._record(cid, record)
+            if record.get('capacity_denial_code') or dispatch.denial:
+                from .capacity_dispatch import CapacityDenied
+                raise CapacityDenied(record.get('capacity_denial_code') or dispatch.denial)
+            return record
         payload = args[-1]
         model = payload.get('model')
         bound = self.owner.model_bounds.get(model)
@@ -347,10 +388,79 @@ class _BudgetClient:
         return self._record(cid, self.wrapped.reconcile(cid))
 
 
+class _BudgetDispatch:
+    """Keep original fee controls, but create an event only after fresh admission."""
+    def __init__(self, client, cid, args, endpoint, payload):
+        self.client, self.cid, self.args = client, cid, args
+        self.owner, self.endpoint, self.payload = client.owner, endpoint, payload
+        self.capacity, self.denial = None, None
+        self.execution_guard = client._dispatch_guard
+        self.payload_fingerprint = _fingerprint(payload)
+        self.bound = self.owner.model_bounds.get(payload.get('model'))
+
+    def prepare(self, cid, request):
+        if self.bound is None:
+            raise BudgetError('No confirmed model upper bound')
+        verifier = getattr(self.owner.verify_bound, 'verify_dispatch', None)
+        if callable(verifier):
+            if verifier(self.client.wrapped, self.endpoint, self.payload, self.bound) is not True:
+                raise BudgetError('Enforceable dispatch upper bound unconfirmed')
+        else:
+            self.owner._verify('model', self.payload.get('model'), self.payload, self.bound)
+        if _fingerprint(self.payload) != self.payload_fingerprint:
+            from .capacity_dispatch import CapacityDenied
+            raise CapacityDenied('capacity_request_changed')
+        self.capacity = self.owner.capacity_controller.dispatch(self.owner._capacity_context,
+            self.client.wrapped, self.endpoint, self.payload, self.owner._capacity_descriptor)
+        evidence = self.capacity.prepare(cid, request)
+        try:
+            self.owner.store.begin_event(self.client.run_id, self.client._event_id(cid), 'model',
+                money(self.bound.usd), _fingerprint(self.args))
+        except BaseException:
+            self.capacity.release()
+            raise
+        return evidence
+
+    def before_post(self):
+        from .capacity_dispatch import CapacityDenied
+        try:
+            verifier = getattr(self.owner.verify_bound, 'verify_post', None)
+            if callable(verifier) and verifier(self.client.wrapped, self.endpoint, self.payload, self.bound) is not True:
+                raise BudgetError('Original enforced bound no longer permits dispatch')
+            self.owner.store.verify_event_before_post(self.client.run_id, self.client._event_id(self.cid))
+            if _fingerprint(self.payload) != self.payload_fingerprint:
+                raise BudgetError('Original prepared request changed')
+        except Exception:
+            raise CapacityDenied('capacity_original_budget_denied') from None
+        if self.execution_guard is not None:
+            try:
+                if self.execution_guard() is not True:
+                    raise ValueError('Original guard denied')
+            except CapacityDenied:
+                raise
+            except Exception:
+                raise CapacityDenied('capacity_original_gate_denied') from None
+        return self.capacity.before_post()
+
+    def release(self):
+        self.capacity.release()
+
+    def complete(self, record):
+        from .capacity_dispatch import CapacityDenied
+        try:
+            self.denial = self.capacity.complete(record)
+        except CapacityDenied as error:
+            # The original durable response can still settle its real fee.
+            # Capacity remains held if its independent state cannot complete.
+            self.denial = error.code
+        except Exception:
+            self.denial = 'capacity_state_unavailable'
+
+
 class _BudgetEnvironment:
     def __init__(self, environment, owner, run_id):
         self.environment, self.owner, self.run_id = environment, owner, run_id
-        self.index = 0
+        self.index, self.prepared = 0, None
         self.replayable_tools = frozenset(name for name in getattr(environment, 'replayable_tools', ())
                                          if name in owner.tool_bounds and not owner.tool_bounds[name].external)
 
@@ -365,6 +475,88 @@ class _BudgetEnvironment:
                 raise BudgetError('Tool lacks explicit cost and execution policy')
         return tools
 
+    def prepare_capacity_call(self, action_id, name, arguments, *, execution_guard=None):
+        from .capacity_dispatch import CapacityDenied, CapacityToolRequest, CapacityToolTransport, require_tool_transport
+        if self.owner.capacity_controller is None or self.owner._capacity_context['policy_version'] is None:
+            return
+        policy = self.owner.tool_bounds.get(name)
+        if policy is None:
+            raise BudgetError('Tool lacks confirmed upper bound')
+        if not policy.external:
+            # Local deterministic tools have no supplier POST. Explicit host
+            # tool policy and the original privacy/zero-fee gate still apply.
+            self.owner._verify('tool', name, arguments, policy.bound)
+            return
+        self.owner._verify('tool', name, arguments, policy.bound)
+        request = self.environment.capacity_tool(name, arguments)
+        if type(request) is not CapacityToolRequest or type(request.transport) is not CapacityToolTransport:
+            raise CapacityDenied('capacity_tool_protocol_unavailable')
+        require_tool_transport(request.transport)
+        wire = request.transport.prepare(action_id, request.payload)
+        dispatch = self.owner.capacity_controller.dispatch(self.owner._capacity_context,
+            request.transport, request.transport.config['endpoint'], {'model': 'tool:' + name},
+            self.owner._capacity_descriptor)
+        dispatch.prepare(action_id, wire)
+        self.prepared = (name, _fingerprint(arguments), action_id, request.transport, wire, dispatch, execution_guard)
+
+    def abort_capacity_call(self):
+        if self.prepared is not None:
+            self.prepared[5].release()
+            self.prepared = None
+
+    def _controlled_tool(self, name, arguments, policy, event_id):
+        from .capacity_dispatch import CapacityDenied, require_tool_transport
+        from .client import not_dispatched
+        if self.prepared is None or self.prepared[:2] != (name, _fingerprint(arguments)):
+            raise CapacityDenied('capacity_tool_prepare_required')
+        _, _, action_id, transport, wire, dispatch, execution_guard = self.prepared
+        self.prepared = None
+        try:
+            require_tool_transport(transport)
+            fresh = self.owner.store.begin_event(self.run_id, event_id, 'tool', money(policy.bound.usd),
+                _fingerprint({'name': name, 'arguments': arguments}))
+            if not fresh:
+                raise BudgetError('External tool replay is forbidden')
+        except BaseException:
+            dispatch.release()
+            raise
+        def final_guard():
+            try:
+                self.owner._verify('tool', name, arguments, policy.bound)
+                self.owner.store.verify_event_before_post(self.run_id, event_id)
+            except Exception:
+                raise CapacityDenied('capacity_original_budget_denied') from None
+            if execution_guard is not None:
+                try:
+                    if execution_guard() is not True:
+                        raise ValueError('Original tool guard denied')
+                except CapacityDenied:
+                    raise
+                except Exception:
+                    raise CapacityDenied('capacity_original_gate_denied') from None
+            return dispatch.before_post()
+        record = transport.post(action_id, wire, final_guard)
+        if not_dispatched(record):
+            self.owner.store.record_event(event_id, cost_usd='0', verified=True,
+                receipt_id='not-dispatched:' + _fingerprint(str(transport.root) + ':' + action_id))
+            dispatch.release()
+            raise CapacityDenied(record.get('capacity_denial_code', 'capacity_tool_guard_denied'))
+        try:
+            result = transport.result(record)
+            if not isinstance(result, ToolReceipt):
+                raise BudgetError('External tool omitted billing receipt; cost remains unknown')
+            from .client import _encoded
+            _encoded(result.result)
+            self.owner.store.record_event(event_id, cost_usd=result.cost_usd,
+                verified=result.verified, receipt_id=result.receipt_id)
+            if result.cost_usd is None or not result.receipt_id:
+                raise BudgetError('External tool cost unknown; execution stopped')
+        except BaseException:
+            dispatch._update('uncertain')
+            raise
+        dispatch._update('complete')
+        return result.result
+
     def call(self, name, arguments):
         from .client import _encoded
         policy = self.owner.tool_bounds.get(name)
@@ -373,6 +565,9 @@ class _BudgetEnvironment:
         self.owner._verify('tool', name, arguments, policy.bound)
         event_id = f'tool:{self.run_id}:{self.index}'
         self.index += 1
+        if (policy.external and self.owner.capacity_controller is not None
+                and self.owner._capacity_context['policy_version'] is not None):
+            return self._controlled_tool(name, arguments, policy, event_id)
         fresh = self.owner.store.begin_event(self.run_id, event_id, 'tool', money(policy.bound.usd),
                                              _fingerprint({'name': name, 'arguments': arguments}))
         if not fresh and policy.external:
@@ -402,10 +597,10 @@ class BudgetedCore:
     truthy objects fails closed. The optional supplier verifier requires independently
     qualified contracts/control-plane state; none are bundled.
     """
-    def __init__(self, core, store, *, model_bounds, tool_bounds, verify_bound=None):
+    def __init__(self, core, store, *, model_bounds, tool_bounds, verify_bound=None, capacity_controller=None):
         self.core, self.store = core, store
         self.model_bounds, self.tool_bounds = dict(model_bounds), dict(tool_bounds)
-        self.verify_bound = verify_bound
+        self.verify_bound, self.capacity_controller = verify_bound, capacity_controller
 
     def __getattr__(self, name):
         return getattr(self.core, name)
@@ -501,9 +696,16 @@ class BudgetedCore:
                 event_id = 'model:' + _fingerprint(str(client.root.resolve())) + ':' + directory.name
                 self.store.import_history(event_id, cost_usd=cost, receipt_id=receipt, verified=verified)
 
-    def run(self, run_id, task, environment_factory, *, contract_version, mode='cloudyfan', **kwargs):
+    def run(self, run_id, task, environment_factory, *, contract_version, mode='cloudyfan',
+            capacity_context=None, capacity_descriptor=None, **kwargs):
         from copy import copy
         from dataclasses import asdict
+        if self.capacity_controller is not None:
+            from .capacity_dispatch import CapacityDenied
+            if not isinstance(capacity_context, dict) or capacity_context.get('run') != run_id:
+                raise CapacityDenied('capacity_adoption_missing', 403)
+            self.capacity_controller.verify(capacity_context)
+            self._capacity_context, self._capacity_descriptor = capacity_context, capacity_descriptor
         frozen = {**self.core.configuration_descriptor(),
                   'root': str(self.core.client.root.resolve()), 'task': task, 'contract': contract_version,
                   'mode': mode, 'options': kwargs,

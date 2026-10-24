@@ -197,7 +197,7 @@ class Client(ReceiptStore):
                 raise UnresolvedCallsError("Duplicate generation identity blocks a new paid request")
             seen.add(gid)
 
-    def call(self, cid, url, payload, *, before_post=None):
+    def call(self, cid, url, payload, *, before_post=None, dispatch=None):
         if url not in (CHAT, DECISIONS):
             raise ValueError("Unexpected paid endpoint")
         directory = self._directory(cid)
@@ -211,26 +211,43 @@ class Client(ReceiptStore):
                     return self._load(directory)
                 raise UnresolvedCallsError("Unresolved existing intent; paid request will not be resent")
             self._assert_resolved()
+            prepared, capacity = None, {}
+            if dispatch is not None:
+                from .capacity_dispatch import prepare_request
+                prepared = prepare_request(self.http, url, payload,
+                    headers={"Authorization": "Bearer " + self.key, "X-OpenRouter-Metadata": "enabled"})
+                capacity = dispatch.prepare(cid, prepared)
             directory.mkdir(exist_ok=True, mode=0o700)
             _fsync_dir(directory.parent)
             _immutable(intent, {"call_id": cid, "url": url, "payload": payload,
-                                "request_sha256": request_hash, "started_at": _now()})
+                                "request_sha256": request_hash, "started_at": _now(),
+                                **({"dispatch": capacity} if dispatch is not None else {})})
             started = perf_counter()
-            if before_post is not None:
+            denied_code = None
+            if before_post is not None or dispatch is not None:
                 try:
-                    admitted = before_post() is True
-                except Exception:
+                    admitted = (before_post is None or before_post() is True)
+                    if admitted and dispatch is not None:
+                        admitted = dispatch.before_post() is True
+                except Exception as error:
+                    from .capacity_dispatch import CapacityDenied
+                    denied_code = error.code if isinstance(error, CapacityDenied) else None
                     admitted = False
                 if not admitted:
                     record = {"call_id": cid, "request_sha256": request_hash, "http_status": None,
                               "raw": None, "not_dispatched": True, "error": "enforcement_denied_before_post",
                               "elapsed_ms": (perf_counter() - started) * 1000, "finished_at": _now()}
+                    if denied_code:
+                        record['capacity_denial_code'] = denied_code
                     _immutable(directory / "response.json", record)
+                    if dispatch is not None:
+                        dispatch.release()
                     return record
             try:
-                response = self.http.post(url, json=payload,
+                response = (self.http.send(prepared, follow_redirects=False) if dispatch is not None else
+                    self.http.post(url, json=payload,
                     headers={"Authorization": "Bearer " + self.key, "X-OpenRouter-Metadata": "enabled"},
-                    timeout=180, follow_redirects=False)
+                    timeout=180, follow_redirects=False))
                 record = {"call_id": cid, "request_sha256": request_hash,
                           "http_status": response.status_code, "elapsed_ms": (perf_counter() - started) * 1000,
                           "raw": response.text.replace(self.key, "[REDACTED]"),
@@ -250,6 +267,8 @@ class Client(ReceiptStore):
                 if duplicate:
                     _immutable(directory / "duplicate-generation.json", {"generation_id": gid})
                     record["duplicate_generation_id"] = True
+            if dispatch is not None:
+                dispatch.complete(record)
             return record
 
     def reconcile(self, cid):

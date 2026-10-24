@@ -307,7 +307,28 @@ class BackupCategoryCore(Core):
                 eligible.append(record)
         return (deepcopy(min(eligible, key=self._rank_record)) if eligible else None), observations
 
+    def _capacity_post_guard(self, generation):
+        from ..capacity_dispatch import CapacityDenied
+        if self._deadline is not None and self._now() >= self._deadline:
+            raise CapacityDenied('capacity_original_deadline_exceeded')
+        try:
+            self._require_policy_fresh()
+            if generation:
+                self._require_active_health()
+            else:
+                self._require_selection_fresh()
+        except Exception:
+            raise CapacityDenied('capacity_original_gate_denied') from None
+        return True
+
     def _checked(self, cid, url, payload, accepted, provider, *, allow_rejection=False):
+        guard = getattr(self.client, 'guard_dispatch', None)
+        if callable(guard):
+            with guard(lambda: self._capacity_post_guard(allow_rejection)):
+                return self._checked_original(cid, url, payload, accepted, provider, allow_rejection=allow_rejection)
+        return self._checked_original(cid, url, payload, accepted, provider, allow_rejection=allow_rejection)
+
+    def _checked_original(self, cid, url, payload, accepted, provider, *, allow_rejection=False):
         directory = self.client._directory(cid)
         # Completed/intent receipts replay under the same ID; Client refuses an
         # unresolved earlier intent. A deadline never authorizes a new request.
@@ -656,6 +677,10 @@ class _LocalBound:
             if self.core._deadline is not None and self.core._now() >= self.core._deadline:
                 raise RuntimeError('Dispatch stopped: original whole-task deadline exceeded')
             self.core._require_active_health()
+        guard = getattr(self.backend, 'guard_dispatch', None)
+        if callable(guard):
+            with guard(lambda: self.core._capacity_post_guard(True)):
+                return self.backend.call(cid, payload)
         return self.backend.call(cid, payload)
 
     def __getattr__(self, name):

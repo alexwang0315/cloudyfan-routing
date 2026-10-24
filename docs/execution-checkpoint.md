@@ -1,6 +1,38 @@
 # Monitor 本機接入執行檢查點
 
+## 2026-10-24：依PR草稿選擇性本機提交
+
+使用者授權本機Git提交；本輪包含客戶內部美元帳本／任務費率版本／明示OpenRouter唯讀核帳、Ollama Gateway、四池與Jev追蹤、官方SDK50題合成案例及相關測試／文件。既有桌機字級style.css、app.js六個樣式屬性及兩張歷史截圖留在工作區；新QA改用本輪data-task-run識別，避免依賴那些樣式。核心配套本機提交為`471c87197ba387db179ee1f102a3882075756012`（12檔，包含四個來源、五個測試與三份選擇性文件）。
+
+選擇性index匯出的Monitor完整235項／12步檢查通過，含Ruff、產品與QA JavaScript、離線sdist／wheel；前後輸入指紋不變。以精確index靜態檔案覆蓋同一既有50題後端的桌機5組唯讀檢查通過，0 JavaScript錯誤／請求失敗／網外請求，沒有再送50題。核心提交子集另200項受影響回歸、記錄檢查、Ruff、兩個Mock示範與離線建置通過。原鎖版核心整合入口因certifi2026.7.22缺離線快取而在測試前停止；上述另用目前複製的certifi2026.10.19環境，不改提交依賴鎖檔、不稱原鎖版整套通過。測試內6處同值合成憑證改引用明示synthetic常數後，密鑰掃描通過並重跑完整235項。既有密鑰掃描與hooks照常執行。原Monitor235通過／核心2,055通過與50項SQL失敗屬原2026-10-23快照，沒有改寫成目前完整dirty工作區全綠。原R7指標仍stale。真實MRC主線接線與實際客戶逐筆扣款仍待完成，模型／Jev／50題價格均為合成。
+
+原有未提交工作與私有憑證／研究／runtime保留；不讀.env，不做模型／供應商請求、推送、部署、手機或刪除。提交／來源／保留核對收據在CloudyFan `.scratch/cloudyfan-monitor-local-commits-20261024/`，本Monitor提交的SHA以本機Git紀錄及收據為準。
+
 本頁保存 Issue20 各輪執行時的結果，以下「最新」限於該輪紀錄。改善後的目前驗收狀態請執行 `python3 scripts/acceptance.py status`；操作方式見 [驗收工具說明](tooling.md)。
+
+## 2026-10-23：Ollama客戶50題桌機驗收
+
+- 實際批次 `sim-20261023T084051-5408a8`：官方SDK0.6.3透過真loopback HTTP送50題，40次200／10次422；40通過、5失敗、5無法確認。110次作答（開源50／低15／中25／高20）及60次Jev，共170筆合成用量，未知費用0；成本0.1155 USD、170筆客戶扣款0.139128 USD、餘額0.860872 USD、待核0。
+- 桌機 `output/playwright/ollama50-20261023-r3/report.json` **5組唯讀驗收通過**，涵蓋全部六種路徑、四池狀態、兩階段Jev／同分保守選池、輪詢與換頁保留展開、客戶儀表板、用量及帳務；0 JavaScript錯誤／0網外請求／0請求失敗，讀取前後50任務／170事件／171帳務筆數不變。原先啟動與中間進度2項屬獨立較早證據，不將R2整體失敗改稱通過。
+- 首輪22題後401與第二批快照30秒逾時保留。實作修正有公開紅綠證據：SQLite正常伴隨檔消失仍可驗身分、同registry短交易串行、真無效憑證401／工程503、host-only observe逐件只驗一次原Core結果與一次預算報表、相同身分檢查不重包、UI同時只讀一份快照且舊登入回應不回填。受影響核心195通過／1既有lsof平台跳過；該平台單項後續實際重跑1通過。root的Monitor原證據、契約、期限及觀測回歸23通過；這些指定結果不替代全套。
+- 限定範圍獨立複審通過，剩餘問題0：41／41來源檔匹配、11項回歸與5項UI邊界探針通過。原Q23確切原因未知；10.10秒只代表當次50題快照量測。原失敗、SDK報告、帳務、桌機及審查在 `runtime/ollama50-evidence-20261023-final/` 保存，索引同時保留既有263筆歷史證據。
+- 本機桌機網址 `http://127.0.0.1:18773/`，資料 `runtime/ollama50-20261023-r2/data/`，原18767保留。完整操作及證據邊界見[50題文件](ollama50-simulation.md)。真實模型／供應商請求0；不提交、不做手機、推送、部署、刪除或重啟付費研究。
+- 最終Monitor完整凍結gate **235項／12步通過**，Ruff、全部產品／QA JS、全套Monitor測試及sdist／wheel成功，Core與Monitor前後指紋不變；收據 `runtime/ollama50-evidence-20261023-final/full-verification/monitor/runtime/checks/7429cd7f773e/checks.json`。
+- 核心完整收集2,105項，**2,055通過／50失敗／2警告**，整套gate未通過，沒有finalize或把目前交付指標改成verified。失敗均為SQL題庫／研究suite或凍結計畫不一致；現行suite `c829540e…`與表內 `8a3127cd…`不同，固定import到凍結來源後仍失敗。複製依賴環境另有舊editable路徑，已保存隔離注意事項，不能單憑此宣稱全部50項的根因。原始完整log、來源與nodeids封存於 `runtime/ollama50-evidence-20261023-final/full-verification/`。核心兩個既有Mock示範各5次呼叫另行通過，sdist／wheel離線建置另行成功，不替代失敗整套。
+- 固定17份核准歷史副本排除，沒有增加排除或修改SQL／檢查器。較早完整檢查因後續修正輸入而明示中斷130；兩個新目錄因離線快取不足而失敗，之後重用與目前鎖檔完全相符的已安裝環境，仍由原`--locked --offline`檢查重新驗證並重綁凍結project，無網路下載。原R7收據與263筆歷史索引保留，核心全工作區維持未完全驗證。
+
+## 2026-10-23：桌機帳務與尚未完成的主線接線
+
+**主線實際 MRC 尚未接到 Monitor。** 已完成的 Core／TaskService／IdentityStore 接線驗收限於合成環境與介面；`18767` 目前仍用獨立 MockTransport 任務，主線實際 runner、客戶端與共用帳本尚未由同一服務組裝。OpenRouter 真實金鑰用量是獨立唯讀資料，不能當成實際 MRC 任務或客戶計費已運行的證據。接線缺口及下一個必要步驟見[交接紀錄](main-thread-handoff.md)。
+
+- 本輪帳務功能：內部 USD 帳本、版本化全域／客戶倍率、開源模型輸入／輸出每百萬 token 售價、任務接受時固定費率、冪等入帳／扣款、缺證待核與私有原始證據。頁面提供計價明細；預設不扣款，啟用前任務不補扣，原核心成本及派送預算不回寫。
+- 最後完整 Monitor gate：**206 passed、10步全數成功**，Ruff、全部產品／QA JavaScript語法、全部 Monitor 測試及離線 sdist／wheel；測試前後 Monitor 與注入 core 指紋不變。原始收據 `runtime/checks/3a7b50d6365d/checks.json`；前一輪197項／10步紀錄 `runtime/checks/21065421343e/checks.json` 保留。未重跑整個核心工作區套件，不改稱核心全面全綠。
+- 桌機1280×800：`output/playwright/billing-20261023-r4/billing-browser-report.json` **7項通過、0 JavaScript錯誤**；包含草稿保存、售價設定、入帳回應遺失後完整reload沿原編號重試、原客戶消失與sessionStorage不可用時阻擋、重複核帳不重複扣款、客戶無管理權限。1個requestfailed是刻意丟失已成功入帳的回應，保留明列。
+- 原網址與真實帳務顯示：`output/playwright/billing-live-preview-20261023-r2/preview-report.json` 通過；手動讀 `/key` 回應200，原文雜湊可核對，累計／當期用量及重設週期分開，無管理金鑰的帳戶範圍維持未知。合成客戶帳本保持停用與0筆；本輪沒有真實模型請求或客戶扣款。來源只在明示動作讀取，普通頁面與輪詢不查供應商。
+- 獨立唯讀[複審收據](../../.scratch/cloudyfan-monitor-billing-20261023/review/review-final.json)為 `PASS_SCOPED_CODE_REVIEW`、剩餘finding0；初版2項P2各由原探針確認修正。串流期限依資料塊檢查，不能宣稱嚴格牆鐘搶佔；完整限制見[帳務文件](billing.md)。
+- 依使用者指示複製核心 `.env`，0600、Git忽略、內容核對；金鑰未輸出或提交。核心其他研究變更、既有UI與兩張截圖保留。沒有手機工作、金流收款、推送、部署、commit或刪除；原R7證據保持歷史範圍，不覆寫。
+
+本輪新程式未提交，私有過程證據在 CloudyFan `.scratch/cloudyfan-monitor-billing-20261023/`，本機預覽使用 `runtime/billing-preview-20261023`。完整操作與價格規則見[帳務說明](billing.md)。
 
 ## 2026-10-23：本輪工具修正提交
 

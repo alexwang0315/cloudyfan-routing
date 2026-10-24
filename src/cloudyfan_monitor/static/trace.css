@@ -1,0 +1,47 @@
+/* Desktop task evidence and the explicit synthetic batch control. */
+.task-trace-toggle{margin-top:10px}
+.task-trace-row>td{padding:0 18px 20px;background:#0f1822;white-space:normal}
+.task-trace{padding:22px;border:1px solid #35485a;border-radius:8px;background:var(--panel);font-size:14px}
+.trace-header,.trace-section-title,.trace-attempt-heading{display:flex;justify-content:space-between;align-items:center;gap:16px}
+.trace-header{align-items:flex-start;padding-bottom:19px;border-bottom:1px solid var(--border)}
+.trace-header p,.trace-distribution p{font-size:12px;line-height:1.7}
+.trace-header a{color:var(--mint);text-decoration:underline}
+.trace-section{margin-top:22px}
+.trace-section-title{margin-bottom:14px}
+.task-trace h4{margin:0;font-size:15px;font-weight:600}
+.trace-pool-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.trace-pool{padding:15px;border:1px solid var(--border);border-radius:7px;background:#101923;min-width:0}
+.trace-pool>.badge{margin-top:10px;white-space:normal}
+.trace-pool p{margin-top:9px;font-size:12px;line-height:1.7}
+.trace-model-list{overflow-wrap:anywhere}
+.trace-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 24px;margin:13px 0 10px}
+.trace-facts>div{display:flex;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid #263442;min-width:0}
+.trace-facts dt{font-size:12px;color:var(--muted);flex-shrink:0}
+.trace-facts dd{font-size:13px;text-align:right;margin:0;overflow-wrap:anywhere;min-width:0}
+.trace-timeline{list-style:none;margin:0;padding:0;display:grid;gap:14px}
+.trace-attempt{padding:18px;border:1px solid var(--border);border-left:3px solid #557b96;border-radius:7px;background:#101923;min-width:0}
+.trace-order{display:block;color:var(--muted);font:11px var(--mono);margin-bottom:4px}
+.trace-stop,.trace-attempt-models{font-size:12px;margin-top:10px;overflow-wrap:anywhere}
+.trace-call-table{margin-top:15px}
+.task-trace .trace-call-table th,.task-trace .trace-call-table td{font-size:12px;padding:10px 12px}
+.trace-call-table td:first-child{min-width:170px;max-width:270px;overflow-wrap:anywhere}
+.trace-call-table .trace-cost{white-space:nowrap}
+.trace-generation{max-width:230px;min-width:120px;overflow-wrap:anywhere}
+.trace-empty{padding:14px;color:var(--muted);border:1px dashed #3a4a5a;border-radius:6px;font-size:13px}
+.trace-decisions{display:grid;gap:14px}
+.trace-decision{padding:18px;border:1px solid var(--border);border-radius:7px;background:#101923}
+.trace-distribution{padding-top:13px;margin-top:15px;border-top:1px solid var(--border)}
+.trace-distribution h5{margin:0 0 10px;font-size:12px;font-weight:500;color:var(--muted)}
+.trace-probabilities{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+.trace-probabilities>span{display:flex;gap:18px;justify-content:space-between;padding:7px 10px;border:1px solid #344759;border-radius:5px;min-width:130px;font-size:12px}
+.trace-probabilities strong{color:var(--blue);font-weight:500}
+.simulation-banner{padding:20px 22px;border:1px solid #62543a;border-radius:10px;background:#24251f;margin-bottom:24px}
+.simulation-banner-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:20px}
+.simulation-banner h2{margin:6px 0}
+.simulation-banner .eyebrow{color:var(--amber)}
+.simulation-banner p{max-width:85ch;font-size:13px;line-height:1.7}
+.simulation-banner .simulation-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:16px}
+.simulation-banner .simulation-progress{display:flex;align-items:center;gap:14px;margin-top:15px;font-size:13px}
+.simulation-banner progress{width:240px;height:10px;accent-color:var(--mint)}
+.simulation-banner .simulation-progress-label{font-family:var(--mono)}
+.simulation-banner .simulation-identity{margin-top:12px;overflow-wrap:anywhere}

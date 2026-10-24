@@ -49,7 +49,8 @@ def main():
     save = support.write_report
     save(output / "checks.json", report)
     commands = [[python, "-m", "ruff", "check", "--no-cache", ".", "scripts/check"],
-                ["node", "--check", "src/cloudyfan_monitor/static/app.js"],
+                *[["node", "--check", str(p.relative_to(root))]
+                  for p in sorted((root / "src/cloudyfan_monitor/static").glob("*.js"))],
                 *[["node", "--check", str(p.relative_to(root))]
                   for p in sorted((root / "scripts").glob("qa_*.cjs"))]]
     if not args.quick:

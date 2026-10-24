@@ -1,5 +1,7 @@
 # 與主服務整合
 
+目前狀態（2026-10-23）：受控組裝介面與本機合成接線已實作並測試；主線實際 MRC 執行器仍未透過此組裝啟動，真實任務與共用帳本尚未自動進入 Monitor。`18767` 使用獨立合成預覽；OpenRouter 金鑰用量的真實唯讀查詢不等於實際任務已接通。下列主服務組裝範例仍是接線契約，不能當成已運行服務的證據。
+
 本次使用者已確認 Q1～Q12 及完整方案，並授權本機接入與驗收。規格已發布為 [Issue #20](https://github.com/alexwang0315/cloudyfan-routing/issues/20)；實際執行狀態與證據見[執行檢查點](execution-checkpoint.md)及[驗收清單](main-thread-integration-acceptance.md)。模型測試使用真實 Core／BudgetedCore／TaskService 與模擬上游；真實來源 GET 是獨立步驟，不建立模型或費用資格。
 
 ## 受控服務組裝
@@ -51,10 +53,21 @@ Content-Type: application/json
 - `GET /v1/tasks/<id>/result`：讀已完成原結果，先檢查身分與存取有效期，再驗證原結果及收據；不刷新共享傳輸。
 - `POST /v1/tasks/<id>/resume`：body 僅接受 `{}`，明示接續原任務。
 - `GET /v1/monitor`：只讀自己的公開統計與任務。
+- `GET /v1/billing`：只讀自己的內部美元餘額、已入帳紀錄與待核項目；[客戶費率與帳務](billing.md)分別管理。
 
 相同 client／run／內容的 POST 只讀取原任務，完成、執行中或中斷皆不派送。內容衝突 409；到期或退休 410。只有新工作或明示 resume 取得全服務名額；滿載立即 429，不建立佇列。查詢及管理不取得執行名額，HTTP 斷線不取消伺服器已接受的任務。程序中斷後不自動續跑，仍受原未知費與預算限制。
 
 任務建立時固定 client、內容指紋、pool、category、mode、contract。設定切換只影響新任務；缺少原契約時拒絕，不遷移成新版本。未經入口的歷史研究不自動接管。
+
+## Ollama 文字入口
+
+主服務可在同一個 `assemble_monitor` 明示傳入 `ollama_models={"cloudyfan/mrc": {"category": category, "contract_id": registered_contract_id}}`。別名固定到精確的既有契約；Ollama 原生解析及回應沿用核心 `OllamaApp`，透過明示的 `submit_task` callback 交給同一 Monitor Gateway，因此保留客戶歸戶、單件容量、原任務重送、30天期限、凍結售價與原預算控制。
+
+提供 `GET /api/tags`、`POST /api/chat` 及 `POST /api/generate` 的單一使用者文字、非串流子集。列模型須有 `models:read`，送題須有 `tasks:write`，讀結果須有 `tasks:read`。Host／Origin 限制及客戶與操作員權限分離照常適用。若現在選定的模式／池無法解析為別名綁定的同一契約，新任務在綁定及派送前回409；已接受任務的相同內容重送仍用原契約。
+
+官方 Python SDK固定 `ollama==0.6.3`，以 `X-CloudyFan-Run-ID` 指定穩定身分、`stream=False`。它會捨棄CloudyFan擴充欄位，完整狀態、選池及成本另從同一任務的結果API取得。公開驗收失敗／無法確認回原生422，仍保留任務、費用與Monitor追蹤。真正無效憑證回401；身分驗證的工程故障回安全503並停止，不能自動重試或放行。
+
+原始核心結果的作答與 Jev 決策會投影到 Monitor 的安全 `trace`：模型池、驗收狀態、模型、供應商、用量、費用、分類分布、保守選池原因及原請求編號。提示、答案原文與原始API回應保留在私有證據，監控快照不帶入。實際的[50題合成案例](ollama50-simulation.md)使用獨立資料集，與主線真實模型接線的資格及帳本分開。
 
 ## 管理、帳務與保存
 
@@ -93,4 +106,4 @@ source_adapter = OpenRouterPoolSource(
 
 `./scripts/preview` 使用獨立的 `runtime/local-integration`，真實 IdentityStore／30 天政策／Core 搭配 MockTransport、虛構憑證及合成費用。原 `runtime/preview` 保留，需 `--legacy-demo` 才使用舊組裝；舊任務目錄缺少 lifecycle 時拒絕自動遷移。
 
-正式 TLS、跨主機容量、多操作員權限、Queue、OpenAI／Ollama 相容協定及真實模型／費用資格不在本輪交付範圍。本機驗收狀態以[清單](main-thread-integration-acceptance.md)為準，不以開啟頁面或文件整理代替必要證據。
+正式 TLS、跨主機容量、多操作員權限、Queue、完整 OpenAI／Ollama 功能與真實模型／費用資格仍須另外接入及驗收。本機驗收狀態以[清單](main-thread-integration-acceptance.md)及[50題案例](ollama50-simulation.md)各自證據為準，不以開啟頁面或文件整理代替必要證據。

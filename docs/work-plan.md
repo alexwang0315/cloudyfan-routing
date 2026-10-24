@@ -3,6 +3,18 @@
 This page records the Issue20 delivery history. For the current tooling result,
 run `python3 scripts/acceptance.py status`; see [the tooling guide](tooling.md).
 
+## Ollama customer fifty-question follow-up (2026-10-23)
+
+Implemented the real official SDK / loopback HTTP / Monitor Gateway / Core path with synthetic model and Jev responses. The actual single-customer batch completed fifty tasks:40 passed,5 failed,5 unverifiable,110 generation and60 classification calls. Supplier fixture cost0.1155 USD, customer charges0.139128 USD, balance0.860872 USD and no pending charges. The native alias pins an exact registered contract and preserves the original admission, replay, access, budget and tariff rules.
+
+Desktop progress evidence and the final five read-only inspection groups are recorded separately; all six routes, four pool states, Jev fallback/escalation and customer billing were inspected. The first22-task401 and R2 snapshot timeout remain failed history. Repairs keep original receipt validation while eliminating duplicate observation work, serialize short identity transactions, distinguish engineering503 from inactive401 and prevent overlapping/stale browser loads. Scoped independent review has no remaining finding. Full Monitor verification passed235 tests and12 steps. Full core verification failed50 SQL suite/plan tests with2055 passes, so no combined verified delivery is published; the separate mock demos and build passed. Consult the original receipts and [checkpoint](execution-checkpoint.md), not earlier historical totals.
+
+The dedicated18773 environment and all evidence remain local. Mainline real-model qualification, research scope and unknown-cost stopping are unchanged; no real supplier request, credential access, mobile work, Git commit, push, deployment or deletion is part of this follow-up. See [the runnable case](ollama50-simulation.md).
+
+## Desktop billing follow-up (2026-10-23)
+
+Customer USD ledger, frozen tariffs, configurable input/output OSS rates, idempotent credits/debits and explicit read-only OpenRouter accounting are implemented locally. The actual key-scope read is separate from synthetic desktop tasks. Mainline real MRC runners have not yet been assembled into the Monitor host; neither the original Issue20 offline acceptance nor the key-usage read establishes that live task integration. See the current [handoff](main-thread-handoff.md) and [billing scope](billing.md). Mobile work remains stopped; no model spending, production dispatch or payment processing is added.
+
 ## Current Issue #20 integration follow-up (2026-10-22)
 
 The initial side-task history below is preserved. The later main-thread scope is desktop only: mobile implementation and tests were stopped by the user. The invoked implement-spec skill now permits isolated local integration commits, not code push or deployment.

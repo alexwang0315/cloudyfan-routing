@@ -11,8 +11,10 @@ from cloudyfan_jev.client import usage
 from cloudyfan_jev.http_api import ServiceError
 
 from .admission import Admission
+from .billing import Billing
 from .retention_policy import DAY, EvidenceRetentionPolicy
 from .store import MODES, MonitorError, digest
+from .tracing import routing_trace
 
 
 def _bound_task_id(binding):
@@ -26,6 +28,7 @@ def _bound_task_id(binding):
 class Gateway:
     def __init__(self, store, service, registry, *, demo=False):
         self.store, self.service, self.demo = store, service, demo
+        self.billing = Billing(store, demo=demo)
         self.registry = MappingProxyType(dict(registry))
         self.refresh_lock = threading.Lock()
         self.admission = Admission(store.path.with_suffix(".execution.lock"))
@@ -61,18 +64,18 @@ class Gateway:
             raise MonitorError("new_pool_missing_configured_modes", 409)
         return self.store.change(revision=revision, routing=pool)
 
-    def create(self, principal, payload):
+    def create(self, principal, payload, *, expected_contract=None):
         self.service.authorize(principal)
         prior = (self.store.existing_binding(principal, payload.get("run_id"))
                  if isinstance(payload, dict) and isinstance(payload.get("run_id"), str) else None)
         if prior is not None:
-            binding = self.store.bind(principal, payload, self.registry)
+            binding = self.store.bind(principal, payload, self.registry, expected_contract=expected_contract)
             return self.status(principal, binding["run"])
         try:
             with self.admission.acquire():
                 prior = (self.store.existing_binding(principal, payload.get("run_id"))
                          if isinstance(payload, dict) and isinstance(payload.get("run_id"), str) else None)
-                binding = self.store.bind(principal, payload, self.registry)
+                binding = self.store.bind(principal, payload, self.registry, expected_contract=expected_contract)
                 if prior is not None:
                     return self.status(principal, binding["run"])
                 self.store.record(binding, {"status": "bound"})
@@ -91,7 +94,7 @@ class Gateway:
                      if isinstance(payload, dict) and isinstance(payload.get("run_id"), str) else None)
             if prior is None:
                 raise
-            binding = self.store.bind(principal, payload, self.registry)
+            binding = self.store.bind(principal, payload, self.registry, expected_contract=expected_contract)
             return self.status(principal, binding["run"])
 
     def status(self, principal, run):
@@ -152,15 +155,17 @@ class Gateway:
             self.store.record_version_use(binding)
             self.capture(binding)
 
-    def _completed_summary(self, binding, *, expired=False):
-        if not expired:
-            self.service.result(binding["client"], binding["run"], refresh=False)
-        contract = self.service.contracts[binding["contract"]]
-        result = contract.runner.core.read_completed(self.service.internal_id(binding["client"], binding["run"]))
+    def _completed_summary(self, binding, *, expired=False, result=None):
+        if result is None:
+            if not expired:
+                self.service.result(binding["client"], binding["run"], refresh=False)
+            contract = self.service.contracts[binding["contract"]]
+            result = contract.runner.core.read_completed(self.service.internal_id(binding["client"], binding["run"]))
         return {"completed_status": result["status"], "first_pass": result["first_public_pass"],
                 "final_pass": result["final_public_pass"], "wall_seconds": result.get("wall_seconds"),
                 "generation_attempts": len(result["attempts"]),
                 "classifier_calls": (result.get("selection") or {}).get("classifier_calls", 0),
+                "trace": routing_trace(result),
                 "path": [{"tier": a["tier"], "passed": a["public"].get("passed"), "stop": a.get("stop"),
                           "models": sorted({c.get("model") for c in a["calls"] if c.get("model")})}
                          for a in result["attempts"]]}
@@ -184,7 +189,8 @@ class Gateway:
             expired = self._expiry(binding)
             if expired:
                 raise ServiceError(expired, 410)
-            status = self.service.status(principal, run)
+            observed = self.service.observe(principal, run)
+            status = observed["state"]
             costs = status.get("costs", {})
             summary = {"status": status["status"], "known_api_usd": costs.get("known_api_usd"),
                        "complete_api_usd": costs.get("complete_api_usd"),
@@ -193,7 +199,9 @@ class Gateway:
             if status["status"] in ("bound", "ready", "running", "queued"):
                 summary["complete_api_usd"] = None
             if status["status"] in ("passed", "failed", "unverifiable"):
-                summary.update(self._completed_summary(binding))
+                if observed["completed_result"] is None:
+                    raise ServiceError("result_evidence_unavailable", 503)
+                summary.update(self._completed_summary(binding, result=observed["completed_result"]))
         except ServiceError as error:
             if error.code == "task_busy":
                 summary = {"status": previous.get("status") or "running", "observation": "busy"}
@@ -277,8 +285,16 @@ class Gateway:
                     client = clients[root_id]
                     directory = client._directory(call_id)
                     info = usage(client._load(directory))
-                    row.update({k: info.get(k) for k in ("model", "provider", "cost_source", "elapsed_ms")})
+                    row.update({k: info.get(k) for k in ("model", "provider", "cost_source", "elapsed_ms", "generation_id")})
                     intent = json.loads((directory / "intent.json").read_text())
+                    url = urlsplit(intent.get("url", ""))
+                    row["billing_origin"] = ("local" if info.get("local_call_id") else
+                                             "openrouter" if url.hostname == "openrouter.ai" else None)
+                    if owner:
+                        pool = self.store.pool(owner["pool"])
+                        candidates = pool["categories"][owner["category"]]["pools"]["open_source"]
+                        row["open_source"] = any(c.get("profile", {}).get("model_version") == info.get("model")
+                                                 for c in candidates if c.get("profile"))
                     row["request_kind"] = "classification" if urlsplit(intent.get("url", "")).path.endswith("/decisions") else "generation"
                     row["tokens"] = {k: v for k, v in info.get("usage", {}).items()
                         if k in ("input_tokens", "output_tokens", "prompt_tokens", "completion_tokens", "total_tokens")

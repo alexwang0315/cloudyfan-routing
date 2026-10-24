@@ -204,7 +204,7 @@ class Store:
                 raise MonitorError("pool_integrity_failed", 409)
             return {"id": key, **data}
 
-    def bind(self, client, payload, registry):
+    def bind(self, client, payload, registry, *, expected_contract=None):
         if not isinstance(payload, dict) or set(payload) != {"run_id", "category", "prompt"}:
             raise MonitorError("unsupported_task_fields")
         if not isinstance(payload["run_id"], str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", payload["run_id"]):
@@ -220,6 +220,8 @@ class Store:
         with self.db() as db:
             prior = db.execute("SELECT * FROM bindings WHERE client=? AND run=?", (client, payload["run_id"])).fetchone()
             if prior:
+                if expected_contract is not None and prior["contract"] != expected_contract:
+                    raise MonitorError("ollama_contract_changed", 409)
                 if prior["fingerprint"] != fingerprint:
                     raise MonitorError("frozen_task_changed", 409)
                 return dict(prior)
@@ -232,9 +234,13 @@ class Store:
             contract = registry.get((pool, category, mode))
             if contract is None:
                 raise MonitorError("routing_configuration_unavailable", 409)
+            if expected_contract is not None and contract != expected_contract:
+                raise MonitorError("ollama_contract_changed", 409)
             row = {"client": client, "run": payload["run_id"], "fingerprint": fingerprint,
                    "pool": pool, "mode": mode, "category": category, "contract": contract, "created": self.clock()}
             db.execute("INSERT INTO bindings VALUES(:client,:run,:fingerprint,:pool,:mode,:category,:contract,:created)", row)
+            from .billing import freeze_policy
+            freeze_policy(db, row)
             db.execute("INSERT INTO version_uses VALUES(?,?,?,?) ON CONFLICT(pool,contract) "
                        "DO UPDATE SET last_used=MAX(last_used,excluded.last_used)",
                        (pool, contract, row["created"], row["created"]))
@@ -257,7 +263,7 @@ class Store:
         # Only allow explicit public counters/identities. No prompt, answer, diagnosis prose or raw receipts.
         fields = ("status", "first_pass", "final_pass", "generation_attempts", "classifier_calls",
                   "wall_seconds", "known_api_usd", "complete_api_usd", "unknown_events", "path", "error_code",
-                  "completed_status", "access_expired", "observation")
+                  "completed_status", "access_expired", "observation", "trace", "ingress")
         with self.db() as db:
             previous = db.execute("SELECT data FROM tasks WHERE client=? AND run=?",
                                   (binding["client"], binding["run"])).fetchone()

@@ -4,12 +4,17 @@ const esc = (v) => String(v ?? '—').replace(/[&<>"']/g, c => ({'&':'&amp;','<'
 const modes = {cloudyfan:'CloudyFan MRC',fixed_high:'全大模型優先',low_first:'全便宜模型優先',open_source_first:'全開源模型優先'};
 const tiers = {open_source:'開源池',low:'低分池',mid:'中分池',high:'高分池'};
 const candidateTiers = {open_source:'開源候選',low:'低分候選',mid:'中分候選',high:'高分候選'};
-const labels = {overview:'運作總覽',tasks:'任務與升級',ledger:'費用帳本',pools:'候選池與契約',clients:'連線客戶端'};
+const labels = {overview:'運作總覽',tasks:'任務與升級',ledger:'費用帳本',billing:'客戶帳務',pools:'候選池與契約',clients:'連線客戶端'};
 const statuses = {passed:['通過','green'],failed:['未通過','red'],unverifiable:['無法確認','amber'],running:['執行中','blue'],ready:['已準備','blue'],bound:['已凍結','blue'],queued:['排隊中','blue'],expired:['已到期','amber'],task_busy:['執行中','blue'],engineering_interrupted:['工程中斷','red'],accounting_interrupted:['費用待核','amber'],policy_denied:['執行條件不符','amber']};
 const poolStatuses = {missing:'缺額',pending_unqualified:'待驗證',pending_unqualified_stale_source:'來源逾期',research_admitted_only:'僅舊研究准入',mock_only:'模擬設定'};
 const categoryLabels = {'agentic_index':'代理任務','coding_index':'程式與 SQL','intelligence_index':'綜合推理','3d':'3D 設計','asciiart':'字元藝術','audiorealism':'音訊擬真','codecategories':'程式設計','dataviz':'資料視覺化','gamedev':'遊戲開發','graphicdesign':'平面設計','image':'影像生成','imageediting':'影像編輯','logo':'Logo 設計','svg':'SVG 圖形','text-to-speech':'語音合成','uicomponent':'UI 元件','website':'網站設計','gpqa_diamond':'科學推理','search_browsecomp':'網頁搜尋','search_dsqa':'搜尋問答','search_hle':'高難度搜尋','search_widesearch':'廣域搜尋','tau_bench_verified_airline':'航空客服代理'};
 const errors = {unauthorized:'登入憑證不正確或已失效',configuration_changed_reload:'設定已被更新，請重新讀取後再套用',source_get_failed:'來源 API 暫時無法取得資料',source_timeout:'來源連線逾時',source_request_deadline:'單次來源請求逾時',source_network_failed:'來源連線失敗',source_schema_invalid:'來源資料格式或模型身分不符',source_request_limit:'本次來源查詢已達上限',source_refresh_deadline:'來源更新逾時，現有版本保留',source_refresh_busy:'另一個來源更新仍在進行',monitor_or_source_unavailable:'監控服務或資料來源暫時無法使用',candidate_data_has_no_registered_runtime_contracts:'此候選版本尚未接入核心執行設定',routing_configuration_unavailable:'此類別與模式尚無已註冊契約',service_busy:'執行容量已滿，請稍後再試',task_expired:'任務已到期，原結果與接續已停止開放'};
 let token = '', data = null, pool = null, selectedCategory = 'artificial-analysis:coding_index', selectedClient = '', taskFilter = '', modeFilter = '', search = '', pendingConfirm = null, busy = false, refreshCompleteness = null;
+const expandedTaskTraces = new Set();
+let simulationStarting = false;
+let authenticationVersion = 0, snapshotFlight = null;
+function setToken(value) {token=value;authenticationVersion+=1;}
+const sameLogin = (version,value) => authenticationVersion===version&&token===value&&!!token;
 const money = v => v === null || v === undefined ? '未知' : '$' + Number(v).toFixed(6);
 const pct = v => v === null || v === undefined ? '—' : (v * 100).toFixed(1) + '%';
 const secs = v => v === null || v === undefined ? '—' : Number(v).toFixed(2) + 's';
@@ -21,23 +26,26 @@ const options = (values, selected, inherit = false, enabled = null) => (inherit 
 function error(message) {$('#error').hidden=false;$('#error').textContent=message;}
 function toast(message) {$('#toast').hidden=false;$('#toast').textContent=message;setTimeout(()=>$('#toast').hidden=true,4500);}
 async function api(path, body) {
-  const response = await fetch(path,{method:body===undefined?'GET':'POST',headers:{Authorization:'Bearer '+token,...(body===undefined?{}:{'Content-Type':'application/json'})},...(body===undefined?{}:{body:JSON.stringify(body)})});
+  const requestToken=token,requestVersion=authenticationVersion;
+  const response = await fetch(path,{method:body===undefined?'GET':'POST',headers:{Authorization:'Bearer '+requestToken,...(body===undefined?{}:{'Content-Type':'application/json'})},...(body===undefined?{}:{body:JSON.stringify(body)})});
   const result = await response.json();
   if(!response.ok) {
-    if(response.status===401) $('#login').showModal();
+    if(response.status===401&&sameLogin(requestVersion,requestToken)&&!$('#login').open) $('#login').showModal();
     const failure=Error(errors[result.error?.code] || result.error?.code || '無法取得資料');
     failure.completeness=result.completeness;failure.status=response.status;throw failure;
   }
   return result;
 }
-function confirmAction(title, description, action) {
+let confirmationMessage = '';
+function confirmAction(title, description, action, successMessage = '設定已保存；既有任務仍使用原設定。') {
   $('#confirm-title').textContent=title;$('#confirm-description').innerHTML=description;
-  pendingConfirm=action;$('#confirm').showModal();
+  pendingConfirm=action;confirmationMessage=successMessage;$('#confirm').showModal();
 }
 $('#cancel-confirm').onclick=()=>{$('#confirm').close();pendingConfirm=null;};
 $('#apply-confirm').onclick=async()=>{
   if(!pendingConfirm)return;$('#apply-confirm').disabled=true;
-  try{await pendingConfirm();$('#confirm').close();pendingConfirm=null;await load(true);toast('設定已保存；既有任務仍使用原設定。');}
+  const message=confirmationMessage;
+  try{await pendingConfirm();$('#confirm').close();pendingConfirm=null;await load(true);toast(message);}
   catch(e){error(e.message);$('#confirm').close();}
   finally{$('#apply-confirm').disabled=false;}
 };
@@ -48,10 +56,60 @@ function modeControls(client='', value=data.control.mode) {
  const available=data.available_modes||Object.keys(modes);
  return `<div class="mode-control"><label class="mode-label" for="mode-${esc(client||'global')}">${client?'此客戶端模式':'新任務預設模式'}</label><select id="mode-${esc(client||'global')}" data-mode-client="${esc(client)}" aria-label="${client?'客戶端':'全域'}模式">${options(modes,value,!!client,available)}</select><button class="button small" data-change-mode="${esc(client)}" ${!client&&!available.includes(value)?'disabled':''}>套用</button><span class="sub">各類別支援範圍見契約矩陣</span></div>`;
 }
-function taskRows(tasks,compact=false) {return `<div class="table-wrap"><table><thead><tr><th>任務 / 客戶端</th><th>模式</th><th>執行路徑</th><th>結果</th>${compact?'':'<th>Jev 次數</th><th>完整 API</th><th>核心流程延遲</th>'}</tr></thead><tbody>${tasks.slice(0,200).map(t=>`<tr><td><span class="mono">${esc(t.run)}</span><br><span class="muted">${esc(t.client)}</span></td><td>${esc(modes[t.mode])}</td><td>${route(t)}</td><td>${status(t.status)}${t.access_expired||t.status==='expired'?'<br><span class="muted">歷史統計保留</span>':''}</td>${compact?'':`<td class="mono">${esc(t.classifier_calls??'—')}</td><td class="amount">${money(t.complete_api_usd)}</td><td class="mono">${secs(t.wall_seconds)}</td>`}</tr>`).join('')||'<tr><td colspan="7" class="empty">尚無符合條件的任務</td></tr>'}</tbody></table></div>`;}
+const taskTraceKey = task => JSON.stringify([task.client ?? '',task.run ?? '']);
+const taskTraceId = task => 'task-trace-' + encodeURIComponent(taskTraceKey(task));
+const taskMoney = value => typeof value === 'string' ? (/^\d+(?:\.\d+)?$/.test(value) ? '$' + esc(value) : '未知') : money(value);
+const taskTrace = task => window.CloudyFanTrace?.render(task) || '<p class="trace-empty">呼叫與選池明細尚未載入。</p>';
+function taskRows(tasks,compact=false) {
+ return `<div class="table-wrap"><table><thead><tr><th>任務 / 客戶端</th><th>模式</th><th>執行路徑</th><th>結果</th>${compact?'':'<th>Jev 次數</th><th>完整 API</th><th>核心流程延遲</th>'}</tr></thead><tbody>${tasks.slice(0,200).map(t=>{
+   const key=taskTraceKey(t),open=expandedTaskTraces.has(key),detailId=taskTraceId(t);
+   return `<tr data-task-run="${esc(t.run)}"><td><span class="mono">${esc(t.run)}</span><br><span class="muted">${esc(t.client)}</span>${compact?'':`<br><button class="button small task-trace-toggle" type="button" data-task-trace-toggle="${esc(key)}" aria-expanded="${open}" aria-controls="${esc(detailId)}" aria-label="${open?'收起':'查看'}任務 ${esc(t.run)} 的呼叫與選池明細">${open?'收起明細':'查看呼叫與選池'}</button>`}</td><td>${esc(modes[t.mode])}</td><td>${route(t)}</td><td>${status(t.status)}${t.access_expired||t.status==='expired'?'<br><span class="muted">歷史統計保留</span>':''}</td>${compact?'':`<td class="mono">${esc(t.classifier_calls??'—')}</td><td class="amount">${taskMoney(t.complete_api_usd)}</td><td class="mono">${secs(t.wall_seconds)}</td>`}</tr>${compact?'':`<tr id="${esc(detailId)}" class="task-trace-row" data-task-trace-row="${esc(key)}" ${open?'':'hidden'}><td colspan="7">${open?taskTrace(t):''}</td></tr>`}`;
+ }).join('')||`<tr><td colspan="${compact?4:7}" class="empty">尚無符合條件的任務</td></tr>`}</tbody></table></div>`;
+}
+function bindTaskTraces() {
+ document.querySelectorAll('[data-task-trace-toggle]').forEach(button=>button.onclick=()=>{
+   const key=button.dataset.taskTraceToggle,detail=document.getElementById(button.getAttribute('aria-controls'));
+   const task=data.tasks.find(item=>taskTraceKey(item)===key);
+   if(!detail||!task)return;
+   const open=!expandedTaskTraces.has(key);
+   if(open){expandedTaskTraces.add(key);detail.firstElementChild.innerHTML=taskTrace(task);}
+   else expandedTaskTraces.delete(key);
+   detail.hidden=!open;button.setAttribute('aria-expanded',String(open));
+   button.setAttribute('aria-label',`${open?'收起':'查看'}任務 ${task.run} 的呼叫與選池明細`);
+   button.textContent=open?'收起明細':'查看呼叫與選池';
+ });
+}
+function simulationBanner() {
+ const simulation=data.simulation;
+ if(!simulation||typeof simulation!=='object')return '';
+ const labels={idle:['尚未開始','blue'],running:['執行中','blue'],completed:['模擬已完成','green'],failed:['模擬中斷','red']};
+ const current=Object.hasOwn(labels,simulation.status)?labels[simulation.status]:['狀態未知','amber'];
+ const total=Number.isSafeInteger(simulation.total)&&simulation.total>0?simulation.total:null;
+ const completed=Number.isSafeInteger(simulation.completed)&&simulation.completed>=0&&(total===null||simulation.completed<=total)?simulation.completed:null;
+ const canStart=simulation.can_start===true&&simulation.status!=='running'&&!simulationStarting&&total===50;
+ return `<section id="simulation-banner" class="simulation-banner" aria-labelledby="simulation-title"><div class="simulation-banner-heading"><div><div class="eyebrow">OLLAMA / SYNTHETIC BATCH</div><h2 id="simulation-title">Ollama 客戶端 · 50 題模擬</h2><p>透過 Ollama SDK 與本機 HTTP 入口，使用合成模型回應及合成帳務觀察路由。真實模型 API 費用為 $0。</p></div>${badge(...current)}</div><div class="simulation-progress" role="status"><span id="simulation-progress-label" class="simulation-progress-label">已完成 ${esc(completed??'未知')} / ${esc(total??'未知')} 題</span>${total===null?'':`<progress id="simulation-progress" max="${total}" ${completed===null?'':`value="${completed}"`} aria-label="模擬完成進度"></progress>`}</div><p class="simulation-identity metadata">客戶端 <code>${esc(simulation.customer??'未知')}</code> · 模型別名 <code>${esc(simulation.alias??'未知')}</code><br>批次 <code id="simulation-batch">${esc(simulation.batch_id??'未知')}</code></p><div class="simulation-actions"><button id="simulation-start" class="button primary" type="button" ${canStart?'':'disabled'}>${simulationStarting?'正在建立模擬批次…':simulation.status==='running'?'模擬執行中':'執行 50 題模擬'}</button><a id="simulation-view-tasks" class="button" href="#tasks">查看此客戶端任務</a><span class="metadata muted">進度隨帳務與任務快照更新；需確認才會建立批次。</span></div></section>`;
+}
+function bindSimulation() {
+ if($('#simulation-start'))$('#simulation-start').onclick=()=>{
+   const simulation=data.simulation;
+   if(simulationStarting||simulation?.can_start!==true||simulation.status==='running'||simulation.total!==50)return;
+   confirmAction('開始 Ollama 50 題模擬',`<p>以客戶端 <strong>${esc(simulation.customer??'未知')}</strong>，模型別名 <code>${esc(simulation.alias??'未知')}</code> 建立一個 50 題模擬批次。</p><p>使用 Ollama SDK 與本機 HTTP 接線，模型回應與帳務均為合成資料；真實模型 API 費用為 $0。各題的作答、Jev 選池及費用紀錄會出現在 Monitor。</p>`,async()=>{
+     if(simulationStarting)throw Error('模擬批次正在建立，請等候原結果。');
+     simulationStarting=true;render();
+     try{
+       const result=await api('/monitor/simulation/start',{}),next=result.simulation||result;
+       if(data&&next&&['idle','running','completed','failed'].includes(next.status))data.simulation={...data.simulation,...next};
+     }finally{simulationStarting=false;render();}
+   },'已送出 50 題模擬批次；進度會持續更新。');
+ };
+ if($('#simulation-view-tasks'))$('#simulation-view-tasks').onclick=()=>{
+   if(typeof data.simulation?.customer==='string'){taskFilter=data.simulation.customer;modeFilter='';search='';}
+ };
+}
 function overview() {
  const s=data.summary, l=data.ledger, m=data.by_mode.cloudyfan;
  return heading('OPERATIONS / LIVE','路由運作，一眼掌握。','從首答到升級，讓每次選模與完整費用都能追查。')+
+ simulationBanner()+
  `<div class="mode-banner"><div><div class="eyebrow">ACTIVE ROUTING</div><h3>${esc(modes[data.control.mode])}</h3><p>模式與模型池在任務建立時凍結；切換僅影響之後的新任務。</p></div>${modeControls()}</div>`+
  `<div class="metrics">${metric('最終公開驗收通過',pct(s.final_rate),`${s.passed} / ${s.tasks} 件；未知與未完成仍在分母`,true)}${metric('完整 API 費用',money(l.total_usd),`已知 ${money(l.known_usd)} · 待核 ${l.unknown_events} 筆`)}${metric('首答通過',pct(s.first_rate),`${s.first_passed} 件首答完成 · ${s.escalated} 件進入補答`)}${metric('核心流程延遲 P95',secs(s.latency_p95),`P50 ${secs(s.latency_p50)} · ${s.latency_samples} 件有完整證據`)}</div>`+
  `<div class="grid"><section class="panel"><div class="panel-header"><h2>CloudyFan 的選模路徑</h2>${badge('僅 MRC 任務')}</div><div class="panel-body"><div class="route-row"><div><h3>首答完成</h3><p>公開驗收通過後立即結束</p></div><strong class="mono">${m.first_passed} / ${m.tasks}</strong></div><div class="route-row"><div><h3>呼叫一次 Jev</h3><p>包含成功與最終未通過的完整流程</p></div><strong class="mono">${m.jev_once} / ${m.tasks} · ${pct(m.tasks ? m.jev_once/m.tasks : null)}</strong></div><div class="route-row"><div><h3>呼叫兩次 Jev</h3><p>第二次使用最近一次作答的公開診斷</p></div><strong class="mono">${m.jev_twice} / ${m.tasks} · ${pct(m.tasks ? m.jev_twice/m.tasks : null)}</strong></div><div class="route-row"><div><h3>需要關注</h3><p>未通過 ${m.failed} · 無法確認 / 中斷 ${m.unknown}</p></div>${badge(`${m.in_progress} 件進行中`,'blue')}</div></div></section>
@@ -113,10 +171,14 @@ function clientsPage() {
 }
 function render() {
  if(!data)return;const page=location.hash.slice(1) in labels ? location.hash.slice(1) : 'overview';
+ const focusedTrace=document.activeElement?.dataset?.taskTraceToggle;
  $('#crumb').textContent=labels[page];document.querySelectorAll('nav a').forEach(a=>{a.classList.toggle('active',a.dataset.page===page);if(a.dataset.page===page)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
- $('#main').innerHTML=({overview,tasks:tasksPage,ledger:ledgerPage,pools:poolsPage,clients:clientsPage}[page])();
  $('#environment').textContent=data.demo?'模擬上游 · 非真實成效':'受控核心 · 正式資格另列';
  $('#environment').className='badge '+(data.demo?'amber':'blue');
+ if(page==='billing'){window.CloudyFanBilling.mount($('#main'),{api,esc,toast,error,confirmAction});return;}
+ $('#main').innerHTML=({overview,tasks:tasksPage,ledger:ledgerPage,pools:poolsPage,clients:clientsPage}[page])();
+ bindTaskTraces();bindSimulation();
+ if(focusedTrace)Array.from(document.querySelectorAll('[data-task-trace-toggle]')).find(button=>button.dataset.taskTraceToggle===focusedTrace)?.focus({preventScroll:true});
  document.querySelectorAll('[data-change-mode]').forEach(button=>button.onclick=()=>{
    const client=button.dataset.changeMode,mode=document.querySelector(`[data-mode-client="${client}"]`).value || null, revision=data.control.revision;
    confirmAction('變更新任務的路由模式',`<p>${esc(client||'全域預設')} → <strong>${esc(modes[mode]||'跟隨全域')}</strong></p><p>既有、排隊中與中斷續跑任務保留原模式、模型池及嘗試上限。全大模型優先是可選功能，切換本身不會發送模型請求。</p>`,()=>api('/monitor/mode',{revision,mode,...(client?{client}:{})}));
@@ -138,18 +200,55 @@ async function refreshPools() {
    confirmAction('候選更新已準備，檢查差異',`${completenessNotice(refreshCompleteness)}<p>${result.demo?'本次為模擬更新，沒有外部 API。':`已嘗試 ${esc(result.request_count)} 次來源 GET，沒有模型作答請求。`} ${result.changes.length} 個候選欄有資料差異。</p><p>發布只更新候選清單；部分更新保留缺少資料為未知，實際路由仍使用已註冊版本，不會自動批准新模型。</p><div class="diff-list">${result.changes.map(c=>`<div class="diff-row"><strong>${esc(cname(c.category))} / ${esc(candidateTiers[c.tier])}</strong><br>${esc(c.before.join(' → '))}<br>更新為 ${esc(c.after.join(' → '))}</div>`).join('')||'主備模型無變更；來源時間或觀測資料已更新。'}</div>`,()=>api('/monitor/pools/publish',{revision,pool:result.pool}));
  } catch(e) {refreshCompleteness=e.completeness||null;error('更新失敗，現有版本保留：'+e.message);} finally {busy=false;render();}
 }
-async function load(force=false) {
- if(!token)return;
- try {
-   data=await api('/monitor/snapshot');
-   if(data.control.catalog_pool && (!pool||pool.id!==data.control.catalog_pool))pool=await api('/monitor/pools');
-   $('#updated').textContent='更新 '+new Date().toLocaleTimeString('zh-TW',{hour12:false});$('#error').hidden=true;
-   if(force||(!['INPUT','SELECT'].includes(document.activeElement.tagName)&&!$('dialog[open]')))render();
- }catch(e){error('資料未更新，保留上次畫面：'+e.message);}
+function load(force=false) {
+ if(!token)return Promise.resolve({ok:false,stale:true});
+ const version=authenticationVersion,requestToken=token;
+ if(snapshotFlight){
+   if(snapshotFlight.version===version&&snapshotFlight.token===requestToken){
+     snapshotFlight.force=snapshotFlight.force||force;
+     return snapshotFlight.promise;
+   }
+   // A new login waits for the old request to settle; it cannot join its data.
+   return snapshotFlight.promise.then(()=>sameLogin(version,requestToken)?load(force):{ok:false,stale:true});
+ }
+ const flight={version,token:requestToken,force,promise:null};
+ snapshotFlight=flight;
+ flight.promise=(async()=>{
+   try{
+     const next=await api('/monitor/snapshot');
+     if(!sameLogin(version,requestToken))return {ok:false,stale:true};
+     let nextPool=pool;
+     if(next.control.catalog_pool&&(!nextPool||nextPool.id!==next.control.catalog_pool))nextPool=await api('/monitor/pools');
+     if(!sameLogin(version,requestToken))return {ok:false,stale:true};
+     data=next;pool=nextPool;
+     $('#updated').textContent='更新 '+new Date().toLocaleTimeString('zh-TW',{hour12:false});$('#error').hidden=true;
+     if(flight.force||(!['INPUT','SELECT'].includes(document.activeElement?.tagName)&&!$('dialog[open]')))render();
+     return {ok:true};
+   }catch(e){
+     if(!sameLogin(version,requestToken))return {ok:false,stale:true};
+     error('資料未更新，保留上次畫面：'+e.message);
+     return {ok:false,error:e};
+   }finally{if(snapshotFlight===flight)snapshotFlight=null;}
+ })();
+ return flight.promise;
 }
-$('#reload').onclick=()=>load(true);
-$('#logout').onclick=()=>{token='';data=null;pool=null;refreshCompleteness=null;$('#main').innerHTML='<div class="empty">已清除登入；請重新認證。</div>';$('#login').showModal();};
-$('#login-form').onsubmit=async e=>{e.preventDefault();token=$('#token').value;try{await api('/monitor/snapshot');$('#login').close();$('#token').value='';await load(true);}catch(err){$('#login-error').textContent=err.message;token='';}};
+$('#reload').onclick=async()=>{await load(true);if(location.hash==='#billing'&&token)await window.CloudyFanBilling.refresh();};
+$('#logout').onclick=()=>{setToken('');data=null;pool=null;refreshCompleteness=null;pendingConfirm=null;expandedTaskTraces.clear();window.CloudyFanBilling.resetView();$('#main').innerHTML='<div class="empty">已清除登入；請重新認證。</div>';$('#login').showModal();};
+$('#login-form').onsubmit=async e=>{
+ e.preventDefault();setToken($('#token').value);const version=authenticationVersion,requestToken=token;
+ const result=await load(true);
+ if(!sameLogin(version,requestToken))return;
+ if(result.ok){$('#login').close();$('#token').value='';$('#login-error').textContent='';}
+ else{$('#login-error').textContent=result.error?.message||'登入資料無法讀取，請重新認證。';setToken('');}
+};
 window.addEventListener('hashchange',render);
 setInterval(()=>load(),5000);
-(async()=>{try{const r=await fetch('/demo/session');if(r.ok){token=(await r.json()).token;await load(true);}else $('#login').showModal();}catch{error('無法連線至 monitor。');}})();
+(async()=>{
+ const version=authenticationVersion;
+ try{
+   const r=await fetch('/demo/session');
+   if(authenticationVersion!==version)return;
+   if(r.ok){const session=await r.json();if(authenticationVersion!==version)return;setToken(session.token);await load(true);}
+   else $('#login').showModal();
+ }catch{if(authenticationVersion===version)error('無法連線至 monitor。');}
+})();

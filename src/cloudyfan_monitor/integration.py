@@ -71,7 +71,8 @@ class RunBoundCore(Core):
 
 
 def assemble_monitor(store, service, registry, identities, *, operator_token, source=None,
-                     origin="http://127.0.0.1:8766", demo=False, labels=None):
+                     origin="http://127.0.0.1:8766", demo=False, labels=None, billing_source=None,
+                     ollama_models=None, simulation=None):
     """Consume an explicitly controlled host service; never create qualifications."""
     if (not isinstance(store, Store) or not isinstance(service, TaskService)
             or not isinstance(identities, IdentityStore)):
@@ -79,15 +80,21 @@ def assemble_monitor(store, service, registry, identities, *, operator_token, so
     if service.retention_policy is None or service.retention_policy.ttl_seconds != ACCESS_SECONDS:
         raise ValueError("Explicit 30-day TaskService retention required; no implicit legacy migration")
     host_active = service.principal_active
-    service.principal_active = lambda principal: (identities.is_active(principal) is True
-        and (host_active is None or host_active(principal) is True))
+    registry_active = identities.is_active
+    if (host_active is None or (getattr(host_active, "__self__", None) is identities
+            and getattr(host_active, "__func__", None) is getattr(registry_active, "__func__", None))):
+        service.principal_active = registry_active
+    else:
+        service.principal_active = lambda principal: (registry_active(principal) is True
+            and host_active(principal) is True)
     for principal in sorted(service.allowed_principals):
         identities.principal(principal)
         store.register_principal(principal, (labels or {}).get(principal, principal))
     service.retention_protected_paths = tuple(set(service.retention_protected_paths)
                                                | {identities.path.resolve(), store.path.resolve()})
     return App(Gateway(store, service, registry, demo=demo), admin_token=operator_token,
-               source=source, origin=origin, identity_store=identities)
+               source=source, origin=origin, identity_store=identities, billing_source=billing_source,
+               ollama_models=ollama_models, simulation=simulation)
 
 
 @dataclass

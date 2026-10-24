@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CloudyFan · Router Monitor</title><link rel="stylesheet" href="/style.css">
+  <title>CloudyFan · Router Monitor</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/billing.css"><link rel="stylesheet" href="/trace.css">
 </head>
 <body>
 <div class="shell">
@@ -13,6 +13,7 @@
       <a href="#overview" data-page="overview"><span class="icon">◫</span>運作總覽</a>
       <a href="#tasks" data-page="tasks"><span class="icon">↳</span>任務與升級</a>
       <a href="#ledger" data-page="ledger"><span class="icon">▤</span>費用帳本</a>
+      <a href="#billing" data-page="billing"><span class="icon">＄</span>客戶帳務</a>
       <a href="#pools" data-page="pools"><span class="icon">▦</span>候選池與契約<span class="count">92</span></a>
       <a href="#clients" data-page="clients"><span class="icon">⌘</span>連線客戶端</a>
     </nav>
@@ -28,5 +29,5 @@
 <dialog id="login"><form id="login-form"><div class="eyebrow">OPERATOR ACCESS</div><h2>登入管理介面</h2><p>使用伺服器配置的操作員 token。憑證只保留在此頁面記憶體。</p><label for="token">操作員 token</label><input id="token" type="password" autocomplete="off" required><button class="button primary" type="submit">登入</button><p id="login-error" role="alert"></p></form></dialog>
 <dialog id="confirm"><div class="eyebrow">CONFIGURATION</div><h2 id="confirm-title"></h2><div id="confirm-description"></div><div class="dialog-actions"><button class="button" id="cancel-confirm">取消</button><button class="button primary" id="apply-confirm">確認套用</button></div></dialog>
 <div id="toast" role="status" hidden></div>
-<script src="/app.js" defer></script>
+<script src="/billing.js" defer></script><script src="/trace.js" defer></script><script src="/app.js" defer></script>
 </body></html>

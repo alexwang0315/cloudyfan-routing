@@ -678,3 +678,24 @@ Issue34 source observation completed and integrated as6ac8a3d; root fresh origin
 The first frozen original Core gate on0dd8a55 produced2064 passed/2 failed and stopped before integration demos/build. Preserve its original receipts and private temporary data in the external issue36/root-core-integration-final-01 directory. The readonly queue-expiry/retention regression is being fixed by the queue owner without changing original tests. Independent fixed-source experiments reproduce the separate parallel-study late-unknown completion misclassification on both0dd8a55 and accepted Issue35f7ce113: the fifth dispatch is correctly intercepted beforePOST and explicitly records not_dispatched/knownzero, but the injected runner's success is incorrectly sealed as completed. Normal and controlled schedules are distinct evidence; this does not show an extra physical model request.
 
 Before any additional source edit, work-plan declares parallel-check-worker as the exclusive owner of the three existing scripts/research_parallel ledger/runner/test files. Add only a workflow-scoped readonly explicit stopped-dispatch predicate and completion/reuse guard, plus a deterministic additive regression. Preserve legitimate cached resumes and real zero-fee calls, existing tests, immutable reports and all financial records. The current broad phase remains in_progress/current_verification null; fresh original full/integration is required after fixes. This declaration grants no external action or production authority.
+
+
+## Joint36/37 complete; Issue38 current ownership — 2026-10-25
+
+The matched executable source passed original Core2069 tests, all8 integration/check steps,
+existing Mock demos and offline build (af9649e5fbf14705b587569b7e6873cd). Monitor378 tests,
+23steps and offlinebuild passed on its exact77Core/119Monitor fingerprint inputs. Actual
+Chrome queue13+window3 and windows12 passed; fixed-source fail01 remains preserved, including
+the initial Core2 failures and the window desktop6second timeout of unconfirmed cause.
+External immutable receipts and per-ticket completion records define the limited synthetic scope.
+
+Before Issue38 shared edits, transfer the current queue/window interface ownership to
+capacity-resilience-worker: capacity.py,capacity_dispatch.py,capacity_queue.py,capacity_windows.py,
+http_api.py,scheduler.py and a new private capacity_integrity.py only. Prior36/37 and the
+three-script study guard are completed historical work. Any other shared Core source edit
+requires an updated declaration first. Root alone owns the three current metadata documents.
+The primary and isolated helpers implement actual loopback/desktop restart, held task,
+clock/retention, bounded history and controlled copied-store fault cases. Preserve original
+fault evidence, financial holds, health and all history; do not auto-repair/retry/release.
+The broad five-spec phase remains in_progress/current_verification null; parent29 and later
+stages are not complete yet. No real provider, spend, push, deployment or deletion authority.

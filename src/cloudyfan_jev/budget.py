@@ -323,6 +323,19 @@ class _BudgetClient:
         return record
 
     def call(self, cid, *args):
+        if self.owner.capacity_controller is not None and self.owner._capacity_context['policy_version'] is not None:
+            from copy import deepcopy
+            args = tuple(deepcopy(value) for value in args)
+            payload = args[-1]
+            endpoint = args[0] if len(args) > 1 else self.wrapped.configuration['endpoint']
+            # Receipt replay is decided inside the real transport, before prepare.
+            dispatch = _BudgetDispatch(self, cid, args, endpoint, payload)
+            record = self.wrapped.call(cid, *args, dispatch=dispatch)
+            self._record(cid, record)
+            if record.get('capacity_denial_code'):
+                from .capacity_dispatch import CapacityDenied
+                raise CapacityDenied(record['capacity_denial_code'])
+            return record
         payload = args[-1]
         model = payload.get('model')
         bound = self.owner.model_bounds.get(model)
@@ -345,6 +358,47 @@ class _BudgetClient:
 
     def reconcile(self, cid):
         return self._record(cid, self.wrapped.reconcile(cid))
+
+
+class _BudgetDispatch:
+    """Keep original fee controls, but create an event only after fresh admission."""
+    def __init__(self, client, cid, args, endpoint, payload):
+        self.client, self.cid, self.args = client, cid, args
+        self.owner, self.endpoint, self.payload = client.owner, endpoint, payload
+        self.capacity = None
+        self.bound = self.owner.model_bounds.get(payload.get('model'))
+
+    def prepare(self, cid, request):
+        if self.bound is None:
+            raise BudgetError('No confirmed model upper bound')
+        verifier = getattr(self.owner.verify_bound, 'verify_dispatch', None)
+        if callable(verifier):
+            if verifier(self.client.wrapped, self.endpoint, self.payload, self.bound) is not True:
+                raise BudgetError('Enforceable dispatch upper bound unconfirmed')
+        else:
+            self.owner._verify('model', self.payload.get('model'), self.payload, self.bound)
+        self.capacity = self.owner.capacity_controller.dispatch(self.owner._capacity_context,
+            self.client.wrapped, self.endpoint, self.payload, self.owner._capacity_descriptor)
+        evidence = self.capacity.prepare(cid, request)
+        try:
+            self.owner.store.begin_event(self.client.run_id, self.client._event_id(cid), 'model',
+                money(self.bound.usd), _fingerprint(self.args))
+        except BaseException:
+            self.capacity.release()
+            raise
+        return evidence
+
+    def before_post(self):
+        verifier = getattr(self.owner.verify_bound, 'verify_post', None)
+        if callable(verifier) and verifier(self.client.wrapped, self.endpoint, self.payload, self.bound) is not True:
+            return False
+        return self.capacity.before_post()
+
+    def release(self):
+        self.capacity.release()
+
+    def complete(self, record):
+        self.capacity.complete(record)
 
 
 class _BudgetEnvironment:
@@ -402,10 +456,10 @@ class BudgetedCore:
     truthy objects fails closed. The optional supplier verifier requires independently
     qualified contracts/control-plane state; none are bundled.
     """
-    def __init__(self, core, store, *, model_bounds, tool_bounds, verify_bound=None):
+    def __init__(self, core, store, *, model_bounds, tool_bounds, verify_bound=None, capacity_controller=None):
         self.core, self.store = core, store
         self.model_bounds, self.tool_bounds = dict(model_bounds), dict(tool_bounds)
-        self.verify_bound = verify_bound
+        self.verify_bound, self.capacity_controller = verify_bound, capacity_controller
 
     def __getattr__(self, name):
         return getattr(self.core, name)
@@ -501,9 +555,16 @@ class BudgetedCore:
                 event_id = 'model:' + _fingerprint(str(client.root.resolve())) + ':' + directory.name
                 self.store.import_history(event_id, cost_usd=cost, receipt_id=receipt, verified=verified)
 
-    def run(self, run_id, task, environment_factory, *, contract_version, mode='cloudyfan', **kwargs):
+    def run(self, run_id, task, environment_factory, *, contract_version, mode='cloudyfan',
+            capacity_context=None, capacity_descriptor=None, **kwargs):
         from copy import copy
         from dataclasses import asdict
+        if self.capacity_controller is not None:
+            from .capacity_dispatch import CapacityDenied
+            if not isinstance(capacity_context, dict) or capacity_context.get('run') != run_id:
+                raise CapacityDenied('capacity_adoption_missing', 403)
+            self.capacity_controller.verify(capacity_context)
+            self._capacity_context, self._capacity_descriptor = capacity_context, capacity_descriptor
         frozen = {**self.core.configuration_descriptor(),
                   'root': str(self.core.client.root.resolve()), 'task': task, 'contract': contract_version,
                   'mode': mode, 'options': kwargs,

@@ -183,7 +183,8 @@ class TaskService:
     Every execution gets a fresh private workspace for deterministic local replay.
     """
     def __init__(self, root, *, contracts, allowed_principal=None, allowed_principals=None, retention_policy=None,
-                 principal_active=None, clock=time.time, retention_protected_paths=()):
+                 principal_active=None, clock=time.time, retention_protected_paths=(), capacity_controller=None):
+        self.capacity_controller = capacity_controller
         self.root = Path(root)
         if allowed_principal is not None and allowed_principals is not None:
             raise ValueError('Supply one server principal allowlist')
@@ -262,6 +263,14 @@ class TaskService:
                 if _read(path) != frozen:
                     raise ServiceError('frozen_task_changed', 409)
             else:
+                if self.capacity_controller is not None:
+                    try:
+                        self.capacity_controller.adopt(self.internal_id(principal, payload['run_id']), principal, frozen['registered'])
+                    except Exception as error:
+                        from .capacity_dispatch import CapacityDenied
+                        if isinstance(error, CapacityDenied):
+                            raise ServiceError(error.code, error.status) from None
+                        raise
                 _write(path, frozen)
                 _write(directory / 'state.json', {'run_id': payload['run_id'], 'status': 'ready'})
         return self.status(principal, payload['run_id'])
@@ -286,7 +295,9 @@ class TaskService:
     @_retained
     def status(self, principal, run_id):
         directory, job = self._job(principal, run_id)
-        return {**_read(directory / 'state.json'), 'costs': self._costs(principal, run_id, job)}
+        return {**_read(directory / 'state.json'), 'costs': self._costs(principal, run_id, job),
+                **({'capacity': self.capacity_controller.own(self.internal_id(principal, run_id))}
+                   if self.capacity_controller is not None else {})}
 
     def _registered_contract(self, job):
         contract = self.contracts.get(job['request']['contract_id'])
@@ -337,7 +348,8 @@ class TaskService:
             contract = self.contracts.get(job['request']['contract_id'])
             if contract is None or _encode(contract.descriptor()) != _encode(job['registered']):
                 raise ServiceError('frozen_configuration_changed', 409)
-            if (directory / 'outcome.json').exists():
+            if ((directory / 'outcome.json').exists()
+                    or _read(directory / 'state.json').get('status') == 'capacity_denied'):
                 return self.status(principal, run_id)
             _write(directory / 'state.json', {'run_id': run_id, 'status': 'running'})
             def environment():
@@ -348,10 +360,16 @@ class TaskService:
                 runner = BudgetedCore(registered.core, registered.store,
                     model_bounds=registered.model_bounds, verify_bound=registered.verify_bound,
                     tool_bounds={name: bound for name, bound in registered.tool_bounds.items()
-                                 if name in contract.tool_names})
+                                 if name in contract.tool_names}, capacity_controller=self.capacity_controller)
+                context = (self.capacity_controller.context(self.internal_id(principal, run_id), principal, job['registered'])
+                           if self.capacity_controller is not None else None)
                 result = runner.run(self.internal_id(principal, run_id),
                     {'prompt': job['request']['prompt']}, environment,
-                    contract_version=contract.version, mode=contract.mode)
+                    contract_version=contract.version, mode=contract.mode,
+                    **({"capacity_context": context, "capacity_descriptor": job["registered"]}
+                       if self.capacity_controller is not None else {}))
+                if self.capacity_controller is not None:
+                    self.capacity_controller.terminal(self.internal_id(principal, run_id))
                 state = {'run_id': run_id, 'status': result['status']}
                 _write(directory / 'outcome.json', {**state,
                     'answer': result['attempts'][-1]['final'],
@@ -368,7 +386,13 @@ class TaskService:
                 unknown = contract.runner.store.report()['unknown_events']
                 state = {'run_id': run_id, 'status': 'accounting_interrupted' if unknown else 'policy_denied',
                          'error': {'code': 'unknown_cost' if unknown else 'budget_admission_denied'}}
-            except Exception:
+            except Exception as error:
+                from .capacity_dispatch import CapacityDenied
+                if isinstance(error, CapacityDenied):
+                    state = {'run_id': run_id, 'status': 'capacity_denied', 'error': {'code': error.code}}
+                    self.capacity_controller.terminal(self.internal_id(principal, run_id))
+                    _write(directory / 'state.json', state)
+                    return self.status(principal, run_id)
                 unknown = contract.runner.store.report()['unknown_events']
                 state = {'run_id': run_id, 'status': 'accounting_interrupted' if unknown else 'engineering_interrupted',
                          'error': {'code': 'unknown_cost' if unknown else 'execution_interrupted'}}

@@ -3,11 +3,14 @@
 Configuration is supplied by the controlled host, never a task or browser. Reads
 open SQLite read-only; importing evidence cannot qualify a model or grant a slot.
 """
+from contextlib import contextmanager
 from copy import deepcopy
 from decimal import Decimal, InvalidOperation
 import hashlib
 import json
 import math
+import os
+import stat
 from pathlib import Path
 import re
 import sqlite3
@@ -208,12 +211,54 @@ def _limits(observations, scope, now, *, unsupported=False, local=False):
     return output
 
 
+def _private_path(path, *, create=False):
+    path = Path(path).absolute()
+    if '..' in path.parts:
+        raise ValueError("Unsafe capacity path")
+    for parent in reversed(path.parents):
+        if create and not parent.exists() and not parent.is_symlink():
+            parent.mkdir(mode=0o700)
+        if not stat.S_ISDIR(parent.lstat().st_mode):
+            raise ValueError("Unsafe capacity directory")
+    info = path.parent.stat()
+    if info.st_uid != os.getuid() or info.st_mode & 0o077:
+        raise ValueError("Capacity directory must be private and owned")
+    if create:
+        try:
+            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
+        except FileExistsError:
+            pass
+        else:
+            os.close(fd)
+    for candidate in [path, *[path.with_name(path.name + suffix) for suffix in ('-journal', '-wal', '-shm')]]:
+        if candidate != path and not candidate.exists() and not candidate.is_symlink():
+            continue
+        info = candidate.lstat()
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+                or info.st_mode & 0o077 or info.st_nlink != 1):
+            raise ValueError("Capacity database must be private, regular and owned")
+    return path
+
+
+def _live_capacity(connection, now):
+    if not connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='capacity_adoptions'").fetchone():
+        return False
+    if connection.execute("SELECT 1 FROM capacity_adoptions WHERE terminal=0 LIMIT 1").fetchone():
+        return True
+    for encoded, in connection.execute("SELECT payload FROM capacity_allocations"):
+        item = json.loads(encoded)
+        if item['state'] in {'prepared', 'sent', 'uncertain'} or any(
+                item['state'] != 'released' and max(group['rpm_until'], group['tpm_until']) > now
+                for group in item['groups']):
+            return True
+    return False
+
+
 class CapacityStore:
     """Shared immutable configuration/evidence store; never a fee or slot ledger."""
     def __init__(self, path, *, clock=time.time):
-        self.path, self.clock = Path(path), clock
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        with sqlite3.connect(self.path) as connection:
+        self.path, self.clock = _private_path(path, create=True), clock
+        with self.connection(write=True) as connection:
             connection.executescript("""
                 CREATE TABLE IF NOT EXISTS capacity_configurations (
                     version TEXT PRIMARY KEY, digest TEXT NOT NULL, created_at REAL NOT NULL, payload TEXT NOT NULL);
@@ -224,13 +269,34 @@ class CapacityStore:
                     group_id TEXT NOT NULL, status TEXT NOT NULL, payload TEXT NOT NULL, digest TEXT NOT NULL);
             """)
 
+    @contextmanager
+    def connection(self, *, write=False):
+        _private_path(self.path)
+        connection = sqlite3.connect(self.path.as_uri() + ('?mode=rw' if write else '?mode=ro'),
+                                     uri=True, timeout=5)
+        try:
+            if write:
+                connection.execute("PRAGMA journal_mode=DELETE")
+            yield connection
+            if write:
+                connection.commit()
+        except BaseException:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+            _private_path(self.path)
+
     def configure(self, configuration):
         """Import trusted host configuration atomically; versions cannot be rewritten."""
         configuration = _configuration(configuration)
         encoded = json.dumps(configuration, sort_keys=True, separators=(",", ":"), allow_nan=False)
         digest = hashlib.sha256(encoded.encode()).hexdigest()
-        with sqlite3.connect(self.path) as connection:
+        with self.connection(write=True) as connection:
             connection.execute("BEGIN IMMEDIATE")
+            active = connection.execute("SELECT version FROM capacity_control WHERE id=1").fetchone()
+            if active and active[0] != configuration['version'] and _live_capacity(connection, _time(self.clock())):
+                raise ValueError("Live capacity prevents configuration change")
             existing = connection.execute("SELECT digest FROM capacity_configurations WHERE version=?",
                                           (configuration["version"],)).fetchone()
             if existing and existing[0] != digest:
@@ -254,7 +320,7 @@ class CapacityStore:
             raise ValueError("Exact capacity source outcome required")
         if not isinstance(observations, (tuple, list)) or len(observations) > 32:
             raise ValueError("Bounded capacity observations required")
-        with sqlite3.connect(self.path) as connection:
+        with self.connection(write=True) as connection:
             connection.execute("BEGIN IMMEDIATE")
             saved = connection.execute("SELECT payload,digest FROM capacity_configurations WHERE version=?",
                                        (version,)).fetchone()
@@ -282,11 +348,12 @@ class CapacityStore:
         value = json.loads(encoded)
         return {"sequence": sequence, **value}
 
-    def snapshot(self):
+    def snapshot(self, version=None):
         """Read only saved values; no network, accounting, health or dispatch work."""
-        with sqlite3.connect(self.path.resolve().as_uri() + "?mode=ro", uri=True) as connection:
-            saved = connection.execute("SELECT payload,digest FROM capacity_configurations "
-                "WHERE version=(SELECT version FROM capacity_control WHERE id=1)").fetchone()
+        with self.connection() as connection:
+            saved = connection.execute("SELECT payload,digest FROM capacity_configurations " +
+                ("WHERE version=(SELECT version FROM capacity_control WHERE id=1)" if version is None else "WHERE version=?"),
+                () if version is None else (_identity(version),)).fetchone()
             refreshes = {}
             if saved is not None:
                 version = json.loads(saved[0])["version"]

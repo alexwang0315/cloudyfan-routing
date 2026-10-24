@@ -178,6 +178,34 @@ async function lifecycleMain() {
     accessibility_scope:'Keyboard focus/disclosure at the declared desktop viewport; no screen-reader or WCAG certification'};
   report.planned_check_count=['--queue-fault','--local-fault','--companion-loss'].some(flag=>process.argv.includes(flag))?3:process.argv.includes('--focused-restart')?12:13;
   if(process.argv.includes('--focused-restart'))report.scope+='; focused restart slice: >100 paid history and refusal steps explicitly not run';
+  const mib=1024*1024,fullWorkflow=report.planned_check_count===13;
+  report.resource_guard={enforced:fullWorkflow,start_minimum_available_bytes:512*mib,
+    minimum_available_bytes:128*mib,maximum_run_output_bytes:256*mib,final_receipt_reserve_bytes:4*mib,
+    boundaries:[],scope:'Observed filesystem availability and this new output directory; no deletion or held-response release'};
+  const resourceCheck=async(boundary,{start=false}={})=>{
+    const disk=await fs.statfs(output),folders=[output];let bytes=0;
+    while(folders.length){
+      const folder=folders.pop();
+      for(const entry of await fs.readdir(folder,{withFileTypes:true})){
+        const target=path.join(folder,entry.name);
+        if(entry.isDirectory())folders.push(target);
+        else bytes+=(await fs.lstat(target)).size;
+      }
+    }
+    const guard=report.resource_guard,row={boundary,at:new Date().toISOString(),
+      available_bytes:disk.bavail*disk.bsize,output_bytes:bytes};
+    guard.boundaries.push(row);
+    guard.minimum_observed_available_bytes=Math.min(guard.minimum_observed_available_bytes??Infinity,row.available_bytes);
+    guard.maximum_observed_output_bytes=Math.max(guard.maximum_observed_output_bytes??0,bytes);
+    if(start)guard.start_available_bytes=row.available_bytes;
+    if(boundary==='after_fixture_exit')guard.end_available_bytes=row.available_bytes;
+    await fs.appendFile(path.join(output,'actual-resource-boundaries.jsonl'),JSON.stringify(row)+'\n');
+    if(fullWorkflow){
+      assert.ok(!start||row.available_bytes>=guard.start_minimum_available_bytes,'Resource guard: insufficient starting filesystem availability');
+      assert.ok(row.available_bytes>=guard.minimum_available_bytes,'Resource guard: minimum filesystem availability reached');
+      assert.ok(bytes+guard.final_receipt_reserve_bytes<=guard.maximum_run_output_bytes,'Resource guard: bounded new-run output reached');
+    }
+  };
   let fixture,ready,browser,context,page,boot=0,operator,client,agent,originalWindow;
   const headers=token=>({Authorization:'Bearer '+token});
   const start=async port=>{
@@ -216,7 +244,8 @@ async function lifecycleMain() {
   };
   const step=async(name,action)=>{
     const row={name,started_at:new Date().toISOString(),passed:false};report.checks.push(row);
-    await action();row.passed=true;row.finished_at=new Date().toISOString();
+    await resourceCheck('before:'+name);
+    await action();await resourceCheck('after:'+name);row.passed=true;row.finished_at=new Date().toISOString();
     await fs.writeFile(path.join(output,'desktop-progress.json'),JSON.stringify({checks:report.checks},null,2));
   };
   function unchanged(before,after) {
@@ -249,6 +278,7 @@ async function lifecycleMain() {
   const capacityPage=async()=>{await page.locator('a[data-page="capacity"]').click();await page.getByRole('heading',{name:'供應商限額來源',exact:true}).waitFor();await refresh('CloudyFanCapacity');};
   try {
     report.source_before={monitor:await capture(root,owned),core:await capture(core)};
+    await resourceCheck('before_fixture_start',{start:true});
     await start();
     browser=await chromium.launch({channel:'chrome',headless:process.env.CLOUDYFAN_QA_HEADED!=='1'});report.browser=browser.version();
     context=await browser.newContext({viewport:report.viewport,locale:'zh-TW',serviceWorkers:'block'});
@@ -372,9 +402,14 @@ async function lifecycleMain() {
     if(report.source_before){report.source_after={monitor:await capture(root,owned),core:await capture(core)};
       report.source_inputs_unchanged=JSON.stringify(report.source_before)===JSON.stringify(report.source_after);
       if(!report.source_inputs_unchanged){report.status='failed';process.exitCode=1;}}
+    try{await resourceCheck('after_fixture_exit');}
+    catch(error){report.resource_guard.final_measurement_error=error.name;report.status='failed';process.exitCode=1;}
     report.check_counts={planned:report.planned_check_count,attempted:report.checks.length,
       passed:report.checks.filter(row=>row.passed).length,failed:report.checks.filter(row=>!row.passed).length,
       not_run:report.planned_check_count-report.checks.length};
+    if(Buffer.byteLength(JSON.stringify(report,null,2))>report.resource_guard.final_receipt_reserve_bytes){
+      report.resource_guard.final_receipt_reserve_exceeded=true;report.status='failed';process.exitCode=1;
+    }
     await fs.writeFile(path.join(output,'desktop-receipt.json'),JSON.stringify(report,null,2));
     console.log(JSON.stringify({status:report.status,...report.check_counts,output}));
   }
@@ -441,6 +476,7 @@ async function lifecycleMain() {
         }
         assert.equal(pending.size,0);assert.equal((await inspect()).model_response_held,true);
         await fs.writeFile(path.join(output,'overflow-progress.json'),JSON.stringify({actual_completed:completed,held_unreleased:true}));
+        await resourceCheck('paid_history_batch:'+completed);
       }
       const state=await inspect(),cap=await get('/monitor/capacity'),queue=await get('/monitor/queue');
       assert.equal(completed,101);assert.equal(state.model_response_held,true);
@@ -466,6 +502,7 @@ async function lifecycleMain() {
       for(let i=0;i<101;i++){
         const row=await api('post','/v1/tasks',agent,task('resilience-refused-'+String(i).padStart(3,'0')));
         assert.equal(row.response.status(),429);assert.equal(row.body.error.code,'principal_quota_full');
+        if((i+1)%25===0||i===100)await resourceCheck('refusal_batch:'+(i+1));
       }
       const queue=await get('/monitor/queue');assert.equal(queue.rejection_count,101);
       assert.equal(queue.rejections.length,100);assert.equal(queue.rejection_history_complete,false);

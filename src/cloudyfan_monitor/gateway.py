@@ -34,6 +34,8 @@ class Gateway:
         self.refresh_lock = threading.Lock()
         self.admission = Admission(store.path.with_suffix(".execution.lock"))
         self.retention_policy = EvidenceRetentionPolicy()
+        if queue is not None:
+            queue.transition_observer = self._queue_transition
         # Each key binds a previously registered, exact immutable contract to a mode.
         for (pool, category, mode), contract_id in self.registry.items():
             if mode not in MODES or service.contracts[contract_id].mode != mode:
@@ -74,7 +76,7 @@ class Gateway:
             state = self.queue.submit(principal, {'run_id': binding['run'], 'contract_id': binding['contract'],
                                                 'prompt': payload['prompt']})
             self.capture(binding)
-            return state
+            return self.queue_view(binding, state)
         prior = (self.store.existing_binding(principal, payload.get("run_id"))
                  if isinstance(payload, dict) and isinstance(payload.get("run_id"), str) else None)
         if prior is not None:
@@ -117,7 +119,7 @@ class Gateway:
             raise MonitorError("frozen_runtime_contract_unavailable", 409)
         try:
             if self.queue is not None and self.queue.contains(principal, run):
-                return self.queue.status(principal, run)
+                return self.queue_view(binding, self.queue.status(principal, run))
             status = self.service.status(principal, run)
             if status["status"] in ("bound", "ready", "running", "queued"):
                 status["costs"] = {**status.get("costs", {}), "complete_api_usd": None}
@@ -149,7 +151,7 @@ class Gateway:
         self.service.authorize(principal)
         binding = self.store.binding(principal, run)
         if self.queue is not None and self.queue.contains(principal, run):
-            return self.queue.status(principal, run)
+            return self.queue_view(binding, self.queue.status(principal, run))
         status = self.status(principal, run)
         if status["status"] in ("passed", "failed", "unverifiable"):
             return status
@@ -167,6 +169,36 @@ class Gateway:
         finally:
             self.store.record_version_use(binding)
             self.capture(binding)
+
+    def queue_view(self, binding, status):
+        if 'queue' not in status:
+            return status
+        with self.store.db() as db:
+            row = db.execute('SELECT data FROM billing_task_policies WHERE client=? AND run_id=?',
+                (binding['client'], binding['run'])).fetchone()
+        tariff = json.loads(row['data']) if row is not None else None
+        frozen = {**status['queue'].get('frozen', {}),
+            'monitor': {'mode': binding['mode'], 'pool_version': binding['pool'],
+                'category': binding['category'], 'contract_id': binding['contract'],
+                'tariff': tariff, 'tariff_sha256': digest(tariff) if tariff is not None else None}}
+        return {**status, 'queue': {**status['queue'], 'frozen': frozen}}
+
+    def queue_snapshot(self):
+        view = self.queue.snapshot()
+        jobs = []
+        for job in view['jobs']:
+            try:
+                binding = self.store.binding(job['client'], job['run_id'])
+                job = self.queue_view(binding, job)
+            except MonitorError:
+                job = {**job, 'monitor_binding': 'unavailable'}
+            jobs.append(job)
+        return {**view, 'jobs': jobs}
+
+    def _queue_transition(self, principal, run):
+        binding = self.store.binding(principal, run)
+        self.store.record_version_use(binding)
+        self.capture(binding)
 
     def _completed_summary(self, binding, *, expired=False, result=None):
         if result is None:
@@ -205,7 +237,7 @@ class Gateway:
             observed = self.service.observe(principal, run)
             status = observed["state"]
             if self.queue is not None and self.queue.contains(principal, run):
-                status = self.queue.status(principal, run)
+                status = self.queue_view(binding, self.queue.status(principal, run))
             costs = status.get("costs", {})
             summary = {"status": status["status"], "known_api_usd": costs.get("known_api_usd"),
                        "complete_api_usd": costs.get("complete_api_usd"),

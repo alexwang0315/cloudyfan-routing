@@ -193,7 +193,7 @@ class App:
                 raise MonitorError('unsupported_queue_query')
             if self.gateway.queue is None:
                 return {'schema_version': 'capacity-queue-v1', 'configured': False, 'jobs': []}
-            return self.gateway.queue.snapshot()
+            return self.gateway.queue_snapshot()
         if method == "POST" and path == "/monitor/capacity/activate":
             body = self._body(environ)
             self._fields(body, {"revision", "version"})

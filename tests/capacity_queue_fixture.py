@@ -45,7 +45,8 @@ def attach_window_protocol(bundle, previous, backend):
 
 
 def attach_queue(bundle, clock, *, limits=None, rpm=10, tpm=None, concurrency=1,
-                 token_adapter=None, seconds=300, config=None, route_bindings=None, ollama_models=None):
+                 token_adapter=None, seconds=300, config=None, route_bindings=None, ollama_models=None,
+                 window_rules=None):
     from cloudyfan_jev.capacity_queue import QueuePreparation
     from cloudyfan_jev.scheduler import QueueScheduler, QueueLimits
     from capacity_admission_fixture import attach_admission
@@ -55,12 +56,16 @@ def attach_queue(bundle, clock, *, limits=None, rpm=10, tpm=None, concurrency=1,
     preparation = QueuePreparation("synthetic-pure-queue-v1", contracts=old.gateway.service.contracts,
         tools={name: [] for name in old.gateway.service.contracts})
     previous.queue_backend = preparation
+    if window_rules is not None:
+        from cloudyfan_jev.capacity_windows import CapacityWindows
+        previous.window_backend = CapacityWindows(previous.store, version='synthetic-queue-windows-v1', rules=window_rules)
     routes = previous.routes["synthetic-admission-v1"]
     if route_bindings:
         from dataclasses import replace
         routes = [replace(route, binding=route_bindings.get(str(route.transport.root.resolve()), route.binding)) for route in routes]
     previous.register("synthetic-queued-admission-v1", configuration_version="synthetic-admission-config-v1",
-        routes=routes, max_seconds=seconds, queue_version=preparation.version)
+        routes=routes, max_seconds=seconds, queue_version=preparation.version,
+        **({'windows_version': previous.window_backend.version} if window_rules is not None else {}))
     queue = QueueScheduler(old.gateway.service, bundle.root / "queue.sqlite", clock=clock,
         limits=limits or QueueLimits(8, 2, 4, 120), measurement_kind="synthetic", capacity_protocol=preparation)
     bundle.app = assemble_monitor(old.store, old.gateway.service, old.gateway.registry, old.identity_store,
@@ -95,6 +100,16 @@ def build_queue_host(root, *, clock, origin, options=None, before_response=None)
     upstream.before_response = before_response
     upstream.fail_tiers = set(options.get('fail_tiers', []))
     upstream.unknown_cost = options.get('unknown_cost', False)
+    if options.get('retry_after_seconds') is not None:
+        def response_window(request):
+            response = upstream(request)
+            if len(upstream.calls) != 1:
+                return response
+            body = response.json()
+            body.update(choices=[], error={'code': 429, 'message': 'Synthetic controlled queue rate window'})
+            return httpx.Response(429, json=body, headers={'Retry-After': str(options['retry_after_seconds'])})
+        for contract in original.gateway.service.contracts.values():
+            contract.runner.client.http = httpx.Client(transport=httpx.MockTransport(response_window), trust_env=False)
     identities = IdentityStore(root / 'identities.sqlite',
         pepper=b'synthetic-local-integration-pepper-000000', clock=clock)
     credentials_path = root / 'synthetic-host-credentials.json'
@@ -118,7 +133,7 @@ def build_queue_host(root, *, clock, origin, options=None, before_response=None)
         for name, contract in service.contracts.items():
             template, old = contract.runner.core, contract.runner
             receipt_root = root / ('receipts-' + name)
-            client = Client(httpx.Client(transport=httpx.MockTransport(upstream), trust_env=False),
+            client = Client(httpx.Client(transport=httpx.MockTransport(response_window if options.get('retry_after_seconds') is not None else upstream), trust_env=False),
                             'synthetic-key-' + name, receipt_root)
             core = Core(client, template.profiles, template.decision, limits=template.limits,
                 execution_policy=template.execution_policy, diagnostic_contract=template.diagnostic_contract)
@@ -161,7 +176,9 @@ def build_queue_host(root, *, clock, origin, options=None, before_response=None)
     queue = attach_queue(bundle, clock, config=configuration,
         route_bindings=route_bindings, seconds=options.get('seconds', 3600),
         limits=QueueLimits(**options.get('limits', {'capacity': 8, 'concurrency': 2, 'per_principal': 4, 'max_wait_seconds': 1800})),
-        ollama_models={'queue-mrc': {'category': CATEGORY, 'contract_id': 'demo-cloudyfan'}})
+        ollama_models={'queue-mrc': {'category': CATEGORY, 'contract_id': 'demo-cloudyfan'}},
+        window_rules=([{'binding': 'synthetic-binding', 'group': 'shared', 'header': 'retry-after',
+            'format': 'retry_after', 'constraint': 'requests'}] if options.get('retry_after_seconds') is not None else None))
     def close():
         clients = {id(contract.runner.client): contract.runner.client for contract in service.contracts.values()}
         for client in clients.values():

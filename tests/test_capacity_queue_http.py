@@ -167,6 +167,245 @@ def test_stopping_waiting_continuation_preserves_paid_response_and_releases_only
     assert len(bundle.upstream.calls) == 1
 
 
+def test_actual_ollama_sdk_pending_is_honest_and_completed_duplicate_does_not_dispatch(local_service):
+    from capacity_queue_fixture import build_queue_host
+    from pydantic import ValidationError
+    import ollama
+    host = build_queue_host(local_service.bundle.root / 'native', clock=local_service.clock, origin=local_service.origin)
+    local_service.bundle = host.bundle
+    local_service.server.set_app(host.app)
+    operator, client = local_service.client('operator'), local_service.client()
+    operator.post('/monitor/capacity/activate', json={'revision': 0, 'version': 'synthetic-queued-admission-v1'})
+    prompt = 'Return only 1+1.'
+    for endpoint, run in (('chat', 'native-chat-raw'), ('generate', 'native-generate-raw')):
+        payload = {'model': 'queue-mrc', 'stream': False,
+            **({'messages': [{'role': 'user', 'content': prompt}]} if endpoint == 'chat' else {'prompt': prompt})}
+        response = client.post('/api/' + endpoint, json=payload, headers={'X-CloudyFan-Run-ID': run})
+        assert response.status_code == 202, response.text
+        body = response.json()
+        assert body['done'] is False and 'response' not in body and 'message' not in body
+        assert body['cloudyfan']['pending'] is True
+    sdk = ollama.Client(host=local_service.origin, headers={'Authorization': 'Bearer ' + host.credential,
+        'X-CloudyFan-Run-ID': 'native-generate-sdk'}, timeout=5)
+    try:
+        generated = sdk.generate(model='queue-mrc', prompt=prompt, stream=False)
+        assert generated.done is False and generated.response is None
+    finally:
+        sdk._client.close()
+    chat = ollama.Client(host=local_service.origin, headers={'Authorization': 'Bearer ' + host.credential,
+        'X-CloudyFan-Run-ID': 'native-chat-sdk'}, timeout=5)
+    try:
+        # SDK0.6.3 requires a ChatResponse.message and cannot represent honest
+        # answerless pending chat. The original queued task remains queryable.
+        with pytest.raises(ValidationError):
+            chat.chat(model='queue-mrc', messages=[{'role': 'user', 'content': prompt}], stream=False)
+    finally:
+        chat._client.close()
+    assert client.get('/v1/tasks/native-chat-sdk').json()['status'] == 'queued'
+    assert host.upstream.calls == []
+    assert host.queue.dispatch_next()['status'] == 'passed'
+    completed = ollama.Client(host=local_service.origin, headers={'Authorization': 'Bearer ' + host.credential,
+        'X-CloudyFan-Run-ID': 'native-chat-raw'}, timeout=5)
+    try:
+        answer = completed.chat(model='queue-mrc', messages=[{'role': 'user', 'content': prompt}], stream=False)
+        assert answer.done is True and answer.message.content == '2'
+    finally:
+        completed._client.close()
+        host.close()
+    assert len(host.upstream.calls) == 1
+
+
+def test_actual_environment_schema_must_match_host_preparation_before_accepted_queue_or_fees(local_service):
+    from dataclasses import replace
+    from capacity_queue_fixture import attach_queue
+    from cloudyfan_jev.demo import ArithmeticEnvironment
+    bundle = local_service.bundle
+    queue = attach_queue(bundle, local_service.clock)
+    class MismatchedEnvironment(ArithmeticEnvironment):
+        def tools_schema(self):
+            return [{'type': 'function', 'function': {'name': 'unregistered-effect', 'parameters': {}}}]
+    original = queue.service.contracts['demo-cloudyfan']
+    queue.service.contracts['demo-cloudyfan'] = replace(original, environment_factory=lambda workspace: MismatchedEnvironment())
+    local_service.server.set_app(bundle.app)
+    operator, client = local_service.client('operator'), local_service.client()
+    operator.post('/monitor/capacity/activate', json={'revision': 0, 'version': 'synthetic-queued-admission-v1'})
+    result = client.post('/v1/tasks', json={**TASK, 'run_id': 'unsupported-preparation'})
+    assert result.status_code == 409 and result.json()['error']['code'] == 'queue_environment_contract_changed'
+    assert bundle.upstream.calls == []
+    assert queue.service.contracts['demo-cloudyfan'].runner.store.report()['reservations'] == []
+
+
+def test_operator_queue_keeps_new_active_work_visible_after_one_hundred_terminal_jobs(local_service):
+    from capacity_queue_fixture import attach_queue
+    import hashlib
+    queue = attach_queue(local_service.bundle, local_service.clock)
+    local_service.server.set_app(local_service.bundle.app)
+    operator, client = local_service.client('operator'), local_service.client()
+    operator.post('/monitor/capacity/activate', json={'revision': 0, 'version': 'synthetic-queued-admission-v1'})
+    for index in range(101):
+        run = 'terminal-' + str(index)
+        assert client.post('/v1/tasks', json={**TASK, 'run_id': run}).status_code == 202
+        assert client.post('/v1/tasks/' + run + '/cancel', json={}).json()['status'] == 'cancelled'
+        local_service.clock.now += 1
+    assert client.post('/v1/tasks', json={**TASK, 'run_id': 'new-active'}).status_code == 202
+    before = hashlib.sha256(queue.path.read_bytes()).hexdigest()
+    view = operator.get('/monitor/queue', timeout=20).json()
+    assert view['jobs'][0]['run_id'] == 'new-active'
+    assert view['active_count'] == 1 and view['job_count'] == 102
+    assert len(view['jobs']) == 100 and view['history_complete'] is False
+    assert view['active_history_complete'] is True
+    assert view['jobs'][1]['run_id'] == 'terminal-100'
+    assert hashlib.sha256(queue.path.read_bytes()).hexdigest() == before
+    assert local_service.bundle.upstream.calls == []
+
+
+@pytest.mark.parametrize('limits,reason', [({'capacity': 1, 'concurrency': 1, 'per_principal': 4, 'max_wait_seconds': 120}, 'queue_full'),
+    ({'capacity': 4, 'concurrency': 1, 'per_principal': 1, 'max_wait_seconds': 120}, 'principal_quota_full')])
+def test_operator_sees_original_safe_bounded_queue_rejection_without_creating_paid_work(local_service, limits, reason):
+    from capacity_queue_fixture import attach_queue
+    from cloudyfan_jev.scheduler import QueueLimits
+    import hashlib
+    queue = attach_queue(local_service.bundle, local_service.clock, limits=QueueLimits(**limits))
+    local_service.server.set_app(local_service.bundle.app)
+    operator, client = local_service.client('operator'), local_service.client()
+    operator.post('/monitor/capacity/activate', json={'revision': 0, 'version': 'synthetic-queued-admission-v1'})
+    assert client.post('/v1/tasks', json={**TASK, 'run_id': 'accepted-original'}).status_code == 202
+    denied = client.post('/v1/tasks', json={**TASK, 'run_id': 'rejected-original'})
+    assert denied.status_code == 429 and denied.json()['error']['code'] == reason
+    before = hashlib.sha256(queue.path.read_bytes()).hexdigest()
+    view = operator.get('/monitor/queue').json()
+    assert view['rejection_count'] == 1 and view['rejection_history_complete'] is True
+    assert view['rejections'] == [{'client': 'studio', 'run_id': 'rejected-original', 'reason': reason, 'at': local_service.clock()}]
+    assert len(view['jobs']) == 1 and view['jobs'][0]['run_id'] == 'accepted-original'
+    assert hashlib.sha256(queue.path.read_bytes()).hexdigest() == before
+    assert local_service.bundle.upstream.calls == []
+
+
+def test_original_actual_payload_post_guard_denial_waits_without_a_slot_allocation_intent_or_fee_event(local_service):
+    from capacity_queue_fixture import attach_queue
+    bundle = local_service.bundle
+    class ClosedPostGuard:
+        def __call__(self, *args):
+            return True
+        def verify_dispatch(self, *args):
+            return True
+        def verify_post(self, *args):
+            return False
+    for contract in bundle.app.gateway.service.contracts.values():
+        contract.runner.verify_bound = ClosedPostGuard()
+    queue = attach_queue(bundle, local_service.clock)
+    local_service.server.set_app(bundle.app)
+    operator, client = local_service.client('operator'), local_service.client()
+    operator.post('/monitor/capacity/activate', json={'revision': 0, 'version': 'synthetic-queued-admission-v1'})
+    assert client.post('/v1/tasks', json={**TASK, 'run_id': 'original-guard-wait'}).status_code == 202
+    assert queue.dispatch_next() is None
+    view = client.get('/v1/tasks/original-guard-wait').json()
+    assert view['status'] == 'queued' and view['reason'] == 'queue_waiting_budget'
+    report = queue.service.contracts['demo-cloudyfan'].runner.store.report()
+    assert report['events'] == [] and report['reservations'] == []
+    assert operator.get('/monitor/capacity').json()['dispatch']['allocations'] == []
+    assert bundle.upstream.calls == []
+
+
+def test_queue_projects_saved_binding_and_tariff_and_captures_original_worker_completion(local_service):
+    from capacity_queue_fixture import attach_queue
+    bundle = local_service.bundle
+    bundle.upstream.fail_tiers = set()
+    queue = attach_queue(bundle, local_service.clock)
+    local_service.server.set_app(bundle.app)
+    operator, client = local_service.client('operator'), local_service.client()
+    operator.post('/monitor/capacity/activate', json={'revision': 0, 'version': 'synthetic-queued-admission-v1'})
+    original = client.post('/v1/tasks', json={**TASK, 'run_id': 'frozen-queue-binding'}).json()
+    frozen = original['queue']['frozen']
+    assert frozen['contract_id'] == 'demo-cloudyfan' and frozen['mode'] == 'cloudyfan'
+    assert frozen['monitor']['mode'] == 'cloudyfan' and frozen['monitor']['category'] == TASK['category']
+    assert frozen['monitor']['tariff']['revision'] == 0 and frozen['monitor']['tariff']['multiplier'] == '1'
+    assert frozen['access_expires_at'] == original['queue']['accepted_at'] + 30 * 86400
+    bundle.app.gateway.store.change(revision=bundle.app.gateway.store.control()['revision'], mode='fixed_high')
+    def advance(payload):
+        local_service.clock.now += 3
+    bundle.upstream.before_response = advance
+    completed = queue.dispatch_next()
+    assert completed['status'] == 'passed'
+    projected = client.get('/v1/tasks/frozen-queue-binding').json()
+    assert projected['queue']['frozen'] == frozen
+    assert operator.get('/monitor/queue').json()['jobs'][0]['queue']['frozen'] == frozen
+    saved = bundle.app.gateway.store.observation('studio', 'frozen-queue-binding')
+    assert saved['status'] == 'passed' and saved['generation_attempts'] == 1 and saved['queue']['frozen'] == frozen
+    assert saved['updated'] == local_service.clock()
+    assert len(bundle.upstream.calls) == 1
+
+
+def test_claim_journal_counts_against_original_principal_quota_before_any_capacity_allocation(local_service, monkeypatch):
+    from capacity_queue_fixture import attach_queue
+    from cloudyfan_jev.scheduler import QueueLimits
+    from cloudyfan_jev.capacity_dispatch import _CapacityDispatch
+    from concurrent.futures import ThreadPoolExecutor
+    import threading
+    bundle = local_service.bundle
+    bundle.upstream.fail_tiers = set()
+    queue = attach_queue(bundle, local_service.clock, limits=QueueLimits(4, 2, 1, 120))
+    local_service.server.set_app(bundle.app)
+    operator, client = local_service.client('operator'), local_service.client()
+    operator.post('/monitor/capacity/activate', json={'revision': 0, 'version': 'synthetic-queued-admission-v1'})
+    assert client.post('/v1/tasks', json={**TASK, 'run_id': 'claim-quota-original'}).status_code == 202
+    entered, release = threading.Event(), threading.Event()
+    original = _CapacityDispatch.prepare
+    def held(dispatch, cid, request, *, reserve=True):
+        if reserve:
+            entered.set()
+            if not release.wait(5):
+                raise AssertionError('bounded claim release missing')
+        return original(dispatch, cid, request, reserve=reserve)
+    monkeypatch.setattr(_CapacityDispatch, 'prepare', held)
+    with ThreadPoolExecutor(1) as executor:
+        future = executor.submit(queue.dispatch_next)
+        try:
+            assert entered.wait(5)
+            assert client.get('/v1/tasks/claim-quota-original').json()['queue_state'] == 'claiming'
+            assert operator.get('/monitor/capacity').json()['dispatch']['allocations'] == []
+            denied = client.post('/v1/tasks', json={**TASK, 'run_id': 'claim-quota-later'})
+            assert denied.status_code == 429 and denied.json()['error']['code'] == 'principal_quota_full'
+            assert bundle.upstream.calls == []
+        finally:
+            release.set()
+        assert future.result(timeout=10)['status'] == 'passed'
+    assert len(bundle.upstream.calls) == 1
+
+
+def test_original_saved_429_makes_queued_next_boundary_wait_for_real_window_without_an_extra_post(local_service):
+    from capacity_queue_fixture import build_queue_host
+    import hashlib
+    host = build_queue_host(local_service.bundle.root / 'real-window', clock=local_service.clock,
+        origin=local_service.origin, options={'retry_after_seconds': 30})
+    local_service.bundle = host.bundle
+    local_service.server.set_app(host.app)
+    operator, client = local_service.client('operator'), local_service.client()
+    operator.post('/monitor/capacity/activate', json={'revision': 0, 'version': 'synthetic-queued-admission-v1'})
+    assert client.post('/v1/tasks', json={**TASK, 'run_id': 'queue-real-window'}).status_code == 202
+    try:
+        assert host.queue.dispatch_next()['status'] == 'queued'
+        assert len(host.upstream.calls) == 1
+        assert host.queue.dispatch_next() is None
+        state = client.get('/v1/tasks/queue-real-window').json()
+        assert state['reason'] == 'queue_waiting_window' and state['capacity_reason'] == 'capacity_window_wait'
+        window = operator.get('/monitor/capacity').json()['dispatch']['windows']
+        assert window['groups'][0]['not_before'] == local_service.clock() + 30
+        paths = [host.queue.path, host.bundle.root / 'capacity.sqlite', *list((host.bundle.root / 'receipts').rglob('*.json'))]
+        original = {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in paths}
+        assert operator.get('/monitor/queue').json()['jobs'][0]['reason'] == 'queue_waiting_window'
+        assert client.post('/v1/tasks/queue-real-window/resume', json={}).json()['status'] == 'queued'
+        assert {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in paths} == original
+        assert len(host.upstream.calls) == 1
+        local_service.clock.now += 30
+        assert host.queue.dispatch_next()['status'] == 'queued'
+        assert len(host.upstream.calls) == 2
+        assert host.queue.dispatch_next()['status'] == 'passed'
+        assert len(host.upstream.calls) == 3
+    finally:
+        host.close()
+
+
 def test_window_protocol_is_explicitly_not_applicable_on_original_immediate_policy(local_service):
     bundle = local_service.bundle
     attach_admission(bundle, local_service.clock)

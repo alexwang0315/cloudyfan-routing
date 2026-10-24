@@ -1,4 +1,5 @@
 """Private WSGI monitor and controlled task ingress. No model calls on dashboard reads."""
+from contextlib import ExitStack, contextmanager
 from http import HTTPStatus
 import hmac
 import ipaddress
@@ -121,6 +122,18 @@ class App:
                 return self._request(environ, start_response)
         return self._request(environ, start_response)
 
+    @contextmanager
+    def _observation(self):
+        # Scheduler writes acquire queue then capacity. Read snapshots use the
+        # same order, keep both shared locks, and cannot upgrade either lock.
+        with ExitStack() as scope:
+            queue = self.gateway.queue
+            if queue is not None and queue.integrity is not None:
+                scope.enter_context(queue.integrity.observation())
+            if self.capacity_controller is not None:
+                scope.enter_context(self.capacity_controller.store.integrity.observation())
+            yield
+
     def _request(self, environ, start_response):
         status, content_type = 200, "application/json; charset=utf-8"
         method, path = environ.get("REQUEST_METHOD"), environ.get("PATH_INFO", "")
@@ -155,7 +168,11 @@ class App:
                 if path.startswith("/monitor/"):
                     if not hmac.compare_digest(token, self.admin_token):
                         raise MonitorError("unauthorized", 401)
-                    body = self._admin(method, path, environ)
+                    if method == 'GET' and path in {'/monitor/capacity', '/monitor/queue', '/monitor/snapshot'}:
+                        with self._observation():
+                            body = self._admin(method, path, environ)
+                    else:
+                        body = self._admin(method, path, environ)
                 elif path.startswith("/v1/"):
                     principal = self._authenticate(token, method, environ)
                     body = self._client(principal, method, path, environ)

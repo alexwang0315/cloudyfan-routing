@@ -22,6 +22,8 @@
 
 已完成任務的讀取沿用已登錄 Core／BackupCategoryCore 的原唯讀驗證器，每次仍核對原設定、結果與費用收據，不為觀察重建執行政策。未知自訂子類別保留原本依任務組裝的流程。這項讀取最佳化不快取授權、費用或結果，也不改變執行時的模型組裝、財務限制與送出前檢查。
 
+操作員的容量、等待任務與完整頁面查詢，在同一次回應內共用受共享鎖保護的有界中繼快照；鎖順序依序為等待任務、容量。影子投影禁止寫入，該次查詢不能升級為中繼寫入，回應結束即清除快照。下一次查詢與未來送出前檢查重新核對原資料。遺失或待核對交易仍顯示無法使用，歷史投影不會恢復授權。
+
 ## 本機驗收入口
 
 `tests/capacity_resilience_fixture.py` 提供 `build_resilience_host` 與 `build_resilience_health_host`。後者組合真實 BackupCategoryCore、HealthStore、TaskService、IdentityStore、BudgetStore、CapacityStore、CapacityWindows 與 QueueScheduler；所有模型／來源／核帳上游皆使用 MockTransport。程序間共用原儲存與持久化憑證，代際 ID 每次啟動皆唯一。

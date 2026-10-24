@@ -51,7 +51,10 @@ class RunBoundCore(Core):
             raise ValueError("Run factory changed the registered contract or budgeted transports")
         return core
 
-    def run(self, run_id, task, environment_factory, *, contract_version, mode="cloudyfan"):
+    def queue_template(self):
+        return self._template
+
+    def queue_binding(self, run_id, task):
         core = self._bound(run_id)
         descriptor = core.configuration_descriptor()
         policies = [descriptor.get("selection_policy", {}).get("policy", {}),
@@ -64,6 +67,10 @@ class RunBoundCore(Core):
             if "workload_id" in task and task["workload_id"] != workload:
                 raise ValueError("Task workload differs from the registered host contract")
             task = {**deepcopy(task), "workload_id": workload}
+        return core, task
+
+    def run(self, run_id, task, environment_factory, *, contract_version, mode="cloudyfan"):
+        core, task = self.queue_binding(run_id, task)
         return core.run(run_id, task, environment_factory, contract_version=contract_version, mode=mode)
 
     def read_completed(self, run_id):

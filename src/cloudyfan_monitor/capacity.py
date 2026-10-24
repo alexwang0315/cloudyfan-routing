@@ -45,6 +45,7 @@ class CapacityObserver:
                 fcntl.flock(lock, fcntl.LOCK_UN)
 
     def _refresh(self):
+        self.store.integrity.require()
         view = self.snapshot()
         if not view["configured"]:
             raise MonitorError("capacity_source_refresh_not_configured", 409)

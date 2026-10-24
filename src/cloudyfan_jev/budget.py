@@ -135,6 +135,25 @@ class BudgetStore:
         if self._unbounded_history(db):
             raise BudgetError('Unverified historical cost has no bounded exposure; balance unavailable')
 
+    def queue_admission(self, run_id, amount):
+        """Read the ORIGINAL fee gates without reserving or importing history."""
+        db = sqlite3.connect(self.path.resolve().as_uri() + '?mode=ro', uri=True, timeout=30)
+        db.row_factory = sqlite3.Row
+        try:
+            db.execute('PRAGMA query_only=ON')
+            auth = self._authorization(db)
+            self._dispatchable(db, auth)
+            prior = db.execute('SELECT amount FROM reservations WHERE run=?', (run_id,)).fetchone()
+            if prior:
+                if money(prior['amount']) != money(amount):
+                    raise BudgetError('Frozen reservation changed')
+                return
+            reserved = _exact(money(r[0]) for r in db.execute('SELECT amount FROM reservations WHERE status="active"'))
+            if _exact((reserved, self._settled_cost(db), self._provisional_hold(db), money(amount))) > money(auth['total']):
+                raise BudgetError('Insufficient shared balance for complete workflow')
+        finally:
+            db.close()
+
     def _unbounded_history(self, db):
         return db.execute('SELECT COUNT(*) FROM events WHERE run="__history__" AND verified=0').fetchone()[0]
 
@@ -317,20 +336,32 @@ class _BudgetClient:
     def __init__(self, wrapped, owner, run_id):
         self.wrapped, self.owner, self.run_id = wrapped, owner, run_id
         self._dispatch_guard = None
+        self._queue_guard = None
 
     def __getattr__(self, name):
         return getattr(self.wrapped, name)
 
     @contextmanager
-    def guard_dispatch(self, guard):
+    def guard_dispatch(self, guard, *, queue_evidence=None):
         previous, self._dispatch_guard = self._dispatch_guard, guard
+        previous_queue, self._queue_guard = self._queue_guard, queue_evidence
         try:
             yield
         finally:
             self._dispatch_guard = previous
+            self._queue_guard = previous_queue
+
+    def queue_preparation_enabled(self):
+        return self.owner.capacity_controller is not None and self.owner._capacity_context.get('queue_version') is not None
 
     def _event_id(self, cid):
         return 'model:' + _fingerprint(str(self.wrapped.root.resolve())) + ':' + cid
+
+    def candidate_window(self, profile):
+        if self.owner.capacity_controller is None or self.owner._capacity_context['policy_version'] is None:
+            return None
+        return self.owner.capacity_controller.candidate_window(self.owner._capacity_context,
+            self.wrapped, profile, self.owner._capacity_descriptor)
 
     def _record(self, cid, record):
         from .client import usage, not_dispatched
@@ -356,6 +387,10 @@ class _BudgetClient:
             args = tuple(deepcopy(value) for value in args)
             payload = args[-1]
             endpoint = args[0] if len(args) > 1 else self.wrapped.config['endpoint']
+            if self.owner._capacity_context.get('queue_version') is not None:
+                backend = self.owner.capacity_controller._queue_backend(self.owner._capacity_context['queue_version'])
+                payload = backend.ordered_payload(cid, endpoint, payload)
+                args = (*args[:-1], payload)
             # Receipt replay is decided inside the real transport, before prepare.
             dispatch = _BudgetDispatch(self, cid, args, endpoint, payload)
             record = self.wrapped.call(cid, *args, dispatch=dispatch)
@@ -385,6 +420,9 @@ class _BudgetClient:
         return self._record(cid, self.wrapped.call(cid, *args))
 
     def reconcile(self, cid):
+        if (self.owner.capacity_controller is not None
+                and not self.owner.capacity_controller.automatic_reconciliation_allowed(self.owner._capacity_context)):
+            raise BudgetError('Original unknown fee requires explicit accounting; no automatic GET')
         return self._record(cid, self.wrapped.reconcile(cid))
 
 
@@ -410,9 +448,14 @@ class _BudgetDispatch:
         if _fingerprint(self.payload) != self.payload_fingerprint:
             from .capacity_dispatch import CapacityDenied
             raise CapacityDenied('capacity_request_changed')
-        self.capacity = self.owner.capacity_controller.dispatch(self.owner._capacity_context,
-            self.client.wrapped, self.endpoint, self.payload, self.owner._capacity_descriptor)
-        evidence = self.capacity.prepare(cid, request)
+        if self.owner._capacity_context.get('queue_version') is not None:
+            backend = self.owner.capacity_controller._queue_backend(self.owner._capacity_context['queue_version'])
+            self.capacity, evidence = backend.consume(self.owner, self.client.wrapped, cid, self.endpoint, self.payload, request,
+                gate=self.client._queue_guard)
+        else:
+            self.capacity = self.owner.capacity_controller.dispatch(self.owner._capacity_context,
+                self.client.wrapped, self.endpoint, self.payload, self.owner._capacity_descriptor)
+            evidence = self.capacity.prepare(cid, request)
         try:
             self.owner.store.begin_event(self.client.run_id, self.client._event_id(cid), 'model',
                 money(self.bound.usd), _fingerprint(self.args))
@@ -440,10 +483,17 @@ class _BudgetDispatch:
                 raise
             except Exception:
                 raise CapacityDenied('capacity_original_gate_denied') from None
+        if self.owner._capacity_context.get('queue_version') is not None:
+            from .capacity_queue import QueuePreparation
+            execution = QueuePreparation.execution()
+            execution['scheduler'].verify_claim(execution['run'], execution['claim'])
         return self.capacity.before_post()
 
     def release(self):
         self.capacity.release()
+
+    def response_headers(self, response):
+        return self.capacity.response_headers(response)
 
     def complete(self, record):
         from .capacity_dispatch import CapacityDenied
@@ -463,6 +513,10 @@ class _BudgetEnvironment:
         self.index, self.prepared = 0, None
         self.replayable_tools = frozenset(name for name in getattr(environment, 'replayable_tools', ())
                                          if name in owner.tool_bounds and not owner.tool_bounds[name].external)
+        if owner.capacity_controller is not None and owner._capacity_context.get('queue_version') is not None:
+            backend = owner.capacity_controller._queue_backend(owner._capacity_context['queue_version'])
+            execution = backend.execution()
+            backend.verify_environment(execution['prepared']['request']['contract_id'], environment)
 
     def __getattr__(self, name):
         return getattr(self.environment, name)
@@ -535,7 +589,7 @@ class _BudgetEnvironment:
                 except Exception:
                     raise CapacityDenied('capacity_original_gate_denied') from None
             return dispatch.before_post()
-        record = transport.post(action_id, wire, final_guard)
+        record = transport.post(action_id, wire, final_guard, response_headers=dispatch.response_headers)
         if not_dispatched(record):
             self.owner.store.record_event(event_id, cost_usd='0', verified=True,
                 receipt_id='not-dispatched:' + _fingerprint(str(transport.root) + ':' + action_id))
@@ -552,8 +606,10 @@ class _BudgetEnvironment:
             if result.cost_usd is None or not result.receipt_id:
                 raise BudgetError('External tool cost unknown; execution stopped')
         except BaseException:
+            dispatch._record_window_response(record)
             dispatch._update('uncertain')
             raise
+        dispatch._record_window_response(record)
         dispatch._update('complete')
         return result.result
 
@@ -612,6 +668,25 @@ class BudgetedCore:
     def _verify(self, kind, identity, payload, bound):
         if self.verify_bound is None or self.verify_bound(kind, identity, payload, bound) is not True:
             raise BudgetError('Enforceable upper bound unconfirmed; estimates are not caps')
+
+    def queue_preflight(self, transport, endpoint, payload):
+        """Recheck actual-request fee authority before claiming an execution slot.
+
+        This creates no event/reserve. The original transport repeats these
+        checks at its final POST boundary; this is not a replacement permission.
+        """
+        bound = self.model_bounds.get(payload.get('model'))
+        if bound is None:
+            raise BudgetError('No confirmed model upper bound')
+        verifier = getattr(self.verify_bound, 'verify_dispatch', None)
+        if callable(verifier):
+            if verifier(transport, endpoint, payload, bound) is not True:
+                raise BudgetError('Enforceable dispatch upper bound unconfirmed')
+        else:
+            self._verify('model', payload['model'], payload, bound)
+        verifier = getattr(self.verify_bound, 'verify_post', None)
+        if callable(verifier) and verifier(transport, endpoint, payload, bound) is not True:
+            raise BudgetError('Original POST fee authority denied')
 
     def _admit(self, mode):
         from .engine import generation_tiers
@@ -706,6 +781,11 @@ class BudgetedCore:
                 raise CapacityDenied('capacity_adoption_missing', 403)
             self.capacity_controller.verify(capacity_context)
             self._capacity_context, self._capacity_descriptor = capacity_context, capacity_descriptor
+            if capacity_context.get('queue_version') is not None:
+                from .capacity_queue import QueuePreparation
+                execution = QueuePreparation.execution()
+                if execution is None or execution.get('run') != run_id or execution.get('controller') is not self.capacity_controller:
+                    raise CapacityDenied('capacity_queue_claim_required', 403)
         frozen = {**self.core.configuration_descriptor(),
                   'root': str(self.core.client.root.resolve()), 'task': task, 'contract': contract_version,
                   'mode': mode, 'options': kwargs,

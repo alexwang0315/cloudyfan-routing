@@ -152,7 +152,7 @@ class CapacityToolTransport(ReceiptStore):
             raise CapacityDenied('capacity_tool_replay_forbidden', 409)
         return prepare_request(self.http, self.config['endpoint'], payload)
 
-    def post(self, cid, request, before_post):
+    def post(self, cid, request, before_post, *, response_headers=None):
         from .capacity import _private_path
         _private_path(self.root / '.capacity-tool.lock')
         with self._lock():
@@ -180,6 +180,14 @@ class CapacityToolTransport(ReceiptStore):
                 except Exception:
                     record = {'call_id': cid, 'http_status': None, 'raw': None, 'interrupted': True,
                               'error': 'capacity_tool_transport_failure'}
+                if record['http_status'] is not None and callable(response_headers):
+                    try:
+                        observation = response_headers(response)
+                    except Exception:
+                        observation = {'protocol': 'capacity-window-headers-v1', 'values': [],
+                                       'invalid': True, 'observed_at': None}
+                    if observation is not None:
+                        record['window_headers'] = observation
             _immutable(directory / 'response.json', record)
             return record
 
@@ -199,7 +207,8 @@ def require_tool_transport(transport):
 
 class CapacityController:
     """A registered host authority. Neither request JSON nor browser registers policy."""
-    def __init__(self, store, *, credential_active, history_limit=100, max_live_allocations=1000):
+    def __init__(self, store, *, credential_active, history_limit=100, max_live_allocations=1000,
+                 window_backend=None):
         if type(store) is not CapacityStore or not callable(credential_active):
             raise ValueError('Controlled capacity store and credential verifier required')
         if (type(history_limit) is not int or not 1 <= history_limit <= 100
@@ -208,6 +217,7 @@ class CapacityController:
         self.history_limit, self.max_live_allocations = history_limit, max_live_allocations
         self.store, self.credential_active = store, credential_active
         self.routes, self._route_credentials = {}, {}
+        self.window_backend = window_backend
         with store.connection(write=True) as db:
             db.executescript('''
                 CREATE TABLE IF NOT EXISTS capacity_policies(version TEXT PRIMARY KEY,payload TEXT NOT NULL);
@@ -260,12 +270,18 @@ class CapacityController:
             raise CapacityDenied('capacity_credential_inactive', 403)
         _INGRESS.set((self, value))
 
-    def register(self, version, *, configuration_version, routes, max_seconds):
+    def register(self, version, *, configuration_version, routes, max_seconds, windows_version=None, queue_version=None):
         _identity(version)
         _identity(configuration_version)
         if type(max_seconds) is not int or not 1 <= max_seconds <= 86400 or not routes or len(routes) > 512:
             raise ValueError('Bounded registered dispatch policy required')
         config = self.store.snapshot(configuration_version)
+        if windows_version is not None:
+            _identity(windows_version)
+            self._window_backend(windows_version)
+        if queue_version is not None:
+            _identity(queue_version)
+            self._queue_backend(queue_version)
         if not config['configured'] or config['configuration_version'] != configuration_version:
             raise ValueError('Registered capacity configuration required')
         bindings = {binding['id'] for binding in config['bindings']}
@@ -294,6 +310,11 @@ class CapacityController:
         value = {'version': version, 'configuration_version': configuration_version,
                  'configuration_sha256': config['configuration_sha256'], 'max_seconds': max_seconds,
                  'protocol': SERIALIZER, 'routes': descriptors}
+        if windows_version is not None:
+            value['windows_version'] = windows_version
+        if queue_version is not None:
+            value['queue_version'] = queue_version
+            value['queue_sha256'] = self._queue_backend(queue_version).sha256
         with self.store.connection(write=True) as db:
             db.execute('BEGIN IMMEDIATE')
             prior = db.execute('SELECT payload FROM capacity_policies WHERE version=?', (version,)).fetchone()
@@ -302,6 +323,109 @@ class CapacityController:
             db.execute('INSERT OR IGNORE INTO capacity_policies VALUES(?,?)', (version, _json(value)))
         self.routes[version] = tuple(routes)
         self._route_credentials[version] = tuple(_transport_identity(route.transport) for route in routes)
+
+    def _queue_backend(self, version):
+        from .capacity_queue import QueuePreparation
+        backend = getattr(self, 'queue_backend', None)
+        if type(backend) is not QueuePreparation or backend.version != version:
+            raise CapacityDenied('capacity_queue_backend_unavailable')
+        return backend
+
+    def queue_policy(self, run=None):
+        with self.store.connection() as db:
+            if run is not None:
+                row = db.execute('SELECT payload FROM capacity_adoptions WHERE run=?', (run,)).fetchone()
+                return json.loads(row[0]).get('queue_version') if row else None
+            version = db.execute('SELECT version FROM capacity_dispatch_control WHERE id=1').fetchone()[0]
+            row = db.execute('SELECT payload FROM capacity_policies WHERE version=?', (version,)).fetchone()
+        return json.loads(row[0]).get('queue_version') if row else None
+
+    def automatic_reconciliation_allowed(self, adoption):
+        if adoption.get('queue_version') is not None:
+            return False
+        with self.store.connection() as db:
+            row = db.execute('SELECT payload FROM capacity_policies WHERE version=?', (adoption['policy_version'],)).fetchone()
+        if row is None:
+            if adoption['policy_version'] is None:
+                return True
+            raise CapacityDenied('capacity_policy_not_registered')
+        return json.loads(row[0]).get('windows_version') is None
+
+    def _window_backend(self, version):
+        backend = self.window_backend
+        if (backend is None or getattr(backend, 'protocol', None) != 'capacity-windows-v1'
+                or getattr(backend, 'version', None) != version
+                or any(not callable(getattr(backend, name, None)) for name in ('check', 'record_response', 'snapshot'))):
+            raise CapacityDenied('capacity_window_backend_unavailable')
+        return backend
+
+    def window_scope(self, adoption, route, snapshot, wire_sha256):
+        binding = next((b for b in snapshot['bindings'] if b['id'] == route.binding), None)
+        if binding is None:
+            raise CapacityDenied('capacity_binding_unavailable')
+        groups = [{'group': group['id'], 'scope': group['scope'], 'physical': _hash(group['scope'])}
+            for group in snapshot['groups'] if group['id'] in binding['groups']]
+        return {'protocol': 'capacity-windows-v1', 'policy_version': adoption['policy_version'],
+            'configuration_version': snapshot['configuration_version'],
+            'configuration_sha256': snapshot['configuration_sha256'], 'endpoint': route.endpoint,
+            'model': route.model, 'binding': binding, 'descriptor_sha256': adoption['descriptor_sha256'],
+            'provider_name': route.provider_name, 'accepted_models': list(route.accepted_models or (route.model,)),
+            'wire_sha256': wire_sha256}, groups
+
+    def check_window(self, db, scope, groups, now, version):
+        if version is None:
+            return {'status': 'open', 'not_before': None, 'evidence_refs': [], 'revision': 0,
+                    'reason_code': 'capacity_window_not_applicable'}
+        try:
+            result = self._window_backend(version).check(db, scope, groups, now)
+            if (not isinstance(result, dict) or set(result) != {
+                    'status', 'not_before', 'evidence_refs', 'revision', 'reason_code'}
+                    or result['status'] not in {'open', 'wait', 'unknown', 'denied'}
+                    or type(result['revision']) is not int or result['revision'] < 0
+                    or not isinstance(result['evidence_refs'], list) or len(result['evidence_refs']) > 32
+                    or not isinstance(result['reason_code'], str)
+                    or not re.fullmatch(r'capacity_[a-z_]{1,64}', result['reason_code'])):
+                raise ValueError('Invalid window decision')
+            for reference in result['evidence_refs']:
+                _identity(reference)
+            if result['not_before'] is not None:
+                _time(result['not_before'])
+            return result
+        except CapacityDenied:
+            raise
+        except Exception:
+            raise CapacityDenied('capacity_window_state_unavailable') from None
+
+    def candidate_window(self, adoption, transport, profile, descriptor):
+        with self.store.connection() as db:
+            policy = db.execute('SELECT payload FROM capacity_policies WHERE version=?', (adoption['policy_version'],)).fetchone()
+        if policy is not None and json.loads(policy[0]).get('windows_version') is None:
+            return None
+        endpoint = transport.config['endpoint'] if profile.get('backend') == 'local' else 'https://openrouter.ai/api/v1/chat/completions'
+        dispatch = self.dispatch(adoption, transport, endpoint, {'model': profile['model_version']}, descriptor)
+        snapshot = self.store.snapshot(adoption['configuration_version'])
+        scope, groups = self.window_scope(adoption, dispatch.route, snapshot, None)
+        with self.store.connection() as db:
+            return self.check_window(db, scope, groups, self._now(db), dispatch.windows_version)
+
+    def window_snapshot(self):
+        if self.window_backend is None:
+            with self.store.connection() as db:
+                configured = any(json.loads(row[0]).get('windows_version') is not None
+                    for row in db.execute('SELECT payload FROM capacity_policies'))
+            if configured:
+                return {'configured': True, 'protocol': 'capacity-windows-v1', 'status': 'unknown',
+                        'reason_code': 'capacity_window_backend_unavailable'}
+            return {'configured': False, 'protocol': 'capacity-windows-v1', 'status': 'not_applicable'}
+        try:
+            backend = self._window_backend(self.window_backend.version)
+            result = backend.snapshot()
+            if not isinstance(result, dict):
+                raise ValueError('Invalid window snapshot')
+            return result
+        except Exception:
+            return {'configured': True, 'protocol': 'capacity-windows-v1', 'status': 'unknown',
+                    'reason_code': 'capacity_window_state_unavailable'}
 
     def activate(self, revision, version):
         if type(revision) is not int or revision < 0:
@@ -316,7 +440,18 @@ class CapacityController:
                 raise CapacityDenied('capacity_revision_conflict', 409)
             if version is not None and version not in self.routes:
                 raise CapacityDenied('capacity_policy_not_registered', 409)
-            if current[1] != version and _live_capacity(db, now):
+            pending_target = None
+            if current[1] is None and version is not None:
+                policy = json.loads(db.execute('SELECT payload FROM capacity_policies WHERE version=?', (version,)).fetchone()[0])
+                if policy.get('windows_version') is not None:
+                    configuration = json.loads(db.execute('SELECT payload FROM capacity_configurations WHERE version=?', (policy['configuration_version'],)).fetchone()[0])
+                    bound = {route.binding for route in self.routes[version]}
+                    groups = {group for binding in configuration['bindings'] if binding['id'] in bound for group in binding['groups']}
+                    pending_target = {'window_version': policy['windows_version'],
+                        'configuration_version': policy['configuration_version'],
+                        'configuration_sha256': policy['configuration_sha256'],
+                        'physical': {_hash(group['scope']) for group in configuration['groups'] if group['id'] in groups}}
+            if current[1] != version and _live_capacity(db, now, pending_target=pending_target):
                 raise CapacityDenied('capacity_live_state_blocks_change', 409)
             db.execute('UPDATE capacity_dispatch_control SET revision=?,version=? WHERE id=1', (revision + 1, version))
             self._event(db, {'kind': 'activation', 'version': version, 'at': now})
@@ -345,6 +480,11 @@ class CapacityController:
                      'configuration_version': policy['configuration_version'] if policy else None,
                      'protocol': SERIALIZER, 'descriptor_sha256': _hash(descriptor), 'accepted_at': now,
                      'deadline': now + policy['max_seconds'] if policy else None}
+            if policy is not None and policy.get('queue_version') is not None:
+                backend = self._queue_backend(policy['queue_version'])
+                if policy['queue_sha256'] != backend.sha256:
+                    raise CapacityDenied('capacity_queue_contract_changed')
+                value.update(queue_version=backend.version, queue_sha256=backend.sha256)
             db.execute('INSERT INTO capacity_adoptions VALUES(?,?,0)', (run, _json(value)))
             return value
 
@@ -362,9 +502,10 @@ class CapacityController:
         with self.store.connection() as db:
             row = db.execute('SELECT payload,terminal FROM capacity_adoptions WHERE run=?', (adoption['run'],)).fetchone()
             now = self._now(db)
-            invalid = db.execute('SELECT 1 FROM capacity_invalid_policies WHERE version=?', (adoption['policy_version'],)).fetchone()
+            invalid = db.execute('SELECT reason FROM capacity_invalid_policies WHERE version=?', (adoption['policy_version'],)).fetchone()
         if invalid:
-            raise CapacityDenied('capacity_token_proof_invalidated')
+            raise CapacityDenied('capacity_window_observation_unavailable' if invalid[0] ==
+                'capacity_window_observation_unavailable' else 'capacity_token_proof_invalidated')
         if row is None or json.loads(row[0]) != adoption or row[1]:
             raise CapacityDenied('capacity_adoption_unavailable', 403)
         if not self.credential_active(adoption['principal'], adoption['credential'], adoption['scope'], now):
@@ -409,7 +550,7 @@ class CapacityController:
                 matches.append((route, pin))
         if len(matches) != 1:
             raise CapacityDenied('capacity_route_not_registered')
-        return _CapacityDispatch(self, adoption, *matches[0])
+        return _CapacityDispatch(self, adoption, *matches[0], windows_version=policy.get('windows_version'))
 
     def snapshot(self):
         with self.store.connection() as db:
@@ -433,11 +574,13 @@ class CapacityController:
                     out['tpm_reserved'] += group['tokens'] if held or now < group['tpm_until'] else 0
                     out['concurrency_used'] += item['state'] in {'prepared', 'sent', 'uncertain'}
         return {'schema_version': 'capacity-dispatch-v1', 'revision': revision, 'active_version': version,
-                'protocol': SERIALIZER, 'registered_policies': [{'version': p['version'], 'configuration_version': p['configuration_version'], 'max_seconds': p['max_seconds']} for p in policies],
+                'protocol': SERIALIZER, 'registered_policies': [{
+                    **{key: p[key] for key in ('version', 'configuration_version', 'max_seconds')},
+                    **({'windows_version': p['windows_version']} if 'windows_version' in p else {})} for p in policies],
                 'allocation_count': allocation_count, 'allocation_history_complete': allocation_count == len(allocations),
                 'event_count': event_count, 'event_history_complete': event_count == len(events),
                 'groups': list(groups.values()), 'allocations': [{key: row[key] for key in ('id', 'policy_version', 'state', 'wire_sha256', 'serializer', 'groups')} for row in allocations],
-                'events': events}
+                'events': events, 'windows': self.window_snapshot()}
 
     def own(self, run):
         with self.store.connection() as db:
@@ -449,12 +592,63 @@ class CapacityController:
 
 
 class _CapacityDispatch:
-    def __init__(self, controller, adoption, route, credential_pin):
+    def __init__(self, controller, adoption, route, credential_pin, *, windows_version=None):
         self.controller, self.adoption, self.route = controller, adoption, route
         self._credential_pin = credential_pin
         self.id = None
+        self.windows_version = windows_version
 
-    def prepare(self, call_id, request):
+    def response_headers(self, response):
+        if self.windows_version is None:
+            return None
+        names = {'retry-after', 'ratelimit-reset', 'x-ratelimit-reset',
+                 'x-ratelimit-reset-requests', 'x-ratelimit-reset-tokens', 'date'}
+        values, seen, invalid, size = [], set(), False, 0
+        secret = getattr(self.route.transport, 'key', None)
+        for name, value in response.headers.multi_items():
+            name = name.lower()
+            if name not in names:
+                continue
+            size += len(name.encode()) + len(value.encode())
+            bad = (name in seen or len(values) >= 8 or len(value) > 160 or size > 1024
+                   or any(c in value for c in ('\r', '\n', '\x00'))
+                   or bool(secret and secret in value))
+            invalid = invalid or bad
+            seen.add(name)
+            if not bad:
+                values.append([name, value])
+        try:
+            observed = _time(self.controller.store.clock())
+        except Exception:
+            observed, invalid = None, True
+        return {'protocol': 'capacity-window-headers-v1', 'values': values,
+                'invalid': invalid, 'observed_at': observed}
+
+    def _record_window_response(self, record):
+        if self.windows_version is None:
+            return
+        root = self.route.transport.root
+        response = root / 'calls' / record['call_id'] / 'response.json'
+        snapshot = self.controller.store.snapshot(self.adoption['configuration_version'])
+        with self.controller.store.connection() as db:
+            allocation = json.loads(db.execute('SELECT payload FROM capacity_allocations WHERE id=?', (self.id,)).fetchone()[0])
+        scope, groups = self.controller.window_scope(self.adoption, self.route, snapshot, allocation['wire_sha256'])
+        scope['physical_groups'] = groups
+        try:
+            scope['observed_at'] = _time(record['window_headers']['observed_at'])
+        except Exception:
+            scope.update(observed_at=None, time_error='capacity_clock_invalid')
+        try:
+            self.controller._window_backend(self.windows_version).record_response(
+                {'root': str(root.resolve()), 'call_id': record['call_id'],
+                 'response_sha256': hashlib.sha256(response.read_bytes()).hexdigest()}, scope)
+        except Exception:
+            with self.controller.store.connection(write=True) as db:
+                db.execute('INSERT OR IGNORE INTO capacity_invalid_policies VALUES(?,?)',
+                    (self.adoption['policy_version'], 'capacity_window_observation_unavailable'))
+            raise CapacityDenied('capacity_window_observation_unavailable') from None
+
+    def prepare(self, call_id, request, *, reserve=True):
         controller, adoption, route = self.controller, self.adoption, self.route
         controller.verify(adoption)
         now = _time(controller.store.clock())
@@ -514,9 +708,14 @@ class _CapacityDispatch:
                 'tokens': tokens if limits['tpm'] else 0,
                 'caps': {key: item['value'] if item else None for key, item in limits.items()}})
         identifier = _hash([adoption['run'], call_id, route.descriptor()])
-        with controller.store.connection(write=True) as db:
-            db.execute('BEGIN IMMEDIATE')
-            now = controller._now(db, write=True)
+        window_scope, physical_groups = controller.window_scope(adoption, route, snapshot, wire)
+        with controller.store.connection(write=reserve) as db:
+            if reserve:
+                db.execute('BEGIN IMMEDIATE')
+            now = controller._now(db, write=reserve)
+            window = controller.check_window(db, window_scope, physical_groups, now, self.windows_version)
+            if window['status'] != 'open':
+                raise CapacityDenied(window['reason_code'])
             if token_until is not None and now >= token_until:
                 raise CapacityDenied('capacity_token_bound_expired')
             if db.execute('SELECT 1 FROM capacity_allocations WHERE id=?', (identifier,)).fetchone():
@@ -534,10 +733,16 @@ class _CapacityDispatch:
                     if cap is not None and used[dimension] + amount > cap:
                         # No group rows have been inserted, so all-group refusal is atomic.
                         raise CapacityDenied('capacity_' + dimension + '_exhausted')
+            if not reserve:
+                return {'protocol': SERIALIZER, 'wire_sha256': wire, 'scope_sha256': scope_hash,
+                        'capacity_allocation': identifier}
             allocation = {'id': identifier, 'run': adoption['run'], 'policy_version': adoption['policy_version'],
                 'wire_sha256': wire, 'scope_sha256': scope_hash, 'serializer': SERIALIZER,
                 'state': 'prepared', 'prepared_at': now, 'groups': groups, 'evidence': evidence,
                 'token_valid_until': token_until, 'evidence_valid_until': min(item[4] for item in evidence)}
+            if self.windows_version is not None:
+                allocation.update(window_scope=window_scope, windows_version=self.windows_version,
+                    window_decision=window, physical_groups=physical_groups)
             horizon = max((max(g['rpm_until'], g['tpm_until']) for g in groups), default=now)
             db.execute('INSERT INTO capacity_allocations VALUES(?,?,?,?)', (identifier, _json(allocation), 'prepared', horizon))
             controller._event(db, {'kind': 'prepared', 'allocation': identifier, 'version': adoption['policy_version'], 'at': now})
@@ -565,6 +770,11 @@ class _CapacityDispatch:
             if state == 'sent' and value['state'] != 'prepared':
                 raise CapacityDenied('capacity_dispatch_already_sent', 409)
             if state == 'sent':
+                if value.get('windows_version') is not None:
+                    decision = self.controller.check_window(db, value['window_scope'],
+                        value['physical_groups'], now, value['windows_version'])
+                    if decision['status'] != 'open':
+                        raise CapacityDenied(decision['reason_code'])
                 if value['token_valid_until'] is not None and now >= value['token_valid_until']:
                     raise CapacityDenied('capacity_token_bound_expired')
                 if value.get('evidence_valid_until') is not None and now >= value['evidence_valid_until']:
@@ -647,6 +857,7 @@ class _CapacityDispatch:
             allocation = json.loads(db.execute('SELECT payload FROM capacity_allocations WHERE id=?', (self.id,)).fetchone()[0])
         violation = tokens is not None and any(group['caps']['tpm'] is not None and tokens > group['tokens']
                                              for group in allocation['groups'])
+        self._record_window_response(record)
         self._update('uncertain' if record.get('interrupted') or info['cost_unknown'] or not identity or violation else 'complete',
                      tokens=tokens, bound_violation=violation)
         return 'capacity_token_bound_violated' if violation else None

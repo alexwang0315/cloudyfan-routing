@@ -787,6 +787,18 @@ class ConcurrentLedger:
         wid = _identifier(workflow_id, "workflow_id")
         return self._operate(lambda c: self._row(c, "workflows", wid))
 
+    def has_not_dispatched_calls(self, workflow_id):
+        """Read explicit stopped-attempt evidence for this workflow only."""
+        wid = _identifier(workflow_id, "workflow_id")
+
+        def action(c):
+            return any(
+                json.loads(row[0]).get("revision_id") == "not_dispatched"
+                for row in c.execute("SELECT value FROM calls WHERE workflow_id=?", (wid,))
+            )
+
+        return self._operate(action)
+
     def lookup(self, call_id):
         cid = _identifier(call_id, "call_id")
 

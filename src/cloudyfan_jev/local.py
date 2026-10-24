@@ -38,7 +38,7 @@ class LocalBackend(ReceiptStore):
         return all(profile.get(k) == self.config[k] for k in
                    ('model_version', 'quantization', 'engine', 'execution_location'))
 
-    def call(self, cid, payload, *, dispatch=None):
+    def prepare_payload(self, payload):
         if payload.get('model') != self.config['model_version']:
             raise ValueError('Local request model does not match pinned configuration')
         if payload.get('tools') or any(m.get('role') not in {'system', 'user', 'assistant'} or
@@ -46,6 +46,10 @@ class LocalBackend(ReceiptStore):
             raise ValueError('Local text subset does not support tools, media or nontext messages')
         request = {'model': payload['model'], 'messages': payload['messages'],
                    'max_tokens': payload['max_tokens'], 'stream': False}
+        return request
+
+    def call(self, cid, payload, *, dispatch=None):
+        request = self.prepare_payload(payload)
         directory = self._directory(cid)
         fingerprint = hashlib.sha256(_encoded({'configuration': self.config, 'request': request})).hexdigest()
         with self._lock():
@@ -92,6 +96,15 @@ class LocalBackend(ReceiptStore):
             except Exception:
                 record = {**common, 'http_status': None, 'raw': None, 'interrupted': True,
                           'error': 'local_transport_failure'}
+            observe = getattr(dispatch, 'response_headers', None)
+            if record['http_status'] is not None and callable(observe):
+                try:
+                    window_headers = observe(response)
+                except Exception:
+                    window_headers = {'protocol': 'capacity-window-headers-v1', 'values': [],
+                                      'invalid': True, 'observed_at': None}
+                if window_headers is not None:
+                    record['window_headers'] = window_headers
             record.update(elapsed_ms=(perf_counter() - started) * 1000, finished_at=_now())
             _immutable(directory / 'response.json', record)
             if dispatch is not None:

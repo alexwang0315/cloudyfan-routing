@@ -258,6 +258,15 @@ class Client(ReceiptStore):
                 record = {"call_id": cid, "request_sha256": request_hash, "http_status": None,
                           "elapsed_ms": (perf_counter() - started) * 1000, "raw": None,
                           "interrupted": True, "error": "transport_failure", "finished_at": _now()}
+            observe = getattr(dispatch, 'response_headers', None)
+            if record['http_status'] is not None and callable(observe):
+                try:
+                    window_headers = observe(response)
+                except Exception:
+                    window_headers = {'protocol': 'capacity-window-headers-v1', 'values': [],
+                                      'invalid': True, 'observed_at': None}
+                if window_headers is not None:
+                    record['window_headers'] = window_headers
             # Durable answer/receipt precedes any downstream interpretation.
             _immutable(directory / "response.json", record)
             gid = usage(record)["generation_id"]

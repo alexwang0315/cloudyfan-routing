@@ -258,6 +258,61 @@ class Core:
                                  if self.selection_policy is not None else None)
         return {**selected, "calls": calls}
 
+    def generation_payload(self, messages, profile, prefix, tools):
+        """The single generation builder used by preparation and real dispatch."""
+        if len(_encoded(messages)) > self.limits.max_context_bytes:
+            raise ValueError("Public conversation exceeds context byte limit")
+        payload = {"model": request_model(profile), "messages": deepcopy(messages),
+                   "max_tokens": self.limits.max_tokens, **reasoning_fields(profile), "session_id": prefix}
+        if profile.get('backend') != 'local':
+            payload['provider'] = {"only": [profile['provider']], "allow_fallbacks": False, "require_parameters": True}
+        if tools:
+            payload.update(tools=deepcopy(tools), tool_choice='auto')
+        return payload
+
+    def queue_template(self):
+        return self
+
+    def queue_binding(self, run_id, task):
+        return self, deepcopy(task)
+
+    def queue_accept(self, run_id, accepted_at):
+        """Base Core has no separate absolute flow deadline to initialize."""
+
+    def queue_validate(self, next_request):
+        """Original privacy and final dispatch guards still run during execution."""
+        if self.execution_policy is None:
+            return
+        if next_request['endpoint'] == transport.DECISIONS:
+            location = self.execution_policy.classifier
+            self.execution_policy.require('classifier', location)
+            if not location.startswith('cloud:'):
+                raise PolicyDenied('classifier', 'backend_location_mismatch')
+        else:
+            profile = next((profile for profile in self.profiles.values()
+                            if request_model(profile) == next_request['payload']['model']), None)
+            if profile is None:
+                raise PolicyDenied('generation', 'unknown_profile')
+            self._queue_location(profile)
+
+    def _queue_location(self, profile):
+        if self.execution_policy is None:
+            return
+        location = profile.get('execution_location')
+        self.execution_policy.require('generation', location)
+        if profile.get('backend') == 'local':
+            if self.local_backend is None or not self.local_backend.matches_profile(profile):
+                raise PolicyDenied('generation', 'backend_location_mismatch')
+        elif not location.startswith('cloud:'):
+            raise PolicyDenied('generation', 'backend_location_mismatch')
+
+    def queue_initial(self, run_id, task, *, mode, tools, candidate_window=None):
+        profile = self.profiles[INITIAL[mode]]
+        prefix = 'run-' + run_id
+        messages = [{'role': 'system', 'content': self.system}, {'role': 'user', 'content': task['prompt']}]
+        return {'call_id': prefix + '-a0-t0', 'payload': self.generation_payload(messages, profile, prefix, tools),
+                'local': profile.get('backend') == 'local'}
+
     def _attempt(self, env, messages, tier, prefix, index, actions, directory):
         profile = self.profiles[tier]
         if self.execution_policy:
@@ -271,17 +326,8 @@ class Core:
                 raise PolicyDenied('generation', 'backend_location_mismatch')
         calls, final, stop = [], '', 'turn_limit'
         for turn in range(self.limits.max_turns):
-            if len(_encoded(messages)) > self.limits.max_context_bytes:
-                raise ValueError("Public conversation exceeds context byte limit")
             tools = env.tools_schema()
-            payload = {"model": request_model(profile), "messages": messages,
-                       "max_tokens": self.limits.max_tokens, **reasoning_fields(profile),
-                       "session_id": prefix}
-            if profile.get('backend') != 'local':
-                payload['provider'] = {"only": [profile['provider']], "allow_fallbacks": False,
-                                       "require_parameters": True}
-            if tools:
-                payload.update(tools=tools, tool_choice='auto')
+            payload = self.generation_payload(messages, profile, prefix, tools)
             cid = f'{prefix}-a{index}-t{turn}'
             if profile.get('backend') == 'local':
                 record = self.local_backend.call(cid, payload)

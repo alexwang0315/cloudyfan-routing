@@ -240,7 +240,73 @@ def _private_path(path, *, create=False):
     return path
 
 
-def _live_capacity(connection, now):
+def _window_source_live(connection, pending_target):
+    """Optional SQL protocol; missing/changed original obligations fail closed."""
+    if not connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='capacity_window_policies'").fetchone():
+        return False
+    try:
+        required = {}
+        for version, payload in connection.execute('SELECT version,payload FROM capacity_window_policies'):
+            policy = json.loads(payload)
+            sources = policy.get('controlled_source_ids', [])
+            if policy.get('controlled_sources') and not sources:
+                return True
+            if not isinstance(sources, list) or len(sources) > 128:
+                return True
+            for row in sources:
+                if (not isinstance(row, dict) or set(row) != {'id', 'physical', 'window_version',
+                        'configuration_version', 'configuration_sha256', 'source_id'}
+                        or row['window_version'] != version or policy.get('configuration_sha256') != row['configuration_sha256']
+                        or row['id'] in required):
+                    return True
+                required[row['id']] = row
+        exists = connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='capacity_window_source_obligations'").fetchone()
+        if not exists:
+            return bool(required)
+        rows = connection.execute('SELECT id,physical,window_version,configuration_version,status,payload FROM capacity_window_source_obligations').fetchall()
+        if {row[0] for row in rows} != set(required):
+            return True
+        pending = []
+        for identifier, physical, window_version, configuration_version, status, payload in rows:
+            expected = required[identifier]
+            if (json.loads(payload) != expected or physical != expected['physical']
+                    or window_version != expected['window_version'] or configuration_version != expected['configuration_version']):
+                return True
+            config = connection.execute('SELECT digest FROM capacity_configurations WHERE version=?', (configuration_version,)).fetchone()
+            if config is None or config[0] != expected['configuration_sha256']:
+                return True
+            if status == 'pending':
+                pending.append(expected)
+            elif status == 'imported':
+                saved = connection.execute('SELECT physical,payload FROM capacity_window_observations WHERE id=?', (identifier,)).fetchone()
+                if saved is None or saved[0] != physical:
+                    return True
+                observation = json.loads(saved[1])
+                if any(observation.get(key) != expected[key] for key in (
+                        'id', 'physical', 'configuration_version', 'configuration_sha256', 'source_id')) or observation.get('version') != window_version:
+                    return True
+            else:
+                return True
+        if not pending:
+            return False
+        # Only first activation of the exact policy can establish enforcement.
+        # It does not waive ordinary live adoptions/allocations/windows below.
+        return pending_target is None or any(
+            row['window_version'] != pending_target['window_version']
+            or row['configuration_version'] != pending_target['configuration_version']
+            or row['configuration_sha256'] != pending_target['configuration_sha256']
+            or row['physical'] not in pending_target['physical'] for row in pending)
+    except (ValueError, KeyError, TypeError, sqlite3.Error):
+        return True
+
+
+def _live_capacity(connection, now, *, pending_target=None):
+    if _window_source_live(connection, pending_target):
+        return True
+    if connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='capacity_window_observations'").fetchone():
+        if connection.execute("SELECT 1 FROM capacity_window_observations WHERE status='unknown' "
+                              "OR (status='wait' AND not_before>?) LIMIT 1", (now,)).fetchone():
+            return True
     if not connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='capacity_adoptions'").fetchone():
         return False
     if connection.execute("SELECT 1 FROM capacity_adoptions WHERE terminal=0 LIMIT 1").fetchone():

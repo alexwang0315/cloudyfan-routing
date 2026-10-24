@@ -23,7 +23,7 @@ SECURITY_HEADERS = [("X-Content-Type-Options", "nosniff"), ("Referrer-Policy", "
 class App:
     def __init__(self, gateway, *, admin_token, source=None, origin="http://127.0.0.1:8766",
                  identity_store=None, billing_source=None, ollama_models=None, simulation=None,
-                 candidate_observer=None):
+                 candidate_observer=None, task_observer=None):
         if len(admin_token) < 32:
             raise ValueError("Strong operator token required")
         self.gateway, self.store, self.admin_token = gateway, gateway.store, admin_token
@@ -37,6 +37,7 @@ class App:
             raise ValueError("Controlled identity registry required")
         self.identity_store = identity_store
         self.simulation = simulation
+        self.task_observer = task_observer
         if candidate_observer is not None and not isinstance(candidate_observer, CandidateObserver):
             raise ValueError("Controlled candidate observer required")
         self.candidate_observer = candidate_observer or CandidateObserver(self.store, gateway.service, gateway.registry)
@@ -183,6 +184,9 @@ class App:
             return self.gateway.billing.read_account()
         if method == "GET" and path == "/monitor/snapshot":
             view = self.gateway.snapshot()
+            from .history_observation import task_observation
+            for task in view["tasks"]:
+                task["operator_observation"] = task_observation(self.task_observer, task)
             view["source_refresh_available"] = self.source is not None
             if self.simulation is not None:
                 view["simulation"] = self.simulation.descriptor()

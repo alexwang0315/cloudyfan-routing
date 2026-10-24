@@ -207,7 +207,13 @@ class App:
         if method == "POST" and path == "/monitor/capacity/refresh":
             self._fields(self._body(environ), set())
             if self.capacity_observer is not None:
-                return self.capacity_observer.refresh()
+                refreshed = self.capacity_observer.refresh()
+                if self.capacity_controller is not None:
+                    dispatch = self.capacity_controller.snapshot()
+                    refreshed['execution_enabled'] = dispatch['active_version'] is not None
+                    refreshed['snapshot']['dispatch'] = dispatch
+                    refreshed['snapshot']['execution_enabled'] = refreshed['execution_enabled']
+                return refreshed
             raise MonitorError("capacity_source_refresh_not_configured", 409)
         if method == "POST" and path == "/monitor/simulation/start":
             if self.gateway.demo is not True or self.simulation is None:

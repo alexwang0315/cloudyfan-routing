@@ -654,3 +654,18 @@ def test_optin_rejects_retrying_http_client_subclass_before_any_physical_post(lo
     response = client.post("/v1/tasks", json={**TASK, "run_id": "retrying-subclass"})
     assert response.status_code == 429 and response.json()["error"]["code"] == "capacity_transport_protocol_unsupported"
     assert bundle.upstream.calls == [] and response.json()["costs"]["unknown_events"] == 0
+
+
+def test_explicit_source_refresh_preserves_active_policy_projection(local_service):
+    bundle = local_service.bundle
+    attach_admission(bundle, local_service.clock, rpm=1)
+    local_service.server.set_app(bundle.app)
+    operator = local_service.client("operator")
+    assert operator.post("/monitor/capacity/activate", json={"revision": 0, "version": "synthetic-admission-v1"}).status_code == 200
+    expected = operator.get("/monitor/capacity").json()["dispatch"]
+    refreshed = operator.post("/monitor/capacity/refresh", json={})
+    assert refreshed.status_code == 200
+    assert refreshed.json()["execution_enabled"] is True
+    assert refreshed.json()["snapshot"]["dispatch"] == expected
+    assert refreshed.json()["snapshot"]["execution_enabled"] is True
+    assert refreshed.json()["request_count"] == 0 and bundle.upstream.calls == []

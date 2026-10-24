@@ -121,7 +121,7 @@ class OllamaApp:
                                  else 'public_validation_unavailable')
                         body = {'error': error, 'cloudyfan': metadata}
                 else:
-                    code = {'policy_denied': 403, 'accounting_interrupted': 409,
+                    code = {'policy_denied': 403, 'capacity_denied': 429, 'accounting_interrupted': 409,
                             'engineering_interrupted': 503}.get(state['status'], 409)
                     body = {'error': state.get('error', {}).get('code', 'task_not_complete'), 'cloudyfan': metadata}
             else:

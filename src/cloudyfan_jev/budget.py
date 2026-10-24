@@ -182,6 +182,23 @@ class BudgetStore:
                        (event_id, run_id, kind, str(bound), fingerprint))
             return True
 
+    def verify_event_before_post(self, run_id, event_id):
+        """Recheck original spending authority, excluding this one pending event."""
+        with self._transaction() as db:
+            auth = self._authorization(db)
+            event = db.execute('SELECT * FROM events WHERE id=?', (event_id,)).fetchone()
+            reservation = db.execute('SELECT * FROM reservations WHERE run=?', (run_id,)).fetchone()
+            if (event is None or event['run'] != run_id or event['cost'] is not None
+                    or reservation is None or reservation['status'] != 'active'
+                    or db.execute('SELECT 1 FROM violations LIMIT 1').fetchone()
+                    or self._unbounded_history(db)
+                    or db.execute('SELECT 1 FROM events WHERE cost IS NULL AND id!=? LIMIT 1', (event_id,)).fetchone()):
+                raise BudgetError('Original spending authority no longer permits dispatch')
+            reserved = _exact(money(row[0]) for row in db.execute('SELECT amount FROM reservations WHERE status="active"'))
+            if _exact((reserved, self._settled_cost(db), self._provisional_hold(db))) > money(auth['total']):
+                raise BudgetError('Shared exposure exceeds original authorization')
+        return True
+
     def record_event(self, event_id, *, cost_usd, verified=False, receipt_id=None):
         cost = None if cost_usd is None else str(money(cost_usd))
         breached = False
@@ -299,9 +316,18 @@ def _fingerprint(value):
 class _BudgetClient:
     def __init__(self, wrapped, owner, run_id):
         self.wrapped, self.owner, self.run_id = wrapped, owner, run_id
+        self._dispatch_guard = None
 
     def __getattr__(self, name):
         return getattr(self.wrapped, name)
+
+    @contextmanager
+    def guard_dispatch(self, guard):
+        previous, self._dispatch_guard = self._dispatch_guard, guard
+        try:
+            yield
+        finally:
+            self._dispatch_guard = previous
 
     def _event_id(self, cid):
         return 'model:' + _fingerprint(str(self.wrapped.root.resolve())) + ':' + cid
@@ -366,6 +392,8 @@ class _BudgetDispatch:
         self.client, self.cid, self.args = client, cid, args
         self.owner, self.endpoint, self.payload = client.owner, endpoint, payload
         self.capacity, self.denial = None, None
+        self.execution_guard = client._dispatch_guard
+        self.payload_fingerprint = _fingerprint(payload)
         self.bound = self.owner.model_bounds.get(payload.get('model'))
 
     def prepare(self, cid, request):
@@ -377,6 +405,9 @@ class _BudgetDispatch:
                 raise BudgetError('Enforceable dispatch upper bound unconfirmed')
         else:
             self.owner._verify('model', self.payload.get('model'), self.payload, self.bound)
+        if _fingerprint(self.payload) != self.payload_fingerprint:
+            from .capacity_dispatch import CapacityDenied
+            raise CapacityDenied('capacity_request_changed')
         self.capacity = self.owner.capacity_controller.dispatch(self.owner._capacity_context,
             self.client.wrapped, self.endpoint, self.payload, self.owner._capacity_descriptor)
         evidence = self.capacity.prepare(cid, request)
@@ -389,16 +420,39 @@ class _BudgetDispatch:
         return evidence
 
     def before_post(self):
-        verifier = getattr(self.owner.verify_bound, 'verify_post', None)
-        if callable(verifier) and verifier(self.client.wrapped, self.endpoint, self.payload, self.bound) is not True:
-            return False
+        from .capacity_dispatch import CapacityDenied
+        try:
+            verifier = getattr(self.owner.verify_bound, 'verify_post', None)
+            if callable(verifier) and verifier(self.client.wrapped, self.endpoint, self.payload, self.bound) is not True:
+                raise BudgetError('Original enforced bound no longer permits dispatch')
+            self.owner.store.verify_event_before_post(self.client.run_id, self.client._event_id(self.cid))
+            if _fingerprint(self.payload) != self.payload_fingerprint:
+                raise BudgetError('Original prepared request changed')
+        except Exception:
+            raise CapacityDenied('capacity_original_budget_denied') from None
+        if self.execution_guard is not None:
+            try:
+                if self.execution_guard() is not True:
+                    raise ValueError('Original guard denied')
+            except CapacityDenied:
+                raise
+            except Exception:
+                raise CapacityDenied('capacity_original_gate_denied') from None
         return self.capacity.before_post()
 
     def release(self):
         self.capacity.release()
 
     def complete(self, record):
-        self.denial = self.capacity.complete(record)
+        from .capacity_dispatch import CapacityDenied
+        try:
+            self.denial = self.capacity.complete(record)
+        except CapacityDenied as error:
+            # The original durable response can still settle its real fee.
+            # Capacity remains held if its independent state cannot complete.
+            self.denial = error.code
+        except Exception:
+            self.denial = 'capacity_state_unavailable'
 
 
 class _BudgetEnvironment:
@@ -419,7 +473,7 @@ class _BudgetEnvironment:
                 raise BudgetError('Tool lacks explicit cost and execution policy')
         return tools
 
-    def prepare_call(self, action_id, name, arguments):
+    def prepare_capacity_call(self, action_id, name, arguments, *, execution_guard=None):
         from .capacity_dispatch import CapacityDenied, CapacityToolRequest, CapacityToolTransport
         if self.owner.capacity_controller is None or self.owner._capacity_context['policy_version'] is None:
             return
@@ -440,14 +494,19 @@ class _BudgetEnvironment:
             request.transport, request.transport.config['endpoint'], {'model': 'tool:' + name},
             self.owner._capacity_descriptor)
         dispatch.prepare(action_id, wire)
-        self.prepared = (name, _fingerprint(arguments), action_id, request.transport, wire, dispatch)
+        self.prepared = (name, _fingerprint(arguments), action_id, request.transport, wire, dispatch, execution_guard)
+
+    def abort_capacity_call(self):
+        if self.prepared is not None:
+            self.prepared[5].release()
+            self.prepared = None
 
     def _controlled_tool(self, name, arguments, policy, event_id):
         from .capacity_dispatch import CapacityDenied
         from .client import not_dispatched
         if self.prepared is None or self.prepared[:2] != (name, _fingerprint(arguments)):
             raise CapacityDenied('capacity_tool_prepare_required')
-        _, _, action_id, transport, wire, dispatch = self.prepared
+        _, _, action_id, transport, wire, dispatch, execution_guard = self.prepared
         self.prepared = None
         try:
             fresh = self.owner.store.begin_event(self.run_id, event_id, 'tool', money(policy.bound.usd),
@@ -457,7 +516,22 @@ class _BudgetEnvironment:
         except BaseException:
             dispatch.release()
             raise
-        record = transport.post(action_id, wire, dispatch.before_post)
+        def final_guard():
+            try:
+                self.owner._verify('tool', name, arguments, policy.bound)
+                self.owner.store.verify_event_before_post(self.run_id, event_id)
+            except Exception:
+                raise CapacityDenied('capacity_original_budget_denied') from None
+            if execution_guard is not None:
+                try:
+                    if execution_guard() is not True:
+                        raise ValueError('Original tool guard denied')
+                except CapacityDenied:
+                    raise
+                except Exception:
+                    raise CapacityDenied('capacity_original_gate_denied') from None
+            return dispatch.before_post()
+        record = transport.post(action_id, wire, final_guard)
         if not_dispatched(record):
             self.owner.store.record_event(event_id, cost_usd='0', verified=True,
                 receipt_id='not-dispatched:' + _fingerprint(str(transport.root) + ':' + action_id))

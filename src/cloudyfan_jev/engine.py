@@ -334,10 +334,18 @@ class Core:
                 if isinstance(arguments, dict):
                     intent = directory / f'action-a{index}-t{turn}-{j}-intent.json'
                     prior_intent = intent.exists() or checkpoint.exists()
-                    prepare = getattr(env, 'prepare_call', None)
+                    prepare = getattr(env, 'prepare_capacity_call', None)
                     if not prior_intent and callable(prepare):
-                        prepare(f'{cid}-tool-{j}', name, arguments)
-                    _save(intent, action)
+                        gate = getattr(self, '_capacity_post_guard', None)
+                        prepare(f'{cid}-tool-{j}', name, arguments,
+                                execution_guard=(lambda: gate(True)) if callable(gate) else None)
+                    try:
+                        _save(intent, action)
+                    except BaseException:
+                        abort = getattr(env, 'abort_capacity_call', None)
+                        if not prior_intent and callable(abort):
+                            abort()
+                        raise
                     if prior_intent and name not in getattr(env, 'replayable_tools', ()):
                         raise ToolReplayBlocked('Tool replay blocked: external or undeclared effect')
                     try:

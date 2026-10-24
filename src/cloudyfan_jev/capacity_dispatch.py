@@ -38,6 +38,20 @@ def _transport_identity(transport):
             tuple((str(pattern.pattern), id(value)) for pattern, value in http._mounts.items()))
 
 
+def _group_usage(allocations, group, now):
+    used = {'rpm': 0, 'tpm': 0, 'concurrency': 0}
+    for item in allocations:
+        if item['state'] == 'released':
+            continue
+        held = item['state'] in {'prepared', 'sent', 'uncertain'}
+        for older in item['groups']:
+            if older['physical'] == group['physical']:
+                used['rpm'] += older['caps']['rpm'] is not None and (held or now < older['rpm_until'])
+                used['tpm'] += older['tokens'] if held or now < older['tpm_until'] else 0
+                used['concurrency'] += held
+    return used
+
+
 class CapacityDenied(RuntimeError):
     control_plane_error = True
 
@@ -48,17 +62,23 @@ class CapacityDenied(RuntimeError):
         super().__init__(code)
 
 
-def prepare_request(http, endpoint, payload, *, headers=None):
-    """Supported one-send httpx protocol. Custom hooks/auth/retries fail closed."""
+def _require_http_protocol(http):
     import httpx
-    if (not isinstance(http, httpx.Client) or http.auth is not None
-            or any(http.event_hooks.values()) or http.follow_redirects
+    methods = ('send', 'build_request', '_send_handling_auth', '_send_handling_redirects',
+               '_send_single_request', '_build_request_auth', '_build_redirect_request')
+    if (type(http) is not httpx.Client or any(name in vars(http) for name in methods)
+            or http.auth is not None or any(http.event_hooks.values()) or http.follow_redirects
             or any(transport is not None for transport in http._mounts.values())):
         raise CapacityDenied('capacity_transport_protocol_unsupported')
     transport = http._transport
     if type(transport) is not httpx.MockTransport and not (
             type(transport) is httpx.HTTPTransport and getattr(transport._pool, '_retries', None) == 0):
         raise CapacityDenied('capacity_transport_protocol_unsupported')
+
+
+def prepare_request(http, endpoint, payload, *, headers=None):
+    """Supported one-send httpx protocol. Custom hooks/auth/retries fail closed."""
+    _require_http_protocol(http)
     request = http.build_request('POST', endpoint, json=payload, headers=headers, timeout=180)
     if request.method != 'POST' or str(request.url) != endpoint:
         raise CapacityDenied('capacity_transport_protocol_unsupported')
@@ -249,6 +269,11 @@ class CapacityController:
                 raise ValueError('Invalid registered dispatch route')
             if descriptor in descriptors:
                 raise ValueError('Duplicate capacity route')
+            if (not isinstance(route.accepted_models, (tuple, list)) or len(route.accepted_models) > 32
+                    or any(not isinstance(model, str) or not model or len(model) > 256 for model in route.accepted_models)
+                    or route.provider_name is not None and (not isinstance(route.provider_name, str)
+                        or not route.provider_name or len(route.provider_name) > 256)):
+                raise ValueError('Explicit actual model and provider identities required')
             if route.token_adapter is not None:
                 _identity(descriptor['token_adapter_version'])
             descriptors.append(descriptor)
@@ -389,8 +414,9 @@ class CapacityController:
             for group in item['groups']:
                 out = groups.setdefault(group['physical'], {'group': group['group'], 'scope': group['scope'], 'rpm_used': 0, 'tpm_reserved': 0, 'concurrency_used': 0})
                 if item['state'] != 'released':
-                    out['rpm_used'] += now < group['rpm_until']
-                    out['tpm_reserved'] += group['tokens'] if now < group['tpm_until'] else 0
+                    held = item['state'] in {'prepared', 'sent', 'uncertain'}
+                    out['rpm_used'] += group['caps']['rpm'] is not None and (held or now < group['rpm_until'])
+                    out['tpm_reserved'] += group['tokens'] if held or now < group['tpm_until'] else 0
                     out['concurrency_used'] += item['state'] in {'prepared', 'sent', 'uncertain'}
         return {'schema_version': 'capacity-dispatch-v1', 'revision': revision, 'active_version': version,
                 'protocol': SERIALIZER, 'registered_policies': [{'version': p['version'], 'configuration_version': p['configuration_version'], 'max_seconds': p['max_seconds']} for p in policies],
@@ -434,16 +460,16 @@ class _CapacityDispatch:
                 local = next(d for d in group['local_limits'] if d['dimension'] == dimension)
                 if local['status'] not in {'known', 'not_applicable'}:
                     raise CapacityDenied('capacity_local_limit_unavailable')
-                evidence.append([group_id, 'local_limits', dimension, _hash(local)])
+                evidence.append([group_id, 'local_limits', dimension, _hash(local), local['valid_until']])
                 effective = [local]
                 if dimension in route.require_supplier:
                     supplier = next(d for d in group['supplier_limits'] if d['dimension'] == dimension)
                     if supplier['status'] not in {'known', 'not_applicable'}:
                         raise CapacityDenied('capacity_supplier_evidence_unavailable')
-                    evidence.append([group_id, 'supplier_limits', dimension, _hash(supplier)])
+                    evidence.append([group_id, 'supplier_limits', dimension, _hash(supplier), supplier['valid_until']])
                     effective.append(supplier)
                 known = [d for d in effective if d['status'] == 'known']
-                # Different supplier/local windows need a separate explicit group.
+                # Different windows for one physical scope are unsupported.
                 if len({d['window_seconds'] for d in known}) > 1:
                     raise CapacityDenied('capacity_window_mismatch')
                 limits[dimension] = min(known, key=lambda d: d['value']) if known else None
@@ -455,13 +481,20 @@ class _CapacityDispatch:
                     proof = adapter(request.content, {**scope, 'scope_sha256': scope_hash, 'wire_sha256': wire})
                 except Exception:
                     raise CapacityDenied('capacity_token_bound_unavailable') from None
-                if (type(proof) is not TokenUpperBound or type(proof.tokens) is not int or not 0 <= proof.tokens <= 10**12
-                        or proof.wire_sha256 != wire or proof.scope_sha256 != scope_hash
-                        or proof.version != getattr(adapter, 'version', None) or now >= _time(proof.valid_until)):
+                try:
+                    valid = (type(proof) is TokenUpperBound and type(proof.tokens) is int and 0 <= proof.tokens <= 10**12
+                        and proof.wire_sha256 == wire and proof.scope_sha256 == scope_hash
+                        and proof.version == getattr(adapter, 'version', None) and now < _time(proof.valid_until))
+                    if valid:
+                        _identity(proof.evidence_ref)
+                except (ValueError, TypeError, OverflowError):
+                    valid = False
+                if not valid:
                     raise CapacityDenied('capacity_token_bound_invalid')
-                _identity(proof.evidence_ref)
                 tokens, token_until = proof.tokens, proof.valid_until
             groups.append({'group': group_id, 'scope': group['scope'], 'physical': _hash(group['scope']),
+                'rpm_window': limits['rpm']['window_seconds'] if limits['rpm'] else None,
+                'tpm_window': limits['tpm']['window_seconds'] if limits['tpm'] else None,
                 'rpm_until': now + limits['rpm']['window_seconds'] if limits['rpm'] else now,
                 'tpm_until': now + limits['tpm']['window_seconds'] if limits['tpm'] else now,
                 'tokens': tokens if limits['tpm'] else 0,
@@ -480,15 +513,7 @@ class _CapacityDispatch:
             if len(prior) >= controller.max_live_allocations:
                 raise CapacityDenied('capacity_live_state_limit_exceeded')
             for group in groups:
-                used = {'rpm': 0, 'tpm': 0, 'concurrency': 0}
-                for item in prior:
-                    if item['state'] == 'released':
-                        continue
-                    for older in item['groups']:
-                        if older['physical'] == group['physical']:
-                            used['rpm'] += now < older['rpm_until']
-                            used['tpm'] += older['tokens'] if now < older['tpm_until'] else 0
-                            used['concurrency'] += item['state'] in {'prepared', 'sent', 'uncertain'}
+                used = _group_usage(prior, group, now)
                 for dimension in used:
                     cap = group['caps'][dimension]
                     amount = group['tokens'] if dimension == 'tpm' else 1
@@ -498,7 +523,7 @@ class _CapacityDispatch:
             allocation = {'id': identifier, 'run': adoption['run'], 'policy_version': adoption['policy_version'],
                 'wire_sha256': wire, 'scope_sha256': scope_hash, 'serializer': SERIALIZER,
                 'state': 'prepared', 'prepared_at': now, 'groups': groups, 'evidence': evidence,
-                'token_valid_until': token_until}
+                'token_valid_until': token_until, 'evidence_valid_until': min(item[4] for item in evidence)}
             horizon = max((max(g['rpm_until'], g['tpm_until']) for g in groups), default=now)
             db.execute('INSERT INTO capacity_allocations VALUES(?,?,?,?)', (identifier, _json(allocation), 'prepared', horizon))
             controller._event(db, {'kind': 'prepared', 'allocation': identifier, 'version': adoption['policy_version'], 'at': now})
@@ -525,7 +550,31 @@ class _CapacityDispatch:
                 raise CapacityDenied('capacity_sent_cannot_release', 409)
             if state == 'sent' and value['state'] != 'prepared':
                 raise CapacityDenied('capacity_dispatch_already_sent', 409)
+            if state == 'sent':
+                if value['token_valid_until'] is not None and now >= value['token_valid_until']:
+                    raise CapacityDenied('capacity_token_bound_expired')
+                if value.get('evidence_valid_until') is not None and now >= value['evidence_valid_until']:
+                    raise CapacityDenied('capacity_evidence_changed_or_expired')
+                prior = [json.loads(row[0]) for row in db.execute(
+                    "SELECT payload FROM capacity_allocations WHERE id!=? AND (state IN ('prepared','sent','uncertain') OR (state='complete' AND horizon>?)) LIMIT ?",
+                    (self.id, now, self.controller.max_live_allocations + 1))]
+                if len(prior) >= self.controller.max_live_allocations:
+                    raise CapacityDenied('capacity_live_state_limit_exceeded')
+                for group in value['groups']:
+                    used = _group_usage(prior, group, now)
+                    for dimension, amount in [('rpm', 1), ('tpm', group['tokens']), ('concurrency', 1)]:
+                        if group['caps'][dimension] is not None and used[dimension] + amount > group['caps'][dimension]:
+                            raise CapacityDenied('capacity_' + dimension + '_exhausted')
+                value['dispatch_intent_at'] = now
             value['state'] = state
+            if state == 'complete':
+                # Completion is a trustworthy upper bound on physical send time.
+                # A marker, scheduling gap or pool wait is not wire-time proof.
+                value['completed_at'] = now
+                for group in value['groups']:
+                    for dimension in ('rpm', 'tpm'):
+                        window = group.get(dimension + '_window', group[dimension + '_until'] - value['prepared_at'])
+                        group[dimension + '_until'] = now + window if group['caps'][dimension] is not None else now
             if tokens is not None:
                 for group in value['groups']:
                     if group['caps']['tpm'] is not None:
@@ -536,11 +585,13 @@ class _CapacityDispatch:
                     (value['policy_version'], 'capacity_token_bound_violated'))
                 self.controller._event(db, {'kind': 'bound_violation', 'allocation': self.id,
                     'version': value['policy_version'], 'reason_code': 'capacity_token_bound_violated', 'at': now})
-            db.execute('UPDATE capacity_allocations SET payload=?,state=? WHERE id=?', (_json(value), state, self.id))
+            horizon = max((max(group['rpm_until'], group['tpm_until']) for group in value['groups']), default=value['prepared_at'])
+            db.execute('UPDATE capacity_allocations SET payload=?,state=?,horizon=? WHERE id=?', (_json(value), state, horizon, self.id))
             self.controller._event(db, {'kind': state, 'allocation': self.id, 'at': now})
 
     def before_post(self):
         self.controller.verify(self.adoption)
+        _require_http_protocol(self.route.transport.http)
         if _transport_identity(self.route.transport) != self._credential_pin:
             raise CapacityDenied('capacity_transport_binding_changed')
         with self.controller.store.connection() as db:
@@ -549,7 +600,8 @@ class _CapacityDispatch:
         if allocation['token_valid_until'] is not None and now >= allocation['token_valid_until']:
             raise CapacityDenied('capacity_token_bound_expired')
         snapshot = self.controller.store.snapshot(self.adoption['configuration_version'])
-        for group_id, side, dimension, digest in allocation['evidence']:
+        for saved in allocation['evidence']:
+            group_id, side, dimension, digest = saved[:4]
             group = next(group for group in snapshot['groups'] if group['id'] == group_id)
             item = next(item for item in group[side] if item['dimension'] == dimension)
             if _hash(item) != digest or item['status'] not in {'known', 'not_applicable'}:

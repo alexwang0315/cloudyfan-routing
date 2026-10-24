@@ -62,6 +62,11 @@ class QueueScheduler:
             db.execute('CREATE TABLE IF NOT EXISTS rejections (principal TEXT, run_id TEXT, reason TEXT, at REAL)')
             db.execute('CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, principal TEXT, run_id TEXT, request TEXT, '
                        'created REAL, deadline REAL, state TEXT, reason TEXT, started REAL, finished REAL, cancel_requested INTEGER DEFAULT 0)')
+            if capacity_protocol is not None:
+                columns = {row[1] for row in db.execute('PRAGMA table_info(jobs)')}
+                for name, declaration in (('claim', 'TEXT'), ('epoch', 'INTEGER DEFAULT 0'), ('detail', 'TEXT')):
+                    if name not in columns:
+                        db.execute('ALTER TABLE jobs ADD COLUMN ' + name + ' ' + declaration)
         os.chmod(self.path, 0o600)
         if capacity_protocol is not None:
             service.queue_scheduler = self
@@ -156,6 +161,13 @@ class QueueScheduler:
             raise ServiceError('unregistered_contract')
         self.capacity_protocol.verify_contract(payload['contract_id'], contract)
         encoded = _encode(payload).decode()
+        with self._readonly() as db:
+            prior = db.execute('SELECT * FROM jobs WHERE id=?', (identity,)).fetchone()
+            if prior is not None:
+                if prior['request'] != encoded:
+                    raise ServiceError('frozen_task_changed', 409)
+                if prior['state'] != 'accepting':
+                    return self.status(principal, payload['run_id'])
         rejection = None
         # This committed accepting row is a recovery journal across the queue,
         # original TaskService job and capacity adoption stores. No cross-store
@@ -311,7 +323,9 @@ class QueueScheduler:
                 'limits': asdict(self.limits), 'accepted_at': row['created'], 'deadline': row['deadline'],
                 'waiting_seconds': max(0, (row['started'] or min(now, row['deadline'])) - row['created']),
                 'effective_expiry_only': row['state'] == 'expired' and row['finished'] == row['deadline']}
-            if row['state'] in {'queued', 'accepting', 'running', 'interrupted_pending'}:
+            detail = json.loads(row.get('detail') or '{}')
+            view['capacity_reason'] = detail.get('code')
+            if row['state'] in {'queued', 'accepting', 'claiming', 'running', 'interrupted_pending'}:
                 view['costs'] = {**task['costs'], 'complete_api_usd': None}
         return view
 
@@ -325,6 +339,7 @@ class QueueScheduler:
         for row in rows:
             try:
                 view = self._status(row, now)
+                view['physical_groups'] = json.loads(row.get('detail') or '{}').get('groups', [])
                 jobs.append({'client': row['principal'], **view})
             except ServiceError as error:
                 jobs.append({'client': row['principal'], 'run_id': row['run_id'],
@@ -344,7 +359,7 @@ class QueueScheduler:
         if workers_stopped is not True:
             raise ValueError('Confirm all prior workers stopped before recovery marking')
         with self._transaction() as db:
-            changed = db.execute('UPDATE jobs SET state="interrupted_pending",reason="worker_interrupted" WHERE state="running"')
+            changed = db.execute('UPDATE jobs SET state="interrupted_pending",reason="worker_interrupted" WHERE state IN ("running","claiming")')
             return changed.rowcount
 
     def cancel(self, principal, run_id):
@@ -354,13 +369,13 @@ class QueueScheduler:
             row = self._job(db, principal, run_id)
             if row['state'] in {'queued', 'accepting'}:
                 db.execute('UPDATE jobs SET state="cancelled",reason="cancelled_before_dispatch",finished=?,cancel_requested=1 WHERE id=?', (self._now(db), row['id']))
-            elif row['state'] in {'running', 'interrupted_pending'}:
+            elif row['state'] in {'claiming', 'running', 'interrupted_pending'}:
                 db.execute('UPDATE jobs SET cancel_requested=1 WHERE id=?', (row['id'],))
         return self.status(principal, run_id)
 
     def dispatch_next(self):
         if self.capacity_protocol is not None:
-            raise ServiceError('queue_worker_protocol_unavailable', 503)
+            return self._capacity_dispatch_next()
         with self._transaction() as db:
             if db.execute('SELECT 1 FROM maintenance WHERE active=1').fetchone():
                 return None
@@ -379,6 +394,126 @@ class QueueScheduler:
         else:
             with self._transaction() as db:
                 db.execute('UPDATE jobs SET state="completed",finished=? WHERE id=?', (self._now(db), row['id']))
+        return self.status(row['principal'], row['run_id'])
+
+    def verify_claim(self, identity, claim):
+        from .capacity_dispatch import CapacityDenied
+        with self._readonly() as db:
+            row = db.execute('SELECT * FROM jobs WHERE id=?', (identity,)).fetchone()
+            now = self._observed_now(db)
+        if row is None or row['claim'] != claim or row['state'] != 'running':
+            raise CapacityDenied('capacity_queue_claim_invalid', 403)
+        if row['cancel_requested']:
+            raise CapacityDenied('capacity_queue_cancel_requested')
+        if now >= row['deadline']:
+            raise CapacityDenied('capacity_queue_deadline_exceeded')
+        self.service.authorize(row['principal'])
+
+    def _capacity_dispatch_next(self):
+        from .capacity_dispatch import CapacityDenied
+        from .capacity_queue import QueueWaiting
+        from .budget import BudgetError
+        selected = None
+        with self._transaction() as db:
+            if db.execute('SELECT 1 FROM maintenance WHERE active=1').fetchone():
+                return None
+            self._expire(db)
+            active = db.execute('SELECT COUNT(*) FROM jobs WHERE state IN ("claiming","running","interrupted_pending")').fetchone()[0]
+            if active >= self.limits.concurrency:
+                db.execute('UPDATE jobs SET reason="queue_waiting_slot" WHERE state="queued"')
+                return None
+            blocked = set()
+            # The queue itself is bounded; old terminal history is not scanned.
+            for value in db.execute('SELECT * FROM jobs WHERE state="queued" ORDER BY created,rowid').fetchall():
+                row = dict(value)
+                prepared = None
+                try:
+                    self.service.authorize(row['principal'])
+                    self.service.queue_task_status(row['principal'], row['run_id'])
+                    prepared = self.capacity_protocol.prepare_next(self.service, row)
+                    groups = prepared['groups']
+                    detail = {'groups': sorted(groups)}
+                    if groups & blocked:
+                        db.execute('UPDATE jobs SET reason="queue_waiting_turn",detail=? WHERE id=?', (_encode(detail).decode(), row['id']))
+                        blocked.update(groups)
+                        continue
+                    prepared['dispatch'].prepare(prepared['request']['call_id'], prepared['wire'], reserve=False)
+                    runner = prepared['contract'].runner
+                    runner.store.queue_admission(row['id'], runner._admit(prepared['contract'].mode))
+                except (CapacityDenied, ServiceError, BudgetError, QueueWaiting) as error:
+                    code = getattr(error, 'code', 'capacity_original_budget_denied')
+                    groups = prepared['groups'] if prepared is not None else set()
+                    detail = {'groups': sorted(groups), 'code': code}
+                    terminal = (isinstance(error, ServiceError) and error.status in (401, 403, 404, 409, 410)
+                        or code in {'capacity_credential_inactive', 'capacity_deadline_exceeded',
+                                    'capacity_adoption_unavailable', 'capacity_queue_contract_changed'})
+                    if terminal:
+                        db.execute('UPDATE jobs SET state="rejected",reason="queue_original_authority_denied",detail=?,finished=? WHERE id=?',
+                            (_encode(detail).decode(), self._now(db), row['id']))
+                        self.service.capacity_controller.terminal(row['id'])
+                    else:
+                        reason = ('queue_waiting_budget' if isinstance(error, BudgetError) else
+                                  'queue_waiting_window' if 'window' in code else 'queue_waiting_capacity')
+                        db.execute('UPDATE jobs SET reason=?,detail=? WHERE id=?', (reason, _encode(detail).decode(), row['id']))
+                        blocked.update(groups)
+                    continue
+                except Exception:
+                    db.execute('UPDATE jobs SET reason="queue_preparation_unavailable" WHERE id=?', (row['id'],))
+                    # Unknown preparation must not let later overlapping work
+                    # guess its groups. Keep this bounded pass fail-closed.
+                    break
+                claim = uuid.uuid4().hex
+                self.capacity_protocol.save_boundary(self.service, row, prepared['request'])
+                db.execute('UPDATE jobs SET state="claiming",claim=?,epoch=epoch+1,reason="queue_claiming_capacity",detail=? WHERE id=? AND state="queued"',
+                    (claim, _encode(detail).decode(), row['id']))
+                selected = row, prepared, claim
+                break
+        if selected is None:
+            return None
+        row, prepared, claim = selected
+        dispatch = prepared['dispatch']
+        try:
+            evidence = dispatch.prepare(prepared['request']['call_id'], prepared['wire'])
+        except CapacityDenied as error:
+            with self._transaction() as db:
+                db.execute('UPDATE jobs SET state="queued",reason="queue_waiting_capacity",detail=? WHERE id=? AND claim=? AND state="claiming"',
+                    (_encode({'groups': sorted(prepared['groups']), 'code': error.code}).decode(), row['id'], claim))
+            return self.status(row['principal'], row['run_id'])
+        except BaseException:
+            # A failed/uncertain cross-store claim is not automatically freed.
+            with self._transaction() as db:
+                db.execute('UPDATE jobs SET state="interrupted_pending",reason="queue_claim_interrupted" WHERE id=? AND claim=?', (row['id'], claim))
+            raise
+        with self._transaction() as db:
+            current = db.execute('SELECT * FROM jobs WHERE id=?', (row['id'],)).fetchone()
+            now = self._now(db)
+            if current['state'] != 'claiming' or current['claim'] != claim:
+                dispatch.release()  # This process has never granted send access.
+                raise ServiceError('queue_claim_changed', 409)
+            if current['cancel_requested'] or now >= current['deadline']:
+                dispatch.release()
+                state, reason = ('cancelled', 'cancelled_before_dispatch') if current['cancel_requested'] else ('expired', 'queue_deadline_expired')
+                db.execute('UPDATE jobs SET state=?,reason=?,finished=? WHERE id=?', (state, reason, now, row['id']))
+                self.service.capacity_controller.terminal(row['id'])
+                return self._status(dict(db.execute('SELECT * FROM jobs WHERE id=?', (row['id'],)).fetchone()), now)
+            db.execute('UPDATE jobs SET state="running",started=COALESCE(started,?),reason=NULL WHERE id=?', (now, row['id']))
+        try:
+            with self.capacity_protocol.running(self, row, prepared, claim) as execution:
+                execution['evidence'] = evidence
+                state = self.service.execute(row['principal'], row['run_id'])
+            with self._transaction() as db:
+                waiting = state.get('status') == 'queued'
+                interrupted = state.get('status') in {'engineering_interrupted', 'accounting_interrupted'}
+                db.execute('UPDATE jobs SET state=?,reason=?,finished=? WHERE id=? AND claim=? AND state="running"',
+                    ('queued' if waiting else 'interrupted_pending' if interrupted else 'completed',
+                     'queue_waiting_worker' if waiting else state.get('error', {}).get('code'),
+                     None if waiting or interrupted else self._now(db), row['id'], claim))
+            if not execution['consumed']:
+                dispatch.release()  # Original gates refused before a paid intent.
+        except Exception as error:
+            reason = error.code if isinstance(error, ServiceError) else 'execution_interrupted'
+            with self._transaction() as db:
+                db.execute('UPDATE jobs SET state="interrupted_pending",reason=? WHERE id=? AND claim=?', (reason, row['id'], claim))
         return self.status(row['principal'], row['run_id'])
 
 

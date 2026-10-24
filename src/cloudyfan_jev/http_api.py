@@ -428,17 +428,22 @@ class TaskService:
                     except BudgetError:
                         state = {'run_id': run_id, 'status': 'accounting_interrupted', 'error': {'code': 'unknown_cost'}}
                         _write(directory / 'state.json', state)
-                        return self.status(principal, run_id)
+                        return self.queue_task_status(principal, run_id)
                     state = {'run_id': run_id, 'status': 'capacity_denied', 'error': {'code': error.code}}
                     self.capacity_controller.refused(internal, error.code)
                     self.capacity_controller.terminal(internal)
                     _write(directory / 'state.json', state)
-                    return self.status(principal, run_id)
+                    return self.queue_task_status(principal, run_id)
+                from .capacity_queue import QueueWaiting
+                if isinstance(error, QueueWaiting):
+                    state = {'run_id': run_id, 'status': 'queued'}
+                    _write(directory / 'state.json', state)
+                    return self.queue_task_status(principal, run_id)
                 unknown = contract.runner.store.report()['unknown_events']
                 state = {'run_id': run_id, 'status': 'accounting_interrupted' if unknown else 'engineering_interrupted',
                          'error': {'code': 'unknown_cost' if unknown else 'execution_interrupted'}}
             _write(directory / 'state.json', state)
-            return self.status(principal, run_id)
+            return self.queue_task_status(principal, run_id)
 
 
     def mark_queued(self, principal, run_id):

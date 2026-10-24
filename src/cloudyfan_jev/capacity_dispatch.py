@@ -626,7 +626,7 @@ class _CapacityDispatch:
                     (self.adoption['policy_version'], 'capacity_window_observation_unavailable'))
             raise CapacityDenied('capacity_window_observation_unavailable') from None
 
-    def prepare(self, call_id, request):
+    def prepare(self, call_id, request, *, reserve=True):
         controller, adoption, route = self.controller, self.adoption, self.route
         controller.verify(adoption)
         now = _time(controller.store.clock())
@@ -687,9 +687,10 @@ class _CapacityDispatch:
                 'caps': {key: item['value'] if item else None for key, item in limits.items()}})
         identifier = _hash([adoption['run'], call_id, route.descriptor()])
         window_scope, physical_groups = controller.window_scope(adoption, route, snapshot, wire)
-        with controller.store.connection(write=True) as db:
-            db.execute('BEGIN IMMEDIATE')
-            now = controller._now(db, write=True)
+        with controller.store.connection(write=reserve) as db:
+            if reserve:
+                db.execute('BEGIN IMMEDIATE')
+            now = controller._now(db, write=reserve)
             window = controller.check_window(db, window_scope, physical_groups, now, self.windows_version)
             if window['status'] != 'open':
                 raise CapacityDenied(window['reason_code'])
@@ -710,6 +711,9 @@ class _CapacityDispatch:
                     if cap is not None and used[dimension] + amount > cap:
                         # No group rows have been inserted, so all-group refusal is atomic.
                         raise CapacityDenied('capacity_' + dimension + '_exhausted')
+            if not reserve:
+                return {'protocol': SERIALIZER, 'wire_sha256': wire, 'scope_sha256': scope_hash,
+                        'capacity_allocation': identifier}
             allocation = {'id': identifier, 'run': adoption['run'], 'policy_version': adoption['policy_version'],
                 'wire_sha256': wire, 'scope_sha256': scope_hash, 'serializer': SERIALIZER,
                 'state': 'prepared', 'prepared_at': now, 'groups': groups, 'evidence': evidence,

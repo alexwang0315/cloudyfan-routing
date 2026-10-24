@@ -135,6 +135,25 @@ class BudgetStore:
         if self._unbounded_history(db):
             raise BudgetError('Unverified historical cost has no bounded exposure; balance unavailable')
 
+    def queue_admission(self, run_id, amount):
+        """Read the ORIGINAL fee gates without reserving or importing history."""
+        db = sqlite3.connect(self.path.resolve().as_uri() + '?mode=ro', uri=True, timeout=30)
+        db.row_factory = sqlite3.Row
+        try:
+            db.execute('PRAGMA query_only=ON')
+            auth = self._authorization(db)
+            self._dispatchable(db, auth)
+            prior = db.execute('SELECT amount FROM reservations WHERE run=?', (run_id,)).fetchone()
+            if prior:
+                if money(prior['amount']) != money(amount):
+                    raise BudgetError('Frozen reservation changed')
+                return
+            reserved = _exact(money(r[0]) for r in db.execute('SELECT amount FROM reservations WHERE status="active"'))
+            if _exact((reserved, self._settled_cost(db), self._provisional_hold(db), money(amount))) > money(auth['total']):
+                raise BudgetError('Insufficient shared balance for complete workflow')
+        finally:
+            db.close()
+
     def _unbounded_history(self, db):
         return db.execute('SELECT COUNT(*) FROM events WHERE run="__history__" AND verified=0').fetchone()[0]
 
@@ -416,9 +435,13 @@ class _BudgetDispatch:
         if _fingerprint(self.payload) != self.payload_fingerprint:
             from .capacity_dispatch import CapacityDenied
             raise CapacityDenied('capacity_request_changed')
-        self.capacity = self.owner.capacity_controller.dispatch(self.owner._capacity_context,
-            self.client.wrapped, self.endpoint, self.payload, self.owner._capacity_descriptor)
-        evidence = self.capacity.prepare(cid, request)
+        if self.owner._capacity_context.get('queue_version') is not None:
+            backend = self.owner.capacity_controller._queue_backend(self.owner._capacity_context['queue_version'])
+            self.capacity, evidence = backend.consume(self.owner, self.client.wrapped, cid, self.endpoint, self.payload, request)
+        else:
+            self.capacity = self.owner.capacity_controller.dispatch(self.owner._capacity_context,
+                self.client.wrapped, self.endpoint, self.payload, self.owner._capacity_descriptor)
+            evidence = self.capacity.prepare(cid, request)
         try:
             self.owner.store.begin_event(self.client.run_id, self.client._event_id(cid), 'model',
                 money(self.bound.usd), _fingerprint(self.args))
@@ -446,6 +469,10 @@ class _BudgetDispatch:
                 raise
             except Exception:
                 raise CapacityDenied('capacity_original_gate_denied') from None
+        if self.owner._capacity_context.get('queue_version') is not None:
+            from .capacity_queue import QueuePreparation
+            execution = QueuePreparation.execution()
+            execution['scheduler'].verify_claim(execution['run'], execution['claim'])
         return self.capacity.before_post()
 
     def release(self):
@@ -472,6 +499,10 @@ class _BudgetEnvironment:
         self.index, self.prepared = 0, None
         self.replayable_tools = frozenset(name for name in getattr(environment, 'replayable_tools', ())
                                          if name in owner.tool_bounds and not owner.tool_bounds[name].external)
+        if owner.capacity_controller is not None and owner._capacity_context.get('queue_version') is not None:
+            backend = owner.capacity_controller._queue_backend(owner._capacity_context['queue_version'])
+            execution = backend.execution()
+            backend.verify_environment(execution['prepared']['request']['contract_id'], environment)
 
     def __getattr__(self, name):
         return getattr(self.environment, name)

@@ -114,6 +114,9 @@ class CapacityIntegrity:
             os.close(fd)
 
     def _state(self):
+        observation = getattr(_LOCAL, 'capacity_observations', {}).get(str(self.path))
+        if observation is not None and 'state' in observation:
+            return observation['state']
         identity = json.loads(_file(self.root / 'identity.json'))
         state = json.loads(_file(self.head))
         body = state['body']
@@ -121,7 +124,32 @@ class CapacityIntegrity:
                 or identity['protocol'] != PROTOCOL or identity['role'] != self.role
                 or identity['path_sha256'] != _hash(str(self.path))):
             raise CapacityIntegrityError()
+        if observation is not None:
+            observation['state'] = body
         return body
+
+    @contextmanager
+    def observation(self):
+        """One bounded read snapshot under a shared lock, never execution authority.
+
+        A host spanning queue and capacity must enter the queue scope first.
+        Writes cannot upgrade this shared lock. The state and projection live
+        only until this read completes; subsequent dispatch guards inspect anew.
+        """
+        previous = getattr(_LOCAL, 'capacity_observations', {})
+        key = str(self.path)
+        with self.lock():
+            if key in previous:
+                yield
+                return
+            observation = {}
+            _LOCAL.capacity_observations = {**previous, key: observation}
+            try:
+                yield
+            finally:
+                _LOCAL.capacity_observations = previous
+                if 'projection' in observation:
+                    observation['projection'].close()
 
     def _scan(self, db=None):
         own = db is None
@@ -196,6 +224,20 @@ class CapacityIntegrity:
         owned = getattr(_LOCAL, 'capacity_transactions', {}).get(str(self.path))
         if owned is not None:
             return owned
+        observation = getattr(_LOCAL, 'capacity_observations', {}).get(str(self.path))
+        if observation is None:
+            return self._inspect_current()
+        if 'error' in observation:
+            raise observation['error']
+        if 'inspection' not in observation:
+            try:
+                observation['inspection'] = self._inspect_current()
+            except (OSError, ValueError, KeyError, TypeError, sqlite3.Error, CapacityIntegrityError) as error:
+                observation['error'] = error
+                raise
+        return observation['inspection']
+
+    def _inspect_current(self):
         if self.binding_error is not None:
             raise CapacityIntegrityError(self.binding_error)
         state = self._state()
@@ -372,6 +414,17 @@ class CapacityIntegrity:
     @contextmanager
     def projection(self, *, current=None):
         """Last independently verified metadata only, never used to grant a POST."""
+        observation = getattr(_LOCAL, 'capacity_observations', {}).get(str(self.path))
+        if observation is not None and 'projection' in observation:
+            db = observation['projection']
+            factory = db.row_factory
+            db.row_factory = None
+            try:
+                db.execute('PRAGMA query_only=ON')
+                yield db
+            finally:
+                db.row_factory = factory
+            return
         try:
             state = self._state()
         except (OSError, ValueError, KeyError, TypeError):
@@ -404,8 +457,15 @@ class CapacityIntegrity:
                     columns = list(view)
                     db.execute('INSERT INTO "' + name + '" (' + ','.join('"' + k + '"' for k in columns)
                         + ') VALUES (' + ','.join('?' for _ in columns) + ')', tuple(view.values()))
-            yield db
+            db.execute('PRAGMA query_only=ON')
+            if observation is not None:
+                observation['projection'] = db
+            try:
+                yield db
+            finally:
+                db.row_factory = None
         finally:
-            db.close()
+            if observation is None or observation.get('projection') is not db:
+                db.close()
             if original is not None:
                 original.close()

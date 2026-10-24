@@ -23,7 +23,7 @@ SECURITY_HEADERS = [("X-Content-Type-Options", "nosniff"), ("Referrer-Policy", "
 class App:
     def __init__(self, gateway, *, admin_token, source=None, origin="http://127.0.0.1:8766",
                  identity_store=None, billing_source=None, ollama_models=None, simulation=None,
-                 candidate_observer=None, task_observer=None):
+                 candidate_observer=None, task_observer=None, capacity_observer=None):
         if len(admin_token) < 32:
             raise ValueError("Strong operator token required")
         self.gateway, self.store, self.admin_token = gateway, gateway.store, admin_token
@@ -37,6 +37,11 @@ class App:
             raise ValueError("Controlled identity registry required")
         self.identity_store = identity_store
         self.simulation = simulation
+        if capacity_observer is not None:
+            from .capacity import CapacityObserver
+            if type(capacity_observer) is not CapacityObserver:
+                raise ValueError("Controlled capacity observer required")
+        self.capacity_observer = capacity_observer
         from .history_observation import TaskDecisionObserver
         for observer, kind in ((candidate_observer, CandidateObserver), (task_observer, TaskDecisionObserver)):
             if observer is not None and (type(observer) is not kind
@@ -124,6 +129,8 @@ class App:
                       "/trace.css": ("trace.css", "text/css; charset=utf-8"),
                       "/candidates.js": ("candidates.js", "text/javascript; charset=utf-8"),
                       "/candidates.css": ("candidates.css", "text/css; charset=utf-8"),
+                      "/capacity.js": ("capacity.js", "text/javascript; charset=utf-8"),
+                      "/capacity.css": ("capacity.css", "text/css; charset=utf-8"),
                       "/style.css": ("style.css", "text/css; charset=utf-8")}
             if method == "GET" and path in static:
                 filename, content_type = static[path]
@@ -163,6 +170,19 @@ class App:
         return [body]
 
     def _admin(self, method, path, environ):
+        if method == "GET" and path == "/monitor/capacity":
+            if environ.get("QUERY_STRING"):
+                raise MonitorError("unsupported_capacity_query")
+            if self.capacity_observer is not None:
+                return self.capacity_observer.snapshot()
+            return {"schema_version": "capacity-sources-v1", "configured": False,
+                    "execution_enabled": False, "configuration_version": None,
+                    "bindings": [], "groups": [], "reason_codes": ["capacity_not_configured"]}
+        if method == "POST" and path == "/monitor/capacity/refresh":
+            self._fields(self._body(environ), set())
+            if self.capacity_observer is not None:
+                return self.capacity_observer.refresh()
+            raise MonitorError("capacity_source_refresh_not_configured", 409)
         if method == "POST" and path == "/monitor/simulation/start":
             if self.gateway.demo is not True or self.simulation is None:
                 raise MonitorError("simulation_not_available", 409)

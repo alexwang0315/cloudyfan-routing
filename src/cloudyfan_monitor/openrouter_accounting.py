@@ -126,6 +126,25 @@ class OpenRouterAccounting:
                 "source": "openrouter_generation_api", "evidence_sha256": sha, "evidence_json": evidence,
                 "observed_at": datetime.now(timezone.utc).isoformat(), "account_ref": self.account_ref}
 
+    def key_capacity(self, *, time_budget):
+        """One bounded key GET using the existing exact accounting parser.
+
+        Credits and management credentials are deliberately outside this source.
+        Raw provider fields remain private to the parser, never its projection.
+        """
+        data, sha, _ = self._read("key", key=self._api_key, time_budget=time_budget)
+        reset = data.get("limit_reset")
+        includes_byok = data.get("include_byok_in_limit")
+        if includes_byok is not None and type(includes_byok) is not bool:
+            raise AccountingError("openrouter_accounting_schema_invalid")
+        return {"provider": "openrouter", "credential_fingerprint": self.account_ref,
+                "limit": None if data.get("limit") is None else _money(data["limit"]),
+                "remaining": None if data.get("limit_remaining") is None else _money(data["limit_remaining"]),
+                "usage": None if data.get("usage") is None else _money(data["usage"]),
+                "reset_period": reset if reset in {"daily", "weekly", "monthly"} else None,
+                "include_byok_in_limit": includes_byok,
+                "evidence_sha256": sha}
+
     def account(self):
         """Return independent key/account scopes, retaining any successful scope."""
         result = {"provider": "openrouter", "account_ref": self.account_ref,

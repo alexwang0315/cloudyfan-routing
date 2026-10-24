@@ -4,7 +4,7 @@ const esc = (v) => String(v ?? '—').replace(/[&<>"']/g, c => ({'&':'&amp;','<'
 const modes = {cloudyfan:'CloudyFan MRC',fixed_high:'全大模型優先',low_first:'全便宜模型優先',open_source_first:'全開源模型優先'};
 const tiers = {open_source:'開源池',low:'低分池',mid:'中分池',high:'高分池'};
 const candidateTiers = {open_source:'開源候選',low:'低分候選',mid:'中分候選',high:'高分候選'};
-const labels = {overview:'運作總覽',tasks:'任務與升級',ledger:'費用帳本',billing:'客戶帳務',pools:'候選池與契約',clients:'連線客戶端'};
+const labels = {overview:'運作總覽',tasks:'任務與升級',ledger:'費用帳本',billing:'客戶帳務',pools:'候選池與契約',capacity:'供應商限額來源',clients:'連線客戶端'};
 const statuses = {passed:['通過','green'],failed:['未通過','red'],unverifiable:['無法確認','amber'],running:['執行中','blue'],ready:['已準備','blue'],bound:['已凍結','blue'],queued:['排隊中','blue'],expired:['已到期','amber'],task_busy:['執行中','blue'],engineering_interrupted:['工程中斷','red'],accounting_interrupted:['費用待核','amber'],policy_denied:['執行條件不符','amber']};
 const poolStatuses = {missing:'缺額',pending_unqualified:'待驗證',pending_unqualified_stale_source:'來源逾期',research_admitted_only:'僅舊研究准入',mock_only:'模擬設定'};
 const categoryLabels = {'agentic_index':'代理任務','coding_index':'程式與 SQL','intelligence_index':'綜合推理','3d':'3D 設計','asciiart':'字元藝術','audiorealism':'音訊擬真','codecategories':'程式設計','dataviz':'資料視覺化','gamedev':'遊戲開發','graphicdesign':'平面設計','image':'影像生成','imageediting':'影像編輯','logo':'Logo 設計','svg':'SVG 圖形','text-to-speech':'語音合成','uicomponent':'UI 元件','website':'網站設計','gpqa_diamond':'科學推理','search_browsecomp':'網頁搜尋','search_dsqa':'搜尋問答','search_hle':'高難度搜尋','search_widesearch':'廣域搜尋','tau_bench_verified_airline':'航空客服代理'};
@@ -212,6 +212,7 @@ function render() {
  $('#environment').textContent=data.demo?'模擬上游 · 非真實成效':'受控核心 · 正式資格另列';
  $('#environment').className='badge '+(data.demo?'amber':'blue');
  if(page==='billing'){window.CloudyFanBilling.mount($('#main'),{api,esc,toast,error,confirmAction});return;}
+ if(page==='capacity'){window.CloudyFanCapacity.mount($('#main'),{api,esc,confirmAction,demo:data.demo});return;}
  $('#main').innerHTML=({overview,tasks:tasksPage,ledger:ledgerPage,pools:poolsPage,clients:clientsPage}[page])();
  bindTaskTraces();bindSimulation();
  restoreObservationView(focused,page);
@@ -303,8 +304,8 @@ function load(force=false) {
  })();
  return flight.promise;
 }
-$('#reload').onclick=async()=>{await load(true);if(location.hash==='#billing'&&token)await window.CloudyFanBilling.refresh();};
-$('#logout').onclick=()=>{setToken('');data=null;pool=null;selectedCandidateVersion='';selectedCandidateMode='cloudyfan';candidateFlight+=1;refreshCompleteness=null;pendingConfirm=null;expandedTaskTraces.clear();expandedCandidateDetails.clear();candidateRead={status:'idle'};candidateRequest=null;window.CloudyFanBilling.resetView();$('#main').innerHTML='<div class="empty">已清除登入；請重新認證。</div>';$('#login').showModal();};
+$('#reload').onclick=async()=>{await load(true);if(location.hash==='#billing'&&token)await window.CloudyFanBilling.refresh();if(location.hash==='#capacity'&&token)await window.CloudyFanCapacity.refresh();};
+$('#logout').onclick=()=>{setToken('');data=null;pool=null;selectedCandidateVersion='';selectedCandidateMode='cloudyfan';candidateFlight+=1;refreshCompleteness=null;pendingConfirm=null;expandedTaskTraces.clear();expandedCandidateDetails.clear();candidateRead={status:'idle'};candidateRequest=null;window.CloudyFanBilling.resetView();window.CloudyFanCapacity.resetView();$('#main').innerHTML='<div class="empty">已清除登入；請重新認證。</div>';$('#login').showModal();};
 $('#login-form').onsubmit=async e=>{
  e.preventDefault();setToken($('#token').value);const version=authenticationVersion,requestToken=token;
  const result=await load(true);

@@ -5,6 +5,7 @@ only a durable original response or explicit controlled import can add evidence.
 """
 import hashlib
 import json
+from email.utils import format_datetime, parsedate_to_datetime
 import os
 from pathlib import Path
 import re
@@ -42,6 +43,16 @@ def _read(path):
     return data, json.loads(data)
 
 
+def _http_date(value):
+    try:
+        parsed = parsedate_to_datetime(value)
+        if format_datetime(parsed, usegmt=True) != value:
+            raise ValueError('Noncanonical HTTP date')
+        return _time(parsed.timestamp())
+    except (ValueError, TypeError, OverflowError, AttributeError):
+        raise ValueError('capacity_window_clock_reference_unknown') from None
+
+
 class CapacityWindows:
     protocol = PROTOCOL
 
@@ -57,6 +68,7 @@ class CapacityWindows:
         self.rules = []
         if not isinstance(rules, (list, tuple)) or len(rules) > 128:
             raise ValueError('Bounded controlled window rules required')
+        seen = set()
         for supplied in rules:
             row = dict(supplied)
             if (set(row) != {'binding', 'group', 'header', 'format', 'constraint'}
@@ -65,8 +77,10 @@ class CapacityWindows:
                     or row['format'] not in {'retry_after', 'unix_seconds', 'delta_seconds'}):
                 raise ValueError('Exact controlled window rule required')
             _identity(row['constraint'])
-            if row in self.rules:
+            key = (row['binding'], row['group'], row['header'], row['constraint'])
+            if key in seen:
                 raise ValueError('Duplicate controlled window rule')
+            seen.add(key)
             self.rules.append(row)
         self.not_applicable = tuple(_identity(value) for value in not_applicable)
         if set(self.not_applicable) - set(bindings) or set(self.not_applicable) & {r['binding'] for r in self.rules}:
@@ -101,6 +115,24 @@ class CapacityWindows:
                 or sorted(expected, key=lambda g: g['group']) != sorted(physical_groups, key=lambda g: g['group'])):
             raise ValueError('Exact physical window scopes required')
         return [r for r in self.rules if r['binding'] == binding['id']]
+
+    def _until(self, value, grammar, observed, headers):
+        if not isinstance(value, str):
+            raise ValueError('capacity_window_header_missing')
+        if 'date' in headers and abs(_http_date(headers['date']) - observed) > 1:
+            raise ValueError('capacity_window_clock_reference_unknown')
+        digits = re.fullmatch(r'[0-9]{1,13}', value)
+        if grammar == 'unix_seconds' or grammar == 'retry_after' and not digits:
+            if 'date' not in headers:
+                raise ValueError('capacity_window_clock_reference_unknown')
+            until = _time(int(value)) if grammar == 'unix_seconds' and digits else _http_date(value)
+        elif grammar in {'retry_after', 'delta_seconds'} and digits:
+            until = observed + int(value)
+        else:
+            raise ValueError('capacity_window_time_invalid')
+        if not observed <= until <= observed + self.max_delay_seconds:
+            raise ValueError('capacity_window_time_invalid')
+        return _time(until)
 
     def check(self, db, scope, physical_groups, now):
         try:
@@ -145,12 +177,17 @@ class CapacityWindows:
                  and envelope.get('invalid') is False and isinstance(envelope.get('values'), list)
                  and len(envelope['values']) <= 8)
         if valid:
-            for name, value in envelope['values']:
+            for pair in envelope['values']:
+                if not isinstance(pair, list) or len(pair) != 2:
+                    valid = False
+                    break
+                name, value = pair
                 if (name not in HEADERS or name in header_map or not isinstance(value, str)
                         or len(value) > 160 or any(ord(c) < 32 or ord(c) == 127 for c in value)):
                     valid = False
                     break
                 header_map[name] = value
+            valid = valid and sum(len(name.encode()) + len(value.encode()) for name, value in header_map.items()) <= 1024
         try:
             observed = _time(envelope.get('observed_at'))
             if observed != scope['observed_at'] or observed > _time(self.store.clock()):
@@ -160,10 +197,14 @@ class CapacityWindows:
         observations = []
         for rule in rules:
             value = header_map.get(rule['header'])
-            good = valid and isinstance(value, str) and re.fullmatch(r'[0-9]{1,6}', value)
-            good = bool(good and rule['format'] in {'retry_after', 'delta_seconds'}
-                        and int(value) <= self.max_delay_seconds)
-            until = observed + int(value) if good else None
+            reason, until = 'capacity_window_header_invalid', None
+            if valid:
+                try:
+                    until = self._until(value, rule['format'], observed, header_map)
+                    reason = 'capacity_window_wait'
+                except ValueError as error:
+                    reason = str(error) if re.fullmatch(r'capacity_window_[a-z_]+', str(error)) else 'capacity_window_time_invalid'
+            good = until is not None
             group = next(g for g in scope['physical_groups'] if g['group'] == rule['group'])
             identifier = _hash({'receipt': receipt_ref['response_sha256'], 'version': self.version,
                 'physical': group['physical'], 'constraint': rule['constraint'], 'header': rule['header']})
@@ -172,7 +213,16 @@ class CapacityWindows:
                 'observed_at': observed, 'source_kind': 'original_response', 'header': rule['header'],
                 'constraint': rule['constraint'], 'version': self.version,
                 'policy_version': scope['policy_version'], 'configuration_version': scope['configuration_version'],
-                'reason_code': 'capacity_window_wait' if good else 'capacity_window_header_invalid'})
+                'reason_code': reason, 'reported_not_before': until})
+        by_constraint = {}
+        for row in observations:
+            by_constraint.setdefault((row['physical'], row['constraint']), []).append(row)
+        for rows in by_constraint.values():
+            known = [r['not_before'] for r in rows if r['status'] == 'wait']
+            if known and max(known) - min(known) > 1:
+                for row in rows:
+                    row.update(status='unknown', not_before=None,
+                               reason_code='capacity_window_source_contradictory')
         with self.store.connection(write=True) as db:
             db.execute('BEGIN IMMEDIATE')
             for row in observations:

@@ -525,7 +525,9 @@ class CapacityController:
                     out['tpm_reserved'] += group['tokens'] if held or now < group['tpm_until'] else 0
                     out['concurrency_used'] += item['state'] in {'prepared', 'sent', 'uncertain'}
         return {'schema_version': 'capacity-dispatch-v1', 'revision': revision, 'active_version': version,
-                'protocol': SERIALIZER, 'registered_policies': [{'version': p['version'], 'configuration_version': p['configuration_version'], 'max_seconds': p['max_seconds']} for p in policies],
+                'protocol': SERIALIZER, 'registered_policies': [{
+                    **{key: p[key] for key in ('version', 'configuration_version', 'max_seconds')},
+                    **({'windows_version': p['windows_version']} if 'windows_version' in p else {})} for p in policies],
                 'allocation_count': allocation_count, 'allocation_history_complete': allocation_count == len(allocations),
                 'event_count': event_count, 'event_history_complete': event_count == len(events),
                 'groups': list(groups.values()), 'allocations': [{key: row[key] for key in ('id', 'policy_version', 'state', 'wire_sha256', 'serializer', 'groups')} for row in allocations],

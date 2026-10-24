@@ -668,3 +668,6 @@ The [new selector research contract](jev-selector-research.md) replaces the fixe
 ## Issues 29-33 offline implementation — 2026-10-25
 
 User requested implement-spec for the five sequential specifications. The prior current state and ownership plan are preserved in docs/evidence/issues29-33-prior-*.json; prior research, unknown charges and pending production gates are unchanged. Current phase is in_progress, with no current full-verification claim. Initial frontier is Issue34 (supplier source observation); capacity execution remains disabled until its dependent Issue35. Completion requires all20 child tickets, real loopback HTTP and desktop checks with MockTransport only, both full checks and Core integration, two independent review axes, and immutable evidence. No real provider calls, paid requests, source push, deployment or deletion is authorized.
+
+
+Issue34 source observation completed and integrated as6ac8a3d; root fresh original Core integration2066 tests/8steps passed at runtime/checks/18f1cd786fc04e84a60341d9cc5f9f81. Monitor285/full build and desktop5 are separate same-input proofs. Original first failures preserved under external issue34 context. Issue35 now owns per-request capacity admission interfaces; no waiting execution is implemented yet. Current broad scope remains in_progress and has no current_verification claim.

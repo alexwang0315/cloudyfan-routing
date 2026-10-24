@@ -3,17 +3,78 @@
   "integration_branch": "codex/issues-29-33-mrc-integration",
   "baseline_commit": "9d20072b076bb64c3666cd3d1380dcb5e49bb909",
   "merger_owner": "integration-merger",
-  "shared_interfaces": [],
+  "shared_interfaces": [
+    {
+      "id": "CAPACITY-ADMISSION",
+      "owner": "capacity-dispatch-worker",
+      "owned_files": [
+        "src/cloudyfan_jev/capacity.py",
+        "src/cloudyfan_jev/capacity_dispatch.py"
+      ],
+      "provided_by": "ISSUE35"
+    },
+    {
+      "id": "TRANSPORT-CAPACITY",
+      "owner": "capacity-dispatch-worker",
+      "owned_files": [
+        "src/cloudyfan_jev/client.py",
+        "src/cloudyfan_jev/local.py"
+      ],
+      "provided_by": "ISSUE35"
+    },
+    {
+      "id": "BUDGET-DISPATCH",
+      "owner": "capacity-dispatch-worker",
+      "owned_files": [
+        "src/cloudyfan_jev/budget.py"
+      ],
+      "provided_by": "ISSUE35"
+    },
+    {
+      "id": "TASK-DISPATCH",
+      "owner": "capacity-dispatch-worker",
+      "owned_files": [
+        "src/cloudyfan_jev/http_api.py"
+      ],
+      "provided_by": "ISSUE35"
+    },
+    {
+      "id": "TOOL-DISPATCH-PREFLIGHT",
+      "owner": "capacity-dispatch-worker",
+      "owned_files": [
+        "src/cloudyfan_jev/engine.py"
+      ],
+      "provided_by": "ISSUE35"
+    }
+  ],
   "tasks": [
     {
       "id": "ISSUE34",
       "owner": "capacity-source-worker",
+      "status": "completed",
+      "owned_files": [
+        "src/cloudyfan_jev/capacity.py"
+      ],
+      "depends_on": [],
+      "consumed_interfaces": [],
+      "outcome": "Issue34 locally verified: Core2066/full integration, Monitor285/full build, actual loopback9 and desktop5; immutable local evidence preserved. Execution disabled."
+    },
+    {
+      "id": "ISSUE35",
+      "owner": "capacity-dispatch-worker",
       "status": "in_progress",
       "owned_files": [
         "src/cloudyfan_jev/capacity.py",
-        "tests/test_capacity_sources.py"
+        "src/cloudyfan_jev/capacity_dispatch.py",
+        "src/cloudyfan_jev/client.py",
+        "src/cloudyfan_jev/local.py",
+        "src/cloudyfan_jev/budget.py",
+        "src/cloudyfan_jev/http_api.py",
+        "src/cloudyfan_jev/engine.py"
       ],
-      "depends_on": [],
+      "depends_on": [
+        "ISSUE34"
+      ],
       "consumed_interfaces": []
     }
   ]

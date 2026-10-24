@@ -399,3 +399,6 @@ Ollama50 R2已完成50題／170次合成呼叫，但桌機快照因每題重複�
 ## Issues29-33 integration ownership
 
 Root owns current metadata, source preservation and stage verification. capacity-source-worker owns Issue34 capacity.py and its public-boundary tests, in a separate branch/worktree based on this integration. Monitor source/UI/HTTP acceptance ownership is recorded in the external implementation context. integration-merger alone merges worker branches. Child tickets follow the native GitHub dependencies, including strict parent29→30→31→32→33 order; ownership is updated before each shared-interface change. Original canonical checkouts remain untouched.
+
+
+Issue35 frontier: capacity-dispatch-worker owns capacity store/admission, transport pre-POST, BudgetedCore forwarding, TaskService controlled execution and optional pre-tool dispatch interfaces, as declared in work-plan.json. Monitor counterpart owns the vertical policy/ingress/safe-status/UI/actual HTTP+desktop acceptance. Root alone owns current metadata. Later queue36 and windows37 remain blocked until35 completes.

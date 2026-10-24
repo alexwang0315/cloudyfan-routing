@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const {createHash,randomUUID} = require('node:crypto');
+const {execFileSync} = require('node:child_process');
 const {startFixture} = require('./qa_fixture_ipc.cjs');
 
 async function main() {
@@ -14,11 +15,17 @@ async function main() {
   await fs.mkdir(path.dirname(output),{recursive:true});await fs.mkdir(output,{recursive:false,mode:0o700});
   const report={schema_version:1,status:'incomplete',viewport:{width:1280,height:800},checks:[],screenshots:[],
     http_responses:[],page_errors:[],console_errors:[],expected_http_errors:[],blocked_browser_requests:[],
+    visual_regression:{status:'INCONCLUSIVE',reason:'No declared visual baseline; actual rendered screenshots are preserved'},
+    accessibility_scope:'Keyboard disclosure and focus checks; no screen-reader or automated accessibility certification',
     scope:'actual Chrome + loopback HTTP; real synthetic window/health/capacity host; MockTransport only; no provider recovery or capacity/SLO claim'};
   const fixture=startFixture(process.env.CLOUDYFAN_QA_PYTHON||path.join(core,'.venv/bin/python'),
     [path.join(__dirname,'qa_capacity_windows_http.py'),'--output',output],{cwd:root,
       env:{...process.env,PYTHONDONTWRITEBYTECODE:'1',PYTHONPATH:[path.join(root,'src'),path.join(core,'src')].join(path.delimiter)}});
-  let browser,page,activeTask;
+  let browser,page,activeTask,savedCandidateWindow;
+  const revision=directory=>Object.fromEntries(['HEAD','HEAD^{tree}'].map(ref=>{
+    const value=execFileSync('git',['rev-parse',ref],{cwd:directory,encoding:'utf8'}).trim();
+    assert.match(value,/^[0-9a-f]{40}$/);return[ref,value];
+  }));
   const inspect=async(command={command:'inspect'})=>{fixture.send(command);return fixture.next();};
   const step=async(name,action)=>{await action();report.checks.push({name,passed:true});console.log('PASS '+name);};
   const shot=async name=>{await page.screenshot({path:path.join(output,name+'.png'),fullPage:true});report.screenshots.push(name+'.png');
@@ -28,11 +35,12 @@ async function main() {
       assert.deepEqual(after[key],before[key],key+' changed during read-only checks');
   };
   try {
+    report.source_revisions={monitor:revision(root),core:revision(core)};
     const names=['src/cloudyfan_monitor/static/capacity.js','src/cloudyfan_monitor/static/capacity.css','src/cloudyfan_monitor/app.py',
       'src/cloudyfan_monitor/history_observation.py','src/cloudyfan_monitor/integration.py',
       'tests/candidate_health_fixture.py','scripts/qa_capacity_windows_http.py','scripts/qa_capacity_windows_desktop.cjs'];
     report.source_sha256=Object.fromEntries(await Promise.all(names.map(async name=>[name,createHash('sha256').update(await fs.readFile(path.join(root,name))).digest('hex')])));
-    const coreNames=['capacity_dispatch.py','capacity.py','capacity_windows.py','client.py','budget.py','http_api.py','engine.py','local.py','scores/backup_runtime.py'];
+    const coreNames=['capacity_dispatch.py','capacity.py','capacity_windows.py','capacity_queue.py','client.py','budget.py','http_api.py','engine.py','local.py','scheduler.py','ollama_api.py','scores/backup_runtime.py','scores/category_routing.py'];
     report.core_source_sha256=Object.fromEntries(await Promise.all(coreNames.map(async name=>[name,
       createHash('sha256').update(await fs.readFile(path.join(core,'src/cloudyfan_jev',name))).digest('hex')])));
     const ready=await fixture.next();assert.equal(ready.type,'ready');
@@ -81,7 +89,16 @@ async function main() {
       assert.equal(response.status(),200);assert.equal((await response.json()).status,'passed');
       assert.equal((await inspect()).model_requests.length,before.model_requests.length+3);
       const snapshot=await context.request.get(ready.origin+'/monitor/snapshot',{headers:operator});assert.equal(snapshot.status(),200);
-      await fs.writeFile(path.join(output,'safe-original-task-snapshot.json'),JSON.stringify(await snapshot.json(),null,2));
+      const original=await snapshot.json();
+      await fs.writeFile(path.join(output,'safe-original-task-snapshot.json'),JSON.stringify(original,null,2));
+      const saved=original.tasks.find(row=>row.client==='studio'&&row.run==='window-prepost-exclusion');
+      const excludedCandidate=saved.operator_observation.task_decision.stages.flatMap(stage=>stage.candidates||[])
+        .find(row=>row.state==='excluded_before_dispatch'&&row.capacity_window?.status==='wait');
+      assert.ok(excludedCandidate,'original pre-POST window exclusion must be projected');
+      assert.equal(excludedCandidate.capacity_window.reason_code,'capacity_window_wait');
+      assert.ok(excludedCandidate.capacity_window.evidence_refs.length>0);
+      savedCandidateWindow={config_id:excludedCandidate.config_id,window:excludedCandidate.capacity_window};
+      report.frozen_candidate_window=savedCandidateWindow;
       const loaded=page.waitForResponse(response=>response.url().endsWith('/monitor/capacity')&&response.request().method()==='GET');
       await page.locator('#reload').click();await (await loaded).finished();
       const panel=page.locator('#capacity-window-decisions');await panel.waitFor();
@@ -94,6 +111,7 @@ async function main() {
       const excluded=panel.locator('[data-window-task="studio:window-prepost-exclusion"]');
       await excluded.locator('summary').first().click();
       assert.match(await excluded.innerText(),/派送前排除/);
+      assert.ok(await excluded.locator('[data-window-candidate-status="wait"]').count()>0);
       await shot('02-candidate-exclusion-and-distinct-reasons');
     });
     await step('live_window_and_stale_revision_conflicts_are_honest_without_retry_or_policy_override',async()=>{
@@ -162,6 +180,11 @@ async function main() {
       assert.equal(await page.locator('[data-capacity-detail="window:'+original.id+'"]').count(),0);
       const after=await inspect();unchanged(before,after);
       assert.deepEqual(after.window_snapshot.events.find(row=>row.id===original.id),original);
+      const snapshot=await context.request.get(ready.origin+'/monitor/snapshot',{headers:operator});
+      const own=(await snapshot.json()).tasks.find(row=>row.client==='studio'&&row.run==='window-prepost-exclusion');
+      const candidate=own.operator_observation.task_decision.stages.flatMap(stage=>stage.candidates||[])
+        .find(row=>row.config_id===savedCandidateWindow.config_id&&row.capacity_window?.status==='wait');
+      assert.deepEqual(candidate.capacity_window,savedCandidateWindow.window);
       const history=page.locator('#capacity-window-history');await history.locator('summary').first().click();
       await history.locator('[data-capacity-window="'+original.id+'"] > summary').click();
       assert.match(await history.innerText(),/原事件|原來源時間/);await shot('05-expired-original-history');
@@ -252,6 +275,7 @@ async function main() {
       const row=page.locator('[data-window-task="studio:window-unknown-fee"]');
       if(!await row.evaluate(node=>node.open))await row.locator('summary').click();
       assert.match(await row.innerText(),/費用待核/);await shot('10-unknown-fee-stops');
+      await row.screenshot({path:path.join(output,'10-unknown-fee-task-detail.png')});report.screenshots.push('10-unknown-fee-task-detail.png');
     });
     report.console_classification=report.console_errors.map(message=>({message,
       classification:/status of (409|401|503)\b/.test(message)&&report.expected_http_errors.some(item=>message.includes(String(item.status)))?
@@ -272,6 +296,8 @@ async function main() {
       const coreAfter=Object.fromEntries(await Promise.all(Object.keys(report.core_source_sha256).map(async name=>[name,
         createHash('sha256').update(await fs.readFile(path.join(core,'src/cloudyfan_jev',name))).digest('hex')])));
       report.source_inputs_unchanged=JSON.stringify(after)===JSON.stringify(report.source_sha256)&&JSON.stringify(coreAfter)===JSON.stringify(report.core_source_sha256);
+      report.source_revisions_after={monitor:revision(root),core:revision(core)};
+      report.source_inputs_unchanged=report.source_inputs_unchanged&&JSON.stringify(report.source_revisions_after)===JSON.stringify(report.source_revisions);
       if(!report.source_inputs_unchanged){report.status='failed';process.exitCode=1;report.input_failure='Source inputs changed during desktop QA';}
     }
     await fs.writeFile(path.join(output,'desktop-receipt.json'),JSON.stringify(report,null,2));

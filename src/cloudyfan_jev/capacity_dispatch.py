@@ -340,6 +340,17 @@ class CapacityController:
             row = db.execute('SELECT payload FROM capacity_policies WHERE version=?', (version,)).fetchone()
         return json.loads(row[0]).get('queue_version') if row else None
 
+    def automatic_reconciliation_allowed(self, adoption):
+        if adoption.get('queue_version') is not None:
+            return False
+        with self.store.connection() as db:
+            row = db.execute('SELECT payload FROM capacity_policies WHERE version=?', (adoption['policy_version'],)).fetchone()
+        if row is None:
+            if adoption['policy_version'] is None:
+                return True
+            raise CapacityDenied('capacity_policy_not_registered')
+        return json.loads(row[0]).get('windows_version') is None
+
     def _window_backend(self, version):
         backend = self.window_backend
         if (backend is None or getattr(backend, 'protocol', None) != 'capacity-windows-v1'

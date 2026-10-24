@@ -317,7 +317,7 @@ class QueueScheduler:
         if row['state'] == 'accepting':
             task = {'status': 'accepting', 'costs': {'complete_api_usd': None, 'known_api_usd': '0', 'unknown_events': 0}}
         else:
-            task = (self.service.queue_task_status(principal, run_id) if self.capacity_protocol is not None
+            task = (self.service.queue_observe(principal, run_id) if self.capacity_protocol is not None
                     else self.service.status(principal, run_id))
         status = task['status'] if row['state'] == 'completed' else row['state']
         view = {'run_id': run_id, 'status': status, 'queue_state': row['state'],
@@ -359,8 +359,8 @@ class QueueScheduler:
                 'production_slo_validated': False}
 
     def result(self, principal, run_id):
-        with self._transaction() as db: self._job(db, principal, run_id)
-        return self.service.result(principal, run_id)
+        with self._readonly() as db: self._job(db, principal, run_id)
+        return self.service.result(principal, run_id, **({'refresh': False} if self.capacity_protocol is not None else {}))
 
     def recover_inflight(self, *, workers_stopped=False):
         """Operator-only recovery marking; never releases budget or retries work."""
@@ -437,7 +437,7 @@ class QueueScheduler:
                 prepared = None
                 try:
                     self.service.authorize(row['principal'])
-                    self.service.queue_task_status(row['principal'], row['run_id'])
+                    self.service.queue_observe(row['principal'], row['run_id'])
                     prepared = self.capacity_protocol.prepare_next(self.service, row)
                     groups = prepared['groups']
                     detail = {'groups': sorted(groups)}

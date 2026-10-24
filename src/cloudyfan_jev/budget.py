@@ -410,6 +410,9 @@ class _BudgetClient:
         return self._record(cid, self.wrapped.call(cid, *args))
 
     def reconcile(self, cid):
+        if (self.owner.capacity_controller is not None
+                and not self.owner.capacity_controller.automatic_reconciliation_allowed(self.owner._capacity_context)):
+            raise BudgetError('Original unknown fee requires explicit accounting; no automatic GET')
         return self._record(cid, self.wrapped.reconcile(cid))
 
 

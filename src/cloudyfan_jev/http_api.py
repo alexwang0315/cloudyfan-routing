@@ -173,6 +173,11 @@ def _retained(method):
         internal = self.internal_id(principal, run_id)
         if self.retention is None:
             return method(self, principal, *args, **kwargs)
+        queue = getattr(self, 'queue_scheduler', None)
+        if (method.__name__ in {'status', 'observe', 'result'} and queue is not None
+                and queue.capacity_protocol is not None and queue.contains(principal, run_id)):
+            self.queue_access(principal, run_id)
+            return method(self, principal, *args, **kwargs)
         try:
             with self.retention.guard(internal):
                 self.authorize(principal)
@@ -317,6 +322,32 @@ class TaskService:
     @_retained
     def queue_task_status(self, principal, run_id):
         """Original task-owned fields for the controlled queue projection."""
+        return self._task_status(principal, run_id)
+
+    def queue_access(self, principal, run_id):
+        """Read-only original access policy; polling never expires or renews it."""
+        import math
+        self.authorize(principal)
+        if self.retention is not None:
+            internal = self.internal_id(principal, run_id)
+            lifecycle = self.retention.lookup(internal)
+            if lifecycle is None:
+                raise ServiceError('retention_metadata_missing', 409)
+            now = self.retention.clock()
+            if isinstance(now, bool) or not isinstance(now, (int, float)) or not math.isfinite(now):
+                raise ServiceError('retention_clock_invalid', 503)
+            if lifecycle['policy'] != self.retention_policy.descriptor():
+                raise ServiceError('retention_policy_changed', 409)
+            if lifecycle['state'] == 'retired':
+                raise ServiceError('task_retired', 410)
+            if lifecycle['state'] != 'active' or now >= lifecycle['expires_at']:
+                raise ServiceError('task_expired', 410)
+
+    def queue_observe(self, principal, run_id):
+        self.queue_access(principal, run_id)
+        return self._task_status(principal, run_id)
+
+    def _task_status(self, principal, run_id):
         directory, job = self._job(principal, run_id)
         return {**_read(directory / 'state.json'), 'costs': self._costs(principal, run_id, job),
                 **({'capacity': self.capacity_controller.own(self.internal_id(principal, run_id))}

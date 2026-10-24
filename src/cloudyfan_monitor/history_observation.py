@@ -133,10 +133,12 @@ def _saved_health_matches(health_store, assessment, policy, cache):
     return observation in cache[snapshot_id].get("observations", [])
 
 
-def _classifier_fee(completed, classified, stage, profile):
+def _classifier_fee(completed, classified, stage, profile, *, allow_missing_profile=False):
+    """QCS may omit its saved profile; backup requires the exact frozen one."""
     calls = [call for call in (completed.get("selection") or {}).get("calls", [])
              if call.get("call_id", "").endswith("-decision-" + stage)
-             and call.get("generation_id") == classified.get("id") and call.get("profile", profile) == profile]
+             and call.get("generation_id") == classified.get("id")
+             and (call.get("profile") == profile or allow_missing_profile and "profile" not in call)]
     if len(calls) == 1 and calls[0].get("cost_unknown") is False:
         amount = calls[0].get("cost_usd")
         if isinstance(amount, str) and Decimal(amount).is_finite() and Decimal(amount) >= 0:
@@ -204,7 +206,8 @@ def _qcs_stages(directory, manifest, completed):
                 "trigger": "public_validation_failed" if previous["public"].get("passed") is False else
                     "public_validation_unavailable", "action": expected["action"], "reason": expected["reason"],
                 "selected_tier": following["tier"], "classifier_called": expected["action"] == "classify",
-                "classifier_api_usd": (_classifier_fee(completed, decision, stage, manifest["decision"])
+                "classifier_api_usd": (_classifier_fee(completed, decision, stage, manifest["decision"],
+                    allow_missing_profile=True)
                     if expected["action"] == "classify" else None),
                 "candidates": rows, "economics": economics})
         except Exception:
@@ -299,14 +302,8 @@ def _backup_stages(directory, manifest, completed, health_store):
                     if classified.get("stage") != stage or classified.get("selected_tier") not in pair:
                         raise ValueError("Historical classifier differs")
                     selected = classified["selected_tier"]
-                    calls = [call for call in completed.get("selection", {}).get("calls", [])
-                             if call.get("call_id", "").endswith("-decision-" + stage)
-                             and call.get("generation_id") == classified.get("id")
-                             and call.get("profile") == manifest["decision"]]
-                    if len(calls) == 1 and calls[0].get("cost_unknown") is False:
-                        amount = calls[0].get("cost_usd")
-                        if isinstance(amount, str) and Decimal(amount).is_finite() and Decimal(amount) >= 0:
-                            classifier_api_usd = amount
+                    classifier_api_usd = _classifier_fee(completed, classified, stage, manifest["decision"],
+                        allow_missing_profile=False)
                     decision_index += 1
                 attempt = attempts[attempt_index]
                 if (attempt["profile"] != pair[selected]["entry"]["profile"]

@@ -61,7 +61,10 @@ still apply. The original fee post-guard runs before the durable capacity send
 intent. Backup generation, classifier and local calls recheck the original exact
 health/policy/deadline gates at that final boundary. Known refusal after intent
 has an immutable `not_dispatched` response and verified zero fee; pre-intent
-refusal creates no model/tool fee event. Current original credential validity is
+refusal creates no model/tool fee event. A terminal capacity refusal releases only
+unused complete-workflow monetary reserve when all of its own fees are known;
+actual/provisional fees, global unknown-fee stops and capacity holds remain. An
+own unknown fee keeps accounting interrupted and its reserve. Current original credential validity is
 checked again before each controlled POST.
 
 Local calls bind the transformed local request (including `stream:false`), pinned

@@ -54,6 +54,7 @@ def test_tpm_requires_exact_versioned_wire_proof_and_keeps_reservation_when_usag
     assert denied.status_code == 429
     assert denied.json()["error"]["code"] == "capacity_token_bound_unavailable"
     assert denied.json()["costs"]["unknown_events"] == 0 and bundle.upstream.calls == []
+    assert operator.get("/monitor/snapshot").json()["ledger"]["reserved_usd"] == "0"
     assert operator.post("/monitor/capacity/activate", json={"revision": 1, "version": None}).status_code == 200
     proofs, actual = [], []
 
@@ -396,6 +397,7 @@ def test_original_accepted_credential_revocation_stops_classifier_and_alternate_
     assert result.status_code == 429 and result.json()["error"]["code"] == "capacity_credential_inactive"
     assert len(bundle.upstream.calls) == 1
     assert operator.get("/monitor/snapshot").json()["ledger"]["unknown_events"] == 0
+    assert operator.get("/monitor/snapshot").json()["ledger"]["reserved_usd"] == "0"
     bundle.credentials["studio"] = alternate
     fresh = local_service.client()
     state = fresh.get("/v1/tasks/revoked-original").json()
@@ -669,3 +671,48 @@ def test_explicit_source_refresh_preserves_active_policy_projection(local_servic
     assert refreshed.json()["snapshot"]["dispatch"] == expected
     assert refreshed.json()["snapshot"]["execution_enabled"] is True
     assert refreshed.json()["request_count"] == 0 and bundle.upstream.calls == []
+
+
+def test_terminal_capacity_refusal_releases_only_unused_workflow_fee_reservation(local_service):
+    bundle = local_service.bundle
+    bundle.upstream.fail_tiers = set()
+    attach_admission(bundle, local_service.clock, rpm=1)
+    local_service.server.set_app(bundle.app)
+    operator, client = local_service.client("operator"), local_service.client()
+    assert operator.post("/monitor/capacity/activate", json={"revision": 0, "version": "synthetic-admission-v1"}).status_code == 200
+    first = client.post("/v1/tasks", json={**TASK, "run_id": "real-fee-before-denial"})
+    assert first.json()["status"] == "passed"
+    denied = client.post("/v1/tasks", json={**TASK, "run_id": "terminal-unused-fee"})
+    assert denied.status_code == 429 and denied.json()["error"]["code"] == "capacity_rpm_exhausted"
+    ledger = operator.get("/monitor/snapshot").json()["ledger"]
+    assert ledger["reserved_usd"] == "0"
+    assert ledger["known_usd"] == "0.0001" and ledger["unknown_events"] == 0
+    assert len(ledger["rows"]) == 1
+    assert ledger["accounts"][0]["provisional_hold_usd"] == "0.0099"
+    capacity = operator.get("/monitor/capacity").json()["dispatch"]
+    assert capacity["groups"][0]["rpm_used"] == 1
+    assert client.post("/v1/tasks/terminal-unused-fee/resume", json={}).json() == denied.json()
+    assert len(bundle.upstream.calls) == 1
+
+
+def test_own_unknown_fee_keeps_workflow_reserve_when_capacity_completion_cannot_settle(local_service):
+    bundle = local_service.bundle
+    original = local_service.clock()
+    bundle.upstream.unknown_cost = True
+    bundle.upstream.before_response = lambda _: setattr(local_service.clock, "now", original - 10)
+    attach_admission(bundle, local_service.clock, rpm=10)
+    local_service.server.set_app(bundle.app)
+    operator, client = local_service.client("operator"), local_service.client()
+    assert operator.post("/monitor/capacity/activate", json={"revision": 0, "version": "synthetic-admission-v1"}).status_code == 200
+    response = client.post("/v1/tasks", json={**TASK, "run_id": "own-unknown-retained"})
+    assert response.status_code in (409, 503)
+    local_service.clock.now = original + 1
+    state = client.get("/v1/tasks/own-unknown-retained").json()
+    assert state["status"] == "accounting_interrupted" and state["error"]["code"] == "unknown_cost"
+    assert state["costs"]["unknown_events"] == 1
+    ledger = operator.get("/monitor/snapshot").json()["ledger"]
+    assert ledger["reserved_usd"] == "0.032" and ledger["unknown_events"] == 1
+    capacity = operator.get("/monitor/capacity").json()["dispatch"]
+    assert capacity["groups"][0]["concurrency_used"] == capacity["groups"][0]["rpm_used"] == 1
+    assert client.post("/v1/tasks/own-unknown-retained/resume", json={}).json()["status"] == "accounting_interrupted"
+    assert len(bundle.upstream.calls) == 1

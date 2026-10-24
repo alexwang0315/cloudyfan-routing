@@ -298,3 +298,85 @@ def test_registered_external_tool_posts_once_through_same_capacity_and_fee_guard
     view = operator.get("/monitor/capacity").json()["dispatch"]
     assert view["groups"][0]["rpm_used"] == 3 and view["groups"][0]["concurrency_used"] == 0
     assert {row["state"] for row in view["allocations"]} == {"complete"}
+    transport.http.headers["Authorization"] = "Bearer SYNTHETIC_PRIVATE_DIFFERENT_ACCOUNT"
+    changed = client.post("/v1/tasks", json={**TASK, "run_id": "changed-tool-account"})
+    assert changed.status_code == 429 and changed.json()["error"]["code"] == "capacity_transport_binding_changed"
+    assert len(actual_tool) == 1
+    after = operator.get("/monitor/snapshot").json()["ledger"]
+    assert after["unknown_events"] == 0 and len(after["rows"]) == 4
+    assert "SYNTHETIC_PRIVATE_DIFFERENT_ACCOUNT" not in operator.get("/monitor/capacity").text
+
+
+def test_backwards_clock_after_intent_still_records_proven_unsent_zero_and_releases(local_service):
+    bundle = local_service.bundle
+    accepted = local_service.clock()
+    class BackwardsAfterIntent:
+        def __call__(self, *args):
+            return True
+        def verify_dispatch(self, *args):
+            return True
+        def verify_post(self, *args):
+            local_service.clock.now = accepted - 10
+            return True
+    for contract in bundle.app.gateway.service.contracts.values():
+        contract.runner.verify_bound = BackwardsAfterIntent()
+    attach_admission(bundle, local_service.clock, rpm=10)
+    local_service.server.set_app(bundle.app)
+    operator, client = local_service.client("operator"), local_service.client()
+    assert operator.post("/monitor/capacity/activate", json={"revision": 0, "version": "synthetic-admission-v1"}).status_code == 200
+    response = client.post("/v1/tasks", json={**TASK, "run_id": "clock-before-post"})
+    # Authentication and reads also fail closed while the host clock is invalid.
+    assert response.status_code in (429, 409, 503)
+    local_service.clock.now = accepted + 1
+    state = client.get("/v1/tasks/clock-before-post").json()
+    assert state["costs"]["unknown_events"] == 0 and state["costs"]["known_api_usd"] == "0"
+    view = operator.get("/monitor/capacity").json()["dispatch"]
+    assert view["allocations"][0]["state"] == "released"
+    assert bundle.upstream.calls == []
+    assert operator.get("/monitor/snapshot").json()["ledger"]["rows"][0]["cost_source"] == "not_dispatched"
+
+
+def test_authoritative_usage_above_token_upper_invalidates_policy_and_keeps_actual_quantity(local_service):
+    from cloudyfan_jev.capacity_dispatch import TokenUpperBound
+    bundle = local_service.bundle
+    bundle.upstream.fail_tiers = set()
+    class BrokenSyntheticUpper:
+        version = "synthetic-broken-upper-v1"
+        def __call__(self, body, scope):
+            return TokenUpperBound(1, scope["wire_sha256"], scope["scope_sha256"], self.version,
+                                   "synthetic-broken-upper", local_service.clock() + 300)
+    attach_admission(bundle, local_service.clock, rpm=10, tpm=1000, token_adapter=BrokenSyntheticUpper())
+    local_service.server.set_app(bundle.app)
+    operator, client = local_service.client("operator"), local_service.client()
+    assert operator.post("/monitor/capacity/activate", json={"revision": 0, "version": "synthetic-admission-v1"}).status_code == 200
+    first = client.post("/v1/tasks", json={**TASK, "run_id": "bad-upper-one"})
+    assert first.status_code == 429 and first.json()["error"]["code"] == "capacity_token_bound_violated"
+    assert first.json()["costs"]["unknown_events"] == 0
+    view = operator.get("/monitor/capacity").json()["dispatch"]
+    assert view["groups"][0]["tpm_reserved"] == 21 and view["groups"][0]["concurrency_used"] == 1
+    second = client.post("/v1/tasks", json={**TASK, "run_id": "bad-upper-two"})
+    assert second.status_code == 429 and second.json()["error"]["code"] == "capacity_token_proof_invalidated"
+    assert len(bundle.upstream.calls) == 1
+    assert any(event["kind"] == "bound_violation" for event in view["events"])
+
+
+def test_bounded_capacity_history_keeps_exact_hot_totals_and_readonly_bytes(local_service):
+    bundle = local_service.bundle
+    bundle.upstream.fail_tiers = set()
+    controller = attach_admission(bundle, local_service.clock, rpm=10)
+    controller.history_limit = 2  # Trusted host projection limit, never request input.
+    local_service.server.set_app(bundle.app)
+    operator, client = local_service.client("operator"), local_service.client()
+    assert operator.post("/monitor/capacity/activate", json={"revision": 0, "version": "synthetic-admission-v1"}).status_code == 200
+    for number in range(3):
+        assert client.post("/v1/tasks", json={**TASK, "run_id": f"history-{number}"}).json()["status"] == "passed"
+    view = operator.get("/monitor/capacity").json()["dispatch"]
+    assert view["allocation_count"] == 3 and len(view["allocations"]) == 2
+    assert view["allocation_history_complete"] is False
+    assert view["event_count"] == 10 and len(view["events"]) == 2 and view["event_history_complete"] is False
+    assert view["groups"][0]["rpm_used"] == 3
+    before = hashlib.sha256(controller.store.path.read_bytes()).hexdigest()
+    for _ in range(2):
+        assert operator.get("/monitor/capacity").json()["dispatch"] == view
+    assert hashlib.sha256(controller.store.path.read_bytes()).hexdigest() == before
+    assert len(bundle.upstream.calls) == 3

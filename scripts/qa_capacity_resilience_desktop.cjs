@@ -176,6 +176,7 @@ async function lifecycleMain() {
     blocked_browser_requests:[],boots:[],viewport:{width:1280,height:900},
     visual_regression:{status:'INCONCLUSIVE',reason:'No declared visual baseline; actual images and semantic checks retained'},
     accessibility_scope:'Keyboard focus/disclosure at the declared desktop viewport; no screen-reader or WCAG certification'};
+  report.planned_check_count=['--queue-fault','--local-fault','--companion-loss'].some(flag=>process.argv.includes(flag))?3:process.argv.includes('--focused-restart')?12:13;
   if(process.argv.includes('--focused-restart'))report.scope+='; focused restart slice: >100 paid history and refusal steps explicitly not run';
   let fixture,ready,browser,context,page,boot=0,operator,client,agent;
   const headers=token=>({Authorization:'Bearer '+token});
@@ -346,8 +347,11 @@ async function lifecycleMain() {
     if(report.source_before){report.source_after={monitor:await capture(root,owned),core:await capture(core)};
       report.source_inputs_unchanged=JSON.stringify(report.source_before)===JSON.stringify(report.source_after);
       if(!report.source_inputs_unchanged){report.status='failed';process.exitCode=1;}}
+    report.check_counts={planned:report.planned_check_count,attempted:report.checks.length,
+      passed:report.checks.filter(row=>row.passed).length,failed:report.checks.filter(row=>!row.passed).length,
+      not_run:report.planned_check_count-report.checks.length};
     await fs.writeFile(path.join(output,'desktop-receipt.json'),JSON.stringify(report,null,2));
-    console.log(JSON.stringify({status:report.status,passed:report.checks.filter(row=>row.passed).length,total:report.checks.length,output}));
+    console.log(JSON.stringify({status:report.status,...report.check_counts,output}));
   }
 
   async function lifecycleSteps() {

@@ -152,6 +152,10 @@ def test_explicit_refresh_imports_exact_controlled_rate_source_without_any_upstr
         "status": "rate_limited", "observed_at": start, "valid_until": start + 300,
         "values": [["retry-after", "30"]]}
     controller, _ = attach_windows(bundle, local_service.clock, controlled_sources=[source])
+    for version, enabled in [("synthetic-source-legacy", False), ("synthetic-source-alternate", True)]:
+        controller.register(version, configuration_version="synthetic-admission-config-v1",
+            routes=controller.routes["synthetic-window-admission-v1"], max_seconds=300,
+            **({"windows_version": "synthetic-windows-v1"} if enabled else {}))
     local_service.server.set_app(bundle.app)
     operator, client = local_service.client("operator"), local_service.client()
     assert operator.post("/monitor/capacity/activate", json={"revision": 0,
@@ -163,8 +167,15 @@ def test_explicit_refresh_imports_exact_controlled_rate_source_without_any_upstr
     pending = client.post("/v1/tasks", json={**TASK, "run_id": "source-not-yet-imported"})
     assert pending.status_code == 429 and pending.json()["error"]["code"] == "capacity_window_source_not_imported"
     assert bundle.upstream.calls == []
-    disabled = operator.post("/monitor/capacity/activate", json={"revision": 1, "version": None})
-    assert disabled.status_code == 409 and disabled.json()["error"]["code"] == "capacity_live_state_blocks_change"
+    for version in [None, "synthetic-source-legacy", "synthetic-source-alternate"]:
+        disabled = operator.post("/monitor/capacity/activate", json={"revision": 1, "version": version})
+        assert disabled.status_code == 409 and disabled.json()["error"]["code"] == "capacity_live_state_blocks_change"
+    renamed = window_configuration(start)
+    renamed["version"] = "synthetic-pending-source-renamed"
+    renamed["bindings"][0]["groups"] = ["renamed-shared"]
+    renamed["groups"][0]["id"] = "renamed-shared"
+    with pytest.raises(ValueError, match="Live capacity prevents configuration change"):
+        controller.store.configure(renamed)
     refreshed = operator.post("/monitor/capacity/refresh", json={})
     assert refreshed.status_code == 200 and refreshed.json()["request_count"] == 0
     response = client.post("/v1/tasks", json={**TASK, "run_id": "controlled-source-exclusion"})
@@ -200,3 +211,110 @@ def test_many_original_constraints_keep_bounded_reason_refs_without_opening_the_
     assert view["event_count"] == 128 and len(view["events"]) == 100 and view["event_history_complete"] is False
     assert len(view["groups"]) == 1 and view["groups"][0]["not_before"] == start + 30
     assert bundle.upstream.calls == []
+
+
+@pytest.mark.parametrize("source_case,reason", [
+    ("stale", "capacity_window_source_stale_or_future"),
+    ("future", "capacity_window_source_stale_or_future"),
+    ("clock_reference", "capacity_window_clock_reference_unknown"),
+    ("nonfinite_reset", "capacity_window_time_invalid"),
+    ("contradictory", "capacity_window_source_contradictory")])
+def test_invalid_controlled_source_stays_unknown_without_clearing_or_dispatch(local_service, source_case, reason):
+    bundle = local_service.bundle
+    start = local_service.clock()
+    source = {"binding": "synthetic-binding", "group": "shared",
+        "scope": {"kind": "account", "ref": "synthetic-shared-account"},
+        "source_version": "synthetic-reviewed-v1", "evidence_ref": "synthetic-invalid-source-v1",
+        "status": "rate_limited", "observed_at": start, "valid_until": start + 300,
+        "values": [["retry-after", "30"]]}
+    rules, sources = None, [source]
+    if source_case == "stale":
+        source.update(observed_at=start - 100, valid_until=start - 1)
+    elif source_case == "future":
+        source["observed_at"] = start + 10
+    elif source_case == "clock_reference":
+        source["values"].append(["date", formatdate(start - 100, usegmt=True)])
+    elif source_case == "nonfinite_reset":
+        source["values"] = [["date", formatdate(start, usegmt=True)], ["x-ratelimit-reset-requests", "NaN"]]
+        rules = [{"binding": "synthetic-binding", "group": "shared", "header": "x-ratelimit-reset-requests",
+            "format": "unix_seconds", "constraint": "requests"}]
+    elif source_case == "contradictory":
+        sources.append({**source, "evidence_ref": "synthetic-contradictory-source-v1", "values": [["retry-after", "60"]]})
+    attach_windows(bundle, local_service.clock, controlled_sources=sources, rules=rules)
+    local_service.server.set_app(bundle.app)
+    operator, client = local_service.client("operator"), local_service.client()
+    assert operator.post("/monitor/capacity/activate", json={"revision": 0,
+        "version": "synthetic-window-admission-v1"}).status_code == 200
+    refreshed = operator.post("/monitor/capacity/refresh", json={})
+    assert refreshed.status_code == 200 and refreshed.json()["window_import"]["status"] == "unknown"
+    original = operator.get("/monitor/capacity").json()["dispatch"]["windows"]
+    assert original["groups"][0]["status"] == "unknown" and original["groups"][0]["reason_code"] == reason
+    assert original["pending_sources"] == []
+    local_service.clock.now += 120
+    denied = client.post("/v1/tasks", json={**TASK, "run_id": "invalid-source-stays-unknown"})
+    assert denied.status_code == 429 and denied.json()["error"]["code"] == reason
+    assert denied.json()["costs"]["unknown_events"] == 0 and bundle.upstream.calls == []
+    assert operator.post("/monitor/capacity/refresh", json={}).json()["window_import"]["imported_count"] == 0
+    assert operator.get("/monitor/capacity").json()["dispatch"]["windows"] == original
+
+
+def test_backwards_clock_cannot_clear_saved_window_or_extend_original_task_deadline(local_service):
+    bundle = local_service.bundle
+    start = local_service.clock()
+    bundle.upstream.fail_tiers = set()
+    def upstream(request):
+        response = bundle.upstream(request)
+        local_service.clock.now = start + 61
+        body = response.json()
+        body.update(choices=[], error={"code": 429})
+        return httpx.Response(429, json=body, headers={"retry-after": "30"})
+    for contract in bundle.app.gateway.service.contracts.values():
+        contract.runner.client.http = httpx.Client(transport=httpx.MockTransport(upstream), trust_env=False)
+    controller, _ = attach_windows(bundle, local_service.clock)
+    local_service.server.set_app(bundle.app)
+    operator, client = local_service.client("operator"), local_service.client()
+    assert operator.post("/monitor/capacity/activate", json={"revision": 0,
+        "version": "synthetic-window-admission-v1"}).status_code == 200
+    first = client.post("/v1/tasks", json={**TASK, "run_id": "original-deadline"}).json()
+    assert first["capacity"]["accepted_at"] == start and first["capacity"]["deadline"] == start + 300
+    saved = operator.get("/monitor/capacity").json()["dispatch"]["windows"]
+    assert saved["groups"][0]["observed_at"] == start + 61 and saved["groups"][0]["not_before"] == start + 91
+    local_service.clock.now = start + 10
+    before = hashlib.sha256(controller.store.path.read_bytes()).hexdigest()
+    for _ in range(2):
+        unavailable = operator.get("/monitor/capacity")
+        assert unavailable.status_code == 409 and unavailable.json()["error"]["code"] == "capacity_clock_backwards"
+    assert hashlib.sha256(controller.store.path.read_bytes()).hexdigest() == before
+    denied = client.post("/v1/tasks", json={**TASK, "run_id": "clock-moved-backwards"})
+    assert denied.status_code == 503 and denied.json()["error"]["code"] == "identity_authentication_unavailable"
+    local_service.clock.now = start + 62
+    assert operator.get("/monitor/capacity").json()["dispatch"]["windows"] == saved
+    assert client.post("/v1/tasks/original-deadline/resume", json={}).json() == first
+    assert len(bundle.upstream.calls) == 1
+
+
+def test_original_reset_cannot_change_the_explicitly_registered_time_unit(local_service):
+    bundle = local_service.bundle
+    start = math.ceil(local_service.clock())
+    local_service.clock.now = start
+    def upstream(request):
+        body = bundle.upstream(request).json()
+        body.update(choices=[], error={"code": 429})
+        return httpx.Response(429, json=body, headers={"date": formatdate(start, usegmt=True),
+            "x-ratelimit-reset-requests": formatdate(start + 30, usegmt=True)})
+    for contract in bundle.app.gateway.service.contracts.values():
+        contract.runner.client.http = httpx.Client(transport=httpx.MockTransport(upstream), trust_env=False)
+    attach_windows(bundle, local_service.clock, rules=[{"binding": "synthetic-binding", "group": "shared",
+        "header": "x-ratelimit-reset-requests", "format": "unix_seconds", "constraint": "requests"}])
+    local_service.server.set_app(bundle.app)
+    operator, client = local_service.client("operator"), local_service.client()
+    assert operator.post("/monitor/capacity/activate", json={"revision": 0,
+        "version": "synthetic-window-admission-v1"}).status_code == 200
+    client.post("/v1/tasks", json={**TASK, "run_id": "unexpected-reset-unit"})
+    observed = operator.get("/monitor/capacity").json()["dispatch"]["windows"]
+    assert observed["groups"][0]["status"] == "unknown"
+    assert observed["groups"][0]["reason_code"] == "capacity_window_time_invalid"
+    local_service.clock.now += 31
+    denied = client.post("/v1/tasks", json={**TASK, "run_id": "unit-mismatch-remains-unknown"})
+    assert denied.status_code == 429 and denied.json()["error"]["code"] == "capacity_window_time_invalid"
+    assert len(bundle.upstream.calls) == 1

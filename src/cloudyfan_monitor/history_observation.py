@@ -8,6 +8,7 @@ from decimal import Decimal, localcontext
 import fcntl
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -217,7 +218,82 @@ def _qcs_stages(directory, manifest, completed):
     return stages
 
 
-def _historical_candidate(row, observation, tier, health_store, policy, cache):
+def _capacity_hash(value):
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"),
+        allow_nan=False).encode()).hexdigest()
+
+
+def _window_context(service, internal, descriptor):
+    controller = getattr(service, "capacity_controller", None)
+    if controller is None:
+        return None
+    with controller.store.connection() as db:
+        saved = db.execute("SELECT payload FROM capacity_adoptions WHERE run=?", (internal,)).fetchone()
+        adoption = json.loads(saved[0]) if saved else None
+        if adoption is None or adoption["policy_version"] is None:
+            return None
+        policy = json.loads(db.execute("SELECT payload FROM capacity_policies WHERE version=?",
+            (adoption["policy_version"],)).fetchone()[0])
+        if policy.get("windows_version") is None:
+            return None
+        configuration_row = db.execute("SELECT payload,digest FROM capacity_configurations WHERE version=?",
+            (adoption["configuration_version"],)).fetchone()
+        configuration = json.loads(configuration_row[0])
+        if (adoption["descriptor_sha256"] != _capacity_hash(descriptor)
+                or configuration_row[1] != _capacity_hash(configuration)
+                or policy["configuration_sha256"] != configuration_row[1]):
+            raise ValueError("Historical capacity binding differs")
+    return {"store": controller.store, "configuration": configuration, "policy": policy}
+
+
+def _saved_window(value, profile, context):
+    if (context is None or not isinstance(value, dict)
+            or set(value) != {"status", "not_before", "evidence_refs", "revision", "reason_code"}
+            or value["status"] not in {"open", "wait", "unknown", "denied"}
+            or type(value["revision"]) is not int or value["revision"] < 0
+            or not isinstance(value["evidence_refs"], list) or len(value["evidence_refs"]) > 32
+            or any(not isinstance(ref, str) or not re.fullmatch(r"[a-f0-9]{64}", ref)
+                   for ref in value["evidence_refs"])
+            or len(set(value["evidence_refs"])) != len(value["evidence_refs"])
+            or not isinstance(value["reason_code"], str)
+            or not re.fullmatch(r"capacity_window_[a-z_]{1,64}", value["reason_code"])):
+        raise ValueError("Historical window decision differs")
+    routes = [route for route in context["policy"]["routes"]
+        if route["model"] == profile["model_version"] and route["provider_name"] == profile.get("provider_name")]
+    if len(routes) != 1:
+        raise ValueError("Historical window route differs")
+    binding = next(row for row in context["configuration"]["bindings"] if row["id"] == routes[0]["binding"])
+    physical = {_capacity_hash(row["scope"]) for row in context["configuration"]["groups"]
+                if row["id"] in binding["groups"]}
+    rows = []
+    with context["store"].connection() as db:
+        count = db.execute("SELECT COUNT(*) FROM capacity_window_observations").fetchone()[0]
+        if value["revision"] > count:
+            raise ValueError("Historical window revision differs")
+        for ref in value["evidence_refs"]:
+            record = db.execute("SELECT rowid,payload FROM capacity_window_observations WHERE id=?", (ref,)).fetchone()
+            if record is None or record[0] > value["revision"]:
+                raise ValueError("Historical window evidence missing")
+            row = json.loads(record[1])
+            if row["id"] != ref or row["physical"] not in physical or _capacity_hash(row["scope"]) != row["physical"]:
+                raise ValueError("Historical window physical scope differs")
+            rows.append(row)
+    until = value["not_before"]
+    if value["status"] == "open":
+        valid = not rows and until is None and value["reason_code"] == "capacity_window_open"
+    elif value["status"] == "wait":
+        valid = (bool(rows) and all(row["status"] == "wait" for row in rows)
+            and type(until) in (int, float) and math.isfinite(until)
+            and until == max(row["not_before"] for row in rows) and value["reason_code"] == "capacity_window_wait")
+    else:
+        valid = until is None and any(row["status"] == "unknown"
+            and row["reason_code"] == value["reason_code"] for row in rows)
+    if not valid:
+        raise ValueError("Historical window reason differs from saved evidence")
+    return dict(value)
+
+
+def _historical_candidate(row, observation, tier, health_store, policy, cache, window_context):
     result = {"tier": tier, "config_id": identifier(row["entry"]["config_id"]),
               "configuration_sha256": row["configuration_sha256"],
               "configuration": configuration(row["entry"]["profile"])}
@@ -231,8 +307,13 @@ def _historical_candidate(row, observation, tier, health_store, policy, cache):
         reasons = observation["reasons"]
         if not isinstance(reasons, list) or any(not isinstance(reason, str) for reason in reasons):
             raise ValueError("Historical reason shape differs")
+        window = (_saved_window(observation["capacity_window"], row["entry"]["profile"], window_context)
+                  if "capacity_window" in observation else None)
+        if window is not None:
+            result["capacity_window"] = window
+        known_reasons = REASONS | ({window["reason_code"]} if window and window["status"] != "open" else set())
         result.update(state="excluded_before_dispatch" if reasons else "considered_not_selected",
-            reasons=[reason if reason in REASONS else "saved_reason_unknown" for reason in reasons],
+            reasons=[reason if reason in known_reasons else "saved_reason_unknown" for reason in reasons],
             health={"snapshot_id": identifier(assessment.get("snapshot_id")),
                 "observed_at": identifier(observed.get("observed_at")) if observed else None,
                 "cooldown_until": identifier(assessment.get("circuit", {}).get("cooldown_until"))})
@@ -241,7 +322,7 @@ def _historical_candidate(row, observation, tier, health_store, policy, cache):
     return result
 
 
-def _backup_stages(directory, manifest, completed, health_store):
+def _backup_stages(directory, manifest, completed, health_store, window_context):
     plan = manifest["backup_plan"]
     verify_backup_pools(plan, now=None)
     attempts, decisions = completed["attempts"], completed.get("selection", {}).get("decisions", [])
@@ -280,7 +361,7 @@ def _backup_stages(directory, manifest, completed, health_store):
                         raise ValueError("Historical candidate differs")
                 for row, observation in zip(pool, observations):
                     rows.append(_historical_candidate(row, observation, tier, health_store,
-                                                       manifest["health_policy"], health_snapshots))
+                                                       manifest["health_policy"], health_snapshots, window_context))
             if any(row["state"] == "unknown" for row in rows):
                 for row in rows:
                     if row["state"] != "unknown":
@@ -426,7 +507,8 @@ class TaskDecisionObserver:
                             ("provider_rate_limited", "provider_unavailable") else "quality_recovery"})
                 if "backup_plan" in manifest:
                     result["stages"], partial = _backup_stages(
-                        directory, manifest, completed, contract.runner.core.health_store)
+                        directory, manifest, completed, contract.runner.core.health_store,
+                        _window_context(self.service, internal, frozen))
                     result.update(status="partial" if partial else "available",
                         reason="saved_selection_unverifiable" if partial else "saved_historical_selection",
                         candidate_evidence="saved_selection")

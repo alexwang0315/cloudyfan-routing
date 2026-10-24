@@ -27,6 +27,13 @@ If one named historical health row cannot be verified, independent rows stay
 visible with their saved health evidence while selection/economics are unknown.
 That does not reconstruct the missing choice or imply dispatch eligibility.
 
+The existing `hierarchical-qcs-v1` CategoryCore is also supported. Its fixed
+selection plan, saved economic checkpoint, previous public attempt and next
+dispatched tier must agree. Known direct/classify reasons and estimates are
+shown; absent conditional-flow forecasts and historical health remain unknown.
+The public trace associates each economic/classifier choice with the attempt it
+actually follows, rather than treating every decision row as another attempt.
+
 Economic amounts come only from the exact frozen calibration and saved decision.
 Historical arithmetic is checked for consistency with that calibration. Only
 explicit decimal interval bounds and identity fields are projected; this does
@@ -36,11 +43,16 @@ fee bounds are separate. Missing evidence stays unknown or not provided. No
 public price lookup, model/source call, fee reconciliation or new fee estimate
 runs on observation. Original deadlines, authorizations, reservations and
 receipts are unchanged. Jev distributions are not correctness probabilities.
+Calibration dataset versions are unknown in the supported evidence formats.
+Raw calibration evidence and classifier protocol/model-pair fingerprints are
+separate fields; neither fingerprint is presented as a dataset version.
+Candidate and historical identities use the same small safe-field projection.
 
 `tests/test_history_observation.py` exercises real loopback HTTP with actual
 Core/BackupCategoryCore, BudgetedCore, TaskService and HealthStore. The model
 boundary is MockTransport. `tests/history_fixture.py` adapts the prepared Core's
-existing synthetic evidence at its original timestamp; it creates no real
+existing synthetic evidence at its original timestamp through the shared private
+`tests/_backup_fixture.py` preparation; it creates no real
 qualification. `scripts/qa_history_desktop.cjs <new-output-directory>` uses the
 installed Chrome and the matching `qa_history_http.py` host. Set
 `CLOUDYFAN_CORE_ROOT` to the approved prepared Core. Each run needs a fresh output

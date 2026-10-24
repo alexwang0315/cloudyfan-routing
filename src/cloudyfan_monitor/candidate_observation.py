@@ -4,6 +4,7 @@ Only registered server-side Core descriptors may supply candidate qualification
 references. Public catalog flags and browser query fields cannot create evidence.
 This projection does not run, refresh, reconcile or mutate any Core state.
 """
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 import re
@@ -14,9 +15,9 @@ from cloudyfan_jev.scores.configuration import configuration_digest
 from cloudyfan_jev.scores.health import HealthStore
 
 from .store import MODES, TIERS, MonitorError
+from .observation_fields import configuration as _profile, identifier as _identifier
 
 SCHEMA = "mrc-observation-v1"
-PROFILE_FIELDS = ("model", "model_version", "effort", "provider", "quantization", "backend")
 REQUIRED_IDENTITY = ("model", "model_version", "effort", "provider")
 REASONS = {
     "candidate_qualification_not_provided", "candidate_identity_incomplete", "candidate_identity_mismatch",
@@ -40,13 +41,6 @@ HEALTH_REASONS = {
 }
 
 
-def _identifier(value):
-    if (isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:/@+ -]{0,199}", value)
-            and not value.lower().startswith(("users/", "private/", "tmp/", "bearer ", "https:", "http:"))):
-        return value
-    return None
-
-
 def _hash(value):
     return value if isinstance(value, str) and re.fullmatch(r"[a-f0-9]{64}", value) else None
 
@@ -61,11 +55,6 @@ def _time(value):
         return stamp.astimezone(timezone.utc).isoformat()
     except (TypeError, ValueError, AttributeError, OverflowError):
         return None
-
-
-def _profile(value):
-    value = value if isinstance(value, dict) else {}
-    return {key: _identifier(value.get(key)) for key in PROFILE_FIELDS}
 
 
 def _scope(view, profile=None, status=None):
@@ -129,6 +118,17 @@ def _endpoint_metrics(observation):
     for key, unit in (("latency_unit", "milliseconds"), ("throughput_unit", "tokens/second")):
         metrics[key] = unit if speed.get(key) == unit else None
     return metrics
+
+
+@dataclass(frozen=True)
+class _ProjectionContext:
+    """One request's read-only source bindings, shared by every candidate row."""
+    view: dict
+    descriptor: dict | None
+    records: dict
+    observed_at: str | None
+    category: str
+    core: object
 
 
 class CandidateObserver:
@@ -245,7 +245,10 @@ class CandidateObserver:
                 "cooldown_until": _time(assessed["circuit"].get("cooldown_until"))},
             "reason_codes": reasons, "endpoint_metrics": _endpoint_metrics(observation)}
 
-    def _candidate(self, candidate, position, tier, view, descriptor, records, observed_at, registered, category, core):
+    def _candidate(self, candidate, position, tier, context):
+        view, descriptor, records = context.view, context.descriptor, context.records
+        observed_at, category, core = context.observed_at, context.category, context.core
+        registered = descriptor is not None
         candidate = candidate if isinstance(candidate, dict) else {}
         raw_profile = candidate.get("profile") if isinstance(candidate, dict) else None
         profile = _profile(raw_profile)
@@ -298,10 +301,9 @@ class CandidateObserver:
                 "quota": {"status": "unknown"}, "dispatch_authorization": {"status": "not_checked"},
                 "reason_codes": reasons}
 
-    def _safe_candidate(self, candidate, position, tier, view, descriptor, records, observed_at, category, core):
+    def _safe_candidate(self, candidate, position, tier, context):
         try:
-            return self._candidate(candidate, position, tier, view, descriptor, records,
-                                   observed_at, descriptor is not None, category, core)
+            return self._candidate(candidate, position, tier, context)
         except Exception:
             # Preserve only the original listing identity when its qualification
             # cannot be verified. No other row or source exception is copied.
@@ -309,11 +311,11 @@ class CandidateObserver:
             profile = _profile(candidate.get("profile"))
             return {"position": position, "role": "primary" if position == 0 else "backup",
                 "listing_status": "listed" if profile["model"] else "unknown",
-                "scope": _scope(view, profile),
+                "scope": _scope(context.view, profile),
                 "configuration": {"config_id": _identifier(candidate.get("config_id")),
                                   "configuration_sha256": None, **profile},
                 "identity": {"status": "unverifiable", "missing_fields": []},
-                "registration": {"status": "registered" if descriptor else "unknown",
+                "registration": {"status": "registered" if context.descriptor else "unknown",
                                  "candidate_matches_contract": None},
                 "qualification": {"status": "unverifiable", "formal_status": "unknown", "evidence": None,
                                   "reason_codes": ["candidate_evidence_unavailable"]},
@@ -351,8 +353,8 @@ class CandidateObserver:
                 "notice": "registration_not_execution_authorization"}}
         context.update(contract_id=contract_id, contract_registered=descriptor is not None,
                        contract_version=_identifier((descriptor or {}).get("version")))
-        tiers = {tier: [self._safe_candidate(candidate, index, tier, view, descriptor, records,
-                                            observed_at, category, core)
+        projection = _ProjectionContext(view, descriptor, records, observed_at, category, core)
+        tiers = {tier: [self._safe_candidate(candidate, index, tier, projection)
                        for index, candidate in enumerate(view["categories"][category]["pools"][tier])]
                  for tier in TIERS}
         partial = any(row["qualification"]["status"] == "unverifiable"

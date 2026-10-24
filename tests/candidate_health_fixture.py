@@ -3,68 +3,33 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal
-import importlib.util
 import json
 from pathlib import Path
-import sys
 
-import cloudyfan_jev
 import httpx
 from cloudyfan_jev.budget import Authorization, BudgetedCore, BudgetStore, EnforcedBound
 from cloudyfan_jev.client import Client
-from cloudyfan_jev.demo import ArithmeticEnvironment, example_config
+from cloudyfan_jev.demo import ArithmeticEnvironment
 from cloudyfan_jev.diagnostics import DiagnosticContract
-from cloudyfan_jev.engine import Core, Limits
+from cloudyfan_jev.engine import Limits
 from cloudyfan_jev.http_api import RegisteredContract, TaskService
 from cloudyfan_jev.identity import IdentityStore
-from cloudyfan_jev.privacy import ExecutionPolicy
 from cloudyfan_jev.scores.backup_runtime import BackupCategoryCore
-from cloudyfan_jev.scores.catalog import digest
 from cloudyfan_jev.scores.health import HealthStore
 
 from cloudyfan_monitor.integration import ACCESS_POLICY, RunBoundCore, assemble_monitor
 from cloudyfan_monitor.pools import empty_view
 from cloudyfan_monitor.store import Store
 
+from _backup_fixture import prepare_backup_values
+
 OPERATOR = "synthetic-candidate-health-operator-not-a-secret"
 CONTRACT = "synthetic-health-public-v1"
 
 
 def health_values():
-    core_tests = Path(cloudyfan_jev.__file__).resolve().parents[2] / "tests"
-    spec = importlib.util.spec_from_file_location("_monitor_candidate_health_fixture", core_tests / "test_backup_runtime.py")
-    module = importlib.util.module_from_spec(spec)
-    original = sys.path[:]
-    try:
-        sys.path.insert(0, str(core_tests))
-        spec.loader.exec_module(module)
-    finally:
-        sys.path[:] = original
-    plan = module.plan_for(count=3)
-
-    def locations(value):
-        if isinstance(value, dict):
-            if isinstance(value.get("profile"), dict):
-                value["profile"]["execution_location"] = "cloud:fixture"
-            for child in value.values():
-                locations(child)
-        elif isinstance(value, list):
-            for child in value:
-                locations(child)
-
-    locations(plan)
-    snapshot = plan["snapshot"]
-    snapshot["snapshot_id"] = digest({key: value for key, value in snapshot.items() if key != "snapshot_id"})
-    plan["snapshot_id"] = snapshot["snapshot_id"]
-    privacy = ExecutionPolicy("unrestricted", "home:fixture", "cloud:typesafe")
-    diagnostics = DiagnosticContract("synthetic-health-v1", "synthetic-health-validator")
-    _, decision = example_config()
-    profiles = {tier: rows[0]["entry"]["profile"] for tier, rows in plan["pools"].items()}
-    plan["qcs_policy"]["execution_contract"] = Core(None, profiles, decision, limits=Limits(max_turns=1),
-        execution_policy=privacy, diagnostic_contract=diagnostics).execution_contract_descriptor(CONTRACT)
-    module.rebind(plan)
-    return {"plan": plan, "module": module, "privacy": privacy, "diagnostics": diagnostics,
-            "decision": decision, "now": module.NOW}
+    return prepare_backup_values(contract=CONTRACT,
+        diagnostics=DiagnosticContract("synthetic-health-v1", "synthetic-health-validator"), count=3)
 
 
 @dataclass

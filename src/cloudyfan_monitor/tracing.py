@@ -15,8 +15,15 @@ def routing_trace(result):
                          "passed": attempt["public"].get("passed"), "stop": attempt.get("stop"),
                          "models": sorted({c["model"] for c in calls if c["model"]}), "calls": calls})
     decisions = []
-    for index, decision in enumerate((result.get("selection") or {}).get("decisions", [])):
-        previous = attempts[index] if index < len(attempts) else None
+    next_attempt = 0
+    for decision in (result.get("selection") or {}).get("decisions", []):
+        # Backup runners save initial/same-pool economic decisions too; an
+        # economic classify choice and its paid classifier share ONE previous
+        # attempt. Plain/QCS Core starts its decision stream after the first
+        # attempt. Advance only when the choice leads to the next saved attempt.
+        if next_attempt == 0 and decision.get("stage") in ("low_mid", "mid_high"):
+            next_attempt = 1
+        previous = attempts[next_attempt - 1] if 0 < next_attempt <= len(attempts) else None
         trigger = ("public_validation_failed" if previous and previous["passed"] is False
                    else "public_validation_unavailable")
         decisions.append({key: decision.get(key) for key in (
@@ -24,5 +31,8 @@ def routing_trace(result):
             "probabilities", "cost_usd", "model")}
             | {"generation_id": decision.get("id"),
                "previous_tier": previous["tier"] if previous else None, "trigger": trigger})
+        if (decision.get("action") == "direct" or "fallback" in decision) and (
+                next_attempt < len(attempts) and attempts[next_attempt]["tier"] == decision.get("selected_tier")):
+            next_attempt += 1
     return {"complete": True, "attempts": attempts, "decisions": decisions,
             "basis": "verified_core_result", "distributions_are_correctness_probabilities": False}

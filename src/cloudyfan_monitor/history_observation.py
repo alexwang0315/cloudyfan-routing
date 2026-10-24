@@ -15,9 +15,11 @@ import sqlite3
 
 from .store import digest
 from .tracing import routing_trace
+from .observation_fields import configuration, identifier
 
 from cloudyfan_jev.scores.backup_pools import verify_backup_pools
 from cloudyfan_jev.scores.backup_runtime import backup_classifier_contract_hash, backup_pool_contract_hash
+from cloudyfan_jev.scores.qcs import SelectionPolicy, classifier_contract_hash
 
 SCHEMA_VERSION = "mrc-observation-v1"
 TIERS = ("open_source", "low", "mid", "high")
@@ -99,7 +101,11 @@ def _economic(plan, decision, stage, previous, pair):
         "classified_paths_usd": {tier: _public_interval(variant["classified_paths"][tier]["cost_usd"]) for tier in pair},
         "classifier_fee_estimate_usd": _public_interval(variant["classifier_cost_usd"]),
         "net_saving_lower_usd": expected["net_saving_lower_usd"],
-        "calibration_version": identifier(calibration["contract_sha256"]),
+        # This evidence format has no dataset version. The protocol/model-pair
+        # contract and raw calibration evidence are distinct fingerprints.
+        "calibration_version": None,
+        "calibration_evidence_sha256": identifier(calibration.get("raw_sha256")),
+        "classifier_contract_sha256": identifier(calibration["contract_sha256"]),
         "classifier_version": identifier(calibration["classifier_version"])}
 
 
@@ -125,6 +131,87 @@ def _saved_health_matches(health_store, assessment, policy, cache):
             return False
         cache[snapshot_id] = snapshot
     return observation in cache[snapshot_id].get("observations", [])
+
+
+def _classifier_fee(completed, classified, stage, profile):
+    calls = [call for call in (completed.get("selection") or {}).get("calls", [])
+             if call.get("call_id", "").endswith("-decision-" + stage)
+             and call.get("generation_id") == classified.get("id") and call.get("profile", profile) == profile]
+    if len(calls) == 1 and calls[0].get("cost_unknown") is False:
+        amount = calls[0].get("cost_usd")
+        if isinstance(amount, str) and Decimal(amount).is_finite() and Decimal(amount) >= 0:
+            return amount
+    return None
+
+
+def _qcs_stages(directory, manifest, completed):
+    """Link existing CategoryCore checkpoints to their original immutable plan.
+
+    SelectionPolicy checks only the frozen calibration arithmetic. No admission,
+    current health, public prices or fee reconciliation is performed here.
+    """
+    plan = manifest["selection_policy"]
+    policy = SelectionPolicy(plan)
+    if plan["policy"].get("category_id") != manifest["task"]["category"]:
+        raise ValueError("Historical QCS category differs")
+    attempts = completed["attempts"]
+    decisions = (completed.get("selection") or {}).get("decisions", [])
+    stages = []
+    for index, decision in enumerate(decisions):
+        stage = "low_mid" if index == 0 else "mid_high"
+        try:
+            previous, following = attempts[index], attempts[index + 1]
+            expected = policy.decide(stage, previous["tier"])
+            saved = _read(directory / ("economics-" + stage + ".json"))
+            if (saved != {"outcome": expected, "previous_tier": previous["tier"],
+                    "previous_answer": previous["final"], "public_diagnostics": previous["public"]}
+                    or expected["action"] == "direct" and decision != expected
+                    or decision.get("stage") != stage or decision.get("selected_tier") != following["tier"]):
+                raise ValueError("Historical QCS decision differs")
+            key = stage if stage == "low_mid" else stage + ":" + previous["tier"]
+            forecast = plan["policy"]["stages"][key]
+            calibration = forecast.get("classified_calibration") or plan["policy"]["calibration"]
+            tiers = ("low", "mid") if stage == "low_mid" else ("mid", "high")
+            rows = []
+            for tier in tiers:
+                profile = plan["profiles"].get(tier)
+                if profile is None:
+                    continue
+                config_id = profile.get("capability_card", {}).get("score_selection", {}).get("config_id")
+                eligible = plan["eligible"][tier]
+                rows.append({"tier": tier, "config_id": identifier(config_id),
+                    "configuration": configuration(profile), "health": {"status": "not_provided"},
+                    "state": "dispatched" if tier == following["tier"] else
+                        "considered_not_selected" if eligible else "excluded_before_dispatch",
+                    "reasons": [] if eligible else ["candidate_qualification_stale_or_invalid"]})
+            paths = {tier: _public_interval(forecast["paths"][tier]["cost_usd"])
+                     for tier in tiers if plan["eligible"][tier]}
+            classified_paths = forecast.get("classified_paths")
+            economics = {"status": "partial", "basis": "frozen_complete_workflow_estimate",
+                "direct_paths_usd": paths,
+                "classified_paths_usd": ({tier: _public_interval(classified_paths[tier]["cost_usd"])
+                    for tier in paths} if classified_paths else None),
+                "classifier_fee_estimate_usd": (_public_interval(forecast["classifier_cost_usd"])
+                    if forecast.get("classifier_cost_usd") else None),
+                "net_saving_lower_usd": expected["net_saving_lower_usd"], "calibration_version": None,
+                "calibration_evidence_sha256": identifier(calibration.get("raw_sha256")),
+                "classifier_contract_sha256": identifier(calibration.get("contract_sha256")),
+                "plan_id": identifier(plan["plan_id"])}
+            if economics["classifier_contract_sha256"] is not None and calibration["contract_sha256"] != (
+                    classifier_contract_hash(plan["profiles"], manifest["decision"]["version"], stage, previous["tier"])):
+                raise ValueError("Historical classifier contract differs")
+            stages.append({"index": index, "stage": stage, "state": "recorded",
+                "trigger": "public_validation_failed" if previous["public"].get("passed") is False else
+                    "public_validation_unavailable", "action": expected["action"], "reason": expected["reason"],
+                "selected_tier": following["tier"], "classifier_called": expected["action"] == "classify",
+                "classifier_api_usd": (_classifier_fee(completed, decision, stage, manifest["decision"])
+                    if expected["action"] == "classify" else None),
+                "candidates": rows, "economics": economics})
+        except Exception:
+            stages.append({"index": index, "stage": stage, "state": "unknown",
+                "reason": "saved_selection_unverifiable", "candidates": [], "economics": {"status": "unknown"}})
+            break
+    return stages
 
 
 def _historical_candidate(row, observation, tier, health_store, policy, cache):
@@ -253,20 +340,6 @@ def _backup_stages(directory, manifest, completed, health_store):
     return stages, partial
 
 
-def identifier(value):
-    if (isinstance(value, str) and len(value) <= 180
-            and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:/@+ -]*", value)
-            and "://" not in value and ".." not in value):
-        return value
-    return None
-
-
-def configuration(profile):
-    profile = profile if isinstance(profile, dict) else {}
-    return {key: identifier(profile.get(key)) for key in
-            ("model", "model_version", "effort", "provider", "provider_name", "backend", "quantization")}
-
-
 def _read(path):
     # Every path is built from controlled roots and the service's hashed run ID.
     if any(part.is_symlink() for part in (path, *path.parents)):
@@ -362,6 +435,12 @@ class TaskDecisionObserver:
                         candidate_evidence="saved_selection")
                     result["costs"]["routing_estimates"] = ("available" if any(
                         row["economics"]["status"] == "available" for row in result["stages"]) else "not_provided")
+                elif manifest.get("selection_policy", {}).get("schema_version") == "hierarchical-qcs-v1":
+                    result["stages"] = _qcs_stages(directory, manifest, completed)
+                    result.update(status="partial", reason="saved_qcs_selection",
+                                  candidate_evidence="frozen_selection")
+                    result["costs"]["routing_estimates"] = ("partial" if any(
+                        row["economics"]["status"] == "partial" for row in result["stages"]) else "not_provided")
             return result
         except Exception:
             result.update(status="unknown", reason="historical_evidence_unavailable",

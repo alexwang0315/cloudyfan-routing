@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import threading
 
+import httpx
 import pytest
 
 from cloudyfan_monitor.demo import CATEGORY
@@ -15,6 +16,8 @@ from test_local_http_integration import (
     local_service as local_service, loopback_network as loopback_network,
 )
 from history_fixture import assemble_backup_host
+from candidate_observation_fixture import assemble_candidate_host
+from test_candidate_observation_http import candidate_http as candidate_http
 
 
 @pytest.fixture
@@ -94,6 +97,10 @@ def test_saved_classification_compares_complete_estimates_and_keeps_actual_fee_s
         "low": {"lower": ".20", "upper": ".20"}, "mid": {"lower": ".10", "upper": ".10"}}
     assert stage["economics"]["classifier_fee_estimate_usd"] == {"lower": ".001", "upper": ".001"}
     assert stage["economics"]["net_saving_lower_usd"] == "0.080"
+    assert stage["economics"]["calibration_version"] is None
+    assert stage["economics"]["calibration_evidence_sha256"] == "b" * 64
+    assert stage["economics"]["classifier_contract_sha256"] is not None
+    assert stage["economics"]["calibration_evidence_sha256"] != stage["economics"]["classifier_contract_sha256"]
     assert stage["classifier_api_usd"] == "0.001"
     assert history["costs"]["complete_api_usd"] == "0.021"
     assert snapshot["tasks"][0]["classifier_calls"] == 1
@@ -126,6 +133,10 @@ def test_both_quality_recovery_stages_keep_the_actual_previous_configuration(his
     assert history["stages"][2]["classifier_called"] is True
     assert history["costs"]["complete_api_usd"] == "0.032"
     assert snapshot["tasks"][0]["classifier_calls"] == 2
+    classifiers = [decision for decision in snapshot["tasks"][0]["trace"]["decisions"] if decision["model"]]
+    assert [(decision["stage"], decision["previous_tier"], decision["trigger"]) for decision in classifiers] == [
+        ("low_mid", "open_source", "public_validation_failed"),
+        ("mid_high", "low", "public_validation_failed")]
     assert len(history_service.bundle.calls) == 5
 
 
@@ -229,3 +240,49 @@ def test_operator_reads_frozen_task_identity_without_exposing_it_to_clients(loca
         repeated = operator.get("/monitor/snapshot").json()
         assert repeated["tasks"][0]["operator_observation"] == observation
     assert len(host.upstream.calls) == calls == 1
+
+
+@pytest.mark.parametrize("classify", [False, True], ids=["direct", "classified"])
+def test_category_qcs_history_preserves_saved_reason_and_partial_forecasts(candidate_http, classify):
+    original, operator = candidate_http
+    host = assemble_candidate_host(original.root / "qcs-history", str(operator.base_url).rstrip("/"),
+        clock=original.clock, fail_first=True, classify=classify)
+    original.server.set_app(host.app)
+    with httpx.Client(base_url=operator.base_url, trust_env=False, timeout=10,
+            headers={"Authorization": "Bearer " + host.credentials["studio"].token}) as client:
+        created = client.post("/v1/tasks", json={"run_id": "category-history", "category": host.category,
+            "prompt": "Return only 1+1. PRIVATE-CATEGORY-HISTORY"})
+        assert created.status_code == 200 and created.json()["status"] == "passed"
+        snapshot = operator.get("/monitor/snapshot")
+        assert snapshot.status_code == 200
+        task = snapshot.json()["tasks"][0]
+        history = task["operator_observation"]["task_decision"]
+        assert history["binding"]["routing_version"] == "hierarchical-qcs-v1"
+        assert history["status"] == "partial"
+        stage = history["stages"][0]
+        assert stage["stage"] == "low_mid"
+        assert stage["trigger"] == "public_validation_failed"
+        assert stage["action"] == ("classify" if classify else "direct")
+        assert stage["selected_tier"] == ("low" if classify else "mid")
+        assert stage["reason"] == ("conservative_net_saving_positive" if classify else "classified_flow_estimate_unknown")
+        assert stage["classifier_called"] is classify
+        assert stage["economics"]["net_saving_lower_usd"] == ("0.080" if classify else "-0.01")
+        assert stage["economics"]["direct_paths_usd"]["mid"] == {"lower": "0.1", "upper": "0.1"}
+        if classify:
+            assert stage["classifier_api_usd"] == "0.001"
+            assert stage["economics"]["classified_paths_usd"]["low"] == {"lower": ".01", "upper": ".01"}
+        else:
+            assert stage["economics"]["classified_paths_usd"] is None
+        assert stage["economics"]["calibration_version"] is None
+        assert stage["economics"]["calibration_evidence_sha256"] == "a" * 64
+        assert stage["candidates"][0 if classify else 1]["state"] == "dispatched"
+        assert all(candidate["health"]["status"] == "not_provided" for candidate in stage["candidates"])
+        assert history["costs"]["routing_estimates"] == "partial"
+        assert history["costs"]["complete_api_usd"] == ("0.021" if classify else "0.02")
+        assert "PRIVATE-CATEGORY-HISTORY" not in snapshot.text
+        assert str(host.root) not in json.dumps(task["operator_observation"])
+        budget = host.budget.report()
+        for _ in range(2):
+            assert operator.get("/monitor/snapshot").json()["tasks"][0]["operator_observation"] == task["operator_observation"]
+        assert len(host.calls) == (3 if classify else 2) and host.budget.report() == budget
+        assert "operator_observation" not in client.get("/v1/monitor").text

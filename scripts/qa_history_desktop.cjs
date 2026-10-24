@@ -28,7 +28,9 @@ async function main(){
   report.origin=origin;report.baseline_mock_calls=baseline.model_mock_calls;
   const sources=['src/cloudyfan_monitor/history_observation.py','src/cloudyfan_monitor/static/trace.js',
     'src/cloudyfan_monitor/app.py','src/cloudyfan_monitor/integration.py',
-    'scripts/qa_history_http.py','scripts/qa_history_desktop.cjs','tests/history_fixture.py','tests/test_history_observation.py'];
+    'src/cloudyfan_monitor/observation_fields.py','src/cloudyfan_monitor/tracing.py',
+    'scripts/qa_history_http.py','scripts/qa_history_desktop.cjs','tests/history_fixture.py','tests/test_history_observation.py',
+    'tests/_backup_fixture.py','tests/test_category_host_integration.py','tests/candidate_observation_fixture.py'];
   report.source_sha256=Object.fromEntries(await Promise.all(sources.map(async source=>[source,createHash('sha256').update(await fs.readFile(path.join(ROOT,source))).digest('hex')])));
   browser=await chromium.launch({channel:'chrome',headless:true});
   report.browser=browser.version();
@@ -40,11 +42,12 @@ async function main(){
   await page.goto(origin,{waitUntil:'domcontentloaded'});
   await page.getByRole('heading',{name:'路由運作，一眼掌握。'}).waitFor();
   const initial=await reload();
-  assert.equal(initial.tasks.length,7);
+  assert.equal(initial.tasks.length,9);
   await page.getByRole('link',{name:'↳ 任務與升級'}).click();
   const cases=[['classified',/保守淨節省足夠，已呼叫 Jev/],['direct',/缺少精確分類校準/],
     ['economic',/已有校準，但保守淨節省不足/],['availability',/供應商可用性故障後的同池備援/],
-    ['quality-chain',/中／高階段/],['first-pass',/未進入此階段/],['legacy',/未提供逐候選歷史證據/]];
+    ['quality-chain',/中／高階段/],['first-pass',/未進入此階段/],['legacy',/未提供逐候選歷史證據/],
+    ['qcs-direct',/缺少完整分類流程耗時估計/],['qcs-classified',/保守淨節省足夠，已呼叫 Jev/]];
   for(const [name,expected] of cases){
     await step('historical_'+name,async()=>{
       const button=page.locator('tr[data-task-run="history-'+name+'"]').locator('[data-task-trace-toggle]');
@@ -62,6 +65,23 @@ async function main(){
         assert.match(await detail.innerText(),/0\.001/);
         assert.match(await detail.innerText(),/分布不是答對機率/);
       }
+      if(['classified','quality-chain','qcs-classified'].includes(name)){
+        const calls=detail.locator('[data-trace-decision]');
+        const previous=async call=>call.locator('dt').filter({hasText:/^前次模型池$/}).locator('..').locator('dd').innerText();
+        const trigger=async call=>call.locator('dt').filter({hasText:/^觸發原因$/}).locator('..').locator('dd').innerText();
+        assert.equal(await previous(calls.nth(0)),'開源池');
+        assert.equal(await trigger(calls.nth(0)),'前次公開驗收未通過');
+        if(name==='quality-chain'){
+          assert.equal(await calls.count(),2);
+          assert.equal(await previous(calls.nth(1)),'低分池');
+          assert.equal(await trigger(calls.nth(1)),'前次公開驗收未通過');
+        }
+      }
+      if(['classified','qcs-direct','qcs-classified'].includes(name)){
+        assert.equal(await detail.locator('dt').filter({hasText:/^原分類校準版本$/}).locator('..').locator('dd').first().innerText(),'未知');
+        assert.match(await detail.innerText(),/原校準證據指紋/);
+        assert.match(await detail.innerText(),/原分類協定指紋/);
+      }
       await detail.locator('[data-history-observation]').evaluate(node=>node.scrollIntoView({block:'start'}));
       await snapshot('desktop-history-'+name);
       if(['classified','availability'].includes(name)){
@@ -78,7 +98,7 @@ async function main(){
     await page.waitForResponse(r=>r.url()===origin+'/monitor/snapshot'&&r.status()===200,{timeout:15000});
     await page.waitForFunction(key=>document.activeElement?.dataset.taskTraceToggle===key,key);
     assert.equal(await button.getAttribute('aria-expanded'),'true');
-    assert.equal(await page.locator('[data-task-trace-toggle][aria-expanded="true"]').count(),7);
+    assert.equal(await page.locator('[data-task-trace-toggle][aria-expanded="true"]').count(),9);
   });
   await step('historical_health_and_fees_stay_frozen_on_read',async()=>{
     await command('health');

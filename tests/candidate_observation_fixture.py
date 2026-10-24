@@ -23,14 +23,15 @@ class CandidateHost:
     operator_token: str = OPERATOR
 
 
-def assemble_candidate_host(root, origin, *, clock, exclude_low=False):
-    values, calls = category_values(), []
+def assemble_candidate_host(root, origin, *, clock, exclude_low=False, fail_first=False, classify=False):
+    values, calls = category_values(classify=classify), []
     if exclude_low:
         values["evidence"]["low"]["quality_sufficient"] = False
         values["policy"]["complete_policy_flow"]["contract_sha256"] = flow_contract_hash(
             values["matrix"]["categories"][values["category"]]["snapshot"], values["requirements"],
             values["evidence"], values["policy"])
-    original, service, budget, credentials = assemble_category_host(root, values, calls, clock=clock)
+    original, service, budget, credentials = assemble_category_host(root, values, calls, clock=clock,
+        fail_first=fail_first)
     descriptor = service.contracts["category-host-v1"].descriptor()
     view = empty_view("synthetic_candidate_observation_no_real_qualification", values["now"])
     category = values["category"]

@@ -64,7 +64,8 @@ class QueueScheduler:
                        'created REAL, deadline REAL, state TEXT, reason TEXT, started REAL, finished REAL, cancel_requested INTEGER DEFAULT 0)')
             if capacity_protocol is not None:
                 columns = {row[1] for row in db.execute('PRAGMA table_info(jobs)')}
-                for name, declaration in (('claim', 'TEXT'), ('epoch', 'INTEGER DEFAULT 0'), ('detail', 'TEXT')):
+                for name, declaration in (('claim', 'TEXT'), ('epoch', 'INTEGER DEFAULT 0'), ('detail', 'TEXT'),
+                                          ('waiting_since', 'REAL'), ('wait_seconds', 'REAL DEFAULT 0')):
                     if name not in columns:
                         db.execute('ALTER TABLE jobs ADD COLUMN ' + name + ' ' + declaration)
         os.chmod(self.path, 0o600)
@@ -191,9 +192,9 @@ class QueueScheduler:
                 if rejection:
                     db.execute('INSERT INTO rejections VALUES(?,?,?,?)', (principal, payload['run_id'], rejection, now))
                 else:
-                    db.execute('INSERT INTO jobs(id,principal,run_id,request,created,deadline,state,reason) VALUES(?,?,?,?,?,?,?,?)',
+                    db.execute('INSERT INTO jobs(id,principal,run_id,request,created,deadline,state,reason,waiting_since) VALUES(?,?,?,?,?,?,?,?,?)',
                         (identity, principal, payload['run_id'], encoded, now, now + self.limits.max_wait_seconds,
-                         'accepting', 'queue_acceptance_incomplete'))
+                         'accepting', 'queue_acceptance_incomplete', now))
         if rejection:
             raise ServiceError(rejection, 429)
         with self._readonly() as db:
@@ -278,7 +279,24 @@ class QueueScheduler:
 
     def _expire(self, db):
         now = self._now(db)
-        db.execute('UPDATE jobs SET state="expired",reason="queue_deadline_expired",finished=? WHERE state="queued" AND deadline<=?', (now, now))
+        if self.capacity_protocol is None:
+            db.execute('UPDATE jobs SET state="expired",reason="queue_deadline_expired",finished=? WHERE state="queued" AND deadline<=?', (now, now))
+        else:
+            for row in db.execute('SELECT * FROM jobs WHERE state IN ("queued","accepting") AND deadline<=?', (now,)).fetchall():
+                self._close_waiting(db, row, 'expired', 'queue_deadline_expired', row['deadline'])
+
+    def _close_waiting(self, db, row, state, reason, finished):
+        from .budget import BudgetError
+        try:
+            request = json.loads(row['request'])
+            self.service.contracts[request['contract_id']].runner.store.finish(row['id'])
+        except BudgetError:
+            db.execute('UPDATE jobs SET state="interrupted_pending",reason="unknown_cost" WHERE id=?', (row['id'],))
+            return
+        self.service.capacity_controller.terminal(row['id'])
+        since = row['waiting_since'] if row['waiting_since'] is not None else row['created'] if row['started'] is None else finished
+        db.execute('UPDATE jobs SET state=?,reason=?,finished=?,wait_seconds=wait_seconds+?,waiting_since=NULL WHERE id=?',
+            (state, reason, finished, max(0, finished-since), row['id']))
 
     def admission_history(self, principal):
         self.service.authorize(principal)
@@ -312,6 +330,11 @@ class QueueScheduler:
 
     def _status(self, row, now):
         principal, run_id = row['principal'], row['run_id']
+        waiting_since = row.get('waiting_since')
+        elapsed_wait = row.get('wait_seconds') or 0
+        if row['state'] in {'queued', 'accepting', 'claiming'}:
+            since = waiting_since if waiting_since is not None else row['created'] if row['started'] is None else now
+            elapsed_wait += max(0, min(now, row['deadline'])-since)
         if row['state'] in {'queued', 'accepting'} and now >= row['deadline']:
             row = {**row, 'state': 'expired', 'reason': 'queue_deadline_expired', 'finished': row['deadline']}
         if row['state'] == 'accepting':
@@ -329,7 +352,7 @@ class QueueScheduler:
         if self.capacity_protocol is not None:
             view['queue'] = {'protocol': self.capacity_protocol.protocol, 'version': self.capacity_protocol.version,
                 'limits': asdict(self.limits), 'accepted_at': row['created'], 'deadline': row['deadline'],
-                'waiting_seconds': max(0, (row['started'] or min(now, row['deadline'])) - row['created']),
+                'waiting_seconds': elapsed_wait,
                 'effective_expiry_only': row['state'] == 'expired' and row['finished'] == row['deadline']}
             detail = json.loads(row.get('detail') or '{}')
             view['capacity_reason'] = detail.get('code')
@@ -376,7 +399,12 @@ class QueueScheduler:
             self._expire(db)
             row = self._job(db, principal, run_id)
             if row['state'] in {'queued', 'accepting'}:
-                db.execute('UPDATE jobs SET state="cancelled",reason="cancelled_before_dispatch",finished=?,cancel_requested=1 WHERE id=?', (self._now(db), row['id']))
+                if self.capacity_protocol is None:
+                    db.execute('UPDATE jobs SET state="cancelled",reason="cancelled_before_dispatch",finished=?,cancel_requested=1 WHERE id=?', (self._now(db), row['id']))
+                else:
+                    reason = 'cancelled_before_next_dispatch' if row['started'] is not None else 'cancelled_before_dispatch'
+                    self._close_waiting(db, row, 'cancelled', reason, self._now(db))
+                    db.execute('UPDATE jobs SET cancel_requested=1 WHERE id=?', (row['id'],))
             elif row['state'] in {'claiming', 'running', 'interrupted_pending'}:
                 db.execute('UPDATE jobs SET cancel_requested=1 WHERE id=?', (row['id'],))
         return self.status(principal, run_id)
@@ -504,7 +532,9 @@ class QueueScheduler:
                 db.execute('UPDATE jobs SET state=?,reason=?,finished=? WHERE id=?', (state, reason, now, row['id']))
                 self.service.capacity_controller.terminal(row['id'])
                 return self._status(dict(db.execute('SELECT * FROM jobs WHERE id=?', (row['id'],)).fetchone()), now)
-            db.execute('UPDATE jobs SET state="running",started=COALESCE(started,?),reason=NULL WHERE id=?', (now, row['id']))
+            since = current['waiting_since'] if current['waiting_since'] is not None else current['created'] if current['started'] is None else now
+            db.execute('UPDATE jobs SET state="running",started=COALESCE(started,?),reason=NULL,wait_seconds=wait_seconds+?,waiting_since=NULL WHERE id=?',
+                       (now, max(0, now-since), row['id']))
         try:
             with self.capacity_protocol.running(self, row, prepared, claim) as execution:
                 execution['evidence'] = evidence
@@ -512,10 +542,10 @@ class QueueScheduler:
             with self._transaction() as db:
                 waiting = state.get('status') == 'queued'
                 interrupted = state.get('status') in {'engineering_interrupted', 'accounting_interrupted'}
-                db.execute('UPDATE jobs SET state=?,reason=?,finished=? WHERE id=? AND claim=? AND state="running"',
+                db.execute('UPDATE jobs SET state=?,reason=?,finished=?,waiting_since=? WHERE id=? AND claim=? AND state="running"',
                     ('queued' if waiting else 'interrupted_pending' if interrupted else 'completed',
                      'queue_waiting_worker' if waiting else state.get('error', {}).get('code'),
-                     None if waiting or interrupted else self._now(db), row['id'], claim))
+                     None if waiting or interrupted else self._now(db), self._now(db) if waiting else None, row['id'], claim))
             if not execution['consumed']:
                 dispatch.release()  # Original gates refused before a paid intent.
         except Exception as error:

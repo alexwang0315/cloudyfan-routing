@@ -130,3 +130,106 @@ def test_actual_backup_health_queue_factory_preserves_fallback_and_same_identity
             reopened.close()
     finally:
         fixture.close()
+
+
+def test_cancelled_acceptance_does_not_reopen_thirty_day_access_on_replay_or_resume(local_service):
+    import fcntl
+    host = build_resilience_host(local_service.bundle.root / 'expired-acceptance', clock=local_service.clock,
+        origin=local_service.origin)
+    local_service.bundle = host.bundle
+    local_service.server.set_app(host.app)
+    operator, client = local_service.client('operator'), local_service.client()
+    assert operator.post('/monitor/capacity/activate', json={
+        'revision': 0, 'version': 'synthetic-queued-admission-v1'}).status_code == 200
+    payload = {**TASK, 'run_id': 'expired-acceptance', 'prompt': 'PRIVATE_EXPIRED_RESILIENCE_TEXT 1+1'}
+    identity = host.queue.service.internal_id('studio', payload['run_id'])
+    directory = host.queue.service.root / identity
+    directory.mkdir(mode=0o700)
+    with (directory / '.lock').open('a+b') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        assert client.post('/v1/tasks', json=payload).status_code == 202
+        assert client.post('/v1/tasks/expired-acceptance/cancel', json={}).status_code == 200
+    lifecycle = host.queue.service.retention.lookup(identity)
+    local_service.clock.now = lifecycle['expires_at'] + 1
+    reopened = build_resilience_host(host.bundle.root, clock=local_service.clock, origin=local_service.origin)
+    try:
+        local_service.bundle = reopened.bundle
+        local_service.server.set_app(reopened.app)
+        for path, body in (('/v1/tasks/expired-acceptance/resume', {}), ('/v1/tasks', payload)):
+            response = client.post(path, json=body)
+            assert response.status_code == 410, response.text
+            assert 'PRIVATE_EXPIRED_RESILIENCE_TEXT' not in response.text
+        assert client.get('/v1/tasks/expired-acceptance').status_code == 410
+        assert client.get('/v1/tasks/expired-acceptance/result').status_code == 410
+        assert host.queue.service.retention.lookup(identity)['expires_at'] == lifecycle['expires_at']
+        assert reopened.upstream.calls == host.upstream.calls == []
+    finally:
+        reopened.close()
+        host.close()
+
+
+def test_queued_known_and_unknown_fees_keep_original_access_and_year_long_evidence(local_service):
+    from datetime import datetime
+    local_service.clock.now = datetime.fromisoformat('2026-10-21T00:00:00+00:00').timestamp()
+    fixture = build_resilience_health_host(local_service.bundle.root / 'retained-health',
+        clock=local_service.clock, origin=local_service.origin)
+    local_service.bundle = fixture.host
+    local_service.server.set_app(fixture.app)
+    operator, client = local_service.client('operator'), local_service.client()
+    day = 86400
+    try:
+        assert operator.post('/monitor/capacity/activate', json={
+            'revision': 0, 'version': fixture.policy_version}).status_code == 200
+        payload = {'category': fixture.category, 'prompt': 'PRIVATE_RETAINED_CAPACITY_TEXT Return 1+1.'}
+        assert client.post('/v1/tasks', json={**payload, 'run_id': 'retained-known'}).status_code == 202
+        assert fixture.queue.dispatch_next()['status'] == 'passed'
+        fixture.flags['scenario'] = 'unknown_fee'
+        assert client.post('/v1/tasks', json={**payload, 'run_id': 'retained-unknown'}).status_code == 202
+        unknown = fixture.queue.dispatch_next()
+        assert unknown['status'] == 'interrupted_pending'
+        budget = fixture.budgets['primary'].report()
+        assert budget['known_usd'] == '.01' or budget['known_usd'] == '0.01'
+        assert budget['unknown_events'] == 1 and budget['dispatch_blocked'] is True
+        start = fixture.host.service.retention.lookup(
+            fixture.host.service.internal_id('studio', 'retained-known'))
+        originals = {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for directory in (
+            fixture.host.root / 'receipts-primary', fixture.host.root / 'health')
+            for p in directory.rglob('*') if p.is_file()}
+        calls = list(fixture.requests)
+        local_service.clock.now = start['expires_at'] - 1
+        assert client.get('/v1/tasks/retained-known/result').status_code == 200
+        local_service.clock.now += 1
+        assert client.get('/v1/tasks/retained-known/result').status_code == 410
+        for elapsed in (31 * day, 365 * day, 366 * day):
+            local_service.clock.now = start['created_at'] + elapsed
+            for run in ('retained-known', 'retained-unknown'):
+                assert client.get('/v1/tasks/' + run).status_code == 410
+                assert client.post('/v1/tasks/' + run + '/resume', json={}).status_code == 410
+            preview = operator.post('/monitor/retention/preview', json={
+                'client': 'studio', 'run_id': 'retained-unknown'})
+            assert preview.status_code == 200, preview.text
+            saved = preview.json()
+            assert saved['policy']['evidence_min_days'] == 365 and saved['policy']['automatic_deletion'] is False
+            assert saved['evidence_retain_until'] >= start['created_at'] + 365 * day
+            assert 'unknown_accounting' in saved['blockers'] and saved['eligible'] is False
+            assert 'PRIVATE_RETAINED_CAPACITY_TEXT' not in preview.text
+            capacity = operator.get('/monitor/capacity').json()['dispatch']
+            assert any(group['concurrency_used'] >= 1 for group in capacity['groups'])
+            assert operator.get('/monitor/queue').status_code == 200
+        reopened = build_resilience_health_host(fixture.host.root, clock=local_service.clock,
+            origin=local_service.origin)
+        try:
+            local_service.bundle = reopened.host
+            local_service.server.set_app(reopened.app)
+            assert client.post('/v1/tasks/retained-known/resume', json={}).status_code == 410
+            assert reopened.budgets['primary'].report() == budget
+            assert reopened.requests == [] and fixture.requests == calls
+            assert all(hashlib.sha256(Path(path).read_bytes()).hexdigest() == value for path, value in originals.items())
+            assert reopened.host.service.retention.lookup(
+                reopened.host.service.internal_id('studio', 'retained-known'))['expires_at'] == start['expires_at']
+            for root in (reopened.queue.integrity.root, reopened.controller.store.integrity.root):
+                assert all(b'PRIVATE_RETAINED_CAPACITY_TEXT' not in p.read_bytes() for p in root.rglob('*.json'))
+        finally:
+            reopened.close()
+    finally:
+        fixture.close()

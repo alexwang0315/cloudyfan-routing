@@ -105,7 +105,8 @@ def assemble_monitor(store, service, registry, identities, *, operator_token, so
         if type(capacity_observer) is not CapacityObserver:
             raise ValueError("Controlled capacity source observer required")
         service.retention_protected_paths = tuple(set(service.retention_protected_paths)
-            | {capacity_observer.store.path.resolve(), capacity_observer.store.path.with_suffix(".refresh.lock").resolve()})
+            | {capacity_observer.store.path.resolve(), capacity_observer.store.path.with_suffix(".refresh.lock").resolve(),
+               capacity_observer.store.integrity.root.resolve()})
     if capacity_controller is not None:
         from cloudyfan_jev.capacity_dispatch import CapacityController
         if (type(capacity_controller) is not CapacityController or capacity_observer is None

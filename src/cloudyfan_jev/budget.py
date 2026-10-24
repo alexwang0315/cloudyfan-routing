@@ -332,9 +332,9 @@ class _BudgetClient:
             dispatch = _BudgetDispatch(self, cid, args, endpoint, payload)
             record = self.wrapped.call(cid, *args, dispatch=dispatch)
             self._record(cid, record)
-            if record.get('capacity_denial_code'):
+            if record.get('capacity_denial_code') or dispatch.denial:
                 from .capacity_dispatch import CapacityDenied
-                raise CapacityDenied(record['capacity_denial_code'])
+                raise CapacityDenied(record.get('capacity_denial_code') or dispatch.denial)
             return record
         payload = args[-1]
         model = payload.get('model')
@@ -365,7 +365,7 @@ class _BudgetDispatch:
     def __init__(self, client, cid, args, endpoint, payload):
         self.client, self.cid, self.args = client, cid, args
         self.owner, self.endpoint, self.payload = client.owner, endpoint, payload
-        self.capacity = None
+        self.capacity, self.denial = None, None
         self.bound = self.owner.model_bounds.get(payload.get('model'))
 
     def prepare(self, cid, request):
@@ -398,7 +398,7 @@ class _BudgetDispatch:
         self.capacity.release()
 
     def complete(self, record):
-        self.capacity.complete(record)
+        self.denial = self.capacity.complete(record)
 
 
 class _BudgetEnvironment:

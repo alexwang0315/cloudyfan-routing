@@ -29,6 +29,15 @@ def _hash(value):
     return hashlib.sha256(_json(value).encode()).hexdigest()
 
 
+def _transport_identity(transport):
+    """Private runtime equality only; never serialized or projected."""
+    http = transport.http
+    return (getattr(transport, 'key', None), id(http), id(http._transport), http.auth,
+            tuple(http.headers.raw), tuple((c.domain, c.path, c.name, c.value) for c in http.cookies.jar),
+            tuple((kind, tuple(map(id, hooks))) for kind, hooks in http.event_hooks.items()),
+            tuple((str(pattern.pattern), id(value)) for pattern, value in http._mounts.items()))
+
+
 class CapacityDenied(RuntimeError):
     control_plane_error = True
 
@@ -149,15 +158,20 @@ class CapacityToolTransport(ReceiptStore):
     def result(self, record):
         import httpx
         if record.get('http_status') is None or record.get('raw') is None:
-            raise CapacityDenied('capacity_tool_result_uncertain')
+            from .budget import BudgetError
+            raise BudgetError('External tool result unknown; execution stopped')
         return self.decode(httpx.Response(record['http_status'], text=record['raw']))
 
 
 class CapacityController:
     """A registered host authority. Neither request JSON nor browser registers policy."""
-    def __init__(self, store, *, credential_active):
+    def __init__(self, store, *, credential_active, history_limit=100, max_live_allocations=1000):
         if type(store) is not CapacityStore or not callable(credential_active):
             raise ValueError('Controlled capacity store and credential verifier required')
+        if (type(history_limit) is not int or not 1 <= history_limit <= 100
+                or type(max_live_allocations) is not int or not 1 <= max_live_allocations <= 10000):
+            raise ValueError('Bounded capacity history and live state required')
+        self.history_limit, self.max_live_allocations = history_limit, max_live_allocations
         self.store, self.credential_active = store, credential_active
         self.routes, self._route_credentials = {}, {}
         with store.connection(write=True) as db:
@@ -168,11 +182,25 @@ class CapacityController:
                 CREATE TABLE IF NOT EXISTS capacity_adoptions(run TEXT PRIMARY KEY,payload TEXT NOT NULL,terminal INTEGER NOT NULL);
                 CREATE TABLE IF NOT EXISTS capacity_allocations(id TEXT PRIMARY KEY,payload TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS capacity_dispatch_events(sequence INTEGER PRIMARY KEY AUTOINCREMENT,payload TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS capacity_invalid_policies(version TEXT PRIMARY KEY,reason TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS capacity_dispatch_metadata(id INTEGER PRIMARY KEY CHECK(id=1),clock_floor REAL NOT NULL);
             ''')
+            columns = {row[1] for row in db.execute('PRAGMA table_info(capacity_allocations)')}
+            if 'state' not in columns:
+                db.execute('ALTER TABLE capacity_allocations ADD COLUMN state TEXT')
+                db.execute('ALTER TABLE capacity_allocations ADD COLUMN horizon REAL')
+            for identifier, encoded in db.execute('SELECT id,payload FROM capacity_allocations WHERE state IS NULL').fetchall():
+                value = json.loads(encoded)
+                horizon = max((max(g['rpm_until'], g['tpm_until']) for g in value['groups']), default=value['prepared_at'])
+                db.execute('UPDATE capacity_allocations SET state=?,horizon=? WHERE id=?', (value['state'], horizon, identifier))
+            db.execute('CREATE INDEX IF NOT EXISTS capacity_hot_state ON capacity_allocations(state,horizon)')
+            db.execute('CREATE INDEX IF NOT EXISTS capacity_live_adoption ON capacity_adoptions(terminal)')
 
     def _now(self, db, *, write=False):
-        now = _time(self.store.clock())
+        try:
+            now = _time(self.store.clock())
+        except (ValueError, OverflowError):
+            raise CapacityDenied('capacity_clock_invalid', 409) from None
         floor = db.execute('SELECT clock_floor FROM capacity_dispatch_metadata WHERE id=1').fetchone()
         if floor and now < floor[0]:
             raise CapacityDenied('capacity_clock_backwards', 409)
@@ -234,7 +262,7 @@ class CapacityController:
                 raise ValueError('An immutable capacity policy cannot change')
             db.execute('INSERT OR IGNORE INTO capacity_policies VALUES(?,?)', (version, _json(value)))
         self.routes[version] = tuple(routes)
-        self._route_credentials[version] = tuple(getattr(route.transport, 'key', None) for route in routes)
+        self._route_credentials[version] = tuple(_transport_identity(route.transport) for route in routes)
 
     def activate(self, revision, version):
         if type(revision) is not int or revision < 0:
@@ -295,6 +323,9 @@ class CapacityController:
         with self.store.connection() as db:
             row = db.execute('SELECT payload,terminal FROM capacity_adoptions WHERE run=?', (adoption['run'],)).fetchone()
             now = self._now(db)
+            invalid = db.execute('SELECT 1 FROM capacity_invalid_policies WHERE version=?', (adoption['policy_version'],)).fetchone()
+        if invalid:
+            raise CapacityDenied('capacity_token_proof_invalidated')
         if row is None or json.loads(row[0]) != adoption or row[1]:
             raise CapacityDenied('capacity_adoption_unavailable', 403)
         if not self.credential_active(adoption['principal'], adoption['credential'], adoption['scope'], now):
@@ -305,7 +336,10 @@ class CapacityController:
     def refused(self, run, code):
         with self.store.connection(write=True) as db:
             db.execute('BEGIN IMMEDIATE')
-            now = self._now(db, write=True)
+            try:
+                now = self._now(db, write=True)
+            except CapacityDenied:
+                now = None
             row = db.execute('SELECT payload FROM capacity_adoptions WHERE run=?', (run,)).fetchone()
             if row is not None:
                 value = json.loads(row[0])
@@ -324,24 +358,34 @@ class CapacityController:
             return None
         with self.store.connection() as db:
             policy = json.loads(db.execute('SELECT payload FROM capacity_policies WHERE version=?', (adoption['policy_version'],)).fetchone()[0])
-        matches = [route for index, route in enumerate(self.routes.get(adoption['policy_version'], ()))
-                   if route.descriptor() in policy['routes']
-                   and getattr(route.transport, 'key', None) == self._route_credentials[adoption['policy_version']][index]
-                   and route.endpoint == endpoint and route.model == payload.get('model')
-                   and route.descriptor()['transport_sha256'] == CapacityRoute(transport, endpoint, payload.get('model'), route.binding).descriptor()['transport_sha256']]
+        matches = []
+        for index, route in enumerate(self.routes.get(adoption['policy_version'], ())):
+            if (route.endpoint == endpoint and route.model == payload.get('model')
+                    and route.descriptor() in policy['routes']
+                    and route.descriptor()['transport_sha256'] == CapacityRoute(
+                        transport, endpoint, payload.get('model'), route.binding).descriptor()['transport_sha256']):
+                pin = self._route_credentials[adoption['policy_version']][index]
+                if _transport_identity(transport) != pin:
+                    raise CapacityDenied('capacity_transport_binding_changed')
+                matches.append((route, pin))
         if len(matches) != 1:
             raise CapacityDenied('capacity_route_not_registered')
-        return _CapacityDispatch(self, adoption, matches[0])
+        return _CapacityDispatch(self, adoption, *matches[0])
 
     def snapshot(self):
         with self.store.connection() as db:
             now = self._now(db)
             revision, version = db.execute('SELECT revision,version FROM capacity_dispatch_control WHERE id=1').fetchone()
             policies = [json.loads(row[0]) for row in db.execute('SELECT payload FROM capacity_policies ORDER BY version')]
-            allocations = [json.loads(row[0]) for row in db.execute('SELECT payload FROM capacity_allocations ORDER BY id')]
-            events = [{'sequence': seq, **json.loads(row)} for seq, row in db.execute('SELECT sequence,payload FROM capacity_dispatch_events ORDER BY sequence DESC LIMIT 100')]
-        groups = {}
-        for item in allocations:
+            allocation_count = db.execute('SELECT COUNT(*) FROM capacity_allocations').fetchone()[0]
+            event_count = db.execute('SELECT COUNT(*) FROM capacity_dispatch_events').fetchone()[0]
+            limit = min(100, max(1, self.history_limit))
+            allocations = [json.loads(row[0]) for row in db.execute('SELECT payload FROM capacity_allocations ORDER BY rowid DESC LIMIT ?', (limit,))]
+            hot = [json.loads(row[0]) for row in db.execute("SELECT payload FROM capacity_allocations WHERE state IN ('prepared','sent','uncertain') OR (state='complete' AND horizon>?)", (now,))]
+            events = [{'sequence': seq, **json.loads(row)} for seq, row in db.execute('SELECT sequence,payload FROM capacity_dispatch_events ORDER BY sequence DESC LIMIT ?', (limit,))]
+        groups = {group['physical']: {'group': group['group'], 'scope': group['scope'], 'rpm_used': 0,
+            'tpm_reserved': 0, 'concurrency_used': 0} for item in allocations for group in item['groups']}
+        for item in hot:
             for group in item['groups']:
                 out = groups.setdefault(group['physical'], {'group': group['group'], 'scope': group['scope'], 'rpm_used': 0, 'tpm_reserved': 0, 'concurrency_used': 0})
                 if item['state'] != 'released':
@@ -350,6 +394,8 @@ class CapacityController:
                     out['concurrency_used'] += item['state'] in {'prepared', 'sent', 'uncertain'}
         return {'schema_version': 'capacity-dispatch-v1', 'revision': revision, 'active_version': version,
                 'protocol': SERIALIZER, 'registered_policies': [{'version': p['version'], 'configuration_version': p['configuration_version'], 'max_seconds': p['max_seconds']} for p in policies],
+                'allocation_count': allocation_count, 'allocation_history_complete': allocation_count == len(allocations),
+                'event_count': event_count, 'event_history_complete': event_count == len(events),
                 'groups': list(groups.values()), 'allocations': [{key: row[key] for key in ('id', 'policy_version', 'state', 'wire_sha256', 'serializer', 'groups')} for row in allocations],
                 'events': events}
 
@@ -363,8 +409,9 @@ class CapacityController:
 
 
 class _CapacityDispatch:
-    def __init__(self, controller, adoption, route):
+    def __init__(self, controller, adoption, route, credential_pin):
         self.controller, self.adoption, self.route = controller, adoption, route
+        self._credential_pin = credential_pin
         self.id = None
 
     def prepare(self, call_id, request):
@@ -427,7 +474,11 @@ class _CapacityDispatch:
                 raise CapacityDenied('capacity_token_bound_expired')
             if db.execute('SELECT 1 FROM capacity_allocations WHERE id=?', (identifier,)).fetchone():
                 raise CapacityDenied('capacity_dispatch_already_prepared', 409)
-            prior = [json.loads(row[0]) for row in db.execute('SELECT payload FROM capacity_allocations')]
+            prior = [json.loads(row[0]) for row in db.execute(
+                "SELECT payload FROM capacity_allocations WHERE state IN ('prepared','sent','uncertain') OR (state='complete' AND horizon>?) LIMIT ?",
+                (now, controller.max_live_allocations + 1))]
+            if len(prior) >= controller.max_live_allocations:
+                raise CapacityDenied('capacity_live_state_limit_exceeded')
             for group in groups:
                 used = {'rpm': 0, 'tpm': 0, 'concurrency': 0}
                 for item in prior:
@@ -448,20 +499,28 @@ class _CapacityDispatch:
                 'wire_sha256': wire, 'scope_sha256': scope_hash, 'serializer': SERIALIZER,
                 'state': 'prepared', 'prepared_at': now, 'groups': groups, 'evidence': evidence,
                 'token_valid_until': token_until}
-            db.execute('INSERT INTO capacity_allocations VALUES(?,?)', (identifier, _json(allocation)))
+            horizon = max((max(g['rpm_until'], g['tpm_until']) for g in groups), default=now)
+            db.execute('INSERT INTO capacity_allocations VALUES(?,?,?,?)', (identifier, _json(allocation), 'prepared', horizon))
             controller._event(db, {'kind': 'prepared', 'allocation': identifier, 'version': adoption['policy_version'], 'at': now})
         self.id = identifier
         return {'protocol': SERIALIZER, 'wire_sha256': wire, 'scope_sha256': scope_hash,
                 'capacity_allocation': identifier}
 
-    def _update(self, state, *, tokens=None):
+    def _update(self, state, *, tokens=None, bound_violation=False):
         if self.id is None:
             return
         with self.controller.store.connection(write=True) as db:
             db.execute('BEGIN IMMEDIATE')
-            now = self.controller._now(db, write=True)
             row = db.execute('SELECT payload FROM capacity_allocations WHERE id=?', (self.id,)).fetchone()
             value = json.loads(row[0])
+            try:
+                now = self.controller._now(db, write=True)
+            except CapacityDenied:
+                if state != 'released' or value['state'] != 'prepared':
+                    raise
+                # Durable never-dispatched proof can release without inventing
+                # a current valid clock or moving its persisted floor backwards.
+                now = None
             if state == 'released' and value['state'] != 'prepared':
                 raise CapacityDenied('capacity_sent_cannot_release', 409)
             if state == 'sent' and value['state'] != 'prepared':
@@ -469,13 +528,21 @@ class _CapacityDispatch:
             value['state'] = state
             if tokens is not None:
                 for group in value['groups']:
-                    if group['tokens'] and tokens <= group['tokens']:
+                    if group['caps']['tpm'] is not None:
                         group['tokens'] = tokens
-            db.execute('UPDATE capacity_allocations SET payload=? WHERE id=?', (_json(value), self.id))
+            if bound_violation:
+                value['reason_code'] = 'capacity_token_bound_violated'
+                db.execute('INSERT OR IGNORE INTO capacity_invalid_policies VALUES(?,?)',
+                    (value['policy_version'], 'capacity_token_bound_violated'))
+                self.controller._event(db, {'kind': 'bound_violation', 'allocation': self.id,
+                    'version': value['policy_version'], 'reason_code': 'capacity_token_bound_violated', 'at': now})
+            db.execute('UPDATE capacity_allocations SET payload=?,state=? WHERE id=?', (_json(value), state, self.id))
             self.controller._event(db, {'kind': state, 'allocation': self.id, 'at': now})
 
     def before_post(self):
         self.controller.verify(self.adoption)
+        if _transport_identity(self.route.transport) != self._credential_pin:
+            raise CapacityDenied('capacity_transport_binding_changed')
         with self.controller.store.connection() as db:
             allocation = json.loads(db.execute('SELECT payload FROM capacity_allocations WHERE id=?', (self.id,)).fetchone()[0])
             now = self.controller._now(db)
@@ -510,4 +577,10 @@ class _CapacityDispatch:
             if quantities and len(set(quantities)) == 1 and (
                     'total_tokens' not in raw or type(raw['total_tokens']) is int and raw['total_tokens'] == quantities[0]):
                 tokens = quantities[0]
-        self._update('uncertain' if record.get('interrupted') or info['cost_unknown'] or not identity else 'complete', tokens=tokens)
+        with self.controller.store.connection() as db:
+            allocation = json.loads(db.execute('SELECT payload FROM capacity_allocations WHERE id=?', (self.id,)).fetchone()[0])
+        violation = tokens is not None and any(group['caps']['tpm'] is not None and tokens > group['tokens']
+                                             for group in allocation['groups'])
+        self._update('uncertain' if record.get('interrupted') or info['cost_unknown'] or not identity or violation else 'complete',
+                     tokens=tokens, bound_violation=violation)
+        return 'capacity_token_bound_violated' if violation else None

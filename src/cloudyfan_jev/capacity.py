@@ -245,12 +245,9 @@ def _live_capacity(connection, now):
         return False
     if connection.execute("SELECT 1 FROM capacity_adoptions WHERE terminal=0 LIMIT 1").fetchone():
         return True
-    for encoded, in connection.execute("SELECT payload FROM capacity_allocations"):
-        item = json.loads(encoded)
-        if item['state'] in {'prepared', 'sent', 'uncertain'} or any(
-                item['state'] != 'released' and max(group['rpm_until'], group['tpm_until']) > now
-                for group in item['groups']):
-            return True
+    if connection.execute("SELECT 1 FROM capacity_allocations WHERE state IN ('prepared','sent','uncertain') "
+                          "OR (state='complete' AND horizon>?) LIMIT 1", (now,)).fetchone():
+        return True
     return False
 
 

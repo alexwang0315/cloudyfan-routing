@@ -9,7 +9,9 @@ from decimal import Decimal, InvalidOperation
 import re
 
 from cloudyfan_jev.scores.categories import resolve_category
+from cloudyfan_jev.scores.catalog import digest
 from cloudyfan_jev.scores.configuration import configuration_digest
+from cloudyfan_jev.scores.health import HealthStore
 
 from .store import MODES, TIERS, MonitorError
 
@@ -26,6 +28,16 @@ REASONS = {
     "duplicate_model_identity", "qualified_beyond_target", "missing_or_invalid_dimensions",
     "capability_context_or_provider_mismatch", "candidate_evidence_unavailable",
 }
+HEALTH_REASONS = {
+    "health_observation_missing", "observation_in_future", "observation_stale", "status_unknown",
+    "status_degraded", "snapshot_in_future", "cooldown_active", "recovery_required",
+    *(field + suffix for field in ("uptime_last_5m", "uptime_last_30m", "uptime_last_1d")
+      for suffix in ("_unit_unknown_or_invalid", "_unknown", "_below_minimum")),
+    *(field + suffix for field in ("latency", "throughput")
+      for suffix in ("_unit_unknown_or_invalid", "_invalid", "_outside_limit")),
+    *(field + "_" + percentile + "_unknown" for field in ("latency", "throughput")
+      for percentile in ("p50", "p75", "p90", "p99")),
+}
 
 
 def _identifier(value):
@@ -41,7 +53,8 @@ def _hash(value):
 
 def _time(value):
     try:
-        stamp = (datetime.fromtimestamp(value, timezone.utc) if type(value) in (int, float)
+        stamp = (value if isinstance(value, datetime) else
+                 datetime.fromtimestamp(value, timezone.utc) if type(value) in (int, float)
                  else datetime.fromisoformat(value.replace("Z", "+00:00")))
         if stamp.tzinfo is None:
             return None
@@ -94,6 +107,29 @@ def _speed(value):
             "upper": _amount(value.get("upper"))}
 
 
+def _metric(value):
+    if type(value) not in (int, float):
+        return None
+    try:
+        return value if Decimal(str(value)).is_finite() and value >= 0 else None
+    except InvalidOperation:
+        return None
+
+
+def _endpoint_metrics(observation):
+    health, speed = observation.get("health") or {}, observation.get("speed") or {}
+    metrics = {key: _metric(health[key]) for key in ("status", "uptime_last_5m", "uptime_last_30m", "uptime_last_1d")
+               if key in health}
+    metrics["uptime_unit"] = "percent" if health.get("uptime_unit") == "percent" else None
+    for field in ("latency_last_30m", "throughput_last_30m"):
+        values = speed.get(field)
+        if isinstance(values, dict):
+            metrics[field] = {key: _metric(values[key]) for key in ("p50", "p75", "p90", "p99") if key in values}
+    for key, unit in (("latency_unit", "milliseconds"), ("throughput_unit", "tokens/second")):
+        metrics[key] = unit if speed.get(key) == unit else None
+    return metrics
+
+
 class CandidateObserver:
     """Read current candidate metadata against the host's exact registered contract."""
     def __init__(self, store, service, registry):
@@ -110,13 +146,13 @@ class CandidateObserver:
         contract_id = self.registry.get((pool, category, mode))
         contract = self.service.contracts.get(contract_id)
         if contract is None:
-            return None, None
+            return None, None, None
         # Validate the real registered contract; never copy paths/system/payloads
         # from the returned descriptor into a public response.
         descriptor = contract.descriptor()
         if descriptor.get("mode") != mode:
             raise ValueError("Registered mode differs")
-        return _identifier(contract_id), descriptor
+        return _identifier(contract_id), descriptor, contract.runner.core
 
     def _records(self, descriptor):
         if not descriptor:
@@ -166,7 +202,42 @@ class CandidateObserver:
                 "reason_codes": ["qualification_evidence_expired" if status == "expired" else
                                  "candidate_evidence_recorded", "formal_qualification_not_evaluated"]}
 
-    def _candidate(self, candidate, position, tier, view, descriptor, records, observed_at, registered, category):
+    def _health(self, profile, record, descriptor, core, category):
+        health = getattr(core, "health_store", None)
+        if not isinstance(health, HealthStore):
+            return {"status": "not_provided"}
+        exact = configuration_digest({"profile": profile})
+        evidence = (record or {}).get("evidence", {})
+        if (record is None or evidence.get("configuration_sha256") != exact
+                or evidence.get("provenance", {}).get("category_id") != category):
+            return {"status": "unverifiable", "reason_codes": ["health_identity_unverifiable"]}
+        policy = descriptor.get("health_policy")
+        bound_policy = descriptor.get("backup_plan", {}).get("qcs_policy", {}).get("health_policy")
+        if policy != health.policy or bound_policy != policy:
+            return {"status": "unverifiable", "reason_codes": ["health_policy_unverifiable"]}
+        assessed = health.assess(exact, profile["provider"])
+        observation = assessed["observation"] or {}
+        reasons = [code if code in HEALTH_REASONS else "health_reason_unavailable" for code in assessed["reasons"]]
+        stale, future = "observation_stale" in reasons, any(code in reasons for code in (
+            "observation_in_future", "snapshot_in_future"))
+        freshness = "future" if future else "stale" if stale else "missing" if not observation else "fresh"
+        state = ("cooldown" if "cooldown_active" in reasons else
+                 "recovery_required" if "recovery_required" in reasons else
+                 "unverifiable" if future or "health_reason_unavailable" in reasons else
+                 "missing" if not observation else "stale" if stale else
+                 "unknown" if "status_unknown" in reasons else "degraded" if reasons else "healthy")
+        return {"status": state, "policy_eligible": assessed["eligible"],
+            "configuration_sha256": exact, "provider": _identifier(profile["provider"]),
+            "policy_sha256": digest(policy), "ttl_seconds": policy["ttl_seconds"],
+            "assessed_at": _time(health.clock()), "observed_at": _time(observation.get("observed_at")),
+            "snapshot_id": _hash(assessed["snapshot_id"]), "freshness": freshness,
+            "circuit": {"open": assessed["circuit"]["open"] is True,
+                "failures": assessed["circuit"]["failures"] if type(assessed["circuit"]["failures"]) is int else None,
+                "last_failure_at": _time(assessed["circuit"].get("last_failure_at")),
+                "cooldown_until": _time(assessed["circuit"].get("cooldown_until"))},
+            "reason_codes": reasons, "endpoint_metrics": _endpoint_metrics(observation)}
+
+    def _candidate(self, candidate, position, tier, view, descriptor, records, observed_at, registered, category, core):
         raw_profile = candidate.get("profile") if isinstance(candidate, dict) else None
         profile = _profile(raw_profile)
         listed = profile["model"] is not None
@@ -194,6 +265,17 @@ class CandidateObserver:
         config_id = candidate.get("config_id") if isinstance(candidate, dict) else None
         if matched is not None:
             config_id = matched.get("entry", {}).get("config_id")
+        if listed and not missing:
+            try:
+                health = self._health(raw_profile, matched, descriptor, core, category)
+            except Exception:
+                # One unreadable source is not health evidence for any row. Do
+                # not forward private storage/transport exception text.
+                health = {"status": "unavailable", "policy_eligible": None,
+                          "assessed_at": observed_at, "reason_codes": ["health_evidence_unavailable"]}
+        else:
+            health = {"status": "not_applicable" if not listed else "unverifiable",
+                      "reason_codes": [] if not listed else ["health_identity_unverifiable"]}
         return {"position": position, "role": "primary" if position == 0 else "backup",
                 "listing_status": "listed" if listed else "missing", "scope": _scope(view, profile, candidate.get("status")),
                 "configuration": {"config_id": _identifier(config_id),
@@ -203,7 +285,7 @@ class CandidateObserver:
                              "missing_fields": missing if listed else []},
                 "registration": {"status": "registered" if registered else "not_registered",
                                  "candidate_matches_contract": runtime_match if registered and listed else None},
-                "qualification": qualification, "health": {"status": "not_provided"},
+                "qualification": qualification, "health": health,
                 "quota": {"status": "unknown"}, "dispatch_authorization": {"status": "not_checked"},
                 "reason_codes": reasons}
 
@@ -219,7 +301,7 @@ class CandidateObserver:
         if category not in view["categories"]:
             raise MonitorError("unknown_observation_category")
         observed_at = _time(self.store.clock())
-        contract_id, descriptor = self._contract(view["id"], category, mode)
+        contract_id, descriptor, core = self._contract(view["id"], category, mode)
         records, excluded = self._records(descriptor)
         return {"schema_version": SCHEMA, "candidates": {
             "status": "available", "observed_at": observed_at,
@@ -230,7 +312,7 @@ class CandidateObserver:
                 "contract_version": _identifier((descriptor or {}).get("version"))},
             "versions": self._versions(control),
             "tiers": {tier: [self._candidate(candidate, index, tier, view, descriptor, records,
-                                             observed_at, descriptor is not None, category)
+                                             observed_at, descriptor is not None, category, core)
                              for index, candidate in enumerate(view["categories"][category]["pools"][tier])]
                       for tier in TIERS},
             "excluded": [{"tier": row.get("tier") if row.get("tier") in TIERS else None,

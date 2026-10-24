@@ -42,6 +42,10 @@ def test_enabled_window_original_header_envelope_is_bounded_and_follows_durable_
     bundle.upstream.fail_tiers = set()
     previous = attach_admission(bundle, local_service.clock, rpm=10)
     backend = WindowProtocolFixture(local_service.clock)
+    def advancing_clock():
+        local_service.clock.now += .001
+        return local_service.clock()
+    previous.store.clock = advancing_clock
     attach_window_protocol(bundle, previous, backend)
     for contract in bundle.app.gateway.service.contracts.values():
         def response(request):

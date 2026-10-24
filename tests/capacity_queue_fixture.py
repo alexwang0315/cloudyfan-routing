@@ -24,7 +24,9 @@ class WindowProtocolFixture:
     def record_response(self, receipt_ref, scope):
         path = Path(receipt_ref["root"]) / "calls" / receipt_ref["call_id"] / "response.json"
         assert hashlib.sha256(path.read_bytes()).hexdigest() == receipt_ref["response_sha256"]
-        self.responses.append({"receipt": receipt_ref, "scope": scope, "response": json.loads(path.read_text())})
+        response = json.loads(path.read_text())
+        assert scope["observed_at"] == response["window_headers"]["observed_at"]
+        self.responses.append({"receipt": receipt_ref, "scope": scope, "response": response})
 
     def snapshot(self):
         return {"configured": True, "protocol": self.protocol, "version": self.version, "status": self.status}

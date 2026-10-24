@@ -44,6 +44,9 @@ flows, hooks, mounted transports, redirects, transport retries and changed final
 URLs. It rechecks supported configuration before POST. The disabled path keeps
 its original `.post(json=...)` behavior. This is a supported-adapter contract,
 not a Python sandbox or a guarantee about arbitrary monkeypatched host code.
+The underlying Core `Client` and `LocalBackend` must also be the exact supported
+classes without instance `call` overrides; tool transport preparation, posting
+and decoding methods cannot be replaced on an instance to omit admission.
 
 Every applicable local RPM, TPM and concurrency dimension must be fresh and known
 or explicitly not applicable with evidence. Unknown never means unlimited.

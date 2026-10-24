@@ -1,5 +1,6 @@
 """Immediate controlled admission through the agreed actual HTTP seam."""
 import hashlib
+import pytest
 from test_local_http_integration import local_service as local_service, loopback_network as loopback_network, TASK
 from capacity_admission_fixture import attach_admission
 from test_candidate_health_http import health_http as health_http
@@ -244,7 +245,8 @@ def test_external_tool_refusal_precedes_action_intent_and_fee_event(local_servic
     assert not list((bundle.root / "receipts" / "runs").glob("**/action-*-intent.json"))
 
 
-def test_registered_external_tool_posts_once_through_same_capacity_and_fee_guards(local_service):
+@pytest.mark.parametrize("override", (None, "prepare", "post"))
+def test_registered_external_tool_posts_once_through_same_capacity_and_fee_guards(local_service, override):
     from dataclasses import replace
     import httpx
     import json
@@ -288,10 +290,25 @@ def test_registered_external_tool_posts_once_through_same_capacity_and_fee_guard
     controller = attach_admission(bundle, local_service.clock, rpm=10)
     controller.register("synthetic-tool-policy-v2", configuration_version="synthetic-admission-config-v1",
         routes=[*controller.routes["synthetic-admission-v1"], CapacityRoute(transport, transport.config["endpoint"], "tool:external_sum", "synthetic-binding")], max_seconds=300)
+    if override == "prepare":
+        original_prepare = transport.prepare
+        def unchecked_prepare(cid, payload):
+            transport.http.post(transport.config["endpoint"], json=payload)
+            return original_prepare(cid, payload)
+        transport.prepare = unchecked_prepare
+    elif override == "post":
+        original_post = transport.post
+        transport.post = lambda cid, request, before_post: original_post(cid, request, lambda: True)
     local_service.server.set_app(bundle.app)
     operator, client = local_service.client("operator"), local_service.client()
     assert operator.post("/monitor/capacity/activate", json={"revision": 0, "version": "synthetic-tool-policy-v2"}).status_code == 200
     response = client.post("/v1/tasks", json={**TASK, "run_id": "registered-tool"})
+    if override:
+        assert (response.status_code, len(actual_tool)) == (429, 0)
+        assert response.json()["error"]["code"] == "capacity_transport_protocol_unsupported"
+        assert response.json()["costs"]["unknown_events"] == 0 and len(bundle.upstream.calls) == 1
+        assert len(operator.get("/monitor/snapshot").json()["ledger"]["rows"]) == 1
+        return
     assert response.status_code == 200 and response.json()["status"] == "passed"
     assert len(actual_tool) == 1 and len(bundle.upstream.calls) == 2
     ledger = operator.get("/monitor/snapshot").json()["ledger"]
@@ -716,3 +733,29 @@ def test_own_unknown_fee_keeps_workflow_reserve_when_capacity_completion_cannot_
     assert capacity["groups"][0]["concurrency_used"] == capacity["groups"][0]["rpm_used"] == 1
     assert client.post("/v1/tasks/own-unknown-retained/resume", json={}).json()["status"] == "accounting_interrupted"
     assert len(bundle.upstream.calls) == 1
+
+
+@pytest.mark.parametrize("override", ("subclass", "instance"))
+def test_optin_rejects_core_transport_that_omits_admission_before_any_physical_post(local_service, override):
+    from cloudyfan_jev.client import Client
+    bundle = local_service.bundle
+    bundle.upstream.fail_tiers = set()
+    class UncontrolledClient(Client):
+        def call(self, cid, url, payload, *, before_post=None, dispatch=None):
+            return super().call(cid, url, payload, before_post=before_post)
+    for contract in bundle.app.gateway.service.contracts.values():
+        original = contract.runner.client
+        if override == "subclass":
+            contract.runner.core.client = UncontrolledClient(original.http, original.key, original.root,
+                rejection_fee_policy=original.rejection_fee_policy)
+        else:
+            original_call = original.call
+            original.call = lambda cid, url, payload, *, before_post=None, dispatch=None, original_call=original_call: original_call(cid, url, payload, before_post=before_post)
+    attach_admission(bundle, local_service.clock, rpm=1)
+    local_service.server.set_app(bundle.app)
+    operator, client = local_service.client("operator"), local_service.client()
+    assert operator.post("/monitor/capacity/activate", json={"revision": 0, "version": "synthetic-admission-v1"}).status_code == 200
+    response = client.post("/v1/tasks", json={**TASK, "run_id": "uncontrolled-core-client"})
+    assert (response.status_code, len(bundle.upstream.calls)) == (429, 0)
+    assert response.json()["error"]["code"] == "capacity_transport_protocol_unsupported"
+    assert response.json()["costs"]["unknown_events"] == 0

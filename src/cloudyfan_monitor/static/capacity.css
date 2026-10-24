@@ -37,3 +37,6 @@
 @media(max-width:1000px){.capacity-usage-grid{grid-template-columns:1fr}}
 @media(max-width:700px){.capacity-policy-summary{grid-template-columns:1fr}.capacity-policy-controls,.capacity-dispatch-heading{align-items:stretch;flex-direction:column}}
 @media(max-width:1000px){.capacity-dimensions{grid-template-columns:1fr}.capacity-group>summary{align-items:flex-start;flex-direction:column}}
+
+.capacity-integrity{padding:22px;margin:18px 0;line-height:1.7;overflow-wrap:anywhere}.capacity-integrity h2{margin:0;font-size:18px}.capacity-preservation-properties{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;font-size:12px}.capacity-preservation-properties dt{color:var(--muted)}.capacity-preservation-properties dd{margin:6px 0}.capacity-usage details{margin-top:16px}.capacity-usage summary{font-size:12px}.capacity-usage [data-capacity-original-counter]{font-size:16px}
+@media(max-width:700px){.capacity-preservation-properties{grid-template-columns:1fr}}

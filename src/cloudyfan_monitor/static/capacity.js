@@ -94,7 +94,7 @@ window.CloudyFanCapacity = (() => {
     const groupCount = Number.isSafeInteger(windows.active_group_count) && windows.active_group_count >= 0 ? windows.active_group_count : null;
     const groupCoverage = windows.active_group_history_complete === false || groupCount !== null && groupCount > groups.length ? '本頁不是完整清單，還有生效群組未列出；不能由本頁推定其他群組可派送。' : windows.active_group_history_complete === true ? '本頁涵蓋這次快照列出的生效群組；新派送仍需伺服器核對。' : '來源未提供清單完整性，不依本頁推定其他群組可派送。';
     const policy = (Array.isArray(dispatch.registered_policies) ? dispatch.registered_policies : []).find(row => row.version === dispatch.active_version);
-    const adoption = !dispatch.active_version ? '新任務未啟用容量政策' : !policy || !Object.hasOwn(policy, 'windows_version') ? '目前政策的窗口採用狀態尚未提供' : policy.windows_version === windows.version ? '新任務已採用登錄窗口版本' : policy.windows_version ? '目前政策與窗口後端版本不同，不能推定已採用' : '目前政策未採用窗口檢查';
+    const adoption = preservationUnverified() ? '以下保留原窗口政策，目前可派送狀態無法核對' : !dispatch.active_version ? '新任務未啟用容量政策' : !policy || !Object.hasOwn(policy, 'windows_version') ? '目前政策的窗口採用狀態尚未提供' : policy.windows_version === windows.version ? '新任務已採用登錄窗口版本' : policy.windows_version ? '目前政策與窗口後端版本不同，不能推定已採用' : '目前政策未採用窗口檢查';
     return `<section class="panel capacity-windows" id="capacity-windows"><div class="capacity-dispatch-heading"><h2>限流窗口與原始回應</h2><span class="badge ${groups.length || hasPending || !pendingKnown ? 'amber' : 'blue'}">${hasPending ? '有待匯入或未知來源' : !pendingKnown ? '受控來源狀態尚未提供' : groups.length ? '本頁列有適用限制' : '本頁沒有列出的生效窗口'}</span></div><p>${h(adoption)}。後端版本 <code>${h(windows.version || '未知')}</code>；修訂 ${h(shown(windows.revision))}。</p><p class="metadata">只讀原始回應或受控保存來源，不重試、不探測、不自動更新來源。沒有列出的窗口不代表健康、資格或額度充足。</p><p class="metadata" data-window-coverage>生效群組總數：${h(shown(groupCount))}；本頁 ${groups.length} 筆。${h(groupCoverage)}</p>${pendingSources(windows)}<div class="capacity-window-grid">${groups.length ? groups.map(row => windowCard(row)).join('') : '<p class="metadata">本頁沒有列出生效群組；新派送仍須由伺服器核對全部適用限制，不能由此推定可用。</p>'}</div><details id="capacity-window-history" data-capacity-detail="window-history"><summary>查看原始限流窗口歷史</summary><p class="metadata">${Number.isSafeInteger(windows.event_count) ? `共 ${h(windows.event_count)} 筆；` : '保存總數未知；'}本頁 ${events.length} 筆${windows.event_history_complete === false ? '，較早事件未完整列出' : ''}。原來源時間與版本固定保存。</p><div class="capacity-window-grid">${events.length ? events.map(row => windowCard(row, true)).join('') : '<p class="metadata">尚無可確認的原窗口事件。</p>'}</div></details></section>`;
   }
 
@@ -130,9 +130,51 @@ window.CloudyFanCapacity = (() => {
     }).join('') : '<p class="metadata">尚無可讀的原任務候選紀錄。</p>'}</section>`;
   }
 
+  function preservationUnverified() {
+    const integrity = data?.dispatch?.integrity;
+    return integrity?.protocol === 'capacity-preservation-v1' && integrity.status !== 'verified';
+  }
+
+  function preservationPanel() {
+    const integrity = data?.dispatch?.integrity;
+    if (!integrity || integrity.protocol !== 'capacity-preservation-v1') return '';
+    const unverified = preservationUnverified();
+    const count = value => Number.isSafeInteger(value) && value >= 0 ? String(value) : '未知';
+    const scope = integrity.affected_groups === null ? '無法確認受影響範圍；不能從下方清單推定任何名額可用。' :
+      Array.isArray(integrity.affected_groups) && integrity.affected_groups.length ? '已識別受影響的群組共 ' + integrity.affected_groups.length + ' 筆；其他群組仍由服務核對全部原閘門。' :
+      '這次保存狀態沒有列出受影響群組；不代表供應商容量或健康已獲保證。';
+    const safeReason = ['capacity_store_integrity_unavailable', 'capacity_store_scope_unavailable'].includes(integrity.reason_code) ?
+      '<code>' + h(integrity.reason_code) + '</code>' : '';
+    return '<section class="panel capacity-integrity" id="capacity-integrity" aria-labelledby="capacity-integrity-heading">' +
+      '<div class="capacity-dispatch-heading"><h2 id="capacity-integrity-heading">' +
+      (unverified ? '容量狀態無法核對' : '容量保存狀態可核對') + '</h2><span class="badge ' +
+      (unverified ? 'amber' : 'blue') + '">' + (unverified ? '目前可用名額未知' : '保存資料核對通過') + '</span></div>' +
+      '<p>' + (unverified ? '下方原保存資料保留原時間、政策與證據，不能據此推定目前名額可用或重新派送。已有回應、已知費用與未決名額分別保留。' :
+        '本次可核對保存狀態；新派送仍須通過原授權、資格、健康、期限與費用檢查。') + '</p><p class="metadata">' +
+      h(scope) + '</p>' + safeReason + '<dl class="capacity-preservation-properties">' +
+      '<div><dt>保存修訂</dt><dd>' + h(count(integrity.revision)) + '</dd></div>' +
+      '<div><dt>保存中繼資料筆數</dt><dd>' + h(count(integrity.metadata_rows)) + '</dd></div>' +
+      '<div><dt>受影響任務筆數</dt><dd>' + h(count(integrity.affected_task_count)) + '</dd></div></dl>' +
+      '<p class="metadata">查詢不修復、不重送、不釋放名額；程序退出不代表供應商停止或退款。保存政策與真實供應商容量資格分開。</p></section>';
+  }
+
   function dispatchUsage(dispatch) {
     const groups = Array.isArray(dispatch.groups) ? dispatch.groups : [];
-    return `<div class="capacity-usage-grid">${groups.map(group => `<article class="capacity-usage" data-capacity-usage="${h(group.group)}"><h3>${h(group.group)}</h3><p class="metadata">${h(scopes[group.scope?.kind] || '範圍未知')} · ${h(group.scope?.ref)}</p><dl><div><dt>RPM · 保守請求計數</dt><dd data-capacity-counter="rpm">${h(shown(group.rpm_used))}</dd></div><div><dt>TPM · 保守 token 預留</dt><dd data-capacity-counter="tpm">${h(shown(group.tpm_reserved))}</dd></div><div><dt>目前占用並行名額</dt><dd data-capacity-counter="concurrency">${h(shown(group.concurrency_used))}</dd></div></dl></article>`).join('')}</div><p class="metadata">${groups.length ? '以上為本機保守計數與占用，包含未送出的預留、已送出但結果未明的占用，以及完成後仍保留的保守窗口；不代表供應商實際用量、剩餘額度或重置時間保證。未決名額不會因時間或程序消失自動釋放。' : '尚無保存的逐次容量計數；不能由缺少紀錄推定供應商容量充足。'}</p>`;
+    const currentUnknown = preservationUnverified() && dispatch.integrity.affected_groups === null;
+    const counters = [['rpm', 'RPM · 保守請求計數', 'rpm_used'], ['tpm', 'TPM · 保守 token 預留', 'tpm_reserved'],
+      ['concurrency', '目前占用並行名額', 'concurrency_used']];
+    return '<div class="capacity-usage-grid">' + groups.map(group =>
+      '<article class="capacity-usage" data-capacity-usage="' + h(group.group) + '"><h3>' + h(group.group) +
+      '</h3><p class="metadata">' + h(scopes[group.scope?.kind] || '範圍未知') + ' · ' + h(group.scope?.ref) + '</p><dl>' +
+      counters.map(([key, label, field]) => '<div><dt>' + h(label) + '</dt><dd data-capacity-counter="' + key + '">' +
+        h(currentUnknown ? '未知' : shown(group[field])) + '</dd></div>').join('') + '</dl>' +
+      (currentUnknown ? '<details data-capacity-detail="' + h('preserved-usage:' + group.group) +
+        '"><summary>查看原保存的保守計數</summary><p class="metadata">以下是原保存資料，不是目前可用名額。原來源時間與事件見原紀錄。</p><dl>' +
+        counters.map(([key, label, field]) => '<div><dt>' + h(label) + '</dt><dd data-capacity-original-counter="' + key + '">' +
+          h(shown(group[field])) + '</dd></div>').join('') + '</dl></details>' : '') + '</article>').join('') +
+      '</div><p class="metadata">' + (currentUnknown ? '目前儲存狀態無法核對；即使原保存值為零，也不能推定名額已釋放或可派送。' :
+        groups.length ? '以上為本機保守計數與占用，包含未送出的預留、已送出但結果未明的占用，以及完成後仍保留的保守窗口；不代表供應商實際用量、剩餘額度或重置時間保證。未決名額不會因時間或程序消失自動釋放。' :
+          '尚無保存的逐次容量計數；不能由缺少紀錄推定供應商容量充足。') + '</p>';
   }
 
   function admissionHistory(dispatch) {
@@ -156,12 +198,12 @@ window.CloudyFanCapacity = (() => {
     if (policySelection === null || policySelection && !policies.some(policy => policy.version === policySelection)) {
       policySelection = active || '';
     }
-    const disabled = mutationBusy || readState !== 'current' || !Number.isSafeInteger(dispatch.revision);
-    return `<section class="panel capacity-dispatch" id="capacity-dispatch"><div class="capacity-dispatch-heading"><h2>逐次派送容量政策</h2><span class="badge ${active ? 'blue' : 'amber'}" id="capacity-dispatch-status">${active ? '已明示啟用' : '尚未啟用'}</span></div><p>${active ? '新任務依接受時固定的容量政策，在每次實際送出前檢查所有適用群組；容量可用仍須通過原品質、健康、資料位置及費用閘門。' : '容量執行政策尚未啟用；保留現有同步派送與滿載拒絕規則。'}</p><dl class="capacity-policy-summary"><div><dt>目前政策版本</dt><dd class="mono" id="capacity-active-version">${h(active || '未啟用')}</dd></div><div><dt>設定修訂</dt><dd id="capacity-policy-revision">${h(dispatch.revision)}</dd></div><div><dt>請求協定</dt><dd class="mono">${h(dispatch.protocol)}</dd></div></dl><div class="capacity-policy-controls"><label for="capacity-policy-version">新任務的容量政策<select id="capacity-policy-version" ${disabled || !policies.length ? 'disabled' : ''}><option value="" ${policySelection === '' ? 'selected' : ''}>停用新任務容量政策</option>${policies.map(policy => `<option value="${h(policy.version)}" ${policySelection === policy.version ? 'selected' : ''}>${h(policy.version)}</option>`).join('')}</select></label><button class="button" id="capacity-activate-policy" ${disabled || policySelection === (active || '') || !policies.length ? 'disabled' : ''}>明示套用容量政策</button></div><p class="metadata">只能選用伺服器已登錄版本；頁面不能編輯 key、群組或上限。停用與切換不得放寬仍有效的容量占用；既有任務保留原政策及期限。</p>${policies.length ? `<details data-capacity-detail="policies"><summary>查看已登錄版本與適用設定</summary><ul class="capacity-history">${policies.map(policy => `<li><code>${h(policy.version)}</code> · 限額設定 <code>${h(policy.configuration_version)}</code> · 原任務最長 ${h(shown(policy.max_seconds))} 秒</li>`).join('')}</ul></details>` : '<p class="capacity-warning">尚無已登錄容量政策，沒有可啟用的版本。</p>'}${activationError ? `<p class="capacity-warning" role="status" id="capacity-activation-error">${h(activationError)}</p>` : ''}${dispatchUsage(dispatch)}${admissionHistory(dispatch)}</section>`;
+    const disabled = mutationBusy || readState !== 'current' || preservationUnverified() || !Number.isSafeInteger(dispatch.revision);
+    return `<section class="panel capacity-dispatch" id="capacity-dispatch"><div class="capacity-dispatch-heading"><h2>逐次派送容量政策</h2><span class="badge ${preservationUnverified() || !active ? 'amber' : 'blue'}" id="capacity-dispatch-status">${preservationUnverified() ? '原啟用狀態待核對' : active ? '已明示啟用' : '尚未啟用'}</span></div><p>${preservationUnverified() ? '以下保留原設定與啟用紀錄；目前容量狀態無法核對，不能從原版本推定新任務可派送。' : active ? '新任務依接受時固定的容量政策，在每次實際送出前檢查所有適用群組；容量可用仍須通過原品質、健康、資料位置及費用閘門。' : '容量執行政策尚未啟用；保留現有同步派送與滿載拒絕規則。'}</p><dl class="capacity-policy-summary"><div><dt>${preservationUnverified() ? '原保存政策版本' : '目前政策版本'}</dt><dd class="mono" id="capacity-active-version">${h(active || '未啟用')}</dd></div><div><dt>${preservationUnverified() ? '原保存修訂' : '設定修訂'}</dt><dd id="capacity-policy-revision">${h(dispatch.revision)}</dd></div><div><dt>請求協定</dt><dd class="mono">${h(dispatch.protocol)}</dd></div></dl><div class="capacity-policy-controls"><label for="capacity-policy-version">新任務的容量政策<select id="capacity-policy-version" ${disabled || !policies.length ? 'disabled' : ''}><option value="" ${policySelection === '' ? 'selected' : ''}>停用新任務容量政策</option>${policies.map(policy => `<option value="${h(policy.version)}" ${policySelection === policy.version ? 'selected' : ''}>${h(policy.version)}</option>`).join('')}</select></label><button class="button" id="capacity-activate-policy" ${disabled || policySelection === (active || '') || !policies.length ? 'disabled' : ''}>明示套用容量政策</button></div><p class="metadata">只能選用伺服器已登錄版本；頁面不能編輯 key、群組或上限。停用與切換不得放寬仍有效的容量占用；既有任務保留原政策及期限。</p>${policies.length ? `<details data-capacity-detail="policies"><summary>查看已登錄版本與適用設定</summary><ul class="capacity-history">${policies.map(policy => `<li><code>${h(policy.version)}</code> · 限額設定 <code>${h(policy.configuration_version)}</code> · 原任務最長 ${h(shown(policy.max_seconds))} 秒</li>`).join('')}</ul></details>` : '<p class="capacity-warning">尚無已登錄容量政策，沒有可啟用的版本。</p>'}${activationError ? `<p class="capacity-warning" role="status" id="capacity-activation-error">${h(activationError)}</p>` : ''}${dispatchUsage(dispatch)}${admissionHistory(dispatch)}</section>`;
   }
 
   function activatePolicy() {
-    if (mutationBusy || readState !== 'current' || !data?.dispatch) return;
+    if (mutationBusy || readState !== 'current' || preservationUnverified() || !data?.dispatch) return;
     const version = policySelection || null, revision = data.dispatch.revision;
     if (version !== null && !data.dispatch.registered_policies.some(policy => policy.version === version)) return;
     context.confirmAction('明示變更新任務容量政策', `<p>採用版本：<strong>${h(version || '停用')}</strong>；設定修訂 ${h(revision)}。</p><p>不修改 key、群組或限額。既有任務保留原政策與期限；仍有效的窗口用量或未決名額會阻止切換，失敗不自動重試。</p>`, async () => {
@@ -202,7 +244,7 @@ window.CloudyFanCapacity = (() => {
     const focusedDetail = active?.tagName === 'SUMMARY' ? detailKey(active.closest('details')) : null;
     const focusId = root.contains(active) ? active.id : null;
     const issue = readState === 'stale' ? '<p class="capacity-warning" role="status">本次讀取失敗，保留上次畫面與原始時間。</p>' : readState === 'unavailable' ? '<p class="capacity-warning" role="status">容量資料目前無法讀取；未派送或更新來源。</p>' : '';
-    root.innerHTML = `<div id="capacity-page"><div class="page-heading"><div><div class="eyebrow">SUPPLIER CAPACITY</div><h1>供應商限額來源</h1><p>分開查看供應商限制、本機上限及未知資料。來源更新只在操作員明示確認後執行。</p></div><button class="button" id="capacity-refresh-sources" ${!data?.configured || mutationBusy ? 'disabled' : ''}>明示更新限額來源</button></div>${context.demo ? '<p class="capacity-warning">合成驗收環境 · 未建立真實供應商容量、吞吐或 SLO 資格。</p>' : ''}${issue}${dispatchPanel()}${windowsPanel()}${windowDecisions()}${!data ? '<div class="panel empty">正在讀取已保存的容量資料…</div>' : !data.configured ? '<div class="panel empty">尚未配置供應商容量來源，沒有自動查詢或可用容量承諾。</div>' : `<p class="metadata">設定版本：<span class="mono">${h(data.configuration_version)}</span></p><section class="panel capacity-bindings" id="capacity-bindings"><h2>伺服器綁定與共用群組</h2><p class="metadata">不同 credential reference 可共用同一帳號限額。頁面不能新增 key、解除群組或擴大上限。</p><div class="table-wrap"><table><thead><tr><th>綁定</th><th>供應商 / 帳號</th><th>Credential reference / 端點</th><th>所有適用群組</th></tr></thead><tbody>${data.bindings.map(binding => `<tr><td class="mono">${h(binding.id)}</td><td>${h(binding.provider)}<br>${h(binding.account_ref)}</td><td>${h(binding.credential_ref)}<br>${h(binding.endpoint_ref)}</td><td>${binding.groups.map(value => `<span class="badge">${h(value)}</span>`).join(' ')}</td></tr>`).join('')}</tbody></table></div></section><div class="capacity-groups">${data.groups.map(group).join('')}</div>`}</div>`;
+    root.innerHTML = `<div id="capacity-page"><div class="page-heading"><div><div class="eyebrow">SUPPLIER CAPACITY</div><h1>供應商限額來源</h1><p>分開查看供應商限制、本機上限及未知資料。來源更新只在操作員明示確認後執行。</p></div><button class="button" id="capacity-refresh-sources" ${!data?.configured || mutationBusy || preservationUnverified() ? 'disabled' : ''}>明示更新限額來源</button></div>${context.demo ? '<p class="capacity-warning">合成驗收環境 · 未建立真實供應商容量、吞吐或 SLO 資格。</p>' : ''}${issue}${preservationPanel()}${dispatchPanel()}${windowsPanel()}${windowDecisions()}${!data ? '<div class="panel empty">正在讀取已保存的容量資料…</div>' : !data.configured ? '<div class="panel empty">尚未配置供應商容量來源，沒有自動查詢或可用容量承諾。</div>' : `<p class="metadata">設定版本：<span class="mono">${h(data.configuration_version)}</span></p><section class="panel capacity-bindings" id="capacity-bindings"><h2>伺服器綁定與共用群組</h2><p class="metadata">不同 credential reference 可共用同一帳號限額。頁面不能新增 key、解除群組或擴大上限。</p><div class="table-wrap"><table><thead><tr><th>綁定</th><th>供應商 / 帳號</th><th>Credential reference / 端點</th><th>所有適用群組</th></tr></thead><tbody>${data.bindings.map(binding => `<tr><td class="mono">${h(binding.id)}</td><td>${h(binding.provider)}<br>${h(binding.account_ref)}</td><td>${h(binding.credential_ref)}<br>${h(binding.endpoint_ref)}</td><td>${binding.groups.map(value => `<span class="badge">${h(value)}</span>`).join(' ')}</td></tr>`).join('')}</tbody></table></div></section><div class="capacity-groups">${data.groups.map(group).join('')}</div>`}</div>`;
     root.querySelectorAll('details').forEach(node => { node.open = opened.has(detailKey(node)); });
     const target = focusedDetail ? Array.from(root.querySelectorAll('details')).find(node => detailKey(node) === focusedDetail)?.querySelector('summary') : focusId ? root.querySelector('#' + CSS.escape(focusId)) : null;
     if (focusedDetail || focusId) {

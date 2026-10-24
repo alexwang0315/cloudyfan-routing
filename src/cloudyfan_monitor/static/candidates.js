@@ -52,6 +52,7 @@ window.CloudyFanCandidates = (() => {
     return `${field}${({unit_unknown_or_invalid:'單位缺少或不適用',invalid:'數值無法確認',outside_limit:'不符合政策限制'})[detail]||`${detail.split('_')[0]} 分位資料缺少`}；這是來源端點觀測。`;
   }
   function reasonList(codes, extra='', fallback='candidate_evidence_unavailable') {
+    if(!codes?.length)return '';
     return `<ul class="candidate-reasons ${extra}">${(codes || []).map(code=>{
       const explanation=Object.hasOwn(reasons,code)?reasons[code]:healthReason(code),safe=explanation?code:fallback;
       return `<li>${esc(explanation||reasons[fallback])} <code>${esc(safe)}</code></li>`;

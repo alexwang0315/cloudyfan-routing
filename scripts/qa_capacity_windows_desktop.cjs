@@ -19,7 +19,7 @@ async function main() {
     accessibility_scope:'Keyboard disclosure and focus checks; no screen-reader or automated accessibility certification',
     scope:'actual Chrome + loopback HTTP; real synthetic window/health/capacity host; MockTransport only; no provider recovery or capacity/SLO claim'};
   const fixture=startFixture(process.env.CLOUDYFAN_QA_PYTHON||path.join(core,'.venv/bin/python'),
-    [path.join(__dirname,'qa_capacity_windows_http.py'),'--output',output],{cwd:root,
+    [path.join(__dirname,'qa_capacity_windows_http.py'),'--output',output,'--controlled-source'],{cwd:root,
       env:{...process.env,PYTHONDONTWRITEBYTECODE:'1',PYTHONPATH:[path.join(root,'src'),path.join(core,'src')].join(path.delimiter)}});
   let browser,page,activeTask,savedCandidateWindow;
   const revision=directory=>Object.fromEntries(['HEAD','HEAD^{tree}'].map(ref=>{
@@ -65,12 +65,16 @@ async function main() {
     response=await context.request.post(ready.origin+'/v1/tasks',{headers:client,data:task('window-fallback')});
     assert.equal(response.status(),200);assert.equal((await response.json()).status,'passed');
     const actual=await inspect();assert.equal(actual.model_requests.length,2);
+    assert.ok(Object.keys(actual.health_sha256).length>0,'Health SQLite evidence must be nonempty');
     assert.equal(actual.window_snapshot.groups[0].not_before,actual.clock+30);
     await page.goto(ready.origin);await page.locator('#environment').filter({hasText:/模擬/}).waitFor();
     await page.locator('#logout').click();await page.locator('#token').fill(ready.operator_token);await page.getByRole('button',{name:'登入',exact:true}).click();
     await page.locator('#login[open]').waitFor({state:'hidden'});await page.locator('a[data-page="capacity"]').click();
     await step('actual_saved_retry_after_window_and_original_source_time_are_visible',async()=>{
       const panel=page.locator('#capacity-windows');await panel.waitFor();
+      assert.equal(actual.window_snapshot.pending_source_count,1);
+      const pending=panel.locator('#capacity-pending-sources');await pending.waitFor();
+      await pending.locator('summary').first().click();assert.match(await pending.innerText(),/尚未明示匯入/);
       assert.match(await panel.innerText(),/原回應|原始回應/);
       assert.match(await panel.innerText(),/synthetic-windows-v1/);
       assert.match(await panel.innerText(),/新任務已採用登錄窗口版本/);
@@ -105,6 +109,7 @@ async function main() {
       const fallback=panel.locator('[data-window-task="studio:window-fallback"]');
       await fallback.locator('summary').first().click();
       assert.match(await fallback.locator('[data-window-transition="availability_fallback"]').innerText(),/可用性備援/);
+      assert.match(await fallback.innerText(),/公開驗收已通過，未進入後續選池/);
       const quality=panel.locator('[data-window-task="studio:window-quality-repair"]');
       await quality.locator('summary').first().click();
       assert.match(await quality.locator('[data-window-transition="quality_recovery"]').innerText(),/公開驗收.*品質補救/);
@@ -232,7 +237,9 @@ async function main() {
       assert.equal(await page.locator('#capacity-policy-version').isDisabled(),true);
       await page.waitForFunction(()=>document.activeElement?.id==='reload');unchanged(before,await inspect());
       await shot('08-stale-read-original-time');await inspect({command:'restore_read'});
-      await page.locator('#reload').click();await page.waitForFunction(()=>!document.querySelector('#capacity-policy-version')?.disabled);
+      const recovered=page.waitForResponse(response=>response.url().endsWith('/monitor/capacity')&&response.status()===200,{timeout:15000});
+      await page.locator('#reload').click();await (await recovered).finished();
+      await page.waitForFunction(()=>!document.querySelector('#capacity-policy-version')?.disabled,null,{timeout:10000});
     });
     await step('operator_only_windows_own_task_isolation_revocation_and_private_canaries_hold',async()=>{
       const before=await inspect();
@@ -276,6 +283,38 @@ async function main() {
       if(!await row.evaluate(node=>node.open))await row.locator('summary').click();
       assert.match(await row.innerText(),/費用待核/);await shot('10-unknown-fee-stops');
       await row.screenshot({path:path.join(output,'10-unknown-fee-task-detail.png')});report.screenshots.push('10-unknown-fee-task-detail.png');
+    });
+    await step('explicit_source_import_retains_original_time_version_and_evidence_without_model_or_accounting_calls',async()=>{
+      const before=await inspect();assert.equal(before.window_snapshot.pending_source_count,1);
+      assert.equal(before.window_snapshot.events.filter(row=>row.source_kind==='controlled_import').length,0);
+      await page.locator('#capacity-refresh-sources').click();await page.locator('#confirm[open]').waitFor();
+      assert.match(await page.locator('#confirm').innerText(),/受控保存來源/);
+      const imported=page.waitForResponse(response=>response.url().endsWith('/monitor/capacity/refresh')&&response.request().method()==='POST');
+      await page.locator('#apply-confirm').click();assert.equal((await imported).status(),200);
+      await page.locator('#confirm[open]').waitFor({state:'hidden'});
+      await page.waitForFunction(()=>document.querySelectorAll('[data-capacity-pending-source]').length===0);
+      const after=await inspect();assert.equal(after.window_snapshot.pending_source_count,0);
+      for(const key of ['model_requests','source_requests','accounting_requests','budget','health_sha256','original_evidence_sha256'])
+        assert.deepEqual(after[key],before[key],key+' changed during controlled import');
+      assert.notEqual(after.capacity_sha256,before.capacity_sha256);
+      for(const original of before.window_snapshot.events)
+        assert.deepEqual(after.window_snapshot.events.find(row=>row.id===original.id),original);
+      const source=after.window_snapshot.events.find(row=>row.source_kind==='controlled_import');assert.ok(source);
+      assert.equal(source.source_version,'synthetic-window-source-v1');
+      assert.equal(source.evidence_ref,'synthetic-controlled-window-source-v1');
+      assert.equal(source.observed_at,actual.clock);assert.equal(source.not_before,actual.clock+1800);
+      assert.notEqual(source.not_before,after.clock+1800);
+      report.controlled_source_observation=source;
+      const row=page.locator('[data-capacity-detail="window:'+source.id+'"]');await row.waitFor();
+      await row.locator('summary').click();assert.match(await row.innerText(),/已明示匯入的受控保存來源/);
+      assert.match(await row.innerText(),/synthetic-window-source-v1/);
+      assert.match(await row.innerText(),/synthetic-controlled-window-source-v1/);
+      assert.ok(!(await page.locator('#main').innerText()).includes('PRIVATE_'));
+      await context.request.get(ready.origin+'/monitor/capacity',{headers:operator});
+      await context.request.get(ready.origin+'/monitor/snapshot',{headers:operator});unchanged(after,await inspect());
+      await shot('11-explicit-controlled-source-original-time');
+      await page.locator('#capacity-windows').screenshot({path:path.join(output,'11-imported-source-panel-detail.png')});
+      report.screenshots.push('11-imported-source-panel-detail.png');
     });
     report.console_classification=report.console_errors.map(message=>({message,
       classification:/status of (409|401|503)\b/.test(message)&&report.expected_http_errors.some(item=>message.includes(String(item.status)))?

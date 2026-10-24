@@ -11,7 +11,7 @@ import threading
 from uuid import uuid4
 
 
-def build_window_host(output, origin, clock):
+def build_window_host(output, origin, clock, *, with_controlled_source=False):
     """Compose real stores/BackupCore plus controlled Mock responses; starts no server.
 
     Returned host/controller/windows and flags/clock/wire records are fixture-only.
@@ -89,7 +89,13 @@ def build_window_host(output, origin, clock):
         return host.app.identity_store.is_active(principal) and any(
             row["id"] == credential and row["revoked_at"] is None and row["created_at"] <= now < row["expires_at"]
             and scope in row["scopes"] for row in host.app.identity_store.credentials(principal))
-    windows = CapacityWindows(store, version="synthetic-windows-v1", rules=rules)
+    source_options = {}
+    if with_controlled_source:
+        source_options["controlled_sources"] = [{"binding": "provider-3", "group": "provider-3",
+            "scope": groups[3]["scope"], "source_version": "synthetic-window-source-v1",
+            "evidence_ref": "synthetic-controlled-window-source-v1", "status": "rate_limited",
+            "observed_at": clock(), "valid_until": clock() + 3600, "values": [["retry-after", "1800"]]}]
+    windows = CapacityWindows(store, version="synthetic-windows-v1", rules=rules, **source_options)
     controller = CapacityController(store, credential_active=credential_active, window_backend=windows)
     transport = host.service.contracts["health-backup-v1"].runner.client
     routes = []
@@ -107,7 +113,8 @@ def build_window_host(output, origin, clock):
     old = host.app
     host.app = assemble_monitor(old.store, host.service, old.gateway.registry, old.identity_store,
         operator_token=host.operator_token, source=old.source, origin=origin, demo=True,
-        capacity_observer=CapacityObserver(store, sources={}), capacity_controller=controller)
+        capacity_observer=CapacityObserver(store, sources={},
+            **({"window_backend": windows} if with_controlled_source else {})), capacity_controller=controller)
     side_requests = {"source": [], "accounting": []}
     observation_transports = []
     for kind in side_requests:
@@ -125,7 +132,9 @@ def build_window_host(output, origin, clock):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", required=True, type=Path)
-    output = parser.parse_args().output.resolve()
+    parser.add_argument("--controlled-source", action="store_true")
+    args = parser.parse_args()
+    output = args.output.resolve()
     package = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(package / "tests"))
     from test_local_http_integration import (
@@ -139,7 +148,7 @@ def main():
         boundary.ports.add(server.server_port)
         origin = f"http://127.0.0.1:{server.server_port}"
         clock = Clock(datetime.fromisoformat("2026-10-21T00:00:00+00:00").timestamp())
-        fixture = build_window_host(output, origin, clock)
+        fixture = build_window_host(output, origin, clock, with_controlled_source=args.controlled_source)
         host, controller, windows = fixture.host, fixture.controller, fixture.windows
         flags, held, released = fixture.flags, fixture.held, fixture.released
         requests, side_requests = fixture.requests, fixture.side_requests
@@ -157,7 +166,8 @@ def main():
                 "model_requests": list(requests), "source_requests": list(side_requests["source"]),
                 "accounting_requests": list(side_requests["accounting"]), "budget": host.budget.report(),
                 "capacity_sha256": hashlib.sha256(controller.store.path.read_bytes()).hexdigest(),
-                "health_sha256": inventory(host.health.path),
+                "health_sha256": {str(host.health.path.relative_to(host.root)):
+                    hashlib.sha256(host.health.path.read_bytes()).hexdigest()},
                 "original_evidence_sha256": {**inventory(host.root / "receipts"), **inventory(host.root / "tasks")},
                 "window_snapshot": windows.snapshot(), "model_response_held": held.is_set() and not released.is_set(),
                 "blocked_server_socket_attempts": [str(item) for item in boundary.blocked],

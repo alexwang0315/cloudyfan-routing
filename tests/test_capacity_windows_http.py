@@ -318,3 +318,36 @@ def test_original_reset_cannot_change_the_explicitly_registered_time_unit(local_
     denied = client.post("/v1/tasks", json={**TASK, "run_id": "unit-mismatch-remains-unknown"})
     assert denied.status_code == 429 and denied.json()["error"]["code"] == "capacity_window_time_invalid"
     assert len(bundle.upstream.calls) == 1
+
+
+@pytest.mark.parametrize("invalid_clock", [float("nan"), float("inf")])
+def test_nonfinite_wall_clock_refuses_without_losing_saved_window(local_service, invalid_clock):
+    bundle = local_service.bundle
+    start = local_service.clock()
+    bundle.upstream.fail_tiers = set()
+    def upstream(request):
+        body = bundle.upstream(request).json()
+        body.update(choices=[], error={"code": 429})
+        return httpx.Response(429, json=body, headers={"retry-after": "30"})
+    for contract in bundle.app.gateway.service.contracts.values():
+        contract.runner.client.http = httpx.Client(transport=httpx.MockTransport(upstream), trust_env=False)
+    controller, _ = attach_windows(bundle, local_service.clock)
+    local_service.server.set_app(bundle.app)
+    operator, client = local_service.client("operator"), local_service.client()
+    assert operator.post("/monitor/capacity/activate", json={"revision": 0,
+        "version": "synthetic-window-admission-v1"}).status_code == 200
+    original = client.post("/v1/tasks", json={**TASK, "run_id": "saved-before-nonfinite-clock"}).json()
+    saved = operator.get("/monitor/capacity").json()["dispatch"]["windows"]
+    before = hashlib.sha256(controller.store.path.read_bytes()).hexdigest()
+    local_service.clock.now = invalid_clock
+    try:
+        unavailable = operator.get("/monitor/capacity")
+        assert unavailable.status_code == 409 and unavailable.json()["error"]["code"] == "capacity_clock_invalid"
+        denied = client.post("/v1/tasks", json={**TASK, "run_id": "nonfinite-clock-not-dispatched"})
+        assert denied.status_code == 503 and denied.json()["error"]["code"] == "identity_authentication_unavailable"
+        assert hashlib.sha256(controller.store.path.read_bytes()).hexdigest() == before
+    finally:
+        local_service.clock.now = start + 1
+    assert operator.get("/monitor/capacity").json()["dispatch"]["windows"] == saved
+    assert client.post("/v1/tasks/saved-before-nonfinite-clock/resume", json={}).json() == original
+    assert len(bundle.upstream.calls) == 1

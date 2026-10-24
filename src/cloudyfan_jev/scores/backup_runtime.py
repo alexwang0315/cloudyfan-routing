@@ -278,7 +278,7 @@ class BackupCategoryCore(Core):
                 'classifier_calls': classifiers, 'classifier_profile': deepcopy(self.decision) if classifiers else None,
                 'max_tool_calls': self._base_limits.max_tool_calls}
 
-    def _health_choice(self, tier, failed_providers, excluded_configs):
+    def _health_choice(self, tier, failed_providers, excluded_configs, *, window_check=None):
         eligible, observations = [], []
         for record in self._backup['pools'][tier]:
             profile = record['entry']['profile']
@@ -303,8 +303,8 @@ class BackupCategoryCore(Core):
                     str((self._deadline - self._now()).total_seconds() * 1000)):
                 reasons.append('remaining_task_time_insufficient')
             window = None
-            check_window = getattr(self.local_backend if profile.get('backend') == 'local' else self.client,
-                                   'candidate_window', None)
+            check_window = window_check or getattr(self.local_backend if profile.get('backend') == 'local' else self.client,
+                                                   'candidate_window', None)
             if callable(check_window):
                 window = check_window(profile)
                 if window is not None and window['status'] != 'open':
@@ -314,6 +314,70 @@ class BackupCategoryCore(Core):
             if not reasons:
                 eligible.append(record)
         return (deepcopy(min(eligible, key=self._rank_record)) if eligible else None), observations
+
+    def queue_accept(self, run_id, accepted_at):
+        if run_id != self._bound_run_id:
+            raise ValueError('Backup queue run identity changed')
+        directory = self._manifest.parent
+        directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+        timing = directory / 'backup-deadline.json'
+        if not timing.exists():
+            start = datetime.fromtimestamp(accepted_at, timezone.utc)
+            _save(timing, {'started_at': start.isoformat(), 'deadline':
+                (start + timedelta(milliseconds=float(_d(self._backup['qcs_policy']['max_flow_ms'])))).isoformat()})
+
+    def _queue_deadline(self):
+        from ..capacity_dispatch import CapacityDenied
+        timing = self._manifest.parent / 'backup-deadline.json'
+        if not timing.exists():
+            raise CapacityDenied('capacity_original_deadline_unavailable')
+        self._deadline = timestamp(_read(timing)['deadline'])
+        if self._now() >= self._deadline:
+            raise CapacityDenied('capacity_original_deadline_exceeded')
+
+    def queue_initial(self, run_id, task, *, mode, tools, candidate_window=None):
+        from ..capacity_dispatch import CapacityDenied
+        self._queue_deadline()
+        self._task = deepcopy(task)
+        self._require_policy_fresh()
+        record, observations = self._health_choice(INITIAL[mode], set(), set(), window_check=candidate_window)
+        if record is None:
+            raise CapacityDenied('capacity_original_candidate_unavailable')
+        profile = record['entry']['profile']
+        prefix = 'run-' + run_id
+        messages = [{'role': 'system', 'content': self.system}, {'role': 'user', 'content': task['prompt']}]
+        return {'call_id': prefix + '-a0-t0', 'payload': self.generation_payload(messages, profile, prefix, tools),
+                'local': profile.get('backend') == 'local', 'gate': {'kind': 'generation', 'record': record}}
+
+    def queue_validate(self, next_request):
+        from ..capacity_dispatch import CapacityDenied
+        self._queue_deadline()
+        self._require_policy_fresh()
+        gate = next_request.get('gate')
+        try:
+            if gate['kind'] == 'generation':
+                record = gate['record']
+                if not any(record in rows for rows in self._backup['pools'].values()):
+                    raise ValueError('Saved candidate is outside frozen backup pool')
+                if next_request['payload']['model'] != record['entry']['profile']['model_version']:
+                    raise ValueError('Saved candidate differs from next model')
+                self._active_record = record
+                self._queue_location(record['entry']['profile'])
+                self._require_active_health()
+            elif gate['kind'] == 'classifier':
+                self._active_selection = gate['selection']
+                if self.execution_policy is not None:
+                    self.execution_policy.require('classifier', self.execution_policy.classifier)
+                if next_request['payload']['model'] != self.decision['version']:
+                    raise ValueError('Saved classifier differs from exact version')
+                for record in self._active_selection['pair'].values():
+                    if not any(record in rows for rows in self._backup['pools'].values()):
+                        raise ValueError('Saved classifier pair is outside frozen pool')
+                self._require_selection_fresh()
+            else:
+                raise ValueError('Unknown original gate')
+        except Exception:
+            raise CapacityDenied('capacity_original_gate_denied') from None
 
     def _capacity_post_guard(self, generation):
         from ..capacity_dispatch import CapacityDenied
@@ -332,7 +396,11 @@ class BackupCategoryCore(Core):
     def _checked(self, cid, url, payload, accepted, provider, *, allow_rejection=False):
         guard = getattr(self.client, 'guard_dispatch', None)
         if callable(guard):
-            with guard(lambda: self._capacity_post_guard(allow_rejection)):
+            queue_enabled = getattr(self.client, 'queue_preparation_enabled', lambda: False)()
+            evidence = ({'kind': 'generation', 'record': self._active_record} if allow_rejection else
+                        {'kind': 'classifier', 'selection': self._active_selection}) if queue_enabled else None
+            with guard(lambda: self._capacity_post_guard(allow_rejection),
+                       **({'queue_evidence': evidence} if queue_enabled else {})):
                 return self._checked_original(cid, url, payload, accepted, provider, allow_rejection=allow_rejection)
         return self._checked_original(cid, url, payload, accepted, provider, allow_rejection=allow_rejection)
 
@@ -687,7 +755,9 @@ class _LocalBound:
             self.core._require_active_health()
         guard = getattr(self.backend, 'guard_dispatch', None)
         if callable(guard):
-            with guard(lambda: self.core._capacity_post_guard(True)):
+            queued = getattr(self.backend, 'queue_preparation_enabled', lambda: False)()
+            with guard(lambda: self.core._capacity_post_guard(True), **({'queue_evidence': {
+                    'kind': 'generation', 'record': self.core._active_record}} if queued else {})):
                 return self.backend.call(cid, payload)
         return self.backend.call(cid, payload)
 

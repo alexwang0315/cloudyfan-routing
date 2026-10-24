@@ -336,17 +336,23 @@ class _BudgetClient:
     def __init__(self, wrapped, owner, run_id):
         self.wrapped, self.owner, self.run_id = wrapped, owner, run_id
         self._dispatch_guard = None
+        self._queue_guard = None
 
     def __getattr__(self, name):
         return getattr(self.wrapped, name)
 
     @contextmanager
-    def guard_dispatch(self, guard):
+    def guard_dispatch(self, guard, *, queue_evidence=None):
         previous, self._dispatch_guard = self._dispatch_guard, guard
+        previous_queue, self._queue_guard = self._queue_guard, queue_evidence
         try:
             yield
         finally:
             self._dispatch_guard = previous
+            self._queue_guard = previous_queue
+
+    def queue_preparation_enabled(self):
+        return self.owner.capacity_controller is not None and self.owner._capacity_context.get('queue_version') is not None
 
     def _event_id(self, cid):
         return 'model:' + _fingerprint(str(self.wrapped.root.resolve())) + ':' + cid
@@ -381,6 +387,10 @@ class _BudgetClient:
             args = tuple(deepcopy(value) for value in args)
             payload = args[-1]
             endpoint = args[0] if len(args) > 1 else self.wrapped.config['endpoint']
+            if self.owner._capacity_context.get('queue_version') is not None:
+                backend = self.owner.capacity_controller._queue_backend(self.owner._capacity_context['queue_version'])
+                payload = backend.ordered_payload(cid, endpoint, payload)
+                args = (*args[:-1], payload)
             # Receipt replay is decided inside the real transport, before prepare.
             dispatch = _BudgetDispatch(self, cid, args, endpoint, payload)
             record = self.wrapped.call(cid, *args, dispatch=dispatch)
@@ -440,7 +450,8 @@ class _BudgetDispatch:
             raise CapacityDenied('capacity_request_changed')
         if self.owner._capacity_context.get('queue_version') is not None:
             backend = self.owner.capacity_controller._queue_backend(self.owner._capacity_context['queue_version'])
-            self.capacity, evidence = backend.consume(self.owner, self.client.wrapped, cid, self.endpoint, self.payload, request)
+            self.capacity, evidence = backend.consume(self.owner, self.client.wrapped, cid, self.endpoint, self.payload, request,
+                gate=self.client._queue_guard)
         else:
             self.capacity = self.owner.capacity_controller.dispatch(self.owner._capacity_context,
                 self.client.wrapped, self.endpoint, self.payload, self.owner._capacity_descriptor)

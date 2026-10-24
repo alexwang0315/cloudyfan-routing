@@ -183,7 +183,7 @@ class QueueScheduler:
                     raise ServiceError('frozen_task_changed', 409)
             else:
                 count = db.execute('SELECT COUNT(*) FROM jobs WHERE state IN ("queued","accepting")').fetchone()[0]
-                active = db.execute('SELECT COUNT(*) FROM jobs WHERE principal=? AND state IN ("accepting","queued","running","interrupted_pending")', (principal,)).fetchone()[0]
+                active = db.execute('SELECT COUNT(*) FROM jobs WHERE principal=? AND state IN ("accepting","queued","claiming","running","interrupted_pending")', (principal,)).fetchone()[0]
                 if count >= self.limits.capacity:
                     rejection = 'queue_full'
                 elif active >= self.limits.per_principal:
@@ -203,6 +203,9 @@ class QueueScheduler:
             try:
                 with self.capacity_protocol.accepting(self):
                     self.service.create(principal, payload)
+                    with self._readonly() as db:
+                        accepted = dict(self._job(db, principal, payload['run_id']))
+                    self.capacity_protocol.accept(self.service, accepted)
                     self.service.mark_queued(principal, payload['run_id'])
             except ServiceError as error:
                 if error.code != 'task_busy':
@@ -228,7 +231,7 @@ class QueueScheduler:
         with self._transaction() as db:
             if db.execute('SELECT 1 FROM maintenance WHERE active=1').fetchone():
                 raise ServiceError('queue_maintenance', 409)
-            if db.execute('SELECT 1 FROM jobs WHERE state IN ("running","interrupted_pending")').fetchone():
+            if db.execute('SELECT 1 FROM jobs WHERE state IN ("claiming","running","interrupted_pending")').fetchone():
                 raise ServiceError('queue_workers_not_stopped', 409)
             db.execute('INSERT OR REPLACE INTO maintenance VALUES (1,?,1)', (token,))
         try:
@@ -482,7 +485,7 @@ class QueueScheduler:
                     detail = {'groups': sorted(groups), 'code': code}
                     terminal = (isinstance(error, ServiceError) and error.status in (401, 403, 404, 409, 410)
                         or code in {'capacity_credential_inactive', 'capacity_deadline_exceeded',
-                                    'capacity_adoption_unavailable', 'capacity_queue_contract_changed'})
+                                    'capacity_adoption_unavailable', 'capacity_queue_contract_changed', 'capacity_original_deadline_exceeded'})
                     if terminal:
                         db.execute('UPDATE jobs SET state="rejected",reason="queue_original_authority_denied",detail=?,finished=? WHERE id=?',
                             (_encode(detail).decode(), self._now(db), row['id']))

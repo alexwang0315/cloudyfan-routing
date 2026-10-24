@@ -139,6 +139,8 @@ class App:
                       "/candidates.css": ("candidates.css", "text/css; charset=utf-8"),
                       "/capacity.js": ("capacity.js", "text/javascript; charset=utf-8"),
                       "/capacity.css": ("capacity.css", "text/css; charset=utf-8"),
+                      "/queue.js": ("queue.js", "text/javascript; charset=utf-8"),
+                      "/queue.css": ("queue.css", "text/css; charset=utf-8"),
                       "/style.css": ("style.css", "text/css; charset=utf-8")}
             if method == "GET" and path in static:
                 filename, content_type = static[path]
@@ -164,7 +166,7 @@ class App:
                     raise MonitorError("endpoint_not_supported", 404)
                 status = {"accounting_interrupted": 409, "engineering_interrupted": 503,
                           "policy_denied": 403, "capacity_denied": 429, "expired": 410, "retired": 410,
-                          "source_refresh_failed": 503}.get(body.get("status"), 200)
+                          "queued": 202, "accepting": 202, "source_refresh_failed": 503}.get(body.get("status"), 200)
                 body = encode(body).encode()
         except (MonitorError, ServiceError) as error:
             detail = error.code if path.startswith("/api/") else {"code": error.code}
@@ -186,6 +188,12 @@ class App:
         return [body]
 
     def _admin(self, method, path, environ):
+        if method == 'GET' and path == '/monitor/queue':
+            if environ.get('QUERY_STRING'):
+                raise MonitorError('unsupported_queue_query')
+            if self.gateway.queue is None:
+                return {'schema_version': 'capacity-queue-v1', 'configured': False, 'jobs': []}
+            return self.gateway.queue_snapshot()
         if method == "POST" and path == "/monitor/capacity/activate":
             body = self._body(environ)
             self._fields(body, {"revision", "version"})
@@ -309,14 +317,22 @@ class App:
             return self.gateway.snapshot(principal)
         if method == "POST" and path == "/v1/tasks":
             return self.gateway.create(principal, self._body(environ))
-        match = re.fullmatch(r"/v1/tasks/([A-Za-z0-9][A-Za-z0-9_-]{0,63})(/result|/resume)?", path)
+        match = re.fullmatch(r"/v1/tasks/([A-Za-z0-9][A-Za-z0-9_-]{0,63})(/result|/resume|/cancel)?", path)
         if match:
             self.store.binding(principal, match[1])
-            if method == "GET" and match[2] != "/resume":
+            if method == "GET" and match[2] not in ("/resume", "/cancel"):
                 state = self.gateway.status(principal, match[1])
                 if match[2] != "/result" or state.get("status") in ("expired", "retired"):
                     return state
                 return self.gateway.service.result(principal, match[1], refresh=False)
+            if method == 'POST' and match[2] == '/cancel':
+                if self._body(environ) != {}:
+                    raise MonitorError('cancel_cannot_change_frozen_settings')
+                if self.gateway.queue is None:
+                    raise MonitorError('capacity_queue_not_configured', 409)
+                state = self.gateway.queue.cancel(principal, match[1])
+                self.gateway.capture(self.store.binding(principal, match[1]))
+                return state
             if method == "POST" and match[2] == "/resume":
                 if self._body(environ) != {}:
                     raise MonitorError("resume_cannot_change_frozen_settings")

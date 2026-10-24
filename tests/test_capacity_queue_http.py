@@ -1,4 +1,5 @@
 """Versioned bounded capacity queue at the agreed real HTTP seam."""
+import pytest
 from test_local_http_integration import local_service as local_service, loopback_network as loopback_network, TASK
 from capacity_admission_fixture import attach_admission
 from capacity_queue_fixture import attach_window_protocol, WindowProtocolFixture
@@ -129,6 +130,41 @@ def test_shared_host_reopen_retains_original_identity_configuration_and_next_req
     finally:
         host.close()
         reopened.close()
+
+
+@pytest.mark.parametrize('stop', ['cancel', 'expire'])
+def test_stopping_waiting_continuation_preserves_paid_response_and_releases_only_unused_fee_reserve(local_service, stop):
+    from capacity_queue_fixture import attach_queue
+    import hashlib
+    bundle = local_service.bundle
+    queue = attach_queue(bundle, local_service.clock, rpm=1)
+    local_service.server.set_app(bundle.app)
+    operator, client = local_service.client('operator'), local_service.client()
+    operator.post('/monitor/capacity/activate', json={'revision': 0, 'version': 'synthetic-queued-admission-v1'})
+    payload = {**TASK, 'run_id': 'stop-continuation'}
+    assert client.post('/v1/tasks', json=payload).status_code == 202
+    assert queue.dispatch_next()['status'] == 'queued'
+    paths = list((bundle.root / 'receipts/calls').glob('*/*.json'))
+    before = {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in paths}
+    local_service.clock.now += 3 if stop == 'cancel' else 121
+    if stop == 'cancel':
+        state = client.post('/v1/tasks/stop-continuation/cancel', json={}).json()
+        assert state['reason'] == 'cancelled_before_next_dispatch'
+    else:
+        assert client.get('/v1/tasks/stop-continuation').json()['status'] == 'expired'
+        queue.dispatch_next()  # explicit mutation closes only the original unused monetary reserve
+        state = client.get('/v1/tasks/stop-continuation').json()
+    report = queue.service.contracts['demo-cloudyfan'].runner.store.report()
+    assert report['known_usd'] == '0.0001' and report['unknown_events'] == 0 and report['reserved_usd'] == '0'
+    assert state['provider_cancellation_confirmed'] is False
+    assert before == {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in paths}
+    assert len(bundle.upstream.calls) == 1 and len(report['events']) == 1
+    elapsed = state['queue']['waiting_seconds']
+    local_service.clock.now += 5
+    assert client.post('/v1/tasks', json=payload).json()['status'] == state['status']
+    assert client.get('/v1/tasks/stop-continuation').json()['queue']['waiting_seconds'] == elapsed
+    assert client.post('/v1/tasks/stop-continuation/resume', json={}).json()['status'] == state['status']
+    assert len(bundle.upstream.calls) == 1
 
 
 def test_window_protocol_is_explicitly_not_applicable_on_original_immediate_policy(local_service):

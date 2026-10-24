@@ -332,6 +332,12 @@ class _BudgetClient:
     def _event_id(self, cid):
         return 'model:' + _fingerprint(str(self.wrapped.root.resolve())) + ':' + cid
 
+    def candidate_window(self, profile):
+        if self.owner.capacity_controller is None or self.owner._capacity_context['policy_version'] is None:
+            return None
+        return self.owner.capacity_controller.candidate_window(self.owner._capacity_context,
+            self.wrapped, profile, self.owner._capacity_descriptor)
+
     def _record(self, cid, record):
         from .client import usage, not_dispatched
         info = usage(record)
@@ -445,6 +451,9 @@ class _BudgetDispatch:
     def release(self):
         self.capacity.release()
 
+    def response_headers(self, response):
+        return self.capacity.response_headers(response)
+
     def complete(self, record):
         from .capacity_dispatch import CapacityDenied
         try:
@@ -535,7 +544,7 @@ class _BudgetEnvironment:
                 except Exception:
                     raise CapacityDenied('capacity_original_gate_denied') from None
             return dispatch.before_post()
-        record = transport.post(action_id, wire, final_guard)
+        record = transport.post(action_id, wire, final_guard, response_headers=dispatch.response_headers)
         if not_dispatched(record):
             self.owner.store.record_event(event_id, cost_usd='0', verified=True,
                 receipt_id='not-dispatched:' + _fingerprint(str(transport.root) + ':' + action_id))
@@ -552,8 +561,10 @@ class _BudgetEnvironment:
             if result.cost_usd is None or not result.receipt_id:
                 raise BudgetError('External tool cost unknown; execution stopped')
         except BaseException:
+            dispatch._record_window_response(record)
             dispatch._update('uncertain')
             raise
+        dispatch._record_window_response(record)
         dispatch._update('complete')
         return result.result
 

@@ -302,7 +302,15 @@ class BackupCategoryCore(Core):
             if self._deadline is not None and _d(record['evidence']['speed']['upper']) > Decimal(
                     str((self._deadline - self._now()).total_seconds() * 1000)):
                 reasons.append('remaining_task_time_insufficient')
-            observations.append({'config_id': record['entry']['config_id'], 'assessment': health, 'reasons': reasons})
+            window = None
+            check_window = getattr(self.local_backend if profile.get('backend') == 'local' else self.client,
+                                   'candidate_window', None)
+            if callable(check_window):
+                window = check_window(profile)
+                if window is not None and window['status'] != 'open':
+                    reasons.append(window['reason_code'])
+            observations.append({'config_id': record['entry']['config_id'], 'assessment': health, 'reasons': reasons,
+                **({'capacity_window': window} if window is not None else {})})
             if not reasons:
                 eligible.append(record)
         return (deepcopy(min(eligible, key=self._rank_record)) if eligible else None), observations

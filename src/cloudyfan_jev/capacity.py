@@ -241,6 +241,10 @@ def _private_path(path, *, create=False):
 
 
 def _live_capacity(connection, now):
+    if connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='capacity_window_observations'").fetchone():
+        if connection.execute("SELECT 1 FROM capacity_window_observations WHERE status='unknown' "
+                              "OR (status='wait' AND not_before>?) LIMIT 1", (now,)).fetchone():
+            return True
     if not connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='capacity_adoptions'").fetchone():
         return False
     if connection.execute("SELECT 1 FROM capacity_adoptions WHERE terminal=0 LIMIT 1").fetchone():

@@ -316,15 +316,26 @@ async function lifecycleMain() {
       });
     } else if(process.argv.includes('--companion-loss')) {
       await step('lost_companion_has_unknown_policy_and_counts_without_erasing_original_receipts',async()=>{
+        await capacityPage();
+        const selector=page.locator('#capacity-policy-version');
+        assert.equal(await selector.isEnabled(),true);
+        await selector.focus();
+        assert.equal(await page.evaluate(()=>document.activeElement.id),'capacity-policy-version');
         const before=await inspect();await inspect({command:'fault_companion_loss'});
         const cap=await get('/monitor/capacity');assert.equal(cap.dispatch.integrity.status,'unavailable');
         assert.equal(cap.dispatch.integrity.retained_verified_metadata,false);
         assert.equal(cap.dispatch.active_version,null);assert.equal(cap.dispatch.allocation_count,null);
         const after=await inspect();for(const key of ['budget','model_requests','wire_files_sha256','health_sqlite_sha256','original_evidence_sha256'])assert.deepEqual(after[key],before[key],key);
         await fs.writeFile(path.join(output,'safe-companion-loss-capacity.json'),JSON.stringify(cap,null,2));
-        await capacityPage();assert.equal(await page.locator('#capacity-active-version').innerText(),'未知');
+        await refresh('CloudyFanCapacity');
+        assert.equal(await page.locator('#capacity-active-version').innerText(),'未知');
         assert.equal(await page.locator('#capacity-policy-revision').innerText(),'未知');
         assert.ok(!(await page.locator('#capacity-dispatch').innerText()).includes('尚無已登錄容量政策'));
+        assert.equal(await selector.isDisabled(),true);
+        const focused=await page.evaluate(()=>document.activeElement.id);
+        assert.equal(focused,'reload');
+        report.focus_transition={trigger:'actual companion loss followed by same-page saved-state refresh',
+          before:'capacity-policy-version',after:focused,original_control_disabled:true};
         await shot('03-no-witness-policy-unknown');
       });
     } else {

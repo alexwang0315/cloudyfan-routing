@@ -30,6 +30,16 @@
         "src/cloudyfan_jev/capacity_windows.py"
       ],
       "provided_by": "ISSUE37"
+    },
+    {
+      "id": "PARALLEL-STUDY-COMPLETION",
+      "owner": "parallel-check-worker",
+      "owned_files": [
+        "scripts/research_parallel/concurrent_ledger.py",
+        "scripts/research_parallel/parallel_runner.py",
+        "scripts/research_parallel/test_parallel_runner.py"
+      ],
+      "provided_by": "CORE-CHECK-PARALLEL-COMPLETION"
     }
   ],
   "tasks": [
@@ -102,6 +112,21 @@
       "consumed_interfaces": [
         "CONTROLLED-QUEUE-WINDOW-HOOKS"
       ]
+    },
+    {
+      "id": "CORE-CHECK-PARALLEL-COMPLETION",
+      "owner": "parallel-check-worker",
+      "status": "in_progress",
+      "owned_files": [
+        "scripts/research_parallel/concurrent_ledger.py",
+        "scripts/research_parallel/parallel_runner.py",
+        "scripts/research_parallel/test_parallel_runner.py"
+      ],
+      "depends_on": [
+        "ISSUE35"
+      ],
+      "consumed_interfaces": [],
+      "outcome": "Investigate and minimally fix pre-existing parallel-study completion misclassification exposed by original full Core gate. Preserve all old tests/evidence; no production qualification or fee/dispatch relaxation."
     }
   ]
 }

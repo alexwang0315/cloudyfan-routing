@@ -241,7 +241,7 @@ function load(force=false) {
      if(!sameLogin(version,requestToken))return {ok:false,stale:true};
      let nextPool=pool;
      const viewedPool=selectedCandidateVersion||next.control.catalog_pool,selection=candidateSelectionKey();
-     if(viewedPool&&(flight.force||!nextPool||nextPool.id!==viewedPool||!candidateObservation()))nextPool=await api(candidateQuery(viewedPool));
+     if(viewedPool&&(flight.force||location.hash==='#pools'||!nextPool||nextPool.id!==viewedPool||!candidateObservation()))nextPool=await api(candidateQuery(viewedPool));
      if(!sameLogin(version,requestToken))return {ok:false,stale:true};
      if(selection!==candidateSelectionKey())return {ok:false,stale:true};
      data=next;pool=nextPool;

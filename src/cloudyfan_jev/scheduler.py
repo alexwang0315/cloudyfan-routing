@@ -251,14 +251,16 @@ class QueueScheduler:
 
     def retention_snapshot(self, internal_id):
         """Operator-side queue inventory, containing no task prompt."""
-        with self._transaction() as db:
-            row = db.execute('SELECT request,state FROM jobs WHERE id=?', (internal_id,)).fetchone()
+        with self._readonly() as db:
+            row = db.execute('SELECT request,state,deadline FROM jobs WHERE id=?', (internal_id,)).fetchone()
             if row is None:
                 return {'terminal': False, 'request_erased': False, 'request_sha256': None,
                         'bytes': 0, 'evidence_ref': 'queue-job-missing'}
             raw = row['request'].encode()
             parsed = json.loads(row['request'])
-            return {'terminal': row['state'] in {'completed', 'cancelled', 'expired', 'rejected'},
+            terminal = (row['state'] in {'completed', 'cancelled', 'expired', 'rejected'}
+                or row['state'] in {'queued', 'accepting'} and row['deadline'] <= self._observed_now(db))
+            return {'terminal': terminal,
                     'request_erased': parsed.get('retired') is True,
                     'request_sha256': (parsed.get('request_sha256') if parsed.get('retired') is True
                                        else hashlib.sha256(raw).hexdigest()),
@@ -270,7 +272,16 @@ class QueueScheduler:
         if not isinstance(approval_reference, str) or not approval_reference.strip():
             raise ServiceError('retention_approval_required', 403)
         with self._transaction() as db:
-            row = db.execute('SELECT request,state FROM jobs WHERE id=?', (internal_id,)).fetchone()
+            row = db.execute('SELECT request,state,deadline FROM jobs WHERE id=?', (internal_id,)).fetchone()
+            if (row is not None and row['state'] in {'queued', 'accepting'}
+                    and row['deadline'] <= self._observed_now(db)):
+                # Only the already-approved exact retention maintenance persists
+                # the expiry that readonly status/preview previously projected.
+                # Original billing/intent checks still decide eligibility; this
+                # never treats running/uncertain work as terminal or paid as zero.
+                db.execute('UPDATE jobs SET state="expired",reason="queue_deadline_expired",finished=? WHERE id=?',
+                    (row['deadline'], internal_id))
+                row = db.execute('SELECT request,state FROM jobs WHERE id=?', (internal_id,)).fetchone()
             if row is None or row['state'] not in {'completed', 'cancelled', 'expired', 'rejected'}:
                 raise ServiceError('retention_queue_not_terminal', 409)
             if hashlib.sha256(row['request'].encode()).hexdigest() != expected_request_sha256:

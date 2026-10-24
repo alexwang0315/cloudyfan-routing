@@ -172,7 +172,7 @@ class QueueScheduler:
         # This committed accepting row is a recovery journal across the queue,
         # original TaskService job and capacity adoption stores. No cross-store
         # transaction is claimed; resubmit can only finish the same frozen row.
-        with self._task_guard(identity), self._transaction() as db:
+        with self._transaction() as db:
             if db.execute('SELECT 1 FROM maintenance WHERE active=1').fetchone():
                 raise ServiceError('queue_maintenance', 503)
             self._expire(db)
@@ -199,9 +199,17 @@ class QueueScheduler:
         with self._readonly() as db:
             state = self._job(db, principal, payload['run_id'])['state']
         if state == 'accepting':
-            with self.capacity_protocol.accepting(self):
-                self.service.create(principal, payload)
-                self.service.mark_queued(principal, payload['run_id'])
+            try:
+                with self.capacity_protocol.accepting(self):
+                    self.service.create(principal, payload)
+                    self.service.mark_queued(principal, payload['run_id'])
+            except ServiceError as error:
+                if error.code != 'task_busy':
+                    raise
+                # The committed original acceptance is still being completed
+                # under its original nonblocking service/retention lock. This
+                # duplicate is a pending lookup, not a second execution owner.
+                return self.status(principal, payload['run_id'])
             with self._transaction() as db:
                 row = self._job(db, principal, payload['run_id'])
                 if row['state'] == 'accepting':

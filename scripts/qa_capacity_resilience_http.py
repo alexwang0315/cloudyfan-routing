@@ -18,7 +18,10 @@ def main():
     parser.add_argument("--service-root", type=Path)
     parser.add_argument("--port", type=int, default=0)
     parser.add_argument("--minimal", action="store_true")
+    parser.add_argument("--full-workflow", action="store_true")
     args = parser.parse_args()
+    if args.minimal and args.full_workflow:
+        parser.error("The full-workflow held fixture cannot be combined with the minimal slice")
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True, mode=0o700)
     package = Path(__file__).resolve().parents[1]
@@ -69,7 +72,7 @@ def main():
             side_requests = {"source": [], "accounting": []}
         else:
             controlled = build_resilience_health_host(service_root, clock=clock, origin=origin,
-                before_response=observe_model)
+                before_response=observe_model, held_timeout_seconds=1800 if args.full_workflow else 600)
             host = controlled.host
             side_requests = controlled.side_requests
         queue, controller = controlled.queue, controlled.controller
@@ -130,6 +133,7 @@ def main():
                 "original_evidence_sha256": inventory(), "worker_running": any(w.is_alive() for w in workers),
                 "worker_running_count": sum(w.is_alive() for w in workers),
                 "model_response_held": not args.minimal and controlled.held.is_set() and not controlled.released.is_set(),
+                "held_timeout_seconds": None if args.minimal else controlled.held_timeout_seconds,
                 "worker_results": list(results),
                 "wall_elapsed_seconds": time.monotonic() - started,
                 "blocked_server_socket_attempts": [str(item) for item in boundary.blocked],
@@ -174,6 +178,7 @@ def main():
         print(json.dumps({"type": "ready", "origin": origin, "pid": os.getpid(),
             "category": CATEGORY if args.minimal else host.category,
             "policy_version": "synthetic-queued-admission-v1" if args.minimal else controlled.policy_version,
+            "held_timeout_seconds": None if args.minimal else controlled.held_timeout_seconds,
             "operator_token": host.operator_token,
             "credentials": {name: value.token for name, value in host.credentials.items()}}), flush=True)
         try:

@@ -178,17 +178,22 @@ async function lifecycleMain() {
     accessibility_scope:'Keyboard focus/disclosure at the declared desktop viewport; no screen-reader or WCAG certification'};
   report.planned_check_count=['--queue-fault','--local-fault','--companion-loss'].some(flag=>process.argv.includes(flag))?3:process.argv.includes('--focused-restart')?12:13;
   if(process.argv.includes('--focused-restart'))report.scope+='; focused restart slice: >100 paid history and refusal steps explicitly not run';
+  const fullWorkflow=report.planned_check_count===13,heldTimeoutSeconds=fullWorkflow?1800:600;
+  const heldTimeoutMs=heldTimeoutSeconds*1000;
+  report.private_fixture_limits={held_timeout_seconds:heldTimeoutSeconds,idle_maximum_elapsed_ms:120000,
+    idle_maximum_samples:1200,idle_sampling_interval_ms:100,
+    scope:'Private MockTransport completion gate and observation sampling; no product deadline or SLO change'};
   let liveHoldStarted=null;
   const requireLiveHold=()=>{
     if(liveHoldStarted===null)return;
     const elapsed=performance.now()-liveHoldStarted;
     report.live_hold_guard.maximum_observed_elapsed_ms=Math.max(report.live_hold_guard.maximum_observed_elapsed_ms,elapsed);
-    if(elapsed>=600000){
+    if(elapsed>=heldTimeoutMs){
       report.live_hold_guard.bound_reached=true;
-      throw Error('Original 600-second live-held prerequisite ended; remaining workflow is not accepted');
+      throw Error('Configured private live-held fixture prerequisite ended; remaining workflow is not accepted');
     }
   };
-  const mib=1024*1024,fullWorkflow=report.planned_check_count===13;
+  const mib=1024*1024;
   report.resource_guard={enforced:fullWorkflow,start_minimum_available_bytes:512*mib,
     minimum_available_bytes:128*mib,maximum_run_output_bytes:256*mib,final_receipt_reserve_bytes:4*mib,
     boundaries:[],scope:'Observed filesystem availability and this new output directory; no deletion or held-response release'};
@@ -221,10 +226,13 @@ async function lifecycleMain() {
   const start=async port=>{
     const bootOutput=path.join(output,'boot-'+String(++boot).padStart(2,'0'));
     fixture=startFixture(path.join(core,'.venv/bin/python'),
-      [path.join(__dirname,'qa_capacity_resilience_http.py'),'--output',bootOutput,'--service-root',service,...(port?['--port',String(port)]:[])],
+      [path.join(__dirname,'qa_capacity_resilience_http.py'),'--output',bootOutput,'--service-root',service,
+        ...(fullWorkflow?['--full-workflow']:[]),...(port?['--port',String(port)]:[])],
       {cwd:root,env:{...process.env,PYTHONDONTWRITEBYTECODE:'1',PYTHONPATH:[path.join(root,'src'),path.join(core,'src')].join(path.delimiter)}});
     ready=await fixture.next();assert.equal(ready.type,'ready');
-    report.boots.push({pid:ready.pid,origin:ready.origin,output:path.basename(bootOutput)});
+    assert.equal(ready.held_timeout_seconds,heldTimeoutSeconds,'Actual configured private held-response bound');
+    report.boots.push({pid:ready.pid,origin:ready.origin,output:path.basename(bootOutput),
+      held_timeout_seconds:ready.held_timeout_seconds});
     operator=headers(ready.operator_token);client=headers(ready.credentials.studio);agent=headers(ready.credentials.agent);
   };
   const inspect=async(command={command:'inspect'})=>{
@@ -271,20 +279,23 @@ async function lifecycleMain() {
   }
   const idle=async(expected=0)=>{
     const started=performance.now(),row={started_at:new Date().toISOString(),expected_workers:expected,
-      maximum_samples:160,sampling_interval_ms:100,samples:0,completed:false};
+      maximum_elapsed_ms:120000,maximum_samples:1200,sampling_interval_ms:100,samples:0,completed:false};
     try{
-      for(let i=0;i<160;i++){
+      for(let i=0;i<row.maximum_samples&&performance.now()-started<row.maximum_elapsed_ms;i++){
         row.samples++;
         const progress=await inspect({command:'progress'});assert.equal(progress.type,'progress');
+        if(performance.now()-started>=row.maximum_elapsed_ms)break;
         if(progress.thread_running_count===expected){
           const value=await inspect();
-          if(value.worker_running_count===expected){row.completed=true;return value;}
+          if(value.worker_running_count===expected&&performance.now()-started<=row.maximum_elapsed_ms){row.completed=true;return value;}
         }
-        await page.waitForTimeout(100);
+        await page.waitForTimeout(row.sampling_interval_ms);
       }
       throw Error('Actual controlled worker did not reach expected completion boundary');
     }finally{
       row.duration_ms=performance.now()-started;
+      row.elapsed_bound_reached=row.duration_ms>=row.maximum_elapsed_ms;
+      row.sample_bound_reached=row.samples>=row.maximum_samples;
       await fs.appendFile(path.join(output,'actual-private-idle.jsonl'),JSON.stringify(row)+'\n');
     }
   };
@@ -462,7 +473,9 @@ async function lifecycleMain() {
       heldOriginal=accepted.body;
       liveHoldStarted=performance.now();
       report.live_hold_guard={started_at:new Date().toISOString(),started_before:'original held work command',
-        original_limit_ms:600000,maximum_observed_elapsed_ms:0,bound_reached:false};
+        configured_fixture_timeout_seconds:ready.held_timeout_seconds,configured_limit_ms:heldTimeoutMs,
+        scope:'Conservative monotonic bound starts before the actual MockTransport callback; no product SLO',
+        maximum_observed_elapsed_ms:0,bound_reached:false};
       await inspect({command:'work'});
       for(let i=0;i<80;i++){
         const state=await inspect();

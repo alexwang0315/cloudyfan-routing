@@ -339,12 +339,15 @@ class CapacityStore:
 
     @contextmanager
     def connection(self, *, write=False, projection=False):
-        _private_path(self.path)
+        detached = self.integrity.reading_view
+        if not detached:
+            _private_path(self.path)
         with self.integrity.transaction(write=write, projection=projection) as connection:
             if write:
                 connection.execute("PRAGMA journal_mode=DELETE")
             yield connection
-        _private_path(self.path)
+        if not detached:
+            _private_path(self.path)
 
     def configure(self, configuration):
         """Import trusted host configuration atomically; versions cannot be rewritten."""

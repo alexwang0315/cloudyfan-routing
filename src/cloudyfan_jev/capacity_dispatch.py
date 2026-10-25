@@ -518,6 +518,18 @@ class CapacityController:
 
     def context(self, run, principal, descriptor):
         self.require_integrity(task=run)
+        return self._context(run, principal, descriptor)
+
+    def read_context(self, run, principal, descriptor):
+        """Original adoption identity for a read projection, never dispatch."""
+        from .capacity_integrity import CapacityIntegrityError
+        try:
+            self.store.integrity.read_require(task=run)
+        except CapacityIntegrityError as error:
+            raise CapacityDenied(error.code, error.status) from None
+        return self._context(run, principal, descriptor)
+
+    def _context(self, run, principal, descriptor):
         with self.store.connection() as db:
             row = db.execute('SELECT payload FROM capacity_adoptions WHERE run=?', (run,)).fetchone()
         if row is None:

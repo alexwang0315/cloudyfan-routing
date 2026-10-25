@@ -4,7 +4,9 @@ The controlled host keeps this private companion outside the SQLite database.
 Read verification never repairs either copy. A pending metadata commit remains
 fail-closed after interruption; it never means that a supplier stopped or refunded.
 """
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
+from copy import deepcopy
+from dataclasses import dataclass
 import fcntl
 import hashlib
 import json
@@ -13,6 +15,7 @@ from pathlib import Path
 import sqlite3
 import stat
 import threading
+import time
 import uuid
 
 PROTOCOL = 'capacity-preservation-v1'
@@ -20,6 +23,57 @@ MAX_BYTES = 64 * 1024 * 1024
 MAX_ROWS = 50000
 MAX_TRANSACTIONS = 50000
 _LOCAL = threading.local()
+
+
+@dataclass(frozen=True)
+class _ReadView:
+    owner_thread: int
+    captured_at_ns: int
+    state: object
+    inspection: object
+    status: dict
+    database: object
+
+
+def _read_sql(action, first, second, _database, _trigger):
+    if action in {sqlite3.SQLITE_SELECT, sqlite3.SQLITE_READ, sqlite3.SQLITE_FUNCTION,
+                  sqlite3.SQLITE_RECURSIVE}:
+        return sqlite3.SQLITE_OK
+    if action == sqlite3.SQLITE_PRAGMA and (second is None or first in {'table_info', 'index_list', 'index_info'}
+            or first == 'query_only' and str(second).lower() in {'on', '1'}):
+        return sqlite3.SQLITE_OK
+    return sqlite3.SQLITE_DENY
+
+
+@contextmanager
+def read_views(integrities):
+    """Capture at most one queue/capacity pair, then release authority locks.
+
+    Each database and witness is bounded by MAX_BYTES/MAX_ROWS. At most two
+    private copies and two bounded witness states live for this response only;
+    this bounds serialized data, not Python allocator overhead or a read SLO.
+    A detached view can never supply an execution integrity check.
+    """
+    ordered = tuple(dict.fromkeys(integrities))
+    if len(ordered) > 2 or [row.role for row in ordered] not in ([], ['queue'], ['capacity'], ['queue', 'capacity']):
+        raise CapacityIntegrityError('capacity_store_read_scope_invalid')
+    previous = getattr(_LOCAL, 'capacity_read_views', {})
+    if previous:
+        raise CapacityIntegrityError('capacity_store_read_scope_invalid')
+    views = {}
+    try:
+        with ExitStack() as locks:
+            for integrity in ordered:
+                locks.enter_context(integrity.observation())
+            for integrity in ordered:
+                views[str(integrity.path)] = integrity._capture_read_view()
+        _LOCAL.capacity_read_views = views
+        yield
+    finally:
+        _LOCAL.capacity_read_views = previous
+        for view in views.values():
+            if view.database is not None:
+                view.database.close()
 
 
 class CapacityIntegrityError(RuntimeError):
@@ -96,6 +150,11 @@ class CapacityIntegrity:
 
     @contextmanager
     def lock(self, *, write=False):
+        if self._read_view() is not None:
+            if write:
+                raise CapacityIntegrityError('capacity_store_lock_upgrade_denied')
+            yield
+            return
         held = getattr(_LOCAL, 'capacity_locks', {})
         key = str(self.lock_path)
         if key in held:
@@ -114,6 +173,11 @@ class CapacityIntegrity:
             os.close(fd)
 
     def _state(self):
+        view = self._read_view()
+        if view is not None:
+            if view.state is None:
+                raise CapacityIntegrityError()
+            return view.state
         observation = getattr(_LOCAL, 'capacity_observations', {}).get(str(self.path))
         if observation is not None and 'state' in observation:
             return observation['state']
@@ -150,6 +214,54 @@ class CapacityIntegrity:
                 _LOCAL.capacity_observations = previous
                 if 'projection' in observation:
                     observation['projection'].close()
+
+    def _read_view(self):
+        view = getattr(_LOCAL, 'capacity_read_views', {}).get(str(self.path))
+        if view is not None and view.owner_thread != threading.get_ident():
+            raise CapacityIntegrityError('capacity_store_read_scope_invalid')
+        return view
+
+    @property
+    def reading_view(self):
+        return self._read_view() is not None
+
+    def _capture_read_view(self):
+        if str(self.lock_path) not in getattr(_LOCAL, 'capacity_locks', {}):
+            raise CapacityIntegrityError('capacity_store_read_scope_invalid')
+        status = self.status()
+        state, inspection, database = None, None, None
+        try:
+            state = self._state()
+            if len(_encoded(state)) > MAX_BYTES or sum(map(len, state['rows'].values())) > MAX_ROWS:
+                raise CapacityIntegrityError('capacity_store_witness_bound_exceeded')
+            try:
+                inspection = self._inspect()
+            except (OSError, ValueError, KeyError, TypeError, sqlite3.Error, CapacityIntegrityError):
+                # Preserve the captured global failure; the retained projection
+                # may still describe old obligations, never current authority.
+                pass
+            database = sqlite3.connect(':memory:')
+            with self.transaction(projection=True) as source:
+                source.backup(database)
+            pages = database.execute('PRAGMA page_count').fetchone()[0]
+            size = database.execute('PRAGMA page_size').fetchone()[0]
+            if pages * size > MAX_BYTES:
+                raise CapacityIntegrityError('capacity_store_witness_bound_exceeded')
+            if status['status'] == 'verified' and _hash(self._scan(database)) != _hash({
+                    'schema': state['schema'], 'rows': state['rows']}):
+                raise CapacityIntegrityError()
+            database.execute('PRAGMA query_only=ON')
+            database.set_authorizer(_read_sql)
+        except (OSError, ValueError, KeyError, TypeError, sqlite3.Error, CapacityIntegrityError) as error:
+            if database is not None:
+                database.close()
+                database = None
+            status = {**status, 'status': 'unavailable', 'affected_groups': None,
+                'affected_task_count': None, 'revision': None, 'metadata_rows': None,
+                'retained_verified_metadata': False,
+                'reason_code': error.code if isinstance(error, CapacityIntegrityError)
+                    else 'capacity_store_integrity_unavailable'}
+        return _ReadView(threading.get_ident(), time.monotonic_ns(), state, inspection, status, database)
 
     def _scan(self, db=None):
         own = db is None
@@ -221,6 +333,8 @@ class CapacityIntegrity:
         _write(self.head, {'body': body, 'sha256': _hash(body)})
 
     def _inspect(self):
+        if self._read_view() is not None:
+            raise CapacityIntegrityError('capacity_store_read_authority_denied')
         owned = getattr(_LOCAL, 'capacity_transactions', {}).get(str(self.path))
         if owned is not None:
             return owned
@@ -300,6 +414,9 @@ class CapacityIntegrity:
                 self.binding_error = 'capacity_store_binding_unavailable'
 
     def status(self):
+        view = self._read_view()
+        if view is not None:
+            return deepcopy(view.status)
         with self.lock():
             try:
                 state, status = self._inspect()
@@ -325,9 +442,18 @@ class CapacityIntegrity:
                     'witness_retention_days_minimum': 365, 'automatic_repair': False}
 
     def require(self, *, groups=None, task=None):
+        if self._read_view() is not None:
+            raise CapacityIntegrityError('capacity_store_read_authority_denied')
+        self.read_require(groups=groups, task=task)
+
+    def read_require(self, *, groups=None, task=None):
+        """Validate a metadata lookup; never an execution or POST permit."""
         with self.lock():
             try:
-                _, status = self._inspect()
+                view = self._read_view()
+                if view is not None and view.inspection is None:
+                    raise CapacityIntegrityError()
+                _, status = view.inspection if view is not None else self._inspect()
             except (OSError, ValueError, KeyError, TypeError, sqlite3.Error, CapacityIntegrityError):
                 raise CapacityIntegrityError() from None
             if status['bad'] and (groups is None and task is None
@@ -336,6 +462,15 @@ class CapacityIntegrity:
 
     @contextmanager
     def transaction(self, *, write=False, projection=False):
+        view = self._read_view()
+        if view is not None:
+            if write:
+                raise CapacityIntegrityError('capacity_store_lock_upgrade_denied')
+            if view.database is None or not projection and view.inspection is None:
+                raise CapacityIntegrityError()
+            with self.projection() as db:
+                yield db
+            return
         with self.lock(write=write):
             try:
                 state, status = self._inspect()
@@ -414,6 +549,17 @@ class CapacityIntegrity:
     @contextmanager
     def projection(self, *, current=None):
         """Last independently verified metadata only, never used to grant a POST."""
+        view = self._read_view()
+        if view is not None:
+            if view.database is None:
+                raise CapacityIntegrityError()
+            factory = view.database.row_factory
+            view.database.row_factory = None
+            try:
+                yield view.database
+            finally:
+                view.database.row_factory = factory
+            return
         observation = getattr(_LOCAL, 'capacity_observations', {}).get(str(self.path))
         if observation is not None and 'projection' in observation:
             db = observation['projection']
@@ -455,8 +601,9 @@ class CapacityIntegrity:
                         except sqlite3.Error:
                             pass
                     columns = list(view)
-                    db.execute('INSERT INTO "' + name + '" (' + ','.join('"' + k + '"' for k in columns)
-                        + ') VALUES (' + ','.join('?' for _ in columns) + ')', tuple(view.values()))
+                    db.execute('INSERT INTO "' + name + '" (rowid,' + ','.join('"' + k + '"' for k in columns)
+                        + ') VALUES (?,' + ','.join('?' for _ in columns) + ')', (record['rowid'], *view.values()))
+            db.commit()
             db.execute('PRAGMA query_only=ON')
             if observation is not None:
                 observation['projection'] = db

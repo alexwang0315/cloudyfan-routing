@@ -440,7 +440,7 @@ class QueueScheduler:
                 'effective_expiry_only': row['state'] == 'expired' and row['finished'] == row['deadline']}
             try:
                 directory, job = self.service._job(principal, run_id)
-                adoption = self.service.capacity_controller.context(row['id'], principal, job['registered'])
+                adoption = self.service.capacity_controller.read_context(row['id'], principal, job['registered'])
                 with self.service.capacity_controller.store.connection() as db:
                     policy_row = db.execute('SELECT payload FROM capacity_policies WHERE version=?', (adoption['policy_version'],)).fetchone()
                 policy = json.loads(policy_row[0]) if policy_row is not None else {}

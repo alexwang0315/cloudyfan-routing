@@ -2,6 +2,7 @@
 """Private real HTTP resilience fixture; original stores and failures stay local."""
 import argparse
 from datetime import datetime
+import faulthandler
 import hashlib
 import json
 import os
@@ -41,8 +42,23 @@ def main():
     boundary, responses, requests, commands = LoopbackEvidence(), [], [], []
     configure_loopback_network(boundary, setattr)
     lock = threading.RLock()
+    phase_lock = threading.Lock()
     workers, results = [], []
+    thread_dump_written = False
     started = time.monotonic()
+
+    def worker_phase(worker_id, phase, outcome=None):
+        observed = time.monotonic()
+        row = {"worker_id": worker_id, "thread_id": threading.get_ident(),
+            "native_thread_id": threading.get_native_id(), "phase": phase,
+            "monotonic_seconds": observed, "elapsed_seconds": observed - started}
+        if outcome is not None:
+            row["outcome"] = outcome
+        with phase_lock:
+            descriptor = os.open(output / "private-worker-phases.jsonl",
+                os.O_CREAT | os.O_APPEND | os.O_WRONLY, 0o600)
+            with os.fdopen(descriptor, "a") as stream:
+                stream.write(json.dumps(row) + "\n")
     service_root = (args.service_root or output / "service").resolve()
     service_root.mkdir(parents=True, exist_ok=True, mode=0o700)
     clock_file = service_root / "private-fixture-clock.json"
@@ -200,22 +216,45 @@ def main():
                     continue
                 if name == "stop":
                     break
+                if name == "thread_dump":
+                    if thread_dump_written:
+                        raise ValueError("Only one private thread dump is permitted per boot")
+                    thread_dump_written = True
+                    reference = "private-all-thread-stacks.txt"
+                    descriptor = os.open(output / reference, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+                    with os.fdopen(descriptor, "w") as stream:
+                        # CPython bounds this to 100 threads/100 frames; no source code or locals.
+                        faulthandler.dump_traceback(file=stream, all_threads=True)
+                    commands.append({"command": name, "started_elapsed_seconds": command_started - started,
+                        "duration_seconds": time.monotonic() - command_started})
+                    print(json.dumps({"type": "thread_dump", "ref": reference}), flush=True)
+                    continue
                 if name == "work":
                     if sum(worker.is_alive() for worker in workers) >= (1 if args.minimal else 4):
                         raise ValueError("Private worker bound reached")
-                    def work():
+                    worker_id = len(workers) + 1
+                    def work(worker_id=worker_id):
                         try:
+                            worker_phase(worker_id, "dispatch_enter")
                             result = queue.dispatch_next()
+                            worker_phase(worker_id, "dispatch_return")
                             results.append({key: result[key] for key in ("status", "run_id", "reason") if key in result}
                                 if isinstance(result, dict) else {"status": "returned"})
                         except Exception as error:
+                            worker_phase(worker_id, "worker_exception")
                             import traceback
                             with (output / f"private-worker-{len(results):04d}-failure.txt").open("x") as stream:
                                 stream.write(traceback.format_exc())
                             results.append({"status": "exception", "type": type(error).__name__})
                         finally:
-                            save()
-                    worker = threading.Thread(target=work, daemon=True)
+                            worker_phase(worker_id, "finally_save_enter")
+                            saved = False
+                            try:
+                                save()
+                                saved = True
+                            finally:
+                                worker_phase(worker_id, "finally_save_end", "returned" if saved else "raised")
+                    worker = threading.Thread(target=work, name=f"resilience-worker-{worker_id}", daemon=True)
                     workers.append(worker)
                     worker.start()
                 elif name == "advance":

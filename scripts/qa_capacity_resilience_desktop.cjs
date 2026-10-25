@@ -277,14 +277,28 @@ async function lifecycleMain() {
     assert.ok(Object.keys(after.health_sqlite_sha256).length>0,'Real Health SQLite hash set must be nonempty');
     assert.deepEqual(after.blocked_server_socket_attempts,[]);
   }
+  let threadDiagnosticRequested=false;
   const idle=async(expected=0)=>{
     const started=performance.now(),row={started_at:new Date().toISOString(),expected_workers:expected,
       maximum_elapsed_ms:120000,maximum_samples:1200,sampling_interval_ms:100,samples:0,completed:false};
+    let unchanged;
     try{
       for(let i=0;i<row.maximum_samples&&performance.now()-started<row.maximum_elapsed_ms;i++){
         row.samples++;
         const progress=await inspect({command:'progress'});assert.equal(progress.type,'progress');
+        assert.ok(Number.isInteger(progress.requests_count)&&Number.isInteger(progress.thread_running_count));
         if(performance.now()-started>=row.maximum_elapsed_ms)break;
+        const observed=performance.now(),signature=[progress.requests_count,progress.thread_running_count].join(':');
+        if(!unchanged||unchanged.signature!==signature)unchanged={signature,since:observed};
+        if(!threadDiagnosticRequested&&progress.thread_running_count>expected&&observed-unchanged.since>=30000){
+          threadDiagnosticRequested=true;
+          report.private_thread_diagnostic={requested_at:new Date().toISOString(),boot,
+            unchanged_elapsed_ms:observed-unchanged.since,requests_count:progress.requests_count,
+            extra_worker_count:progress.thread_running_count-expected};
+          const diagnostic=await inspect({command:'thread_dump'});
+          assert.equal(diagnostic.type,'thread_dump');assert.equal(diagnostic.ref,'private-all-thread-stacks.txt');
+          row.diagnostic_ref=diagnostic.ref;report.private_thread_diagnostic.ref=diagnostic.ref;
+        }
         if(progress.thread_running_count===expected){
           const value=await inspect();
           if(value.worker_running_count===expected&&performance.now()-started<=row.maximum_elapsed_ms){row.completed=true;return value;}

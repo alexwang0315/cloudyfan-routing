@@ -1,5 +1,5 @@
 """Private WSGI monitor and controlled task ingress. No model calls on dashboard reads."""
-from contextlib import ExitStack, contextmanager
+from contextlib import contextmanager
 from http import HTTPStatus
 import hmac
 import ipaddress
@@ -124,14 +124,16 @@ class App:
 
     @contextmanager
     def _observation(self):
-        # Scheduler writes acquire queue then capacity. Read snapshots use the
-        # same order, keep both shared locks, and cannot upgrade either lock.
-        with ExitStack() as scope:
-            queue = self.gateway.queue
-            if queue is not None and queue.integrity is not None:
-                scope.enter_context(queue.integrity.observation())
-            if self.capacity_controller is not None:
-                scope.enter_context(self.capacity_controller.store.integrity.observation())
+        # Capture under queue->capacity shared locks, then release both before
+        # original budget/history reads. Only immutable private copies remain.
+        from cloudyfan_jev.capacity_integrity import read_views
+        stores = []
+        queue = self.gateway.queue
+        if queue is not None and queue.integrity is not None:
+            stores.append(queue.integrity)
+        if self.capacity_controller is not None:
+            stores.append(self.capacity_controller.store.integrity)
+        with read_views(stores):
             yield
 
     def _request(self, environ, start_response):

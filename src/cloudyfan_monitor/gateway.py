@@ -13,7 +13,7 @@ from cloudyfan_jev.http_api import ServiceError
 from .admission import Admission
 from .billing import Billing
 from .retention_policy import DAY, EvidenceRetentionPolicy
-from .store import MODES, MonitorError, digest
+from .store import MODES, MonitorError, digest, stats
 from .tracing import routing_trace
 
 
@@ -230,10 +230,11 @@ class Gateway:
         return {"known_api_usd": str(known), "complete_api_usd": None if unknown else str(known),
                 "unknown_events": unknown}
 
-    def capture(self, binding, unavailable=False):
+    def capture(self, binding, unavailable=False, *, persist=True):
         principal, run = binding["client"], binding["run"]
         previous = self.store.observation(principal, run) or {}
         summary = {"status": "engineering_interrupted", "error_code": "monitor_evidence_unavailable"}
+        original_status = None
         try:
             if unavailable:
                 raise ValueError("creation interrupted")
@@ -242,6 +243,7 @@ class Gateway:
                 raise ServiceError(expired, 410)
             observed = self.service.observe(principal, run)
             status = observed["state"]
+            original_status = status['status']
             if self.queue is not None and self.queue.contains(principal, run):
                 status = self.queue_view(binding, self.queue.status(principal, run))
             costs = status.get("costs", {})
@@ -287,15 +289,36 @@ class Gateway:
             summary.update({"status": "engineering_interrupted", "error_code": "monitor_evidence_unavailable",
                             "first_pass": None, "final_pass": None, "completed_status": None,
                             "observation": "evidence_unavailable"})
-        self.store.record(binding, summary)
+        if (not persist and original_status in {'passed', 'failed', 'unverifiable'}
+                and summary['status'] in {'bound', 'ready', 'queued', 'accepting', 'claiming', 'running', 'interrupted_pending'}):
+            # Original task history can be newer than the captured queue row.
+            # Keep the queued/running fact as captured, with completion unknown
+            # for this view, rather than inherit a newer cached success.
+            summary.update(first_pass=None, final_pass=None, completed_status=None,
+                trace=None, path=None, wall_seconds=None, observation='metadata_changed_during_read')
+        if persist:
+            self.store.record(binding, summary)
+        # A detached queue view is older than work that may finish during the
+        # remaining history/budget read. Project it into this response only;
+        # never overwrite a newer current task record with that older summary.
+        projected = {**previous, **summary,
+            **{key: binding[key] for key in ('client', 'run', 'pool', 'mode', 'category', 'created')},
+            'updated': self.store.clock()}
+        if projected['status'] in {'passed', 'failed', 'unverifiable'}:
+            projected['completed_status'] = projected['status']
+        for key in ('generation_attempts', 'classifier_calls'):
+            projected[key] = projected.get(key) or 0
+        return projected
 
-    def refresh_observations(self, principal=None):
+    def refresh_observations(self, principal=None, *, persist=True):
         # This is a read projection only: no execute, reconcile GET, source refresh, or model POST.
         with self.store.db() as db:
             bindings = [dict(r) for r in db.execute("SELECT * FROM bindings")]
+        observed = []
         for binding in bindings:
             if principal is None or binding["client"] == principal:
-                self.capture(binding)
+                observed.append(self.capture(binding, persist=persist))
+        return observed
 
     def ledger(self):
         seen, accounts, rows = set(), [], []
@@ -407,8 +430,19 @@ class Gateway:
             references=references, accounting=accounting, core_preview=core_preview)
 
     def snapshot(self, principal=None):
-        self.refresh_observations(principal)
+        observed = self.refresh_observations(principal, persist=False)
         view = self.store.dashboard(principal)
+        tasks = {(task['client'], task['run']): task for task in view['tasks']}
+        tasks.update({(task['client'], task['run']): task for task in observed})
+        tasks = sorted(tasks.values(), key=lambda task: task['created'], reverse=True)
+        known = sum((Decimal(task['known_api_usd']) for task in tasks
+            if task.get('known_api_usd') is not None), Decimal(0))
+        view.update(tasks=tasks, summary={**stats(tasks), 'known_task_api_usd': str(known),
+            'complete_task_api_usd': str(known) if all(task.get('complete_api_usd') is not None
+                for task in tasks) else None},
+            by_mode={mode: stats([task for task in tasks if task['mode'] == mode]) for mode in MODES})
+        for client in view['clients']:
+            client['stats'] = stats([task for task in tasks if task['client'] == client['id']])
         view.update({"demo": self.demo, "modes": MODES, "now": self.store.clock(),
                      "available_modes": [m for m in MODES if self.mode_available(m)],
                      "correctness_basis": "public_validator_not_universal_or_independent_truth"})

@@ -29,12 +29,13 @@ def build_resilience_host(root, *, clock, origin, options=None, before_response=
     return host
 
 
-def build_resilience_health_host(root, *, clock, origin, before_response=None):
+def build_resilience_health_host(root, *, clock, origin, before_response=None, held_timeout_seconds=600):
     """Same persistent Backup/Health/Queue host for real desktop and restart QA.
 
     This fixture owns controlled signals and simulated upstreams only. All
     admission, identity, original fee/receipt, health and continuation decisions
-    use the actual product stores and registered protocols.
+    use the actual product stores and registered protocols. The host-only held
+    response bound is separate from every product deadline and defaults to 600s.
     """
     from copy import deepcopy
     from dataclasses import asdict
@@ -61,6 +62,8 @@ def build_resilience_health_host(root, *, clock, origin, before_response=None):
     from candidate_health_fixture import CONTRACT, OPERATOR, HealthHost, health_values
     from capacity_sources_fixture import limit
 
+    if type(held_timeout_seconds) not in (int, float) or not 0 < held_timeout_seconds <= 1800:
+        raise ValueError('Synthetic held timeout must be finite, positive and at most 1800 seconds')
     root = Path(root).absolute()
     root.mkdir(mode=0o700, parents=True, exist_ok=True)
     values, control_path = health_values(), root / 'synthetic-resilience-host.json'
@@ -112,7 +115,7 @@ def build_resilience_health_host(root, *, clock, origin, before_response=None):
             flags['scenario'] = 'success'
         if lane == 'primary' and flags['hold']:
             held.set()
-            if not released.wait(600):
+            if not released.wait(held_timeout_seconds):
                 raise httpx.ReadTimeout('Synthetic resilience completion gate timed out')
         if scenario in {'window', 'unknown', 'unknown_fee', 'availability'}:
             status = 503 if scenario == 'availability' else 429
@@ -238,7 +241,7 @@ def build_resilience_health_host(root, *, clock, origin, before_response=None):
             transport.close()
     return SimpleNamespace(host=host, app=host.app, controller=controller, windows=windows, queue=queue,
         flags=flags, held=held, released=released, requests=requests, side_requests=side_requests,
-        factory_calls=factory_calls,
+        factory_calls=factory_calls, held_timeout_seconds=held_timeout_seconds,
         clock=clock, budgets=budgets, credentials=credentials, operator_token=OPERATOR, category=host.category,
         policy_version='synthetic-resilience-queued-v1', close=close)
 

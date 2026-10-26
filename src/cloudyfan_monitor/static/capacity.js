@@ -222,7 +222,9 @@ window.CloudyFanCapacity = (() => {
       } catch (error) {
         if (generation !== startedGeneration) return;
         activationError = reasons[error.message] || '容量政策變更未確認，請重新讀取後查核；未自動重試。';
-        await refresh(true);
+        // Publish the known rejection before unrelated saved-history reads.
+        render();
+        void refresh(true).catch(() => {});
         throw Error(activationError);
       } finally {
         if (generation === startedGeneration) { mutationBusy = false; render(); }

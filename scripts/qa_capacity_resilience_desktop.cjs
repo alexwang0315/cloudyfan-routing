@@ -176,7 +176,8 @@ async function lifecycleMain() {
     blocked_browser_requests:[],boots:[],viewport:{width:1280,height:900},
     visual_regression:{status:'INCONCLUSIVE',reason:'No declared visual baseline; actual images and semantic checks retained'},
     accessibility_scope:'Keyboard focus/disclosure at the declared desktop viewport; no screen-reader or WCAG certification'};
-  report.planned_check_count=['--queue-fault','--local-fault','--companion-loss'].some(flag=>process.argv.includes(flag))?3:process.argv.includes('--focused-restart')?12:13;
+  report.planned_check_count=['--queue-fault','--local-fault','--companion-loss','--policy-rejection-delay'].some(flag=>process.argv.includes(flag))?3:process.argv.includes('--focused-restart')?12:13;
+  if(process.argv.includes('--policy-rejection-delay'))report.scope+='; tiny genuine policy rejection with bounded delivery of completed HTTP snapshots; N101 not run';
   if(process.argv.includes('--focused-restart'))report.scope+='; focused restart slice: >100 paid history and refusal steps explicitly not run';
   const fullWorkflow=report.planned_check_count===13,heldTimeoutSeconds=fullWorkflow?1800:600;
   const heldTimeoutMs=heldTimeoutSeconds*1000;
@@ -435,6 +436,8 @@ async function lifecycleMain() {
           before:'capacity-policy-version',after:focused,original_control_disabled:true};
         await shot('03-no-witness-policy-unknown');
       });
+    } else if(process.argv.includes('--policy-rejection-delay')) {
+      await policyRejectionDelay();
     } else {
       await lifecycleSteps();
     }
@@ -465,6 +468,134 @@ async function lifecycleMain() {
     }
     await fs.writeFile(path.join(output,'desktop-receipt.json'),JSON.stringify(report,null,2));
     console.log(JSON.stringify({status:report.status,...report.check_counts,output}));
+  }
+
+  async function policyRejectionDelay() {
+    await step('genuine_policy_rejection_is_visible_before_later_completed_snapshot_delivery',async()=>{
+      await inspect({command:'hold'});
+      const accepted=await api('post','/v1/tasks',client,task('resilience-policy-held'));
+      assert.equal(accepted.response.status(),202);
+      await inspect({command:'work'});
+      let held;
+      for(let i=0;i<80;i++){
+        const state=await inspect();
+        if(state.model_response_held&&state.model_requests.length===3&&state.raw_mock_metadata_status==='complete'
+          &&state.raw_mock_method_counts?.POST===3){held=state;break;}
+        await page.waitForTimeout(25);
+      }
+      assert.equal(held?.model_response_held,true);
+      await capacityPage();
+      const before=await inspect();
+      const proof={maximum_snapshot_delivery_delay_ms:10000,maximum_intercepted_snapshots:8,
+        live_original_obligation:true,snapshots:[],delivery_released:false,delivery_bound_reached:false};
+      let rejectionObserved=false,releaseDelivery,firstSnapshot,timer,setupTimer;
+      const delivery=new Promise(resolve=>{releaseDelivery=resolve;});
+      const captured=new Promise(resolve=>{firstSnapshot=resolve;});
+      const jobs=[];
+      let claimed=0,feedbackBeforeDelivery=false;
+      const release=reason=>{
+        if(proof.delivery_released)return;
+        proof.delivery_released=true;proof.release_reason=reason;
+        proof.released_at_ms=performance.now();releaseDelivery();
+      };
+      const observeRejection=response=>{
+        if(response.request().method()==='POST'&&response.url()===ready.origin+'/monitor/capacity/activate'
+          &&response.status()===409)rejectionObserved=true;
+      };
+      const pattern='**/monitor/snapshot';
+      const intercept=route=>{
+        const job=(async()=>{
+          assert.equal(new URL(route.request().url()).origin,ready.origin);
+          if(!rejectionObserved||proof.delivery_released)return route.continue();
+          assert.ok(++claimed<=proof.maximum_intercepted_snapshots,'Tiny snapshot delivery bound exceeded');
+          const response=await route.fetch({timeout:10000}),body=await response.body();
+          assert.equal(response.status(),200);
+          const value=JSON.parse(body.toString());assert.ok(Array.isArray(value.tasks));
+          const row={http_completed_before_barrier:true,status:response.status(),body_bytes:body.length,
+            body_sha256:createHash('sha256').update(body).digest('hex'),captured_at_ms:performance.now()};
+          proof.snapshots.push(row);
+          if(proof.started_at_ms===undefined&&!proof.delivery_released){
+            proof.started_at_ms=row.captured_at_ms;
+            timer=setTimeout(()=>{proof.delivery_bound_reached=true;release('declared_10s_bound');},10000);
+            firstSnapshot();
+          }
+          await delivery;
+          row.delivery_delay_ms=performance.now()-row.captured_at_ms;
+          await route.fulfill({response,body});
+        })();
+        jobs.push(job);return job.catch(()=>{});
+      };
+      page.on('response',observeRejection);
+      await page.route(pattern,intercept);
+      try{
+        await page.locator('#capacity-policy-version').selectOption('synthetic-resilience-queued-v2');
+        await page.locator('#capacity-activate-policy').click();
+        await page.locator('#confirm[open]').waitFor();
+        const rejected=page.waitForResponse(response=>response.request().method()==='POST'
+          &&response.url()===ready.origin+'/monitor/capacity/activate'&&response.status()===409);
+        await page.locator('#apply-confirm').click();
+        const response=await rejected,body=await response.json();
+        assert.equal(body.error?.code,'capacity_live_state_blocks_change');
+        assert.ok(!JSON.stringify(body).includes('PRIVATE_'));
+        proof.actual_rejection={status:response.status(),body};
+        await fs.writeFile(path.join(output,'safe-original-policy-rejection.json'),JSON.stringify(proof.actual_rejection,null,2));
+        await Promise.race([captured,new Promise((_,reject)=>{
+          setupTimer=setTimeout(()=>reject(Error('A real completed post-rejection snapshot was not captured')),10000);
+        })]);
+        clearTimeout(setupTimer);
+        assert.equal(proof.delivery_released,false);
+        const observed=performance.now();
+        try{
+          await page.locator('#capacity-activation-error').filter({hasText:/仍有執行中/}).waitFor();
+          feedbackBeforeDelivery=true;
+        }catch(error){
+          if(error.name!=='TimeoutError')throw error;
+          proof.feedback_wait_failure_type=error.name;
+        }
+        proof.feedback_wait_ms=performance.now()-observed;
+        proof.feedback_visible_before_delivery=feedbackBeforeDelivery;
+        proof.confirmation_open_before_delivery=await page.locator('#confirm').evaluate(node=>node.open);
+        proof.confirm_button_disabled_before_delivery=await page.locator('#apply-confirm').isDisabled();
+        const during=await inspect();assert.equal(during.model_response_held,true);unchanged(before,during);
+        assert.equal(proof.delivery_released,false,'Delivery ended before the original feedback boundary was sealed');
+        proof.originals_and_finance_unchanged_before_delivery=true;
+        proof.model_posts_before_delivery=during.model_requests.length;
+        proof.original_policy_version=(await get('/monitor/capacity')).dispatch.active_version;
+        assert.equal(proof.original_policy_version,ready.policy_version);
+        await shot('03-policy-rejection-before-snapshot-delivery');
+      }finally{
+        clearTimeout(setupTimer);clearTimeout(timer);release('finally_release');
+        const settled=await Promise.allSettled(jobs);
+        await page.unroute(pattern,intercept);page.off('response',observeRejection);
+        proof.transport_job_failures=settled.filter(row=>row.status==='rejected').map(row=>row.reason.name);
+        proof.delivery_elapsed_ms=proof.started_at_ms===undefined?null:proof.released_at_ms-proof.started_at_ms;
+        report.policy_rejection_delay=proof;
+        await fs.writeFile(path.join(output,'policy-rejection-delivery-proof.json'),JSON.stringify(proof,null,2));
+      }
+      assert.deepEqual(proof.transport_job_failures,[]);
+      assert.equal(proof.delivery_bound_reached,false);
+      assert.ok(proof.snapshots.length>0&&proof.delivery_elapsed_ms<10000);
+      await page.locator('#capacity-activation-error').filter({hasText:/仍有執行中/}).waitFor();
+      proof.feedback_visible_after_delivery=true;
+      await shot('04-original-policy-rejection-after-delivery');
+      await fs.writeFile(path.join(output,'policy-rejection-delivery-proof.json'),JSON.stringify(proof,null,2));
+      assert.equal(feedbackBeforeDelivery,true,'Known genuine409 policy rejection was hidden until a later completed snapshot was delivered');
+      assert.equal(proof.confirmation_open_before_delivery,false);
+      assert.deepEqual(report.page_errors,[]);
+      // Only after the feedback/finance proof, complete the one original Mock
+      // response. This is not a retry or failed-run cleanup release.
+      await inspect({command:'release'});await idle();
+      const completed=await get('/v1/tasks/resilience-policy-held',client);
+      assert.equal(completed.status,'passed');
+      const after=await inspect();assert.equal(after.model_requests.length,3);
+      assert.deepEqual(after.raw_mock_method_counts,{POST:3});
+      proof.planned_original_completion={status:completed.status,model_posts:3,
+        primary_known_usd:after.budget['budget-primary.sqlite'].known_usd,
+        primary_unknown_events:after.budget['budget-primary.sqlite'].unknown_events};
+      assert.equal(proof.planned_original_completion.primary_known_usd,'0.03');
+      assert.equal(proof.planned_original_completion.primary_unknown_events,0);
+      await fs.writeFile(path.join(output,'policy-rejection-delivery-proof.json'),JSON.stringify(proof,null,2));
+    });
   }
 
   async function lifecycleSteps() {

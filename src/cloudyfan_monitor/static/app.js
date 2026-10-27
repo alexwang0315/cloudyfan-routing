@@ -14,10 +14,22 @@ const expandedTaskTraces = new Set();
 const expandedCandidateDetails = new Set();
 let candidateRead = {status:'idle'}, candidateRequest = null;
 let simulationStarting = false;
-let authenticationVersion = 0, snapshotFlight = null;
+let authenticationVersion = 0, snapshotFlight = null, operatorSession = null;
+let confirmationVersion = 0, toastVersion = 0;
 let selectedCandidateVersion = '', selectedCandidateMode = 'cloudyfan', candidateFlight = 0;
-function setToken(value) {token=value;authenticationVersion+=1;}
+function setToken(value) {
+ token=value;authenticationVersion+=1;operatorSession=null;data=null;pool=null;
+ selectedCandidateVersion='';selectedCandidateMode='cloudyfan';selectedClient='';taskFilter='';modeFilter='';search='';
+ candidateFlight+=1;refreshCompleteness=null;pendingConfirm=null;confirmationVersion+=1;toastVersion+=1;busy=false;simulationStarting=false;
+ expandedTaskTraces.clear();expandedCandidateDetails.clear();candidateRead={status:'idle'};candidateRequest=null;
+ window.CloudyFanBilling?.resetView();window.CloudyFanCapacity?.resetView();window.CloudyFanQueue?.resetView();
+ $('#confirm').close();$('#apply-confirm').disabled=false;$('#error').hidden=true;$('#error').textContent='';$('#toast').hidden=true;
+ $('#updated').textContent='尚未讀取此身分的資料';$('#environment').textContent='操作員身分尚未確認';$('#environment').className='badge';
+ $('#main').innerHTML=`<div class="empty">${value?'正在核對操作員身分…':'已清除登入；請重新認證。'}</div>`;
+ $('#token').value='';$('#login-error').textContent='';
+}
 const sameLogin = (version,value) => authenticationVersion===version&&token===value&&!!token;
+function staleAuthentication() {const failure=Error('登入身分已變更，忽略原回應。');failure.stale=true;return failure;}
 const money = v => v === null || v === undefined ? '未知' : '$' + Number(v).toFixed(6);
 const pct = v => v === null || v === undefined ? '—' : (v * 100).toFixed(1) + '%';
 const secs = v => v === null || v === undefined ? '—' : Number(v).toFixed(2) + 's';
@@ -27,31 +39,51 @@ const badge = (text, color = '') => `<span class="badge ${color}">${esc(text)}</
 const status = s => {const v = statuses[s] || [s,'']; return badge(v[0],v[1]);};
 const options = (values, selected, inherit = false, enabled = null) => (inherit ? '<option value="">跟隨全域</option>' : '') + Object.entries(values).map(([k,v])=>`<option value="${esc(k)}" ${k===selected?'selected':''} ${enabled&&!enabled.includes(k)?'disabled':''}>${esc(v)}${enabled&&!enabled.includes(k)?' · 無已註冊契約':''}</option>`).join('');
 function error(message) {$('#error').hidden=false;$('#error').textContent=message;}
-function toast(message) {$('#toast').hidden=false;$('#toast').textContent=message;setTimeout(()=>$('#toast').hidden=true,4500);}
+function toast(message) {const version=authenticationVersion,notice=++toastVersion;$('#toast').hidden=false;$('#toast').textContent=message;setTimeout(()=>{if(version===authenticationVersion&&notice===toastVersion)$('#toast').hidden=true;},4500);}
 async function api(path, body) {
   const requestToken=token,requestVersion=authenticationVersion;
+  if(!requestToken||(!operatorSession&&path!=='/monitor/session'))throw staleAuthentication();
   const response = await fetch(path,{method:body===undefined?'GET':'POST',headers:{Authorization:'Bearer '+requestToken,...(body===undefined?{}:{'Content-Type':'application/json'})},...(body===undefined?{}:{body:JSON.stringify(body)})});
   const result = await response.json();
+  if(!sameLogin(requestVersion,requestToken))throw staleAuthentication();
   if(!response.ok) {
-    if(response.status===401&&sameLogin(requestVersion,requestToken)&&!$('#login').open) $('#login').showModal();
+    if(response.status===401&&operatorSession){setToken('');if(!$('#login').open)$('#login').showModal();$('#login-error').textContent=errors.unauthorized;}
     const failure=Error(errors[result.error?.code] || result.error?.code || '無法取得資料');
     failure.completeness=result.completeness;failure.status=response.status;throw failure;
   }
   return result;
 }
-let confirmationMessage = '';
 function confirmAction(title, description, action, successMessage = '設定已保存；既有任務仍使用原設定。') {
+  if(!operatorSession)return;
   $('#confirm-title').textContent=title;$('#confirm-description').innerHTML=description;
-  pendingConfirm=action;confirmationMessage=successMessage;$('#confirm').showModal();
+  pendingConfirm={action,successMessage,version:++confirmationVersion,loginVersion:authenticationVersion,token};$('#apply-confirm').disabled=false;$('#confirm').showModal();
 }
-$('#cancel-confirm').onclick=()=>{$('#confirm').close();pendingConfirm=null;};
+$('#cancel-confirm').onclick=()=>{$('#confirm').close();pendingConfirm=null;confirmationVersion+=1;};
 $('#apply-confirm').onclick=async()=>{
   if(!pendingConfirm)return;$('#apply-confirm').disabled=true;
-  const message=confirmationMessage;
-  try{await pendingConfirm();$('#confirm').close();pendingConfirm=null;await load(true);toast(message);}
-  catch(e){error(e.message);$('#confirm').close();}
-  finally{$('#apply-confirm').disabled=false;}
+  const intent=pendingConfirm,current=()=>intent.version===confirmationVersion&&sameLogin(intent.loginVersion,intent.token)&&!!operatorSession;
+  try{await intent.action();if(!current())return;$('#confirm').close();pendingConfirm=null;await load(true);if(current())toast(intent.successMessage);}
+  catch(e){if(current()){error(e.message);$('#confirm').close();pendingConfirm=null;}}
+  finally{if(current())$('#apply-confirm').disabled=false;}
 };
+function sessionContext() {
+ const version=authenticationVersion,value=token,current=()=>sameLogin(version,value)&&!!operatorSession;
+ return {api:(...args)=>current()?api(...args):Promise.reject(staleAuthentication()),esc,
+   toast:message=>{if(current())toast(message);},error:message=>{if(current())error(message);},
+   confirmAction:(...args)=>{if(current())confirmAction(...args);},demo:operatorSession.demo,sessionVersion:version};
+}
+async function authenticate(value) {
+ setToken(value);const version=authenticationVersion,requestToken=token;
+ try{
+   const session=await api('/monitor/session');
+   if(!sameLogin(version,requestToken))return {ok:false,stale:true};
+   if(session?.schema_version!=='monitor-operator-session-v1'||session.authenticated!==true||typeof session.demo!=='boolean'||Object.keys(session).length!==3)throw Error('操作員身分確認資料無法核對。');
+   operatorSession=session;render();return {ok:true};
+ }catch(e){
+   if(!sameLogin(version,requestToken))return {ok:false,stale:true};
+   setToken('');return {ok:false,error:e};
+ }
+}
 function heading(eyebrow,title,text,action='') {return `<div class="page-heading"><div><div class="eyebrow">${eyebrow}</div><h1>${title}</h1><p>${text}</p></div>${action}</div>`;}
 function metric(label,value,note,accent=false) {return `<article class="metric"><div class="metric-label">${label}</div><div class="metric-value ${accent?'accent':''}">${value}</div><div class="sub">${note}</div></article>`;}
 function route(t) {return `<div class="route">${(t.path||[]).map((p,i)=>`${i?'<span class="arrow">→</span>':''}<span class="route-node ${p.passed===true?'passed':p.passed===false?'failed':''}" title="${esc((p.models||[]).join(', '))}">${esc(tiers[p.tier]||p.tier)}</span>`).join('') || '<span class="muted">路徑證據尚未完成</span>'}</div>`;}
@@ -98,11 +130,12 @@ function bindSimulation() {
    if(simulationStarting||simulation?.can_start!==true||simulation.status==='running'||simulation.total!==50)return;
    confirmAction('開始 Ollama 50 題模擬',`<p>以客戶端 <strong>${esc(simulation.customer??'未知')}</strong>，模型別名 <code>${esc(simulation.alias??'未知')}</code> 建立一個 50 題模擬批次。</p><p>使用 Ollama SDK 與本機 HTTP 接線，模型回應與帳務均為合成資料；真實模型 API 費用為 $0。各題的作答、Jev 選池及費用紀錄會出現在 Monitor。</p>`,async()=>{
      if(simulationStarting)throw Error('模擬批次正在建立，請等候原結果。');
+     const version=authenticationVersion,value=token,current=()=>sameLogin(version,value)&&!!operatorSession;
      simulationStarting=true;render();
      try{
        const result=await api('/monitor/simulation/start',{}),next=result.simulation||result;
-       if(data&&next&&['idle','running','completed','failed'].includes(next.status))data.simulation={...data.simulation,...next};
-     }finally{simulationStarting=false;render();}
+       if(current()&&data&&next&&['idle','running','completed','failed'].includes(next.status))data.simulation={...data.simulation,...next};
+     }finally{if(current()){simulationStarting=false;render();}}
    },'已送出 50 題模擬批次；進度會持續更新。');
  };
  if($('#simulation-view-tasks'))$('#simulation-view-tasks').onclick=()=>{
@@ -206,14 +239,15 @@ function restoreObservationView(focus,page) {
  if(typeof focus.start==='number'&&target?.setSelectionRange)target.setSelectionRange(focus.start,focus.end);
 }
 function render() {
- if(!data)return;const page=location.hash.slice(1) in labels ? location.hash.slice(1) : 'overview';
+ if(!operatorSession)return;const page=location.hash.slice(1) in labels ? location.hash.slice(1) : 'overview';
  const focused=rememberObservationView();
  $('#crumb').textContent=labels[page];document.querySelectorAll('nav a').forEach(a=>{a.classList.toggle('active',a.dataset.page===page);if(a.dataset.page===page)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
- $('#environment').textContent=data.demo?'模擬上游 · 非真實成效':'受控核心 · 正式資格另列';
- $('#environment').className='badge '+(data.demo?'amber':'blue');
- if(page==='billing'){window.CloudyFanBilling.mount($('#main'),{api,esc,toast,error,confirmAction});return;}
- if(page==='capacity'){window.CloudyFanCapacity.mount($('#main'),{api,esc,confirmAction,demo:data.demo});return;}
- if(page==='queue'){if(window.CloudyFanQueue)window.CloudyFanQueue.mount($('#main'),{api,esc,confirmAction,demo:data.demo,sessionVersion:authenticationVersion});else $('#main').textContent='排隊觀測介面尚未載入，請重新讀取。';return;}
+ $('#environment').textContent=operatorSession.demo?'模擬上游 · 非真實成效':'受控核心 · 正式資格另列';
+ $('#environment').className='badge '+(operatorSession.demo?'amber':'blue');
+ if(page==='capacity'){window.CloudyFanCapacity.mount($('#main'),sessionContext());return;}
+ if(page==='queue'){if(window.CloudyFanQueue)window.CloudyFanQueue.mount($('#main'),sessionContext());else $('#main').textContent='排隊觀測介面尚未載入，請重新讀取。';return;}
+ if(!data){$('#main').innerHTML=heading('OPERATOR / VERIFIED',esc(labels[page]),'操作員身分已確認，正在讀取此身分的觀測資料。')+'<div class="panel empty" role="status">完整觀測資料尚未讀取；任務、費用與統計仍待確認。</div>';return;}
+ if(page==='billing'){window.CloudyFanBilling.mount($('#main'),sessionContext());return;}
  $('#main').innerHTML=({overview,tasks:tasksPage,ledger:ledgerPage,pools:poolsPage,clients:clientsPage}[page])();
  bindTaskTraces();bindSimulation();
  restoreObservationView(focused,page);
@@ -263,22 +297,23 @@ function readCandidateView(id,force=false) {
  return request.promise;
 }
 async function refreshPools() {
+ const version=authenticationVersion,value=token,current=()=>sameLogin(version,value)&&!!operatorSession;
  busy=true;render();
  try {
-   const result=await api('/monitor/pools/refresh',{}), revision=data.control.revision;
+   const result=await api('/monitor/pools/refresh',{});if(!current())return;const revision=data.control.revision;
    refreshCompleteness=result.completeness||null;
    confirmAction('候選更新已準備，檢查差異',`${completenessNotice(refreshCompleteness)}<p>${result.demo?'本次為模擬更新，沒有外部 API。':`已嘗試 ${esc(result.request_count)} 次來源 GET，沒有模型作答請求。`} ${result.changes.length} 個候選欄有資料差異。</p><p>發布只更新候選清單；部分更新保留缺少資料為未知，實際路由仍使用已註冊版本，不會自動批准新模型。</p><div class="diff-list">${result.changes.map(c=>`<div class="diff-row"><strong>${esc(cname(c.category))} / ${esc(candidateTiers[c.tier])}</strong><br>${esc(c.before.join(' → '))}<br>更新為 ${esc(c.after.join(' → '))}</div>`).join('')||'主備模型無變更；來源時間或觀測資料已更新。'}</div>`,()=>api('/monitor/pools/publish',{revision,pool:result.pool}));
- } catch(e) {refreshCompleteness=e.completeness||null;error('更新失敗，現有版本保留：'+e.message);} finally {busy=false;render();}
+ } catch(e) {if(current()){refreshCompleteness=e.completeness||null;error('更新失敗，現有版本保留：'+e.message);}} finally {if(current()){busy=false;render();}}
 }
 function load(force=false) {
- if(!token)return Promise.resolve({ok:false,stale:true});
+ if(!token||!operatorSession)return Promise.resolve({ok:false,stale:true});
  const version=authenticationVersion,requestToken=token;
  if(snapshotFlight){
    if(snapshotFlight.version===version&&snapshotFlight.token===requestToken){
      snapshotFlight.force=snapshotFlight.force||force;
      return snapshotFlight.promise;
    }
-   // A new login waits for the old request to settle; it cannot join its data.
+   // Background history waits for the old flight; authentication and direct reads do not.
    return snapshotFlight.promise.then(()=>sameLogin(version,requestToken)?load(force):{ok:false,stale:true});
  }
  const flight={version,token:requestToken,force,promise:null};
@@ -305,14 +340,20 @@ function load(force=false) {
  })();
  return flight.promise;
 }
-$('#reload').onclick=async()=>{await load(true);if(location.hash==='#billing'&&token)await window.CloudyFanBilling.refresh();if(location.hash==='#capacity'&&token)await window.CloudyFanCapacity.refresh();if(location.hash==='#queue'&&token)await window.CloudyFanQueue?.refresh();};
-$('#logout').onclick=()=>{setToken('');data=null;pool=null;selectedCandidateVersion='';selectedCandidateMode='cloudyfan';candidateFlight+=1;refreshCompleteness=null;pendingConfirm=null;expandedTaskTraces.clear();expandedCandidateDetails.clear();candidateRead={status:'idle'};candidateRequest=null;window.CloudyFanBilling.resetView();window.CloudyFanCapacity.resetView();window.CloudyFanQueue?.resetView();$('#main').innerHTML='<div class="empty">已清除登入；請重新認證。</div>';$('#login').showModal();};
+$('#reload').onclick=async()=>{
+ if(!operatorSession)return;
+ const version=authenticationVersion,value=token,page=location.hash;
+ const history=load(true);
+ if(page==='#capacity')await window.CloudyFanCapacity.refresh(true);
+ else if(page==='#queue')await window.CloudyFanQueue?.refresh(true);
+ else{await history;if(page==='#billing'&&sameLogin(version,value)&&operatorSession)await window.CloudyFanBilling.refresh();}
+};
+$('#logout').onclick=()=>{setToken('');if(!$('#login').open)$('#login').showModal();};
 $('#login-form').onsubmit=async e=>{
- e.preventDefault();setToken($('#token').value);const version=authenticationVersion,requestToken=token;
- const result=await load(true);
- if(!sameLogin(version,requestToken))return;
- if(result.ok){$('#login').close();$('#token').value='';$('#login-error').textContent='';}
- else{$('#login-error').textContent=result.error?.message||'登入資料無法讀取，請重新認證。';setToken('');}
+ e.preventDefault();const result=await authenticate($('#token').value);
+ if(result.stale)return;
+ if(result.ok){$('#login').close();$('#login-error').textContent='';void load(true);}
+ else $('#login-error').textContent=result.error?.message||'登入身分無法確認，請重新認證。';
 };
 window.addEventListener('hashchange',render);
 setInterval(()=>load(),5000);
@@ -321,7 +362,7 @@ setInterval(()=>load(),5000);
  try{
    const r=await fetch('/demo/session');
    if(authenticationVersion!==version)return;
-   if(r.ok){const session=await r.json();if(authenticationVersion!==version)return;setToken(session.token);await load(true);}
+   if(r.ok){const session=await r.json();if(authenticationVersion!==version)return;const result=await authenticate(session.token);if(result.ok)void load(true);else if(!result.stale){if(!$('#login').open)$('#login').showModal();$('#login-error').textContent=result.error?.message||'登入身分無法確認。';}}
    else $('#login').showModal();
  }catch{if(authenticationVersion===version)error('無法連線至 monitor。');}
 })();

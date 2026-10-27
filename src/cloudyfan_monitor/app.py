@@ -214,6 +214,15 @@ class App:
         return [body]
 
     def _admin(self, method, path, environ):
+        if path == '/monitor/session':
+            if method != 'GET':
+                raise MonitorError('endpoint_not_supported', 404)
+            if environ.get('QUERY_STRING'):
+                raise MonitorError('unsupported_operator_session_query')
+            if environ.get('CONTENT_LENGTH') not in (None, '', '0') or environ.get('HTTP_TRANSFER_ENCODING'):
+                raise MonitorError('unsupported_operator_session_body')
+            return {'schema_version': 'monitor-operator-session-v1',
+                    'authenticated': True, 'demo': self.gateway.demo is True}
         if method == 'GET' and path == '/monitor/queue':
             if environ.get('QUERY_STRING'):
                 raise MonitorError('unsupported_queue_query')

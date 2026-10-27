@@ -7,6 +7,13 @@ const {createHash} = require('node:crypto');
 const {execFileSync} = require('node:child_process');
 const {startFixture} = require('./qa_fixture_ipc.cjs');
 
+async function safeAria(page) {
+  const passwords=await page.locator('input[type="password"]').evaluateAll(nodes=>nodes.map(node=>node.value).filter(Boolean));
+  let text=await page.locator('body').ariaSnapshot();
+  for(const value of passwords)text=text.split(value).join('[REDACTED_CREDENTIAL]');
+  return text;
+}
+
 async function storageMain() {
   const root=path.resolve(__dirname,'..'),core=process.env.CLOUDYFAN_CORE_ROOT;
   assert.ok(core,'An explicitly matched Core root is required');
@@ -17,7 +24,8 @@ async function storageMain() {
   const {chromium}=require(process.env.PLAYWRIGHT_PATH||'/Users/alexwang0315/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
   const owned=['src/cloudyfan_monitor/static/capacity.js','src/cloudyfan_monitor/static/capacity.css',
     'src/cloudyfan_monitor/static/queue.js','src/cloudyfan_monitor/static/queue.css',
-    'scripts/qa_capacity_resilience_http.py','scripts/qa_capacity_resilience_desktop.cjs'];
+    'scripts/qa_capacity_resilience_http.py','scripts/qa_capacity_resilience_desktop.cjs',
+    'tests/test_operator_session_http.py'];
   async function capture(directory,extra=[]) {
     const git=(...args)=>execFileSync('git',args,{cwd:directory,encoding:'utf8'}).trim();
     const names=[...new Set([...git('ls-files','-z').split('\0').filter(Boolean),...extra])].sort();
@@ -42,7 +50,7 @@ async function storageMain() {
   const inspect=async(command={command:'inspect'})=>{fixture.send(command);return fixture.next();};
   const save=async name=>{
     await page.screenshot({path:path.join(output,name+'.png'),fullPage:true});report.screenshots.push(name+'.png');
-    await fs.writeFile(path.join(output,name+'.aria.txt'),await page.locator('body').ariaSnapshot());
+    await fs.writeFile(path.join(output,name+'.aria.txt'),await safeAria(page));
   };
   try {
     report.source_before={monitor:await capture(root,owned),core:await capture(core)};
@@ -160,7 +168,8 @@ async function lifecycleMain() {
   const {chromium}=require(process.env.PLAYWRIGHT_PATH||'/Users/alexwang0315/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
   const owned=['src/cloudyfan_monitor/static/capacity.js','src/cloudyfan_monitor/static/capacity.css',
     'src/cloudyfan_monitor/static/queue.js','src/cloudyfan_monitor/static/queue.css',
-    'scripts/qa_capacity_resilience_http.py','scripts/qa_capacity_resilience_desktop.cjs'];
+    'scripts/qa_capacity_resilience_http.py','scripts/qa_capacity_resilience_desktop.cjs',
+    'tests/test_operator_session_http.py'];
   async function capture(directory,extra=[]) {
     const git=(...args)=>execFileSync('git',args,{cwd:directory,encoding:'utf8'}).trim();
     const hashes={};
@@ -176,8 +185,9 @@ async function lifecycleMain() {
     blocked_browser_requests:[],boots:[],viewport:{width:1280,height:900},
     visual_regression:{status:'INCONCLUSIVE',reason:'No declared visual baseline; actual images and semantic checks retained'},
     accessibility_scope:'Keyboard focus/disclosure at the declared desktop viewport; no screen-reader or WCAG certification'};
-  report.planned_check_count=['--queue-fault','--local-fault','--companion-loss','--policy-rejection-delay'].some(flag=>process.argv.includes(flag))?3:process.argv.includes('--focused-restart')?12:13;
+  report.planned_check_count=['--queue-fault','--local-fault','--companion-loss','--policy-rejection-delay','--operator-session-delay'].some(flag=>process.argv.includes(flag))?3:process.argv.includes('--focused-restart')?12:13;
   if(process.argv.includes('--policy-rejection-delay'))report.scope+='; tiny genuine policy rejection with bounded delivery of completed HTTP snapshots; N101 not run';
+  if(process.argv.includes('--operator-session-delay'))report.scope+='; tiny real operator rotation and completed old-auth delivery barrier; N101 not run';
   if(process.argv.includes('--focused-restart'))report.scope+='; focused restart slice: >100 paid history and refusal steps explicitly not run';
   const fullWorkflow=report.planned_check_count===13,heldTimeoutSeconds=fullWorkflow?1800:600;
   const heldTimeoutMs=heldTimeoutSeconds*1000;
@@ -222,7 +232,7 @@ async function lifecycleMain() {
       assert.ok(bytes+guard.final_receipt_reserve_bytes<=guard.maximum_run_output_bytes,'Resource guard: bounded new-run output reached');
     }
   };
-  let fixture,ready,browser,context,page,boot=0,operator,client,agent,originalWindow;
+  let fixture,ready,browser,context,page,boot=0,operator,client,agent,originalWindow,deliveryInterceptor=null;
   const headers=token=>({Authorization:'Bearer '+token});
   const start=async port=>{
     const bootOutput=path.join(output,'boot-'+String(++boot).padStart(2,'0'));
@@ -261,7 +271,7 @@ async function lifecycleMain() {
   const get=async(url,auth=operator)=>{const row=await api('get',url,auth);assert.equal(row.response.status(),200);return row.body;};
   const shot=async name=>{
     await page.screenshot({path:path.join(output,name+'.png'),fullPage:true});report.screenshots.push(name+'.png');
-    await fs.writeFile(path.join(output,name+'.aria.txt'),await page.locator('body').ariaSnapshot());
+    await fs.writeFile(path.join(output,name+'.aria.txt'),await safeAria(page));
   };
   const step=async(name,action)=>{
     const row={name,started_at:new Date().toISOString(),passed:false};report.checks.push(row);
@@ -332,12 +342,13 @@ async function lifecycleMain() {
   const capacityPage=async()=>{await page.locator('a[data-page="capacity"]').click();await page.getByRole('heading',{name:'供應商限額來源',exact:true}).waitFor();await refresh('CloudyFanCapacity');};
   try {
     report.source_before={monitor:await capture(root,owned),core:await capture(core)};
+    await fs.writeFile(path.join(output,'source-inputs-before.json'),JSON.stringify(report.source_before,null,2));
     await resourceCheck('before_fixture_start',{start:true});
     await start();
     browser=await chromium.launch({channel:'chrome',headless:process.env.CLOUDYFAN_QA_HEADED!=='1'});report.browser=browser.version();
     context=await browser.newContext({viewport:report.viewport,locale:'zh-TW',serviceWorkers:'block'});
     await context.route('**/*',route=>{
-      if(new URL(route.request().url()).origin===ready.origin)return route.continue();
+      if(new URL(route.request().url()).origin===ready.origin)return deliveryInterceptor?deliveryInterceptor(route):route.continue();
       report.blocked_browser_requests.push(new URL(route.request().url()).origin);return route.abort();
     });
     page=await context.newPage();page.setDefaultTimeout(6000);
@@ -438,6 +449,8 @@ async function lifecycleMain() {
       });
     } else if(process.argv.includes('--policy-rejection-delay')) {
       await policyRejectionDelay();
+    } else if(process.argv.includes('--operator-session-delay')) {
+      await operatorSessionDelay();
     } else {
       await lifecycleSteps();
     }
@@ -468,6 +481,168 @@ async function lifecycleMain() {
     }
     await fs.writeFile(path.join(output,'desktop-receipt.json'),JSON.stringify(report,null,2));
     console.log(JSON.stringify({status:report.status,...report.check_counts,output}));
+  }
+
+  async function operatorSessionDelay() {
+    await step('real_operator_session_and_fresh_queue_do_not_wait_for_completed_old_auth_delivery',async()=>{
+      const proof={maximum_delivery_delay_ms:10000,maximum_intercepted_responses:8,
+        responses:[],negative_logins:[],delivery_released:false,delivery_bound_reached:false};
+      const digest=value=>createHash('sha256').update(value).digest('hex');
+      for(const [label,value] of [['invalid','PRIVATE_SYNTHETIC_INVALID_OPERATOR'],['client',ready.credentials.studio],['revoked-client',ready.credentials.agent]]){
+        if(label==='revoked-client')await inspect({command:'revoke_agent'});
+        if(!await page.locator('#login').evaluate(node=>node.open))await page.locator('#logout').click();
+        const rejected=page.waitForResponse(response=>response.status()===401
+          &&['/monitor/session','/monitor/snapshot'].includes(new URL(response.url()).pathname)
+          &&response.request().headers().authorization==='Bearer '+value);
+        await page.locator('#token').fill(value);await page.getByRole('button',{name:'登入',exact:true}).click();
+        await (await rejected).finished();
+        await page.locator('#login-error').filter({hasText:/登入憑證不正確或已失效/}).waitFor();
+        assert.equal(await page.locator('#login').evaluate(node=>node.open),true);
+        assert.equal(await page.locator('[data-queue-run]').count(),0);
+        proof.negative_logins.push({case:label,status:401,login_stays_open:true,old_queue_not_visible:true});
+      }
+      await login(ready.operator_token);
+      await inspect({command:'hold'});
+      assert.equal((await api('post','/v1/tasks',client,task('resilience-session-held'))).response.status(),202);
+      await inspect({command:'work'});
+      let held;
+      for(let i=0;i<80;i++){
+        const state=await inspect();
+        if(state.model_response_held&&state.model_requests.length===3&&state.raw_mock_metadata_status==='complete'
+          &&state.raw_mock_method_counts?.POST===3){held=state;break;}
+        await page.waitForTimeout(25);
+      }
+      assert.equal(held?.model_response_held,true);
+      await capacityPage();
+      const oldToken=ready.operator_token,oldAuthorization='Bearer '+oldToken;
+      proof.old_authorization_sha256=digest(oldAuthorization);
+      const captured={},resolvers={};
+      for(const kind of ['snapshot','control','unauthorized'])captured[kind]=new Promise(resolve=>{resolvers[kind]=resolve;});
+      let releaseDelivery,timer,claimed=0,newSessionResponse,loginBeforeDelivery=false,postReleaseSnapshot;
+      const delivery=new Promise(resolve=>{releaseDelivery=resolve;}),jobs=[];
+      const release=reason=>{
+        if(proof.delivery_released)return;
+        proof.delivery_released=true;proof.release_reason=reason;proof.released_at_ms=performance.now();releaseDelivery();
+      };
+      const waitCaptured=async kind=>{
+        let bound;
+        try{await Promise.race([captured[kind],new Promise((_,reject)=>{
+          bound=setTimeout(()=>reject(Error('Completed original HTTP '+kind+' response was not captured')),10000);
+        })]);}finally{clearTimeout(bound);}
+      };
+      const intercept=route=>{
+        const job=(async()=>{
+          const request=route.request(),pathname=new URL(request.url()).pathname;
+          assert.equal(new URL(request.url()).origin,ready.origin);
+          if(proof.delivery_released||request.headers().authorization!==oldAuthorization
+            ||!['/monitor/snapshot','/monitor/capacity/activate','/monitor/queue'].includes(pathname))return route.continue();
+          const response=await route.fetch({timeout:10000}),body=await response.body();
+          const kind=pathname==='/monitor/snapshot'&&response.status()===200?'snapshot'
+            :pathname==='/monitor/capacity/activate'&&request.method()==='POST'&&response.status()===409?'control'
+            :pathname==='/monitor/queue'&&response.status()===401?'unauthorized':null;
+          if(!kind)return route.fulfill({response,body});
+          assert.ok(++claimed<=proof.maximum_intercepted_responses,'Tiny original delivery response bound exceeded');
+          const payload=JSON.parse(body.toString());
+          if(kind==='snapshot'){
+            assert.ok(Array.isArray(payload.tasks));
+            assert.ok(!payload.tasks.some(task=>task.run==='resilience-session-fresh'));
+          }
+          if(kind==='control'){
+            assert.equal(payload.error?.code,'capacity_live_state_blocks_change');
+            assert.ok(!JSON.stringify(payload).includes('PRIVATE_'));
+            proof.actual_old_control={status:409,body:payload};
+          }
+          const row={kind,http_completed_before_barrier:true,status:response.status(),path:pathname,
+            body_bytes:body.length,body_sha256:digest(body),authorization_sha256:digest(oldAuthorization),captured_at_ms:performance.now()};
+          proof.responses.push(row);
+          if(proof.started_at_ms===undefined){
+            proof.started_at_ms=row.captured_at_ms;
+            timer=setTimeout(()=>{proof.delivery_bound_reached=true;release('declared_10s_bound');},10000);
+          }
+          resolvers[kind]();await delivery;
+          row.delivery_delay_ms=performance.now()-row.captured_at_ms;
+          await route.fulfill({response,body});
+        })();
+        jobs.push(job);return job.catch(()=>{});
+      };
+      const observeSession=response=>{
+        if(response.url()===ready.origin+'/monitor/session'&&response.status()===200
+          &&response.request().headers().authorization!==oldAuthorization)newSessionResponse=response;
+      };
+      page.on('response',observeSession);deliveryInterceptor=intercept;
+      try{
+        await page.locator('#reload').click();await waitCaptured('snapshot');
+        await page.locator('#capacity-policy-version').selectOption('synthetic-resilience-queued-v2');
+        await page.locator('#capacity-activate-policy').click();await page.locator('#confirm[open]').waitFor();
+        await page.locator('#apply-confirm').click();await waitCaptured('control');
+        const rotated=await inspect({command:'rotate_operator'});
+        const newToken=rotated.reauth_token,newAuth=headers(newToken);
+        proof.new_authorization_sha256=digest(newAuth.Authorization);
+        assert.notEqual(proof.new_authorization_sha256,proof.old_authorization_sha256);
+        assert.equal((await api('get','/monitor/queue',headers(oldToken))).response.status(),401);
+        await page.locator('#cancel-confirm').click();
+        await page.locator('a[data-page="queue"]').click();await waitCaptured('unauthorized');
+        assert.equal((await api('post','/v1/tasks',client,task('resilience-session-fresh'))).response.status(),202);
+        const fresh=await get('/monitor/queue',newAuth);
+        assert.ok(fresh.jobs.some(job=>job.run_id==='resilience-session-fresh'));
+        proof.independent_existing_new_auth_queue={status:200,fresh_run_present:true};
+        const before=await inspect();assert.equal(before.model_response_held,true);
+        await page.locator('#logout').click();await page.locator('#token').fill(newToken);
+        const started=performance.now();await page.getByRole('button',{name:'登入',exact:true}).click();
+        try{await page.locator('#login[open]').waitFor({state:'hidden'});loginBeforeDelivery=true;}
+        catch(error){if(error.name!=='TimeoutError')throw error;proof.login_wait_failure_type=error.name;}
+        proof.login_wait_ms=performance.now()-started;
+        proof.login_closed_before_delivery=loginBeforeDelivery;
+        proof.actual_new_session_200_before_delivery=!!newSessionResponse;
+        if(loginBeforeDelivery){
+          assert.ok(newSessionResponse,'Login closed without an actual current operator session200');
+          assert.deepEqual(await newSessionResponse.json(),{schema_version:'monitor-operator-session-v1',authenticated:true,demo:true});
+          await page.locator('[data-queue-run="resilience-session-fresh"]').waitFor();
+          proof.fresh_new_auth_queue_visible_before_delivery=true;
+          await page.locator('a[data-page="capacity"]').click();
+          await page.locator('#capacity-policy-version').selectOption('synthetic-resilience-queued-v2');
+          await page.locator('#capacity-activate-policy').click();await page.locator('#confirm[open]').waitFor();
+          assert.equal(await page.locator('#apply-confirm').isDisabled(),false);
+          proof.new_confirmation_open_before_old_control_delivery=true;
+          postReleaseSnapshot=page.waitForResponse(response=>proof.delivery_released&&response.status()===200
+            &&response.url()===ready.origin+'/monitor/snapshot'
+            &&response.request().headers().authorization===newAuth.Authorization);
+        }
+        const during=await inspect();assert.equal(during.model_response_held,true);unchanged(before,during);
+        proof.originals_and_finance_unchanged_before_delivery=true;proof.model_posts_before_delivery=3;
+        assert.equal(proof.delivery_released,false,'Original delivery ended before the6s authentication boundary');
+        await shot('03-operator-session-before-old-delivery');
+        ready.operator_token=newToken;operator=newAuth;
+      }finally{
+        clearTimeout(timer);release('finally_release');
+        const settled=await Promise.allSettled(jobs);deliveryInterceptor=null;page.off('response',observeSession);
+        proof.transport_job_failures=settled.filter(row=>row.status==='rejected').map(row=>row.reason.name);
+        proof.delivery_elapsed_ms=proof.started_at_ms===undefined?null:proof.released_at_ms-proof.started_at_ms;
+        report.operator_session_delay=proof;
+        await fs.writeFile(path.join(output,'operator-session-delivery-proof.json'),JSON.stringify(proof,null,2));
+      }
+      assert.deepEqual(proof.transport_job_failures,[]);assert.equal(proof.delivery_bound_reached,false);
+      assert.ok(proof.responses.length>=3&&proof.delivery_elapsed_ms<10000);
+      assert.equal(loginBeforeDelivery,true,'A valid independently checked operator could not complete login within6s while an old completed snapshot delivery was held');
+      await (await postReleaseSnapshot).finished();
+      await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+      assert.equal(await page.locator('#login').evaluate(node=>node.open),false);
+      assert.equal(await page.locator('#confirm').evaluate(node=>node.open),true);
+      assert.equal(await page.locator('#apply-confirm').isDisabled(),false);
+      assert.equal(await page.locator('#error').isVisible(),false);
+      proof.late_old_200_401_and_control_cannot_change_new_context=true;
+      await shot('04-new-confirmation-after-old-delivery');await page.locator('#cancel-confirm').click();
+      await queuePage();await page.locator('[data-queue-run="resilience-session-fresh"]').waitFor();
+      // Complete the original Mock response only after the passing authentication
+      // and old-context fencing proof. Failed-run cleanup never releases it.
+      await inspect({command:'release'});await idle();
+      assert.equal((await get('/v1/tasks/resilience-session-held',client)).status,'passed');
+      const after=await inspect();assert.equal(after.model_requests.length,3);
+      assert.equal(after.budget['budget-primary.sqlite'].known_usd,'0.03');
+      assert.equal(after.budget['budget-primary.sqlite'].unknown_events,0);
+      proof.planned_original_completion={model_posts:3,known_usd:'0.03',unknown_events:0};
+      await fs.writeFile(path.join(output,'operator-session-delivery-proof.json'),JSON.stringify(proof,null,2));
+    });
   }
 
   async function policyRejectionDelay() {

@@ -2,7 +2,7 @@
 window.CloudyFanCapacity = (() => {
   let root = null, context = null, data = null, readState = 'idle', generation = 0, flight = null;
   let requestVersion = 0, policySelection = null, mutationBusy = false, activationError = '';
-  let historyTasks = null, historyState = 'idle';
+  let historyTasks = null, historyState = 'idle', historyFlight = null, historyRequest = 0;
   const h = value => context.esc(value);
   const dimensions = { rpm: 'RPM · 請求數', tpm: 'TPM · token 數', concurrency: '並行數', usd: '美元限制' };
   const statuses = { known: '已記錄', unknown: '未知', unsupported: '未支援', not_applicable: '不適用',
@@ -118,7 +118,7 @@ window.CloudyFanCapacity = (() => {
       accounting_interrupted: '費用待核，停止派送', engineering_interrupted: '執行中斷，待查核',
       capacity_denied: '容量派送已拒絕', policy_denied: '原執行政策拒絕', expired: '任務已到期',
       cancelled: '任務已取消', cancel_requested: '已請求取消，結果仍待確認' };
-    const note = historyState === 'stale' ? '<p class="capacity-warning" role="status">任務理由本次讀取失敗，保留上次保存的理由；沒有重新判定候選。</p>' : historyState === 'unavailable' ? '<p class="capacity-warning" role="status">任務理由目前無法讀取，不能推定候選沒有被排除。</p>' : '';
+    const note = historyState === 'stale' ? '<p class="capacity-warning" role="status">任務理由本次讀取失敗，保留上次保存的理由；沒有重新判定候選。</p>' : historyState === 'unavailable' ? '<p class="capacity-warning" role="status">任務理由目前無法讀取，不能推定候選沒有被排除。</p>' : historyState === 'loading' || historyState === 'idle' ? '<p class="metadata" role="status">正在讀取原任務理由；尚未取得的歷史仍待確認。</p>' : historyState === 'refreshing' ? '<p class="metadata" role="status">正在背景核對任務理由，以下保留前次讀取的紀錄。</p>' : '';
     return `<section class="panel capacity-windows" id="capacity-window-decisions"><h2>原任務的候選排除與備援理由</h2><p class="metadata">只讀任務當時保存的選擇。派送前排除與已送出後的 429／5xx 分開；可用性備援不等於公開驗收通過或內容品質改善。本頁列出最多 30 筆任務。</p>${note}${tasks.length ? tasks.map(task => {
       const decision = task.operator_observation?.task_decision;
       const attempts = Array.isArray(decision?.attempts) ? decision.attempts : [];
@@ -127,7 +127,7 @@ window.CloudyFanCapacity = (() => {
         const window = candidate.capacity_window;
         return `<tr data-window-candidate="${h(candidate.config_id)}"><td><code>${h(candidate.configuration?.model_version || '未知')}</code><br>${h(candidate.configuration?.provider_name || '未知')}<br><small>${h(candidate.config_id || '設定識別未知')}</small></td><td>${h(states[candidate.state] || '原狀態未知')}</td><td>${window ? `<span data-window-candidate-status="${h(window.status)}">${h(window.status === 'wait' ? '原窗口要求等待' : window.status === 'open' ? '當時窗口未排除' : window.status === 'not_applicable' ? '當時未採用窗口檢查' : '原窗口未知，不能放行')}</span><br>原最早可再評估：${h(stamp(window.not_before))}<br><code>${h(window.reason_code || 'capacity_window_unknown')}</code>${window.evidence_refs?.length ? `<br><small>原證據：${window.evidence_refs.map(value => h(value)).join('、')}</small>` : ''}` : '<span class="metadata">未提供可核對的原窗口檢查；不以目前窗口回填。</span>'}${(candidate.reasons || []).map(code => `<p class="capacity-reason">${h(reasons[code] || '原候選依當時規則排除；安全代碼保留供查核。')}<small class="mono">${h(code)}</small></p>`).join('')}</td></tr>`;
       }).join('')}</tbody></table></div>` : '<p class="metadata">原逐候選證據尚未提供。</p>'}</section>`).join('')}</div></details>`;
-    }).join('') : '<p class="metadata">尚無可讀的原任務候選紀錄。</p>'}</section>`;
+    }).join('') : `<p class="metadata">${historyState === 'current' ? '這次已讀取的資料沒有原任務候選紀錄。' : '原任務歷史尚未取得，不能由此推定沒有任務或候選紀錄。'}</p>`}</section>`;
   }
 
   function preservationUnverified() {
@@ -268,26 +268,41 @@ window.CloudyFanCapacity = (() => {
       async () => { await context.api('/monitor/capacity/refresh', {}); await refresh(true); }, '限額來源查核已完成；詳情與未知事項見各群組。');
   }
 
+  function refreshHistory() {
+    if (historyFlight) return historyFlight;
+    const currentGeneration = generation, currentRequest = ++historyRequest, readContext = context;
+    const current = () => generation === currentGeneration && historyRequest === currentRequest
+      && root?.querySelector('#capacity-page') && data?.dispatch?.windows?.schema_version === 'capacity-windows-v1';
+    historyState = historyTasks ? 'refreshing' : 'loading'; render();
+    const pending = (async () => {
+      try {
+        const snapshot = await readContext.api('/monitor/snapshot');
+        if (!Array.isArray(snapshot.tasks)) throw Error('Saved task projection unavailable');
+        if (!current()) return;
+        historyTasks = snapshot.tasks; historyState = 'current'; render();
+      } catch {
+        if (!current()) return;
+        historyState = historyTasks ? 'stale' : 'unavailable'; render();
+      } finally { if (historyFlight === pending) historyFlight = null; }
+    })();
+    historyFlight = pending;
+    return pending;
+  }
+
   function refresh(force = false) {
     if (!context || !root?.querySelector('#capacity-page')) return Promise.resolve();
     if (flight && !force) return flight;
-    const currentGeneration = generation, currentRequest = ++requestVersion;
+    const currentGeneration = generation, currentRequest = ++requestVersion, readContext = context;
     const pending = (async () => {
       try {
-        const next = await context.api('/monitor/capacity');
-        let tasks = null, taskRead = 'idle';
-        if (next?.dispatch?.windows?.schema_version === 'capacity-windows-v1') {
-          try {
-            const snapshot = await context.api('/monitor/snapshot');
-            if (!Array.isArray(snapshot.tasks)) throw Error('Saved task projection unavailable');
-            tasks = snapshot.tasks; taskRead = 'current';
-          } catch { taskRead = 'failed'; }
-        }
+        const next = await readContext.api('/monitor/capacity');
         if (generation !== currentGeneration || currentRequest !== requestVersion || !root?.querySelector('#capacity-page')) return;
         data = next; readState = 'current';
-        if (taskRead === 'failed') historyState = historyTasks ? 'stale' : 'unavailable';
-        else { historyTasks = tasks; historyState = taskRead; }
+        if (next?.dispatch?.windows?.schema_version !== 'capacity-windows-v1') {
+          historyRequest += 1; historyTasks = null; historyState = 'idle';
+        }
         render();
+        if (next?.dispatch?.windows?.schema_version === 'capacity-windows-v1') void refreshHistory();
       } catch {
         if (generation !== currentGeneration || currentRequest !== requestVersion || !root?.querySelector('#capacity-page')) return;
         readState = data ? 'stale' : 'unavailable'; render();
@@ -298,13 +313,14 @@ window.CloudyFanCapacity = (() => {
   }
 
   function mount(node, nextContext) {
+    const sameSession = context?.sessionVersion === nextContext.sessionVersion;
     context = nextContext;
-    if (root === node && root.querySelector('#capacity-page')) return;
-    generation += 1; root = node; data = null; flight = null; readState = 'idle'; policySelection = null; mutationBusy = false; activationError = ''; historyTasks = null; historyState = 'idle';
+    if (root === node && root.querySelector('#capacity-page') && sameSession) return;
+    generation += 1; historyRequest += 1; root = node; data = null; flight = null; historyFlight = null; readState = 'idle'; policySelection = null; mutationBusy = false; activationError = ''; historyTasks = null; historyState = 'idle';
     root.innerHTML = '<div id="capacity-page"></div>';
     render(); refresh();
   }
-  function resetView() { generation += 1; requestVersion += 1; root = null; context = null; data = null; flight = null; readState = 'idle'; policySelection = null; mutationBusy = false; activationError = ''; historyTasks = null; historyState = 'idle'; }
+  function resetView() { generation += 1; requestVersion += 1; historyRequest += 1; root = null; context = null; data = null; flight = null; historyFlight = null; readState = 'idle'; policySelection = null; mutationBusy = false; activationError = ''; historyTasks = null; historyState = 'idle'; }
   setInterval(() => refresh(), 5000);
   return { mount, refresh, resetView };
 })();

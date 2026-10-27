@@ -699,3 +699,10 @@ clock/retention, bounded history and controlled copied-store fault cases. Preser
 fault evidence, financial holds, health and all history; do not auto-repair/retry/release.
 The broad five-spec phase remains in_progress/current_verification null; parent29 and later
 stages are not complete yet. No real provider, spend, push, deployment or deletion authority.
+
+
+## Issue39 candidate and evidence boundary — 2026-10-28
+
+Core40569c54 / Monitor2f8bc84c implement bounded creation-time observation and safe host readers. The candidate reports34 focused HTTP passes and3 headed desktop business-flow passes with source596 frozen; these are not original full-suite checks or complete39. Root independent readback found concurrent HTTP artifact filenames overwritten in the new QA recorder: the image/business assertions remain their original reports, while complete referenced-response evidence needs a recorder fix and fresh run. Original records are retained without retroactive repair or relabelling.
+
+The [feature contract](task-features.md) separates legal acceptance, immutable first-owner capture, unknown values, expired safe observation and the existing explicit financial reconciliation authority. Core original full/integration, Monitor full/build, two independent review axes, final source/evidence checks and normal integration merge are still required before39closure. Whole29–33 remains in_progress/current_verification null; production gates, original canonical dirty work and earlier accepted38 receipts remain unchanged. No real provider/spend/push/deployment or deletion authority follows from these documents.

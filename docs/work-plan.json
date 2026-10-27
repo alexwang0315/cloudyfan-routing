@@ -17,13 +17,13 @@
     },
     {
       "id": "CREATION-TIME-TASK-OBSERVATION",
-      "owner": "task-features-worker",
+      "owner": "route-advice-worker",
       "owned_files": [
         "src/cloudyfan_jev/task_features.py",
         "src/cloudyfan_jev/http_api.py",
-        "src/cloudyfan_jev/scheduler.py"
+        "src/cloudyfan_jev/task_recommendations.py"
       ],
-      "provided_by": "ISSUE39"
+      "provided_by": "ISSUE40"
     },
     {
       "id": "RATE-WINDOW-POLICY",
@@ -168,6 +168,23 @@
         "CONTROLLED-QUEUE-WINDOW-HOOKS"
       ],
       "outcome": "Issue39 actual local loopback/real headed Chrome + MockTransport acceptance completed and GitHub39 CLOSED with9AC. New39 focused45 plus original2 regression=47PASS; desktop3PASS; originalCore6c01 full2069/8+demos/sdist/wheel reused only after all429Corebytes and absenceofMonimports confirmed. Fresh correctedMonEFE8 originalfull472/26+sdist/wheel PASS; two independentreview03 axes0. Exact597source merged normallyasCore087e29c8/Mon20765124 withoriginalguard+quick4/24; canonical576bytes/modes/heads/statusunchanged. Originalfull01 2fail/460pass andfull02 wrappererrno5/exit1 retained; originalerrno5path/causeunknown, separate26212regular/291symlinkrecovery andRootreadbackcomplete. External issue39/root-integration-merge-pass-readback-01.json SHA75807500946526b65554f248ea7c98fce660e5b06cc6fac6dd873c386fc39a60 and tracker-closed-and40-claimed-01.json recordactualclosure. Parent30stillneeds40/41; entire29-33scope in_progress/current_verificationnull/productiongatespending. No realAPI/spend/sourcepush/deploy/deletion."
+    },
+    {
+      "id": "ISSUE40",
+      "owner": "route-advice-worker",
+      "status": "in_progress",
+      "owned_files": [
+        "src/cloudyfan_jev/task_features.py",
+        "src/cloudyfan_jev/http_api.py",
+        "src/cloudyfan_jev/task_recommendations.py"
+      ],
+      "depends_on": [
+        "ISSUE39"
+      ],
+      "consumed_interfaces": [
+        "CONTROLLED-QUEUE-WINDOW-HOOKS"
+      ],
+      "outcome": "First public HTTP RED authorized only on separate40 branch after current ownership commit. Bounded creation-time observational recommendation; new host-only opt-in requires valid explicit feature capture; no selector/scheduler/routing adoption or later-state inputs. No feature/advice capability is implemented or verified yet. Root owns common metadata/docs; external issue40/first-red-ownership-release-01.json declares exact Mon paths and evidence limits. Preserve39/38 acceptance, legacy bytes, canonical dirty work, original failures and all production gates."
     }
   ]
 }

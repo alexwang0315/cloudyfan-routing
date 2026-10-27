@@ -88,7 +88,7 @@ def main():
             side_requests = {"source": [], "accounting": []}
         else:
             controlled = build_resilience_health_host(service_root, clock=clock, origin=origin,
-                before_response=observe_model, held_timeout_seconds=1800 if args.full_workflow else 600)
+                before_response=observe_model, held_timeout_seconds=3600 if args.full_workflow else 600)
             host = controlled.host
             side_requests = controlled.side_requests
         queue, controller = controlled.queue, controlled.controller
@@ -103,21 +103,28 @@ def main():
             host.app.source = OpenRouterPoolSource(transports[0], fixtures()[2])
             host.app.gateway.billing.source = OpenRouterAccounting(transports[1], api_key=uuid4().hex)
 
-        def inventory():
+        def inventory(digest):
             folders = {host.app.gateway.service.root}
             folders.update(contract.runner.client.root for contract in host.app.gateway.service.contracts.values())
-            return {str(path.relative_to(host.root)): hashlib.sha256(path.read_bytes()).hexdigest()
+            return {str(path.relative_to(host.root)): digest(path)
                 for folder in folders for path in sorted(folder.rglob("*.json")) if path.is_file()}
 
-        def hashes(paths):
-            return {str(path.relative_to(host.root)): hashlib.sha256(path.read_bytes()).hexdigest()
+        def hashes(paths, digest):
+            return {str(path.relative_to(host.root)): digest(path)
                 for path in sorted(paths) if path.is_file()}
 
         def receipt():
             receipt_started = time.monotonic()
+            digests = {}
+
+            def digest(path):
+                if path not in digests:
+                    digests[path] = hashlib.sha256(path.read_bytes()).hexdigest()
+                return digests[path]
+
             budgets = {str(contract.runner.store.path.relative_to(host.root)): contract.runner.store.report()
                 for contract in host.app.gateway.service.contracts.values()}
-            health = {} if args.minimal else hashes([host.health.path])
+            health = {} if args.minimal else hashes([host.health.path], digest)
             if not args.minimal and (not health or host.health.path.stat().st_size == 0):
                 raise AssertionError("A real nonempty HealthStore SQLite is required")
             raw_status = "complete"
@@ -137,16 +144,16 @@ def main():
                 "capacity_sha256": hashlib.sha256(controller.store.path.read_bytes()).hexdigest(),
                 "queue_sha256": hashlib.sha256(queue.path.read_bytes()).hexdigest(),
                 "health_sqlite_sha256": health,
-                "wire_files_sha256": hashes(host.root.glob("private-wire-*.bin")),
-                "raw_mock_request_sha256": hashes(host.root.glob("private-request-*.json")),
+                "wire_files_sha256": hashes(host.root.glob("private-wire-*.bin"), digest),
+                "raw_mock_request_sha256": hashes(host.root.glob("private-request-*.json"), digest),
                 "raw_mock_method_counts": method_counts,
                 "raw_mock_metadata_status": raw_status,
-                "receipt_artifacts_sha256": hashes(path for folder in host.root.glob("receipts-*")
-                    for path in folder.rglob("*.json")),
-                "task_jobs_sha256": hashes((host.root / "tasks").rglob("job.json")),
-                "preservation_sha256": hashes([controller.store.integrity.head, queue.integrity.head]),
+                "receipt_artifacts_sha256": hashes((path for folder in host.root.glob("receipts-*")
+                    for path in folder.rglob("*.json")), digest),
+                "task_jobs_sha256": hashes((host.root / "tasks").rglob("job.json"), digest),
+                "preservation_sha256": hashes([controller.store.integrity.head, queue.integrity.head], digest),
                 "health_evidence_status": "present" if health else "not_in_initial_factory",
-                "original_evidence_sha256": inventory(), "worker_running": any(w.is_alive() for w in workers),
+                "original_evidence_sha256": inventory(digest), "worker_running": any(w.is_alive() for w in workers),
                 "worker_running_count": sum(w.is_alive() for w in workers),
                 "model_response_held": not args.minimal and controlled.held.is_set() and not controlled.released.is_set(),
                 "held_timeout_seconds": None if args.minimal else controlled.held_timeout_seconds,

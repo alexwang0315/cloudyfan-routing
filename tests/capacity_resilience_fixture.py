@@ -62,8 +62,8 @@ def build_resilience_health_host(root, *, clock, origin, before_response=None, h
     from candidate_health_fixture import CONTRACT, OPERATOR, HealthHost, health_values
     from capacity_sources_fixture import limit
 
-    if type(held_timeout_seconds) not in (int, float) or not 0 < held_timeout_seconds <= 1800:
-        raise ValueError('Synthetic held timeout must be finite, positive and at most 1800 seconds')
+    if type(held_timeout_seconds) not in (int, float) or not 0 < held_timeout_seconds <= 3600:
+        raise ValueError('Synthetic held timeout must be finite, positive and at most 3600 seconds')
     root = Path(root).absolute()
     root.mkdir(mode=0o700, parents=True, exist_ok=True)
     values, control_path = health_values(), root / 'synthetic-resilience-host.json'

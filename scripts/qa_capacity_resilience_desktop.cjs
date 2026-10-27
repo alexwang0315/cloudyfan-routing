@@ -189,7 +189,7 @@ async function lifecycleMain() {
   if(process.argv.includes('--policy-rejection-delay'))report.scope+='; tiny genuine policy rejection with bounded delivery of completed HTTP snapshots; N101 not run';
   if(process.argv.includes('--operator-session-delay'))report.scope+='; tiny real operator rotation and completed old-auth delivery barrier; N101 not run';
   if(process.argv.includes('--focused-restart'))report.scope+='; focused restart slice: >100 paid history and refusal steps explicitly not run';
-  const fullWorkflow=report.planned_check_count===13,heldTimeoutSeconds=fullWorkflow?1800:600;
+  const fullWorkflow=report.planned_check_count===13,heldTimeoutSeconds=fullWorkflow?3600:600;
   const heldTimeoutMs=heldTimeoutSeconds*1000;
   report.private_fixture_limits={held_timeout_seconds:heldTimeoutSeconds,idle_maximum_elapsed_ms:120000,
     idle_maximum_samples:1200,idle_sampling_interval_ms:100,

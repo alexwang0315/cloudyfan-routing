@@ -6,12 +6,14 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 import threading
+import io
 from pathlib import Path
 import sqlite3
 from urllib.parse import unquote
 
 import pytest
 
+from capacity_resilience_fixture import build_resilience_health_host
 from task_features_fixture import task_features_http as task_features_http, POLICY_BUNDLE, StoreFeatureBindingPort
 from test_local_http_integration import loopback_network as loopback_network
 from test_local_http_integration import local_service as local_service
@@ -427,8 +429,289 @@ def test_expired_observation_keeps_finances_and_explicit_operator_reconcile_work
         'charged_once': reconciled.json()['charged'], 'repeated_charged': repeated.json()['charged'],
         'debit_amount_usd': debits[0]['amount_usd'], 'mock_model_calls': len(host.upstream.calls)}, indent=2) + '\n')
     assert snapshot_reads == [], 'General expired snapshot reopened retained original request text'
-    assert all(row.get('metadata_unavailable') is True and row.get('metadata_reason') == 'original_raw_access_expired'
-               for row in observed.json()['ledger']['rows'])
+    assert observed.json()['ledger'] == before['ledger']
+    assert new_task['operator_observation']['task_decision']['binding'] == old_task['operator_observation']['task_decision']['binding']
+
+
+@pytest.mark.parametrize('saved', ['warm', 'cold-legacy', 'invalid-legacy', 'cold-replayed'])
+def test_expired_safe_history_survives_host_reopen_without_raw_or_read_writes(task_features_http, monkeypatch, saved):
+    tracer = task_features_http
+    operator, client = tracer.client('operator'), tracer.client('agent')
+    capacity = operator.get('/monitor/capacity')
+    assert operator.post('/monitor/capacity/activate', json={
+        'revision': capacity.json()['dispatch']['revision'], 'version': tracer.controlled.policy_version}).status_code == 200
+    accepted = client.post('/v1/tasks', json={'run_id': 'retained-reopen',
+        'category': tracer.controlled.category, 'prompt': 'PRIVATE_RETAINED_REOPEN_CANARY 1+1'})
+    assert accepted.status_code == 202 and accepted.json()['task_features']['status'] == 'available'
+    features = accepted.json()['task_features']
+    assert tracer.dispatch() is not None
+    assert client.get('/v1/tasks/retained-reopen').json()['status'] == 'passed'
+    before = operator.get('/monitor/snapshot').json()
+    original_task = next(row for row in before['tasks'] if row['run'] == 'retained-reopen')
+    original_binding = original_task['operator_observation']['task_decision']['binding']
+    previous = tracer.snapshot('before-retained-reopen')
+    assert len(previous['model_requests']) == 1
+    root, database = tracer.controlled.host.root, tracer.controlled.app.store.path
+    targets = {str(path) for path in root.rglob('*.json') if path.is_file()
+               and b'PRIVATE_RETAINED_REOPEN_CANARY' in path.read_bytes()}
+    assert targets
+    opened, original_open = [], io.open
+    def watched(file, mode='r', *args, **kwargs):
+        if isinstance(file, (str, os.PathLike)) and os.fspath(file) in targets and 'r' in mode:
+            opened.append(os.fspath(file))
+        return original_open(file, mode, *args, **kwargs)
+    with monkeypatch.context() as boundary:
+        boundary.setattr(io, 'open', watched)
+        assert operator.get('/monitor/snapshot').status_code == 200 and opened
+        opened.clear()
+        if saved != 'warm':
+            # Fresh synthetic upgrade/corruption fixture, not a product reader
+            # that manufactures a legacy state or repairs a missing record.
+            with sqlite3.connect(database) as db:
+                data = json.loads(db.execute('SELECT data FROM tasks WHERE client=? AND run=?',
+                    ('agent', 'retained-reopen')).fetchone()[0])
+                if saved.startswith('cold-'):
+                    data.pop('_retained_public_metadata', None)
+                else:
+                    data['_retained_public_metadata'] = {'schema_version': 'untrusted-legacy'}
+                db.execute('UPDATE tasks SET data=? WHERE client=? AND run=?',
+                    (json.dumps(data), 'agent', 'retained-reopen'))
+            if saved == 'cold-replayed':
+                replayed = client.post('/v1/tasks', json={'run_id': 'retained-reopen',
+                    'category': tracer.controlled.category, 'prompt': 'PRIVATE_RETAINED_REOPEN_CANARY 1+1'})
+                assert replayed.status_code == 200 and replayed.json()['status'] == 'passed'
+                assert replayed.json()['task_features'] == features
+        tracer.evidence['legal_pre_expiry_replay_raw_reads'] = len(opened)
+        opened.clear()  # The original authorized replay is still before expiry.
+        tracer.clock.now = features['captured_at'] + 30 * 86400
+        tracer.controlled.close()
+        reopened = build_resilience_health_host(root, clock=tracer.clock, origin=tracer.origin, held_timeout_seconds=600)
+        tracer.stack.callback(reopened.close)
+        reopened.host.service.creation_features = {
+            'policy_bundle': POLICY_BUNDLE, 'binding_port': StoreFeatureBindingPort(reopened.app.store)}
+        tracer.controlled = reopened
+        tracer.server.set_app(reopened.app)
+        # Host bootstrap legitimately appends original preservation journals.
+        # Its fixture-only inventory is outside the HTTP raw-open spy scope.
+        boundary.setattr(io, 'open', original_open)
+        read_baseline = tracer.snapshot('after-original-bootstrap-before-expired-http')
+        boundary.setattr(io, 'open', watched)
+        assert client.get('/v1/tasks/retained-reopen').status_code == 410
+        committed = database.read_bytes()
+        for unused in range(2):
+            observed = operator.get('/monitor/snapshot')
+            customer = client.get('/v1/monitor')
+            assert observed.status_code == customer.status_code == 200
+            assert '_retained_public_metadata' not in observed.text + customer.text
+            assert 'PRIVATE_RETAINED_REOPEN_CANARY' not in observed.text + customer.text
+            task = next(row for row in observed.json()['tasks'] if row['run'] == 'retained-reopen')
+            assert task['status'] == 'expired' and task['completed_status'] == 'passed'
+            assert task['operator_observation']['task_features'] == features
+            history = task['operator_observation']['task_decision']
+            assert history['reason'] == 'historical_evidence_not_complete'
+            assert history['binding']['bound_at'] == original_binding['bound_at']
+            ledger = observed.json()['ledger']
+            if saved == 'warm':
+                assert ledger == before['ledger']
+                assert history['binding'] == original_binding
+            else:
+                assert all(row.get('metadata_unavailable') is True
+                    and row.get('metadata_reason') == 'original_raw_access_expired' for row in ledger['rows'])
+                assert history['binding']['contract_version'] is history['binding']['routing_version'] is None
+                for key in ('pool_version', 'category', 'mode', 'contract_id'):
+                    assert history['binding'][key] == original_binding[key]
+            for key in ('known_usd', 'total_usd', 'unknown_events', 'accounts', 'reserved_usd',
+                        'by_client_known_usd', 'unattributed_known_usd'):
+                assert ledger[key] == before['ledger'][key]
+            assert database.read_bytes() == committed, 'Read-only snapshot changed stored history'
+        assert opened == [], 'Reopened expired observation reread original text'
+    after = tracer.snapshot('after-retained-reopen')
+    for key in ('budget', 'budget_sqlite_sha256', 'health_sha256', 'queue_sha256'):
+        assert after[key] == previous[key]
+    for key in ('capacity_sha256', 'raw_files_sha256'):
+        assert after[key] == read_baseline[key]
+    for path in targets:
+        relative = str(Path(path).relative_to(root))
+        assert after['raw_files_sha256'][relative] == previous['raw_files_sha256'][relative]
+    assert after['model_requests'] == after['source_requests'] == after['accounting_requests'] == []
+    tracer.evidence['retained_reopen'] = {'saved': saved, 'original_model_calls': 1,
+        'reopened_capture_enabled': True, 'raw_open_count': len(opened), 'read_writes': 0,
+        'bootstrap_capacity_changed': previous['capacity_sha256'] != read_baseline['capacity_sha256'],
+        'http_read_capacity_unchanged': after['capacity_sha256'] == read_baseline['capacity_sha256']}
+
+
+@pytest.mark.parametrize('fault', ['control', 'busy', 'full', 'commit-denied', 'invalid-supplier-metadata'])
+def test_auxiliary_history_storage_failure_preserves_the_original_public_completion(task_features_http, monkeypatch, fault):
+    """Real SQLite boundaries; no Store, recorder, or producer replacement."""
+    tracer = task_features_http
+    operator, client = tracer.client('operator'), tracer.client('agent')
+    capacity = operator.get('/monitor/capacity')
+    assert operator.post('/monitor/capacity/activate', json={
+        'revision': capacity.json()['dispatch']['revision'], 'version': tracer.controlled.policy_version}).status_code == 200
+    accepted = client.post('/v1/tasks', json={'run_id': 'auxiliary-public-summary',
+        'category': tracer.controlled.category, 'prompt': 'PRIVATE_AUXILIARY_HISTORY_CANARY 1+1'})
+    assert accepted.status_code == 202 and accepted.json()['task_features']['status'] == 'available'
+    original_history = next(row for row in operator.get('/monitor/snapshot').json()['tasks']
+        if row['run'] == 'auxiliary-public-summary')['operator_observation']['task_decision']['binding']
+    database = tracer.controlled.app.store.path.resolve()
+    original_connect = sqlite3.connect
+    evidence = {'fault': fault, 'scope': 'new synthetic Monitor DB auxiliary connections only',
+                'connections': 0, 'errors': [], 'updates': 0}
+
+    class ObservedConnection(sqlite3.Connection):
+        blocker = None
+        def execute(self, sql, parameters=(), /):
+            try:
+                if fault == 'full' and sql.startswith('UPDATE tasks SET data='):
+                    # Real resource pressure inside only the post-public-commit
+                    # auxiliary transaction. Its abort removes this filler.
+                    pages = super().execute('PRAGMA page_count').fetchone()[0]
+                    super().execute('PRAGMA max_page_count=' + str(pages))
+                    super().execute('INSERT INTO audit(at,action,data) VALUES(0,?,zeroblob(1048576))',
+                                    ('synthetic_auxiliary_full_pressure',))
+                result = super().execute(sql, parameters)
+                if sql.startswith('UPDATE tasks SET data='):
+                    evidence['updates'] += result.rowcount
+                return result
+            except sqlite3.Error as error:
+                evidence['errors'].append({'name': error.sqlite_errorname, 'code': error.sqlite_errorcode,
+                    'transaction_active': self.in_transaction, 'statement': sql.split()[0]})
+                raise
+        def commit(self):
+            try:
+                return super().commit()
+            except sqlite3.Error as error:
+                evidence['errors'].append({'name': error.sqlite_errorname, 'code': error.sqlite_errorcode,
+                    'transaction_active': self.in_transaction, 'statement': 'COMMIT'})
+                raise
+        def close(self):
+            try:
+                return super().close()
+            finally:
+                if self.blocker is not None:
+                    self.blocker.rollback()
+                    self.blocker.close()
+                    self.blocker = None
+
+    def constrained(database_name, *args, **kwargs):
+        name = str(database_name)
+        selected = (Path(unquote(name.split('?', 1)[0].removeprefix('file:'))).absolute() == database
+                    and 'mode=rw' in name and kwargs.get('timeout') == 0)
+        if selected:
+            kwargs['factory'] = ObservedConnection
+        db = original_connect(database_name, *args, **kwargs)
+        if selected:
+            evidence['connections'] += 1
+            if fault == 'busy':
+                db.blocker = original_connect(database, timeout=0, isolation_level=None)
+                db.blocker.execute('BEGIN IMMEDIATE')
+            if fault == 'commit-denied':
+                db.set_authorizer(lambda action, first, *rest: sqlite3.SQLITE_DENY
+                    if action == sqlite3.SQLITE_TRANSACTION and first == 'COMMIT' else sqlite3.SQLITE_OK)
+        return db
+
+    with monkeypatch.context() as boundary:
+        boundary.setattr(sqlite3, 'connect', constrained)
+        if fault == 'invalid-supplier-metadata':
+            import httpx
+            original_transport = httpx.MockTransport.handle_request
+            def invalid_supplier(transport, request):
+                response = original_transport(transport, request)
+                if request.method == 'POST' and request.url.path.endswith('/chat/completions'):
+                    body = response.json()
+                    # Preserve the original valid generation ID and known fee;
+                    # only auxiliary token metadata exceeds its fixed bound.
+                    body['usage']['prompt_tokens'] = 10**12 + 1
+                    return httpx.Response(response.status_code, json=body, request=request)
+                return response
+            boundary.setattr(httpx.MockTransport, 'handle_request', invalid_supplier)
+        assert tracer.dispatch() is not None
+    completed = client.get('/v1/tasks/auxiliary-public-summary')
+    assert completed.status_code == 200 and completed.json()['status'] == 'passed'
+    assert completed.json()['task_features'] == accepted.json()['task_features']
+    before = operator.get('/monitor/snapshot').json()
+    task = next(row for row in before['tasks'] if row['run'] == 'auxiliary-public-summary')
+    assert task['completed_status'] == 'passed' and task['final_pass'] is True
+    assert task['known_api_usd'] == task['complete_api_usd'] == '0.01'
+    tracer.clock.now = accepted.json()['task_features']['captured_at'] + 30 * 86400
+    assert client.get('/v1/tasks/auxiliary-public-summary').status_code == 410
+    expired = operator.get('/monitor/snapshot')
+    assert expired.status_code == 200 and '_retained_public_metadata' not in expired.text
+    expired_task = next(row for row in expired.json()['tasks'] if row['run'] == 'auxiliary-public-summary')
+    assert expired_task['completed_status'] == 'passed' and expired_task['final_pass'] is True
+    assert expired_task['known_api_usd'] == expired_task['complete_api_usd'] == '0.01'
+    assert expired_task['operator_observation']['task_decision']['binding'] == original_history
+    if fault == 'control':
+        assert expired.json()['ledger'] == before['ledger']
+        assert evidence['updates'] > 0 and not evidence['errors']
+    else:
+        assert all(row.get('metadata_unavailable') is True for row in expired.json()['ledger']['rows'])
+    if fault == 'busy':
+        assert any(row['name'] == 'SQLITE_BUSY' for row in evidence['errors'])
+    elif fault == 'full':
+        assert any(row['name'] == 'SQLITE_FULL' and not row['transaction_active'] for row in evidence['errors'])
+    elif fault == 'commit-denied':
+        assert evidence['updates'] > 0
+        assert any(row['name'] == 'SQLITE_AUTH' and row['statement'] == 'COMMIT' for row in evidence['errors'])
+    effects = tracer.snapshot('after-auxiliary-history-failure')
+    assert len(effects['model_requests']) == 1 and effects['source_requests'] == effects['accounting_requests'] == []
+    tracer.evidence['retained_auxiliary_failure'] = evidence
+
+
+def test_unrelated_budget_history_hits_a_real_sqlite_scan_bound_without_losing_completion(task_features_http, monkeypatch):
+    tracer = task_features_http
+    operator, client = tracer.client('operator'), tracer.client('agent')
+    capacity = operator.get('/monitor/capacity')
+    assert operator.post('/monitor/capacity/activate', json={
+        'revision': capacity.json()['dispatch']['revision'], 'version': tracer.controlled.policy_version}).status_code == 200
+    accepted = client.post('/v1/tasks', json={'run_id': 'bounded-retained-history',
+        'category': tracer.controlled.category, 'prompt': 'PRIVATE_BOUNDED_HISTORY_CANARY 1+1'})
+    assert accepted.status_code == 202 and accepted.json()['task_features']['status'] == 'available'
+    budget = tracer.controlled.budgets['primary'].path.resolve()
+    original_connect = sqlite3.connect
+    # Valid, known-zero, unrelated historical events in this disposable Budget.
+    # There is no run index: the bounded product query must really interrupt.
+    with original_connect(budget) as db:
+        db.executemany('INSERT INTO events VALUES(?,?,?,?,?,?,?,?)', [
+            ('synthetic-unrelated-' + str(number), 'another-synthetic-run', 'generation', '0',
+             'f' * 64, '0', 1, 'synthetic-vm-receipt-' + str(number)) for number in range(10000)])
+    errors = []
+    class ReadCursor(sqlite3.Cursor):
+        def fetchall(self):
+            try:
+                return super().fetchall()
+            except sqlite3.Error as error:
+                errors.append({'name': error.sqlite_errorname, 'code': error.sqlite_errorcode})
+                raise
+    class ReadConnection(sqlite3.Connection):
+        def execute(self, sql, parameters=(), /):
+            return self.cursor(factory=ReadCursor).execute(sql, parameters)
+    def observed_connect(database, *args, **kwargs):
+        name = str(database)
+        if (Path(unquote(name.split('?', 1)[0].removeprefix('file:'))).absolute() == budget
+                and 'mode=ro' in name and kwargs.get('timeout') == 0):
+            kwargs['factory'] = ReadConnection
+        return original_connect(database, *args, **kwargs)
+    with monkeypatch.context() as boundary:
+        boundary.setattr(sqlite3, 'connect', observed_connect)
+        assert tracer.dispatch() is not None
+    completed = client.get('/v1/tasks/bounded-retained-history')
+    assert completed.status_code == 200 and completed.json()['status'] == 'passed'
+    assert completed.json()['costs']['complete_api_usd'] == '0.01'
+    assert any(row['name'] == 'SQLITE_INTERRUPT' for row in errors)
+    tracer.clock.now = accepted.json()['task_features']['captured_at'] + 30 * 86400
+    assert client.get('/v1/tasks/bounded-retained-history').status_code == 410
+    expired = operator.get('/monitor/snapshot')
+    assert expired.status_code == 200
+    task = next(row for row in expired.json()['tasks'] if row['run'] == 'bounded-retained-history')
+    assert task['completed_status'] == 'passed' and task['complete_api_usd'] == '0.01'
+    assert task['operator_observation']['task_features'] == accepted.json()['task_features']
+    own_rows = [row for row in expired.json()['ledger']['rows'] if row['task_run'] == 'bounded-retained-history']
+    assert len(own_rows) == 1 and own_rows[0]['metadata_unavailable'] is True
+    effects = tracer.snapshot('after-real-sqlite-scan-bound')
+    assert len(effects['model_requests']) == 1 and effects['source_requests'] == effects['accounting_requests'] == []
+    tracer.evidence['retained_scan_bound'] = {'unrelated_events': 10000, 'sqlite_errors': errors,
+        'public_completion_preserved': True, 'known_task_fee': '0.01'}
 
 
 def test_auxiliary_seal_busy_is_one_nonwaiting_attempt_and_never_repaired(task_features_http, monkeypatch):

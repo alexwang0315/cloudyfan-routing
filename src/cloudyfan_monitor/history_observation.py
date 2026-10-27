@@ -463,6 +463,14 @@ class TaskDecisionObserver:
         try:
             binding = self.store.binding(task["client"], task["run"])
             if task.get('access_expired') or task.get('status') in ('expired', 'retired'):
+                result['binding'] = {
+                    'pool_version': identifier(binding['pool']), 'category': identifier(binding['category']),
+                    'mode': identifier(binding['mode']), 'contract_id': identifier(binding['contract']),
+                    'contract_version': None, 'routing_version': None, 'bound_at': binding['created']}
+                saved = self.store.retained_metadata(binding)
+                if saved is not None:
+                    result['binding'] = saved['history_binding']
+                result['status'] = 'partial'
                 result['reason'] = 'historical_evidence_not_complete'
                 return result  # Safe metadata stays separate; never reopen expired prompts.
             if self.registry.get((binding["pool"], binding["category"], binding["mode"])) != binding["contract"]:

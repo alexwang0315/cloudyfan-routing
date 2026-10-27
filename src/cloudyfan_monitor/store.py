@@ -12,12 +12,73 @@ import sqlite3
 import stat
 import time
 
+from .observation_fields import identifier as observation_identifier
 from cloudyfan_jev.task_features import (feature_digest, original_digest, public_features,
                                         unavailable, validate_adoption, feature_computation, feature_budget_available)
 
 MODES = {"cloudyfan": "CloudyFan MRC", "fixed_high": "全大模型優先",
          "low_first": "全便宜模型優先", "open_source_first": "全開源模型優先"}
 TIERS = ("open_source", "low", "mid", "high")
+RETAINED_FIELD = '_retained_public_metadata'
+RETAINED_META_FIELDS = ('model', 'provider', 'cost_source', 'elapsed_ms', 'generation_id',
+                        'billing_origin', 'open_source', 'request_kind', 'tokens')
+
+
+def retained_metadata(value, binding):
+    """Validate bounded, task-owned history; never accept a whole raw receipt."""
+    if (not isinstance(value, dict) or set(value) != {'schema_version', 'binding_sha256',
+            'observed_at', 'history_binding', 'events'}
+            or value['schema_version'] != 'monitor-retained-public-metadata-v1'
+            or value['binding_sha256'] != digest(binding) or len(encode(value).encode()) > 65536
+            or type(value['observed_at']) not in (int, float)
+            or not math.isfinite(value['observed_at']) or value['observed_at'] < binding['created']):
+        raise ValueError('Invalid retained public metadata')
+    history = value['history_binding']
+    expected = {'pool_version': binding['pool'], 'category': binding['category'], 'mode': binding['mode'],
+                'contract_id': binding['contract'], 'bound_at': binding['created']}
+    if (not isinstance(history, dict) or set(history) != {*expected, 'contract_version', 'routing_version'}
+            or any(history[key] != (observation_identifier(item) if key != 'bound_at' else item)
+                   for key, item in expected.items())
+            or any(history[key] is not None and observation_identifier(history[key]) != history[key]
+                   for key in ('contract_version', 'routing_version'))):
+        raise ValueError('Invalid retained binding')
+    if not isinstance(value['events'], list) or len(value['events']) > 64:
+        raise ValueError('Retained event limit exceeded')
+    seen = set()
+    for row in value['events']:
+        if not isinstance(row, dict) or set(row) != {'account', 'id', 'run', 'metadata'}:
+            raise ValueError('Invalid retained event')
+        if any(not isinstance(row[key], str) or observation_identifier(row[key]) != row[key]
+               for key in ('account', 'id', 'run')):
+            raise ValueError('Invalid retained event identity')
+        key = row['account'], row['id'], row['run']
+        if key in seen:
+            raise ValueError('Duplicate retained event')
+        seen.add(key)
+        metadata = row['metadata']
+        if not isinstance(metadata, dict) or set(metadata) != set(RETAINED_META_FIELDS):
+            raise ValueError('Invalid retained event fields')
+        for key in ('model', 'provider', 'cost_source', 'generation_id'):
+            if metadata[key] is not None and observation_identifier(metadata[key]) != metadata[key]:
+                raise ValueError('Invalid retained event value')
+        elapsed = metadata['elapsed_ms']
+        if (elapsed is not None and (type(elapsed) not in (int, float)
+                or not math.isfinite(elapsed) or elapsed < 0)):
+            raise ValueError('Invalid retained elapsed time')
+        if (metadata['billing_origin'] not in (None, 'local', 'openrouter')
+                or metadata['request_kind'] not in ('classification', 'generation')
+                or type(metadata['open_source']) is not bool):
+            raise ValueError('Invalid retained request metadata')
+        tokens = metadata['tokens']
+        if (not isinstance(tokens, dict) or set(tokens) - {'input_tokens', 'output_tokens',
+                'prompt_tokens', 'completion_tokens', 'total_tokens'}
+                or any(type(item) is not int or not 0 <= item <= 10**12 for item in tokens.values())):
+            raise ValueError('Invalid retained tokens')
+    return value
+
+
+def public_task(value):
+    return {key: item for key, item in value.items() if key != RETAINED_FIELD}
 
 
 class MonitorError(Exception):
@@ -405,7 +466,54 @@ class Store:
     def observation(self, client, run):
         with self.db() as db:
             row = db.execute("SELECT data FROM tasks WHERE client=? AND run=?", (client, run)).fetchone()
-            return json.loads(row["data"]) if row else None
+            return public_task(json.loads(row["data"])) if row else None
+
+    def retained_metadata(self, binding):
+        try:
+            with self._feature_db() as db:
+                row = db.execute('SELECT data FROM tasks WHERE client=? AND run=? '
+                    'AND length(CAST(data AS BLOB))<=1048576', (binding['client'], binding['run'])).fetchone()
+            value = retained_metadata(json.loads(row['data'])[RETAINED_FIELD], binding) if row else None
+            return value if value is not None and value['observed_at'] <= self.clock() else None
+        except Exception:
+            return None
+
+    def retained_pool(self, binding):
+        """Bounded nonwaiting configuration read for the auxiliary writer only."""
+        with self._feature_db() as db:
+            row = db.execute('SELECT data FROM pools WHERE id=? AND length(CAST(data AS BLOB))<=1048576',
+                              (binding['pool'],)).fetchone()
+        if row is None:
+            raise ValueError('Retained pool unavailable')
+        data = json.loads(row['data'])
+        if digest(data) != binding['pool']:
+            raise ValueError('Retained pool identity differs')
+        return {'id': binding['pool'], **data}
+
+    def retain_metadata(self, binding, value):
+        """One auxiliary attempt after the original public record has committed."""
+        try:
+            value = retained_metadata(value, binding)
+            if value['observed_at'] > self.clock():
+                return False
+            with self._feature_db(write=True) as db:
+                original = db.execute('SELECT * FROM bindings WHERE client=? AND run=?',
+                    (binding['client'], binding['run'])).fetchone()
+                if original is None or dict(original) != binding:
+                    return False
+                row = db.execute('SELECT data FROM tasks WHERE client=? AND run=? '
+                    'AND length(CAST(data AS BLOB))<=1048576', (binding['client'], binding['run'])).fetchone()
+                if row is None:
+                    return False
+                data = json.loads(row['data'])
+                data[RETAINED_FIELD] = value
+                db.execute('UPDATE tasks SET data=? WHERE client=? AND run=?',
+                    (encode(data), binding['client'], binding['run']))
+            return True
+        except Exception:
+            # SQLITE_FULL can abort this entire auxiliary transaction. The
+            # original public summary and previous envelope are already durable.
+            return False
 
     def record_version_use(self, binding):
         with self.db() as db:
@@ -430,7 +538,7 @@ class Store:
 
     def dashboard(self, client=None):
         with self.db() as db:
-            tasks = [json.loads(r["data"]) for r in db.execute("SELECT data FROM tasks")]
+            tasks = [public_task(json.loads(r["data"])) for r in db.execute("SELECT data FROM tasks")]
             clients = [dict(r) for r in db.execute("SELECT id,label,mode,enabled,last_seen FROM clients")]
             config = dict(db.execute("SELECT * FROM control").fetchone())
             audit = [dict(r) for r in db.execute("SELECT * FROM audit ORDER BY id DESC LIMIT 100")]

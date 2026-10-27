@@ -66,6 +66,16 @@ Core 在原新任務鎖內寫入獨占建立錨點、raw 目錄外的安全紀�
 
 一般 GET／snapshot 對到期任務保留原 Budget 金額、事件、保留款及已保存的公開 trace。未安全保存的模型／供應商／token／計費來源細節標示 `metadata_unavailable`、`original_raw_access_expired`，不為補畫面重開原始請求。`updated` 是原觀測更新時間欄位，不代表已重新驗證歷史完成證據；特徵仍使用原 `captured_at`。
 
+安全的已執行歷史與建立時特徵分開：既有合法 `capture(persist=True)` 在原公開摘要提交後，另以一次 `timeout=0` 輔助交易保存到既有 Monitor `tasks.data` 的內部 envelope，不新增資料表。只保存本任務已驗證的原綁定／版本與每筆事件的公開模型、供應商、用量及來源白名單；金額、核帳狀態、收據、未知費與預留始終以原 Budget 為準。沒有 prompt、答案、URL、路徑、headers 或別的客戶帳務，內部 envelope 也不直接出現在客戶或操作員的公開 task dict。
+
+只有原新建立、實際執行 finally 與 worker transition 明示開啟主機內的 `retain_metadata=True`；一般 capture 預設不取得此寫入資格。既有重送若只更新原公開摘要，也不因此替 cold legacy 回補安全 metadata。這不是 HTTP request／query 或原 frozen runner descriptor 的欄位。
+
+每份安全紀錄至多 64 筆事件、65,536 UTF-8 bytes；token 子項限原支援欄位及 `0..10**12` 整數。原 Budget 查詢只取本任務，使用唯讀、非等待連線，另有固定 32,000 SQLite VM steps 上限；`LIMIT` 並不保證沒有掃描其他不相符的歷史列。讀取超限、不完整或驗證失敗就略過輔助保存；只有原公開摘要先提交後，才嘗試輔助寫入，寫入忙碌或交易回滾不會回滾原摘要，先前安全紀錄保留。這些界線不保證 OS I/O 的耗時上限，也不改建立特徵原 50ms 純計算界線。
+
+輔助 writer 的 pool 讀取同樣使用非等待唯讀連線、原 pool ID／摘要核對及 1 MiB 上限；每次 capture 只沿原一次到期檢查取得的 `expires_at`，不從目前時間重設期限，也不因補 metadata 再走原可寫、等待 10 秒的 pool／expiry 讀取接線。
+
+到期後依原 binding、account、event id、internal run 與原綁定摘要對照已存資料；完整保存者保留原公開 ledger 明細與分類，cold legacy 或損壞紀錄則明示未知。原 Monitor 綁定與 `bound_at` 仍可知；未保存的 contract／routing version 不從目前 descriptor 補造。`snapshot(persist=False)`、detached／query-only 與一般 GET 不寫入或補建這份安全紀錄，也不重新簽署建立特徵。紀錄沿 Monitor 中繼資料至少 365 天與未知費延保政策保存，沒有新增刪除入口。
+
 既有已驗證操作員 `POST /monitor/billing/reconcile` 保留原財務追溯授權：只有該既有呼叫在主機內硬編碼開啟 `include_retained_financial_metadata=True`，沿原受控財務收據與核帳範圍補齊費用證據。HTTP body／query 不能自行打開此選項。這項明示動作與一般查閱分開；原費率、缺證停止、未知費保留及冪等扣款規則不變，不新增來源查詢或付款權限。
 
 ## 操作員與驗收範圍

@@ -277,7 +277,7 @@ class App:
             return self.gateway.billing.credit(body)
         if method == "POST" and path == "/monitor/billing/reconcile":
             self._fields(self._body(environ), set())
-            return self.gateway.billing.reconcile(self.gateway.ledger())
+            return self.gateway.billing.reconcile(self.gateway.ledger(include_retained_financial_metadata=True))
         if method == "POST" and path == "/monitor/billing/source/account":
             self._fields(self._body(environ), set())
             return self.gateway.billing.read_account()

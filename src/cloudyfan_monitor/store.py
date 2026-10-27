@@ -9,11 +9,76 @@ import os
 from pathlib import Path
 import re
 import sqlite3
+import stat
 import time
+
+from .observation_fields import identifier as observation_identifier
+from cloudyfan_jev.task_features import (feature_digest, original_digest, public_features,
+                                        unavailable, validate_adoption, feature_computation, feature_budget_available)
 
 MODES = {"cloudyfan": "CloudyFan MRC", "fixed_high": "全大模型優先",
          "low_first": "全便宜模型優先", "open_source_first": "全開源模型優先"}
 TIERS = ("open_source", "low", "mid", "high")
+RETAINED_FIELD = '_retained_public_metadata'
+RETAINED_META_FIELDS = ('model', 'provider', 'cost_source', 'elapsed_ms', 'generation_id',
+                        'billing_origin', 'open_source', 'request_kind', 'tokens')
+
+
+def retained_metadata(value, binding):
+    """Validate bounded, task-owned history; never accept a whole raw receipt."""
+    if (not isinstance(value, dict) or set(value) != {'schema_version', 'binding_sha256',
+            'observed_at', 'history_binding', 'events'}
+            or value['schema_version'] != 'monitor-retained-public-metadata-v1'
+            or value['binding_sha256'] != digest(binding) or len(encode(value).encode()) > 65536
+            or type(value['observed_at']) not in (int, float)
+            or not math.isfinite(value['observed_at']) or value['observed_at'] < binding['created']):
+        raise ValueError('Invalid retained public metadata')
+    history = value['history_binding']
+    expected = {'pool_version': binding['pool'], 'category': binding['category'], 'mode': binding['mode'],
+                'contract_id': binding['contract'], 'bound_at': binding['created']}
+    if (not isinstance(history, dict) or set(history) != {*expected, 'contract_version', 'routing_version'}
+            or any(history[key] != (observation_identifier(item) if key != 'bound_at' else item)
+                   for key, item in expected.items())
+            or any(history[key] is not None and observation_identifier(history[key]) != history[key]
+                   for key in ('contract_version', 'routing_version'))):
+        raise ValueError('Invalid retained binding')
+    if not isinstance(value['events'], list) or len(value['events']) > 64:
+        raise ValueError('Retained event limit exceeded')
+    seen = set()
+    for row in value['events']:
+        if not isinstance(row, dict) or set(row) != {'account', 'id', 'run', 'metadata'}:
+            raise ValueError('Invalid retained event')
+        if any(not isinstance(row[key], str) or observation_identifier(row[key]) != row[key]
+               for key in ('account', 'id', 'run')):
+            raise ValueError('Invalid retained event identity')
+        key = row['account'], row['id'], row['run']
+        if key in seen:
+            raise ValueError('Duplicate retained event')
+        seen.add(key)
+        metadata = row['metadata']
+        if not isinstance(metadata, dict) or set(metadata) != set(RETAINED_META_FIELDS):
+            raise ValueError('Invalid retained event fields')
+        for key in ('model', 'provider', 'cost_source', 'generation_id'):
+            if metadata[key] is not None and observation_identifier(metadata[key]) != metadata[key]:
+                raise ValueError('Invalid retained event value')
+        elapsed = metadata['elapsed_ms']
+        if (elapsed is not None and (type(elapsed) not in (int, float)
+                or not math.isfinite(elapsed) or elapsed < 0)):
+            raise ValueError('Invalid retained elapsed time')
+        if (metadata['billing_origin'] not in (None, 'local', 'openrouter')
+                or metadata['request_kind'] not in ('classification', 'generation')
+                or type(metadata['open_source']) is not bool):
+            raise ValueError('Invalid retained request metadata')
+        tokens = metadata['tokens']
+        if (not isinstance(tokens, dict) or set(tokens) - {'input_tokens', 'output_tokens',
+                'prompt_tokens', 'completion_tokens', 'total_tokens'}
+                or any(type(item) is not int or not 0 <= item <= 10**12 for item in tokens.values())):
+            raise ValueError('Invalid retained tokens')
+    return value
+
+
+def public_task(value):
+    return {key: item for key, item in value.items() if key != RETAINED_FIELD}
 
 
 class MonitorError(Exception):
@@ -89,6 +154,35 @@ class Store:
                     last_used REAL, PRIMARY KEY(pool,contract));
             """)
         os.chmod(self.path, 0o600)
+        try:
+            with self._feature_db(write=True) as db:
+                db.execute('CREATE TABLE IF NOT EXISTS creation_feature_adoptions '
+                    '(client TEXT, run TEXT, adoption TEXT NOT NULL, adoption_sha TEXT NOT NULL, '
+                    'record_sha TEXT, request_sha TEXT, registered_sha TEXT, PRIMARY KEY(client,run))')
+        except Exception:
+            pass  # An unavailable auxiliary store cannot reject original tasks.
+
+    @contextmanager
+    def _feature_db(self, *, write=False):
+        """One nonwaiting auxiliary transaction; never the original ten-second db()."""
+        path = self.path.absolute()
+        info = path.lstat()
+        if path != path.resolve() or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+            raise ValueError('Unsafe feature binding store')
+        mode = 'rw' if write else 'ro'
+        db = sqlite3.connect(path.as_uri() + '?mode=' + mode, uri=True, timeout=0, isolation_level=None)
+        db.row_factory = sqlite3.Row
+        try:
+            if not write:
+                db.execute('PRAGMA query_only=ON')
+            db.execute('BEGIN IMMEDIATE' if write else 'BEGIN')
+            yield db
+            db.commit()
+        except BaseException:
+            db.rollback()
+            raise
+        finally:
+            db.close()
 
     @contextmanager
     def db(self):
@@ -204,7 +298,8 @@ class Store:
                 raise MonitorError("pool_integrity_failed", 409)
             return {"id": key, **data}
 
-    def bind(self, client, payload, registry, *, expected_contract=None):
+    def bind(self, client, payload, registry, *, expected_contract=None,
+             feature_policy=None, feature_contracts=None, with_creation=False):
         if not isinstance(payload, dict) or set(payload) != {"run_id", "category", "prompt"}:
             raise MonitorError("unsupported_task_fields")
         if not isinstance(payload["run_id"], str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", payload["run_id"]):
@@ -217,6 +312,7 @@ class Store:
         except ValueError:
             raise MonitorError("unknown_category") from None
         fingerprint = digest({**payload, "category": category})
+        created = False
         with self.db() as db:
             prior = db.execute("SELECT * FROM bindings WHERE client=? AND run=?", (client, payload["run_id"])).fetchone()
             if prior:
@@ -224,28 +320,109 @@ class Store:
                     raise MonitorError("ollama_contract_changed", 409)
                 if prior["fingerprint"] != fingerprint:
                     raise MonitorError("frozen_task_changed", 409)
-                return dict(prior)
-            config = db.execute("SELECT * FROM control").fetchone()
-            client_row = db.execute("SELECT * FROM clients WHERE id=? AND enabled=1", (client,)).fetchone()
-            if client_row is None:
-                raise MonitorError("unauthorized", 401)
-            mode = client_row["mode"] or config["mode"]
-            pool = config["routing_pool"]
-            contract = registry.get((pool, category, mode))
-            if contract is None:
-                raise MonitorError("routing_configuration_unavailable", 409)
-            if expected_contract is not None and contract != expected_contract:
-                raise MonitorError("ollama_contract_changed", 409)
-            row = {"client": client, "run": payload["run_id"], "fingerprint": fingerprint,
-                   "pool": pool, "mode": mode, "category": category, "contract": contract, "created": self.clock()}
-            db.execute("INSERT INTO bindings VALUES(:client,:run,:fingerprint,:pool,:mode,:category,:contract,:created)", row)
-            from .billing import freeze_policy
-            freeze_policy(db, row)
-            db.execute("INSERT INTO version_uses VALUES(?,?,?,?) ON CONFLICT(pool,contract) "
-                       "DO UPDATE SET last_used=MAX(last_used,excluded.last_used)",
-                       (pool, contract, row["created"], row["created"]))
-            self.audit(db, "task_bound", {k: v for k, v in row.items() if k != "fingerprint"})
-            return row
+                row = dict(prior)
+            else:
+                config = db.execute("SELECT * FROM control").fetchone()
+                client_row = db.execute("SELECT * FROM clients WHERE id=? AND enabled=1", (client,)).fetchone()
+                if client_row is None:
+                    raise MonitorError("unauthorized", 401)
+                mode = client_row["mode"] or config["mode"]
+                pool = config["routing_pool"]
+                contract = registry.get((pool, category, mode))
+                if contract is None:
+                    raise MonitorError("routing_configuration_unavailable", 409)
+                if expected_contract is not None and contract != expected_contract:
+                    raise MonitorError("ollama_contract_changed", 409)
+                row = {"client": client, "run": payload["run_id"], "fingerprint": fingerprint,
+                       "pool": pool, "mode": mode, "category": category, "contract": contract, "created": self.clock()}
+                db.execute("INSERT INTO bindings VALUES(:client,:run,:fingerprint,:pool,:mode,:category,:contract,:created)", row)
+                from .billing import freeze_policy
+                freeze_policy(db, row)
+                db.execute("INSERT INTO version_uses VALUES(?,?,?,?) ON CONFLICT(pool,contract) "
+                           "DO UPDATE SET last_used=MAX(last_used,excluded.last_used)",
+                           (pool, contract, row["created"], row["created"]))
+                self.audit(db, "task_bound", {k: v for k, v in row.items() if k != "fingerprint"})
+                self._adopt_features(db, row, payload, feature_policy, feature_contracts)
+                created = True
+        # No producer qualification escapes a failed original binding commit.
+        return (row, created) if with_creation else row
+
+    def _adopt_features(self, db, binding, payload, policy, contracts):
+        if policy is None:
+            return
+        try:
+            with feature_computation():
+                policy = dict(policy)
+                adoption = {'schema_version': 'creation-feature-adoption-v1', 'binding': dict(binding),
+                    'policy': policy, 'policy_sha256': feature_digest(policy),
+                    'request_sha256': original_digest({'run_id': binding['run'], 'contract_id': binding['contract'],
+                                                      'prompt': payload['prompt']}),
+                    'registered_sha256': contracts[binding['contract']]}
+                validate_adoption(adoption)
+                body, adoption_sha = encode(adoption), feature_digest(adoption)
+            if not feature_budget_available():
+                return
+            db.execute('SAVEPOINT creation_features')
+            try:
+                db.execute('INSERT INTO creation_feature_adoptions '
+                    '(client,run,adoption,adoption_sha) VALUES(?,?,?,?)',
+                    (binding['client'], binding['run'], body, adoption_sha))
+            except Exception:
+                db.execute('ROLLBACK TO creation_features')
+            finally:
+                db.execute('RELEASE creation_features')
+        except Exception:
+            if not db.in_transaction:
+                # SQLITE_FULL may roll back the entire original binding, not
+                # just its auxiliary savepoint. Never admit that lost binding.
+                raise MonitorError('monitor_store_unavailable', 503) from None
+            pass  # No adoption for this first owner; replay must not fill it.
+
+    def _feature_snapshot(self, db, client, run):
+        binding = db.execute('SELECT * FROM bindings WHERE client=? AND run=?', (client, run)).fetchone()
+        row = db.execute('SELECT CASE WHEN length(CAST(adoption AS BLOB))<=16384 THEN adoption END AS adoption, '
+            'adoption_sha,record_sha,request_sha,registered_sha FROM creation_feature_adoptions '
+            'WHERE client=? AND run=?', (client, run)).fetchone()
+        if binding is None or row is None or row['adoption'] is None:
+            raise ValueError('Original feature adoption unavailable')
+        with feature_computation():
+            adoption = validate_adoption(json.loads(row['adoption']))
+            if adoption['binding'] != dict(binding) or feature_digest(adoption) != row['adoption_sha']:
+                raise ValueError('Original feature binding changed')
+            seal = None
+            if any(row[key] is not None for key in ('record_sha', 'request_sha', 'registered_sha')):
+                if (row['request_sha'] != adoption['request_sha256']
+                        or row['registered_sha'] != adoption['registered_sha256']
+                        or not isinstance(row['record_sha'], str) or re.fullmatch(r'[a-f0-9]{64}', row['record_sha']) is None):
+                    raise ValueError('Original feature seal invalid')
+                seal = {'record_sha256': row['record_sha'], 'request_sha256': row['request_sha'],
+                        'registered_sha256': row['registered_sha']}
+            return {'adoption': adoption, 'adoption_sha256': row['adoption_sha'], 'seal': seal}
+
+    def feature_binding(self, client, run):
+        """Read-only host port; a lookup never creates producer ownership."""
+        with self._feature_db() as db:
+            return self._feature_snapshot(db, client, run)
+
+    def seal_features(self, client, run, adoption_sha, registered_sha, record_sha):
+        """Called once by the trusted capture owner; no public seal endpoint."""
+        if not isinstance(record_sha, str) or re.fullmatch(r'[a-f0-9]{64}', record_sha) is None:
+            raise ValueError('Invalid captured record digest')
+        with self._feature_db(write=True) as db:
+            snapshot = self._feature_snapshot(db, client, run)
+            adoption = snapshot['adoption']
+            if (snapshot['adoption_sha256'] != adoption_sha or snapshot['seal'] is not None
+                    or adoption['registered_sha256'] != registered_sha):
+                raise ValueError('Original capture adoption or empty seal unavailable')
+            if not feature_budget_available():
+                raise ValueError('Feature compute deadline exceeded before seal')
+            changed = db.execute('UPDATE creation_feature_adoptions SET record_sha=?,request_sha=?,registered_sha=? '
+                'WHERE client=? AND run=? AND adoption_sha=? '
+                'AND record_sha IS NULL AND request_sha IS NULL AND registered_sha IS NULL',
+                (record_sha, adoption['request_sha256'], registered_sha, client, run, adoption_sha))
+            if changed.rowcount != 1:
+                raise ValueError('Original feature seal already consumed')
+        return True
 
     def binding(self, client, run):
         with self.db() as db:
@@ -265,7 +442,13 @@ class Store:
                   "wall_seconds", "known_api_usd", "complete_api_usd", "unknown_events", "path", "error_code",
                   "completed_status", "access_expired", "observation", "trace", "ingress",
                   "queue", "queue_state", "reason", "queue_seconds", "end_to_end_seconds",
-                  "cancellation_requested", "provider_cancellation_confirmed")
+                  "cancellation_requested", "provider_cancellation_confirmed", "task_features")
+        if 'task_features' in summary:
+            summary = dict(summary)
+            try:
+                summary['task_features'] = public_features(summary['task_features'])
+            except Exception:
+                summary['task_features'] = unavailable()
         with self.db() as db:
             previous = db.execute("SELECT data FROM tasks WHERE client=? AND run=?",
                                   (binding["client"], binding["run"])).fetchone()
@@ -283,7 +466,54 @@ class Store:
     def observation(self, client, run):
         with self.db() as db:
             row = db.execute("SELECT data FROM tasks WHERE client=? AND run=?", (client, run)).fetchone()
-            return json.loads(row["data"]) if row else None
+            return public_task(json.loads(row["data"])) if row else None
+
+    def retained_metadata(self, binding):
+        try:
+            with self._feature_db() as db:
+                row = db.execute('SELECT data FROM tasks WHERE client=? AND run=? '
+                    'AND length(CAST(data AS BLOB))<=1048576', (binding['client'], binding['run'])).fetchone()
+            value = retained_metadata(json.loads(row['data'])[RETAINED_FIELD], binding) if row else None
+            return value if value is not None and value['observed_at'] <= self.clock() else None
+        except Exception:
+            return None
+
+    def retained_pool(self, binding):
+        """Bounded nonwaiting configuration read for the auxiliary writer only."""
+        with self._feature_db() as db:
+            row = db.execute('SELECT data FROM pools WHERE id=? AND length(CAST(data AS BLOB))<=1048576',
+                              (binding['pool'],)).fetchone()
+        if row is None:
+            raise ValueError('Retained pool unavailable')
+        data = json.loads(row['data'])
+        if digest(data) != binding['pool']:
+            raise ValueError('Retained pool identity differs')
+        return {'id': binding['pool'], **data}
+
+    def retain_metadata(self, binding, value):
+        """One auxiliary attempt after the original public record has committed."""
+        try:
+            value = retained_metadata(value, binding)
+            if value['observed_at'] > self.clock():
+                return False
+            with self._feature_db(write=True) as db:
+                original = db.execute('SELECT * FROM bindings WHERE client=? AND run=?',
+                    (binding['client'], binding['run'])).fetchone()
+                if original is None or dict(original) != binding:
+                    return False
+                row = db.execute('SELECT data FROM tasks WHERE client=? AND run=? '
+                    'AND length(CAST(data AS BLOB))<=1048576', (binding['client'], binding['run'])).fetchone()
+                if row is None:
+                    return False
+                data = json.loads(row['data'])
+                data[RETAINED_FIELD] = value
+                db.execute('UPDATE tasks SET data=? WHERE client=? AND run=?',
+                    (encode(data), binding['client'], binding['run']))
+            return True
+        except Exception:
+            # SQLITE_FULL can abort this entire auxiliary transaction. The
+            # original public summary and previous envelope are already durable.
+            return False
 
     def record_version_use(self, binding):
         with self.db() as db:
@@ -308,7 +538,7 @@ class Store:
 
     def dashboard(self, client=None):
         with self.db() as db:
-            tasks = [json.loads(r["data"]) for r in db.execute("SELECT data FROM tasks")]
+            tasks = [public_task(json.loads(r["data"])) for r in db.execute("SELECT data FROM tasks")]
             clients = [dict(r) for r in db.execute("SELECT id,label,mode,enabled,last_seen FROM clients")]
             config = dict(db.execute("SELECT * FROM control").fetchone())
             audit = [dict(r) for r in db.execute("SELECT * FROM audit ORDER BY id DESC LIMIT 100")]

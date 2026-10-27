@@ -11,6 +11,7 @@ from cloudyfan_jev.engine import Core
 from cloudyfan_jev.http_api import TaskService
 from cloudyfan_jev.identity import IdentityStore
 from cloudyfan_jev.retention import RetentionPolicy
+from cloudyfan_jev.task_features import POLICY as FEATURE_POLICY
 from cloudyfan_jev.scores.backup_runtime import BackupCategoryCore
 
 from .app import App
@@ -20,6 +21,18 @@ from .store import MODES, Store
 
 ACCESS_SECONDS = 30 * 24 * 60 * 60
 ACCESS_POLICY = RetentionPolicy("monitor-task-access-30d-v1", ACCESS_SECONDS)
+
+
+@dataclass(frozen=True)
+class StoreFeatureBindingPort:
+    """Trusted host metadata only; no public capture or seal HTTP operation."""
+    store: Store
+
+    def snapshot(self, principal, run_id):
+        return self.store.feature_binding(principal, run_id)
+
+    def seal(self, principal, run_id, adoption_sha, registered_sha, record_sha):
+        return self.store.seal_features(principal, run_id, adoption_sha, registered_sha, record_sha)
 
 
 class RunBoundCore(Core):
@@ -91,7 +104,7 @@ class RunBoundCore(Core):
 def assemble_monitor(store, service, registry, identities, *, operator_token, source=None,
                      origin="http://127.0.0.1:8766", demo=False, labels=None, billing_source=None,
                      ollama_models=None, simulation=None, candidate_observer=None, task_observer=None,
-                     capacity_observer=None, capacity_controller=None, queue=None):
+                     capacity_observer=None, capacity_controller=None, queue=None, creation_features=None):
     """Consume an explicitly controlled host service; never create qualifications."""
     if (not isinstance(store, Store) or not isinstance(service, TaskService)
             or not isinstance(identities, IdentityStore)):
@@ -111,6 +124,14 @@ def assemble_monitor(store, service, registry, identities, *, operator_token, so
         store.register_principal(principal, (labels or {}).get(principal, principal))
     service.retention_protected_paths = tuple(set(service.retention_protected_paths)
                                                | {identities.path.resolve(), store.path.resolve()})
+    if creation_features is not None:
+        service.creation_features = {'policy_bundle': creation_features,
+                                     'binding_port': StoreFeatureBindingPort(store)}
+    elif service.creation_features is None:
+        # A reopened host can read independently sealed old observations with
+        # capture disabled. No policy is adopted for a new task by this reader.
+        service.creation_features = {'policy_bundle': FEATURE_POLICY,
+            'binding_port': StoreFeatureBindingPort(store), 'capture': False}
     if capacity_observer is not None:
         from .capacity import CapacityObserver
         if type(capacity_observer) is not CapacityObserver:

@@ -87,3 +87,14 @@ Core 在原新任務鎖內寫入獨占建立錨點、raw 目錄外的安全紀�
 `scripts/qa_task_features_desktop.cjs` 啟動自有 headed Chrome 1280×900 與真 HTTP fixture，保存 PNG、ARIA、原網路／console 與程序退出收據。所有模型、來源及對帳上游均為 MockTransport。
 
 實際 on/off 比對保存原 body、headers 與 session ID，不做正規化；隔離主機的契約私人保存路徑差異另列。原路由、分類次數、公開驗收與 Budget 金額仍各依原始證據核對。Focused 測試或畫面通過不等於完整套件驗收、實際模型資格、真實節費、部署或工作單結案。
+
+
+## #39 本機驗收完成 — 2026-10-28
+
+固定Core6c01bd7e／MonitorEFE8f11b的最終47focused（新增45＋原2）與真實headedChrome156／1280x900桌機3通過；44份含pairfixture的744個HTTP／upstream參照及桌機24response參照逐筆核對無缺口。原兩測試、第一tracer整檔與QA來源未改。
+
+修正後原Monitor完整472tests／26steps及sdist/wheel通過。原Core2069／8、兩個Mock示範與sdist/wheel只在Core429檔精確不變且無Monitor依賴的範圍沿用，不宣稱重跑新Core。兩軸獨立審查各0；正常整合Core087e29c8／Monitor20765124，原guard與quick4／24通過，597來源與已驗收候選一致。此文件收尾是Markdown-only，不是另一輪完整測試。
+
+原Monitorfull01的2failed／460passed與未跑build、各次故障及測試作者oracle失敗完整保留。full02實際checker成功後，外層封存曾errno5／exit1，原失敗路徑及原因未知；原收據未覆寫。另存恢復索引涵蓋26212regular／291symlinkmetadata、3806對native原件／副本，Root均已獨立回讀。詳細時間與SHA在本機CloudyFan的issue39收據；不將舊失敗改標成功。
+
+[工作單39](https://github.com/alexwang0315/cloudyfan-routing/issues/39)已結案。父規格30仍需40／41，整體20張子單目前完成6張；所有模型／供應商上游為MockTransport，沒有來源推送、部署、真實支出或節費／容量／SLO資格主張。

@@ -165,7 +165,7 @@ async function lifecycleMain() {
   const restartConsoleObserve=process.argv.includes('--restart-console-observe');
   const caseArguments=process.argv.filter(value=>value.startsWith('--restart-console-case='));
   const restartConsoleCase=caseArguments.length?caseArguments[0].slice('--restart-console-case='.length):'positive';
-  assert.ok(caseArguments.length<=1&&['positive','post','outside','forged'].includes(restartConsoleCase),
+  assert.ok(caseArguments.length<=1&&['positive','post','outside','forged','candidate-query','query-invalid'].includes(restartConsoleCase),
     'Unknown private stopped-service diagnostic case');
   assert.ok(!caseArguments.length||restartConsoleObserve,'Private cases require the observation diagnostic');
   assert.ok(!restartConsoleObserve||process.argv.includes('--focused-restart'),
@@ -380,7 +380,7 @@ async function lifecycleMain() {
     page.on('console',recordConsole);
     page.on('response',response=>report.http_responses.push({method:response.request().method(),path:new URL(response.url()).pathname,status:response.status()}));
     const {observeBrowserConsole}=require('./qa_capacity_resilience_console.cjs');
-    browserObservation=await observeBrowserConsole({page,output,origin:ready.origin,
+    browserObservation=await observeBrowserConsole({page,output,origin:ready.origin,category:ready.category,
       step:()=>currentStep,boot:()=>boot});
     browserObservation.ready({pid:ready.pid,initial:true});
     await page.goto(ready.origin);await page.locator('#environment').filter({hasText:/模擬/}).waitFor();
@@ -1002,6 +1002,11 @@ async function lifecycleMain() {
     });
     await step('intentional_unreleased_exit_and_new_PID_read_same_original_stores_without_retry',async()=>{
       const before=await inspect();assert.equal(before.model_response_held,true);assert.equal(before.worker_running_count,1);
+      const candidateQueryCase=restartConsoleObserve&&['candidate-query','query-invalid'].includes(restartConsoleCase);
+      const candidatePrior=candidateQueryCase?
+        browserObservation.completedCandidateQuery():null;
+      if(candidateQueryCase)
+        assert.ok(candidatePrior,'No completed same-run validated candidate query with passive prior200 evidence');
       requireLiveHold();
       const oldReady=ready;fixture.send({command:'planned_crash'});const crash=await fixture.next();assert.equal(crash.type,'planned_crash');
       browserObservation.plannedAck({expectedOldPid:oldReady.pid,pid:crash.pid,intentionalExit:crash.intentional_exit});
@@ -1011,7 +1016,35 @@ async function lifecycleMain() {
       liveHoldStarted=null;
       const exited=await fixture.stop();report.boots[0].exit=exited;assert.equal(exited.code,86);assert.equal(exited.cleanup_failed,false);
       browserObservation.oldExit(exited);fixture=null;
-      if(restartConsoleObserve&&restartConsoleCase!=='outside'){
+      if(candidateQueryCase){
+        let candidateURI=candidatePrior.uri;
+        if(restartConsoleCase==='query-invalid'){
+          const invalidQuery=new URL(candidateURI);invalidQuery.searchParams.append('diagnostic_extra','synthetic');
+          candidateURI=invalidQuery.href;
+        }
+        const result=await page.evaluate(async({token,uri})=>{
+          try{
+            const response=await fetch(uri,{method:'GET',headers:{Authorization:'Bearer '+token}});
+            return {kind:'response',status:response.status};
+          }catch{return {kind:'transport_failed'};}
+        },{token:ready.operator_token,uri:candidateURI});
+        if(restartConsoleCase==='query-invalid'){
+          browserObservation.diagnosticInvalidCandidateRead({...result,prior_request_id:candidatePrior.prior_request_id});
+          report.restart_invalid_candidate_query_diagnostic={...result,method:'GET',path:'/monitor/pools',
+            schema:'monitor-pools-query-v1',valid:false,reason:'invalid_exact_query_keys',
+            prior_request_id:candidatePrior.prior_request_id};
+        }else{
+          browserObservation.diagnosticCandidateRead({...result,ref:candidatePrior.candidate_query_ref_sha256,
+            prior_request_id:candidatePrior.prior_request_id});
+          report.restart_candidate_query_diagnostic={...result,method:'GET',path:'/monitor/pools',
+            schema:candidatePrior.candidate_query_schema,valid:candidatePrior.candidate_query_valid,
+            ref_sha256:candidatePrior.candidate_query_ref_sha256,prior_request_id:candidatePrior.prior_request_id,
+            prior_sequence:candidatePrior.prior_sequence,prior_start_sequence:candidatePrior.prior_start_sequence,
+            prior_response_sequence:candidatePrior.prior_response_sequence,
+            prior_loading_finished_sequence:candidatePrior.prior_loading_finished_sequence};
+        }
+        assert.equal(result.kind,'transport_failed');
+      }else if(restartConsoleObserve&&restartConsoleCase!=='outside'){
         const observationMethod=restartConsoleCase==='post'?'POST':'GET';
         const result=await page.evaluate(async({token,method})=>{
           try{

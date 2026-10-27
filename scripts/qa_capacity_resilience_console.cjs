@@ -2,6 +2,7 @@
 // Private bounded evidence and a strict verdict for directly verified planned-outage reads.
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const {createHash}=require('node:crypto');
 
 function consoleVerdict(events, observation, rawConsole) {
   const httpStatus=/^Failed to load resource: the server responded with a status of (401|403|404|409|410|429|503) \(/;
@@ -9,6 +10,12 @@ function consoleVerdict(events, observation, rawConsole) {
   const safe=row=>row?.same_fixture_origin===true&&
     ['/monitor/snapshot','/monitor/queue','/monitor/capacity'].includes(row.path)&&
     row.query_present===false&&row.fragment_present===false&&row.userinfo_present===false;
+  const safePools=row=>row?.same_fixture_origin===true&&row.path==='/monitor/pools'&&
+    row.query_present===true&&row.fragment_present===false&&row.userinfo_present===false&&
+    row.candidate_query_schema==='monitor-pools-query-v1'&&row.candidate_query_valid===true&&
+    typeof row.candidate_query_ref_sha256==='string'&&/^[0-9a-f]{64}$/.test(row.candidate_query_ref_sha256);
+  const sameProjection=(left,right)=>(safe(left)&&safe(right)&&left.path===right.path)||
+    (safePools(left)&&safePools(right)&&left.candidate_query_ref_sha256===right.candidate_query_ref_sha256);
   const rejected=[],accepted=[],originalHttp=[];
   const reject=(source,reason,fields={})=>rejected.push({source,reason,...fields});
   const rows=type=>events.filter(row=>row.type===type);
@@ -26,6 +33,32 @@ function consoleVerdict(events, observation, rawConsole) {
     window.end_ms>window.start_ms&&window.end_ms-window.start_ms<=window.maximum_ms;
   const inside=row=>windowValid&&row.at_ms>=window.start_ms&&row.at_ms<window.end_ms&&
     row.sequence>window.ack_sequence&&row.sequence<window.ready_sequence&&row.step===ack[0].step;
+  const prior200=start=>{
+    const markers=rows('candidate_query_prior_200').filter(row=>
+      row.candidate_query_ref_sha256===start.candidate_query_ref_sha256&&row.sequence<ack[0].sequence);
+    const selected=markers.sort((a,b)=>b.sequence-a.sequence)[0];
+    if(!selected)return null;
+    const initial=rows('initial_ready');
+    const id=selected.request_id,starts=rows('cdp_request_start').filter(row=>row.request_id===id),
+      responses=rows('cdp_response').filter(row=>row.request_id===id),
+      finished=rows('cdp_loading_finished').filter(row=>row.request_id===id),
+      failed=rows('cdp_loading_failed').filter(row=>row.request_id===id);
+    if(id===null||id===start.request_id||starts.length!==1||responses.length!==1||finished.length!==1||failed.length||
+      rows('candidate_query_prior_200').filter(row=>row.request_id===id).length!==1||
+      initial.length!==1||initial[0].pid!==ack[0].pid||initial[0].boot!==ack[0].boot||
+      selected.boot!==ack[0].boot||selected.candidate_query_schema!=='monitor-pools-query-v1'||
+      selected.candidate_query_valid!==true||!safePools(starts[0])||starts[0].method!=='GET'||
+      starts[0].candidate_query_ref_sha256!==start.candidate_query_ref_sha256||
+      starts[0].request_id_reused||starts[0].redirect_present||responses[0].status!==200||
+      ![starts[0],responses[0],finished[0]].every(row=>row.boot===ack[0].boot&&row.at_ms<ack[0].at_ms)||
+      selected.at_ms>=ack[0].at_ms||
+      !(starts[0].sequence<responses[0].sequence&&responses[0].sequence<finished[0].sequence&&
+        finished[0].sequence<selected.sequence)||
+      selected.start_sequence!==starts[0].sequence||selected.response_sequence!==responses[0].sequence||
+      selected.loading_finished_sequence!==finished[0].sequence)return null;
+    return {request_id:id,start_sequence:starts[0].sequence,response_sequence:responses[0].sequence,
+      loading_finished_sequence:finished[0].sequence,prior_marker_sequence:selected.sequence};
+  };
   if(!observation.complete)reject('observation','incomplete_telemetry');
   const consoles=rows('playwright_console');
   if(consoles.length!==rawConsole.length)reject('observation','raw_console_count_mismatch');
@@ -36,21 +69,23 @@ function consoleVerdict(events, observation, rawConsole) {
     const id=log.request_id,starts=rows('cdp_request_start').filter(row=>row.request_id===id),
       failed=rows('cdp_loading_failed').filter(row=>row.request_id===id),
       logs=networkLogs.filter(row=>row.request_id===id);
-    let reason;
+    let reason,prior=null;
     if(!windowValid)reason='unverified_planned_outage';
     else if(id===null||log.request_id_missing)reason='missing_direct_request_id';
     else if(starts.length!==1||failed.length!==1||logs.length!==1)reason='missing_or_ambiguous_direct_chain';
     else if(log.source!=='network'||!codes.includes(log.error_code)||failed[0].error_code!==log.error_code)
       reason='unapproved_network_error';
-    else if(!safe(starts[0])||!safe(log)||starts[0].path!==log.path)reason='unsafe_observation_url';
+    else if(!sameProjection(starts[0],log))reason='unsafe_observation_url';
     else if(starts[0].method!=='GET')reason='observation_method_not_GET';
     else if(starts[0].request_id_reused||starts[0].redirect_present)reason='reused_or_redirected_request_id';
     else if(failed[0].canceled||failed[0].blocked)reason='canceled_or_blocked_request';
     else if(starts[0].sequence>=failed[0].sequence||starts[0].sequence>=log.sequence)
       reason='invalid_request_event_order';
     else if(!inside(failed[0])||!inside(log))reason='failure_outside_verified_window';
+    else if(safePools(starts[0])&&!(prior=prior200(starts[0])))reason='unverified_candidate_query_prior200';
     if(reason)reject('cdp_network_log',reason,{request_id:id,sequence:log.sequence});
-    else candidates.push({id,path:log.path,error_code:log.error_code,start:starts[0],failure:failed[0],log});
+    else candidates.push({id,path:log.path,error_code:log.error_code,start:starts[0],failure:failed[0],log,prior,
+      ...(safePools(starts[0])?{candidate_query_ref_sha256:starts[0].candidate_query_ref_sha256}:{})});
   }
   for(const failed of rows('cdp_loading_failed').filter(row=>codes.includes(row.error_code))){
     if(!networkLogs.some(log=>log.request_id!==null&&log.request_id===failed.request_id))
@@ -68,12 +103,12 @@ function consoleVerdict(events, observation, rawConsole) {
     if(!row||row.message_kind!=='network'||!codes.includes(row.error_code)||
       value!=='Failed to load resource: '+row.error_code)reason='unapproved_console_error';
     else if(row.argument_count!==0)reason='console_API_arguments_not_network_log';
-    else if(!safe(row))reason='unsafe_console_location';
+    else if(!safe(row)&&!safePools(row))reason='unsafe_console_location';
     else if(!inside(row))reason='console_outside_verified_window';
     if(reason)reject('playwright_console',reason,{console_index:i,sequence:row?.sequence});
     else eligibleConsole.push({index:i,row});
   }
-  const signature=row=>row.error_code+'|'+row.path;
+  const signature=row=>row.error_code+'|'+row.path+'|'+(row.candidate_query_ref_sha256||'');
   for(const candidate of candidates){
     const peers=candidates.filter(row=>signature(row)===signature(candidate));
     const matches=eligibleConsole.filter(row=>signature(row.row)===signature(candidate));
@@ -84,7 +119,9 @@ function consoleVerdict(events, observation, rawConsole) {
     accepted.push({console_index:matches[0].index,request_id:candidate.id,path:candidate.path,
       error_code:candidate.error_code,start_sequence:candidate.start.sequence,
       failure_sequence:candidate.failure.sequence,network_log_sequence:candidate.log.sequence,
-      console_sequence:matches[0].row.sequence});
+      console_sequence:matches[0].row.sequence,
+      ...(candidate.prior?{candidate_query_schema:'monitor-pools-query-v1',
+        candidate_query_ref_sha256:candidate.candidate_query_ref_sha256,prior200:candidate.prior}:{})});
   }
   for(const value of eligibleConsole){
     if(!accepted.some(row=>row.console_index===value.index))
@@ -96,12 +133,13 @@ function consoleVerdict(events, observation, rawConsole) {
     scope:'Only directly evidenced observation failures within this planned outage; no retrospective cause or SLO'};
 }
 
-async function observeBrowserConsole({page, output, origin, step, boot}) {
+async function observeBrowserConsole({page, output, origin, category, step, boot}) {
   const filename='actual-browser-console-observations.jsonl';
   const file=await fs.open(path.join(output,filename),'wx',0o600);
   const started=performance.now(),limits={maximum_events:4096,maximum_bytes:1048576,
     maximum_pending_requests:128,ack_to_ready_maximum_ms:20000};
-  const pending=new Map(),seen=new Set();
+  const pending=new Map(),seen=new Set(),candidatePending=new Map();
+  let completedCandidate=null;
   let count=0,bytes=0,writes=Promise.resolve(),problem=null,stopping=false,window=null,finished;
   const now=()=>performance.now()-started;
   const fail=kind=>{problem ||= kind;};
@@ -114,13 +152,32 @@ async function observeBrowserConsole({page, output, origin, step, boot}) {
     return http?{message_kind:'http',status:Number(http[1])}:{message_kind:'unrecognized'};
   };
   const url=raw=>{
+    if(typeof raw!=='string'||raw.length>2048)
+      return {same_fixture_origin:false,path:'unknown',url_invalid:true};
     try {
       const value=new URL(raw);
-      const safe=['/monitor/snapshot','/monitor/queue','/monitor/capacity'];
-      return {same_fixture_origin:value.origin===origin,
+      const safe=['/monitor/snapshot','/monitor/queue','/monitor/capacity','/monitor/pools'];
+      const result={same_fixture_origin:value.origin===origin,
         path:safe.includes(value.pathname)?value.pathname:'other',
         query_present:value.search!=='',fragment_present:value.hash!=='',
         userinfo_present:value.username!==''||value.password!==''};
+      if(value.pathname==='/monitor/pools'){
+        const schema='monitor-pools-query-v1',keys=[...value.searchParams.keys()];
+        const exactKeys=keys.length===3&&['id','category','mode'].every(key=>
+          value.searchParams.getAll(key).length===1&&value.searchParams.get(key)!=='');
+        let reason;
+        if(!result.same_fixture_origin||result.fragment_present||result.userinfo_present)reason='unsafe_origin_or_location';
+        else if(!exactKeys)reason='invalid_exact_query_keys';
+        else if(!/^[0-9a-f]{64}$/.test(value.searchParams.get('id')))reason='invalid_candidate_identifier';
+        else if(typeof category!=='string'||value.searchParams.get('category')!==category)reason='candidate_category_not_fixture';
+        else if(!['cloudyfan','fixed_high','low_first','open_source_first'].includes(value.searchParams.get('mode')))
+          reason='invalid_candidate_mode';
+        result.candidate_query_schema=schema;result.candidate_query_valid=reason===undefined;
+        if(reason)result.candidate_query_reason=reason;
+        else result.candidate_query_ref_sha256=createHash('sha256').update(JSON.stringify([
+          schema,value.searchParams.get('id'),category,value.searchParams.get('mode')])).digest('hex');
+      }
+      return result;
     } catch {return {same_fixture_origin:false,path:'unknown',url_invalid:true};}
   };
   const method=value=>['GET','POST'].includes(value)?value:'OTHER';
@@ -131,6 +188,7 @@ async function observeBrowserConsole({page, output, origin, step, boot}) {
     if(count>=limits.maximum_events||bytes+size>limits.maximum_bytes){fail('observation_bound_reached');return;}
     count++;bytes+=size;
     writes=writes.then(()=>file.writeFile(line)).catch(()=>fail('observation_write_failed'));
+    return row;
   };
   let session;
   const consoleEvent=item=>{
@@ -145,12 +203,19 @@ async function observeBrowserConsole({page, output, origin, step, boot}) {
       if(stopping||problem)return;
       const id=requestId(event.requestId),projection={...url(event.request.url),method:method(event.request.method)};
       const reused=id!==null&&seen.has(id);
+      if(reused&&completedCandidate?.request_id===id)completedCandidate=null;
       if(id!==null){
         seen.add(id);pending.set(id,projection);
         if(pending.size>limits.maximum_pending_requests){fail('pending_request_bound_reached');return;}
       }
-      record('cdp_request_start',{request_id:id,request_id_missing:id===null,
+      const recorded=record('cdp_request_start',{request_id:id,request_id_missing:id===null,
         request_id_reused:reused,redirect_present:event.redirectResponse!==undefined,...projection});
+      candidatePending.delete(id);
+      if(recorded&&id!==null&&projection.method==='GET'&&projection.candidate_query_valid&&
+        !reused&&event.redirectResponse===undefined){
+        candidatePending.set(id,{uri:event.request.url,ref:projection.candidate_query_ref_sha256,
+          start_sequence:recorded.sequence,start_at_ms:recorded.at_ms,response_sequence:null,status:null});
+      }
     });
     session.on('Network.loadingFailed',event=>{
       const id=requestId(event.requestId);
@@ -158,16 +223,30 @@ async function observeBrowserConsole({page, output, origin, step, boot}) {
         error_code:errorCode(event.errorText),canceled:event.canceled===true,
         blocked:event.blockedReason!==undefined||event.corsErrorStatus!==undefined});
       if(id!==null)pending.delete(id);
+      candidatePending.delete(id);
     });
     session.on('Network.loadingFinished',event=>{
       const id=requestId(event.requestId);
-      record('cdp_loading_finished',{request_id:id,request_id_missing:id===null});
+      const recorded=record('cdp_loading_finished',{request_id:id,request_id_missing:id===null});
+      const candidate=candidatePending.get(id);
+      if(recorded&&candidate?.status===200&&candidate.response_sequence>candidate.start_sequence&&
+        recorded.sequence>candidate.response_sequence){
+        const prior=record('candidate_query_prior_200',{request_id:id,candidate_query_schema:'monitor-pools-query-v1',
+          candidate_query_valid:true,candidate_query_ref_sha256:candidate.ref,
+          start_sequence:candidate.start_sequence,response_sequence:candidate.response_sequence,
+          loading_finished_sequence:recorded.sequence});
+        if(prior)completedCandidate={...candidate,request_id:id,prior_sequence:prior.sequence,
+          loading_finished_sequence:recorded.sequence};
+      }
       if(id!==null)pending.delete(id);
+      candidatePending.delete(id);
     });
     session.on('Network.responseReceived',event=>{
       const id=requestId(event.requestId),projection=pending.get(id);
       const status=Number.isInteger(event.response.status)?event.response.status:null;
-      record('cdp_response',{request_id:id,request_id_missing:id===null,status});
+      const recorded=record('cdp_response',{request_id:id,request_id_missing:id===null,status});
+      const candidate=candidatePending.get(id);
+      if(candidate&&recorded){candidate.status=status;candidate.response_sequence=recorded.sequence;}
       if(window?.old_exit_valid&&window.first_response_after_exit_at_ms===null&&projection?.same_fixture_origin){
         window.first_response_after_exit_at_ms=now();
         record('first_same_origin_response_after_old_exit',{request_id:id,status});
@@ -218,9 +297,27 @@ async function observeBrowserConsole({page, output, origin, step, boot}) {
     diagnosticRead(value) {record('diagnostic_stopped_service_observation',{path:'/monitor/queue',method:method(value.method),
       kind:['response','transport_failed'].includes(value.kind)?value.kind:'other',
       ...(Number.isInteger(value.status)?{status:value.status}:{})});},
+    completedCandidateQuery() {
+      return !problem&&completedCandidate?{uri:completedCandidate.uri,candidate_query_schema:'monitor-pools-query-v1',
+        candidate_query_valid:true,candidate_query_ref_sha256:completedCandidate.ref,
+        prior_request_id:completedCandidate.request_id,prior_sequence:completedCandidate.prior_sequence,
+        prior_start_sequence:completedCandidate.start_sequence,prior_response_sequence:completedCandidate.response_sequence,
+        prior_loading_finished_sequence:completedCandidate.loading_finished_sequence}:null;
+    },
+    diagnosticCandidateRead(value) {record('diagnostic_stopped_candidate_query',{path:'/monitor/pools',method:'GET',
+      candidate_query_schema:'monitor-pools-query-v1',candidate_query_valid:true,
+      candidate_query_ref_sha256:value.ref,prior_request_id:value.prior_request_id,
+      kind:['response','transport_failed'].includes(value.kind)?value.kind:'other',
+      ...(Number.isInteger(value.status)?{status:value.status}:{})});},
+    diagnosticInvalidCandidateRead(value) {record('diagnostic_stopped_invalid_candidate_query',{path:'/monitor/pools',method:'GET',
+      candidate_query_schema:'monitor-pools-query-v1',candidate_query_valid:false,
+      candidate_query_reason:'invalid_exact_query_keys',prior_request_id:value.prior_request_id,
+      kind:['response','transport_failed'].includes(value.kind)?value.kind:'other',
+      ...(Number.isInteger(value.status)?{status:value.status}:{})});},
     finish() {
       if(finished)return finished;
       record('observation_ended');stopping=true;
+      candidatePending.clear();completedCandidate=null;
       page.off('console',consoleEvent);page.off('requestfailed',failedEvent);
       finished=(async()=>{
         await session.detach().catch(()=>fail('cdp_detach_failed'));

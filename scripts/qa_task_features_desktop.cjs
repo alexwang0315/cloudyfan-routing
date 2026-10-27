@@ -8,6 +8,7 @@ const fs=require('node:fs/promises');
 const path=require('node:path');
 const assert=require('node:assert/strict');
 const {execFileSync}=require('node:child_process');
+const {createHash}=require('node:crypto');
 const ROOT=path.resolve(__dirname,'..'),CORE=process.env.CLOUDYFAN_CORE_ROOT,OUT=path.resolve(process.argv[2]);
 let fixture,browser,page,origin,baseline;
 const report={scope:'Focused39 only; real headed Chrome1280x900 + HTTP, MockTransport upstreams',
@@ -18,6 +19,25 @@ async function snap(name){await page.screenshot({path:path.join(OUT,name+'.png')
 async function command(value){fixture.send({command:value});return fixture.next();}
 function childPids(){const rows=execFileSync('/bin/ps',['-axo','pid=,ppid=,comm='],{encoding:'utf8'}).trim().split('\n').map(line=>line.trim().split(/\s+/));
   const ids=new Set([process.pid]);let changed=true;while(changed){changed=false;for(const row of rows){if(ids.has(Number(row[1]))&&!ids.has(Number(row[0]))){ids.add(Number(row[0]));changed=true;}}}return [...ids].filter(id=>id!==process.pid);}
+async function verifyHTTPReferences(){
+  const receipt=JSON.parse(await fs.readFile(path.join(OUT,'fixture-receipt.json'),'utf8'));
+  assert.equal(receipt.artifact_verification?.status,'verified','artifact_fixture_oracle_failed');
+  const names=new Set(),sequences=[];
+  for(const row of receipt.http_responses){
+    assert.ok(Number.isSafeInteger(row.sequence)&&row.sequence>0,'artifact_sequence_invalid');sequences.push(row.sequence);
+    assert.equal(path.basename(row.response_body),row.response_body,'artifact_reference_path_invalid');
+    assert.ok(!names.has(row.response_body),'artifact_filename_duplicate');names.add(row.response_body);
+    const target=path.join(OUT,row.response_body),info=await fs.lstat(target);
+    assert.ok(info.isFile()&&!info.isSymbolicLink()&&info.nlink===1&&(info.mode&0o077)===0,'artifact_file_not_private_regular');
+    const body=await fs.readFile(target);
+    assert.equal(body.length,row.response_bytes,'artifact_reference_size_mismatch');
+    assert.equal(createHash('sha256').update(body).digest('hex'),row.response_sha256,'artifact_reference_sha_mismatch');
+    assert.ok(body.length>0||row.method==='HEAD'||[204,304].includes(row.status),'artifact_response_body_empty');
+  }
+  sequences.sort((a,b)=>a-b);assert.deepEqual(sequences,sequences.map((unused,index)=>index+1),'artifact_sequence_gap_or_duplicate');
+  return {status:'verified',checked_response_references:names.size,unique_filenames:names.size,
+    ordering:'recorder_reservation_only_not_native_http_order',fixture:receipt.artifact_verification};
+}
 async function main(){
   process.umask(0o077);assert.ok(CORE,'Explicit approved Core required');await fs.mkdir(OUT,{recursive:false,mode:0o700});
   fixture=startFixture(path.join(CORE,'.venv/bin/python'),[path.join(ROOT,'scripts/qa_task_features_http.py'),'--output',OUT],{
@@ -70,6 +90,8 @@ main().catch(async error=>{report.passed=false;report.failure={name:error.name,m
 }).finally(async()=>{
   if(browser)await browser.close().catch(()=>{report.passed=false;process.exitCode=1;});
   if(fixture){report.fixture_exit=await fixture.stop();if(report.fixture_exit.code!==0||report.fixture_exit.timed_out||report.fixture_exit.stderr_present){report.passed=false;process.exitCode=1;}}
+  try{report.http_reference_verification=await verifyHTTPReferences();}
+  catch{report.http_reference_verification={status:'failed',code:'artifact_reference_integrity_failed'};report.passed=false;process.exitCode=1;}
   report.owned_child_pids_exited=(report.owned_child_pids||[]).map(pid=>{let exited=false;try{process.kill(pid,0);}catch(error){exited=error.code==='ESRCH';}return{pid,exited};});
   if(report.owned_child_pids_exited.some(row=>!row.exited)){report.passed=false;process.exitCode=1;}
   report.finished_at=new Date().toISOString();await save();console.log(JSON.stringify({passed:report.passed,report:path.join(OUT,'desktop-report.json')}));

@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import platform
 import sqlite3
+import stat
 import threading
 from types import MappingProxyType
 
@@ -39,6 +40,86 @@ def _sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+class ArtifactRecorder:
+    """Unique reservation order, exclusive files, then published reference rows."""
+    references = {'request_body': ('request_sha256', 'request_bytes'),
+                  'response_body': ('response_sha256', 'response_bytes'),
+                  'body': ('body_sha256', 'body_bytes'), 'headers': ('headers_sha256', 'headers_bytes')}
+
+    def __init__(self, directory, prefix='http'):
+        self.directory, self.prefix = Path(directory), prefix
+        self.rows, self.errors, self.next_sequence = [], [], 0
+        self.lock = threading.Lock()
+
+    def capture(self, metadata, parts):
+        with self.lock:
+            self.next_sequence += 1
+            sequence = self.next_sequence
+        row = {'sequence': sequence, **metadata}
+        try:
+            for field_name, body in parts.items():
+                sha_name, bytes_name = self.references[field_name]
+                label = field_name.removesuffix('_body')
+                filename = f'{self.prefix}-{sequence:06d}-{label}.bin'
+                row.update({field_name: filename, sha_name: hashlib.sha256(body).hexdigest(), bytes_name: len(body)})
+                descriptor = os.open(self.directory / filename,
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+                with os.fdopen(descriptor, 'wb') as stream:
+                    if stream.write(body) != len(body):
+                        raise OSError('artifact_short_write')
+                    stream.flush()
+                    os.fsync(stream.fileno())
+        except Exception:
+            row['artifact_error'] = 'artifact_exclusive_write_failed'
+            with self.lock:
+                self.errors.append({'sequence': sequence, 'code': row['artifact_error']})
+                self.rows.append(row)
+            raise AssertionError('artifact_capture_failed') from None
+        with self.lock:
+            self.rows.append(row)
+        return row
+
+    def verify(self):
+        with self.lock:
+            rows, errors, reserved = list(self.rows), list(self.errors), self.next_sequence
+        sequences = [row['sequence'] for row in rows]
+        if sorted(sequences) != list(range(1, reserved + 1)):
+            errors.append({'code': 'artifact_sequence_incomplete_or_duplicate'})
+        names, checked, zero_bytes = set(), 0, 0
+        for row in rows:
+            fields = [name for name in self.references if name in row]
+            if not fields:
+                errors.append({'sequence': row['sequence'], 'code': 'artifact_reference_missing'})
+            for name in fields:
+                filename, (sha_name, bytes_name) = row[name], self.references[name]
+                if filename in names:
+                    errors.append({'sequence': row['sequence'], 'code': 'artifact_filename_duplicate'})
+                names.add(filename)
+                try:
+                    if Path(filename).name != filename:
+                        raise ValueError('artifact_path_invalid')
+                    path = self.directory / filename
+                    info = path.lstat()
+                    if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                            or stat.S_IMODE(info.st_mode) & 0o077):
+                        raise ValueError('artifact_file_not_private_regular')
+                    body = path.read_bytes()
+                    if len(body) != row[bytes_name] or hashlib.sha256(body).hexdigest() != row[sha_name]:
+                        raise ValueError('artifact_reference_bytes_or_sha_mismatch')
+                    if not body:
+                        zero_bytes += 1
+                        if name == 'response_body' and row.get('method') != 'HEAD' and row.get('status') not in (204, 304):
+                            raise ValueError('artifact_response_body_empty')
+                    checked += 1
+                except Exception:
+                    errors.append({'sequence': row['sequence'], 'reference': name,
+                                   'code': 'artifact_reference_verification_failed'})
+        return {'schema_version': 'http-artifact-references-v1', 'status': 'verified' if not errors else 'failed',
+                'ordering': 'recorder_reservation_only_not_native_http_order', 'reserved_sequences': reserved,
+                'published_rows': len(rows), 'unique_filenames': len(names), 'checked_references': checked,
+                'zero_byte_references': zero_bytes, 'errors': errors}
+
+
 @dataclass(frozen=True)
 class StoreFeatureBindingPort:
     """Proposed PUBLIC host port: lazily call the real Store, never fabricate features.
@@ -66,6 +147,19 @@ class TaskFeaturesHTTP:
     evidence: dict
     clients: dict = field(default_factory=dict)
     server: object = None
+    wire_recorder: object = None
+    http_recorder: object = field(default=None, repr=False)
+
+    def __post_init__(self):
+        self.http_recorder = ArtifactRecorder(self.artifacts)
+        self.evidence['http_responses'] = self.http_recorder.rows
+
+    def verify_artifacts(self):
+        reports = {'http': self.http_recorder.verify()}
+        if self.wire_recorder is not None:
+            reports['upstream'] = self.wire_recorder.verify()
+        return {'status': 'verified' if all(row['status'] == 'verified' for row in reports.values()) else 'failed',
+                'recorders': reports}
 
     def dispatch(self):
         self.evidence['worker_dispatch_called'] = True
@@ -91,24 +185,13 @@ class TaskFeaturesHTTP:
 
             def record(response):
                 response.read()
-                number = len(self.evidence["http_responses"]) + 1
-                request_path = self.artifacts / f"http-{number:02d}-request.bin"
-                response_path = self.artifacts / f"http-{number:02d}-response.bin"
-                request_path.write_bytes(response.request.content)
-                response_path.write_bytes(response.content)
-                request_path.chmod(0o600)
-                response_path.chmod(0o600)
-                self.evidence["http_responses"].append({
+                self.http_recorder.capture({
                     "method": response.request.method,
                     "path": response.request.url.path,
                     "port": response.request.url.port,
                     "status": response.status_code,
-                    "request_body": request_path.name,
-                    "request_sha256": _sha(request_path),
-                    "response_body": response_path.name,
-                    "response_sha256": _sha(response_path),
                     "authorization_recorded": False,
-                })
+                }, {'request_body': response.request.content, 'response_body': response.content})
 
             self.clients[principal] = self.stack.enter_context(httpx.Client(
                 base_url=self.origin, trust_env=False, timeout=5,
@@ -174,13 +257,11 @@ def task_features_http(tmp_path, loopback_network, request):
         loopback_network.ports.add(server.server_port)
         origin = f"http://127.0.0.1:{server.server_port}"
         clock = Clock(datetime.fromisoformat("2026-10-21T00:00:00+00:00").timestamp())
+        wire_recorder = ArtifactRecorder(artifacts, 'upstream')
+        evidence['upstream_wire'] = wire_recorder.rows
         def record_model(wire):
-            number = len(evidence['upstream_wire']) + 1
-            body, headers = artifacts / f'upstream-{number:02d}-body.bin', artifacts / f'upstream-{number:02d}-headers.bin'
-            body.write_bytes(wire.content)
-            headers.write_bytes(b'\r\n'.join(key + b': ' + value for key, value in wire.headers.raw))
-            evidence['upstream_wire'].append({'method': wire.method, 'url': str(wire.url),
-                'body': body.name, 'body_sha256': _sha(body), 'headers': headers.name, 'headers_sha256': _sha(headers)})
+            wire_recorder.capture({'method': wire.method, 'url': str(wire.url)},
+                {'body': wire.content, 'headers': b'\r\n'.join(key + b': ' + value for key, value in wire.headers.raw)})
         controlled = build_resilience_health_host(artifacts / "service", clock=clock,
                                                  origin=origin, held_timeout_seconds=600, before_response=record_model)
         def close_fixture():
@@ -198,7 +279,7 @@ def task_features_http(tmp_path, loopback_network, request):
             "binding_port": StoreFeatureBindingPort(controlled.app.store),
         }
         server.set_app(controlled.app)
-        tracer = TaskFeaturesHTTP(controlled, origin, clock, stack, artifacts, evidence)
+        tracer = TaskFeaturesHTTP(controlled, origin, clock, stack, artifacts, evidence, wire_recorder=wire_recorder)
         tracer.server = server
         evidence["before"] = tracer.snapshot("before-http")
         thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": .01},
@@ -229,6 +310,7 @@ def task_features_http(tmp_path, loopback_network, request):
                 "worker_dispatch_called": evidence.get('worker_dispatch_called', False),
                 "fixture_close_completed": evidence.get("fixture_close_returned", False),
             }
+            evidence['artifact_verification'] = tracer.verify_artifacts() if tracer is not None else {'status': 'not_started'}
             _save(artifacts / "fixture-receipt.json", evidence)
             _save(evidence_root / (request.node.name + ".json"), {
                 "schema_version": 1, "test": request.node.name,
@@ -239,9 +321,11 @@ def task_features_http(tmp_path, loopback_network, request):
                 "blocked_socket_attempts": evidence["blocked_socket_attempts"],
                 "mock_upstream_call_count": len(controlled.requests) if controlled is not None else None,
                 "cleanup": evidence["cleanup"],
+                'artifact_verification': evidence['artifact_verification'],
             })
         assert thread is None or not thread.is_alive(), "Owned HTTP server thread did not exit"
         assert not loopback_network.blocked, "A connection escaped the test loopback allowlist"
+        assert evidence['artifact_verification']['status'] == 'verified', 'artifact_reference_integrity_failed'
 
 
 @pytest.fixture
@@ -257,13 +341,11 @@ def task_features_pair(task_features_http, loopback_network):
     loopback_network.ports.add(server.server_port)
     origin = f'http://127.0.0.1:{server.server_port}'
     clock = Clock(first.clock.now)
+    wire_recorder = ArtifactRecorder(artifacts, 'upstream')
+    evidence['upstream_wire'] = wire_recorder.rows
     def record_model(wire):
-        number = len(evidence['upstream_wire']) + 1
-        body, headers = artifacts / f'upstream-{number:02d}-body.bin', artifacts / f'upstream-{number:02d}-headers.bin'
-        body.write_bytes(wire.content)
-        headers.write_bytes(b'\r\n'.join(key + b': ' + value for key, value in wire.headers.raw))
-        evidence['upstream_wire'].append({'method': wire.method, 'url': str(wire.url),
-            'body': body.name, 'body_sha256': _sha(body), 'headers': headers.name, 'headers_sha256': _sha(headers)})
+        wire_recorder.capture({'method': wire.method, 'url': str(wire.url)},
+            {'body': wire.content, 'headers': b'\r\n'.join(key + b': ' + value for key, value in wire.headers.raw)})
     controlled = build_resilience_health_host(artifacts / 'service', clock=clock, origin=origin,
                                              held_timeout_seconds=600, before_response=record_model)
     stack.callback(controlled.close)
@@ -272,7 +354,7 @@ def task_features_pair(task_features_http, loopback_network):
     thread.start()
     stack.callback(thread.join, 2)
     stack.callback(server.shutdown)
-    second = TaskFeaturesHTTP(controlled, origin, clock, stack, artifacts, evidence)
+    second = TaskFeaturesHTTP(controlled, origin, clock, stack, artifacts, evidence, wire_recorder=wire_recorder)
     second.server = server
     evidence['before'] = second.snapshot('before-off-http')
     try:
@@ -282,5 +364,7 @@ def task_features_pair(task_features_http, loopback_network):
         evidence['after'] = second.snapshot('after-off-http')
         evidence['cleanup'] = {'server_thread_exited': not thread.is_alive(),
             'server_socket_closed': server.socket.fileno() == -1, 'fixture_close_completed': True}
+        evidence['artifact_verification'] = second.verify_artifacts()
         _save(artifacts / 'pair-fixture-receipt.json', evidence)
         assert not thread.is_alive()
+        assert evidence['artifact_verification']['status'] == 'verified', 'artifact_reference_integrity_failed'

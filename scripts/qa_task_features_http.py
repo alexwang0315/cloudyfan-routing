@@ -14,7 +14,7 @@ import httpx
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tests'))
 from capacity_resilience_fixture import build_resilience_health_host  # noqa: E402
-from task_features_fixture import POLICY_BUNDLE, StoreFeatureBindingPort  # noqa: E402
+from task_features_fixture import ArtifactRecorder, POLICY_BUNDLE, StoreFeatureBindingPort  # noqa: E402
 from test_local_http_integration import (  # noqa: E402
     Clock, LoopbackEvidence, QuietHandler, ThreadedServer, configure_loopback_network,
 )
@@ -26,7 +26,9 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     output = parser.parse_args().output.resolve()
     output.mkdir(mode=0o700, parents=True, exist_ok=True)
-    boundary, responses = LoopbackEvidence(), []
+    boundary = LoopbackEvidence()
+    recorder = ArtifactRecorder(output)
+    responses = recorder.rows
     configure_loopback_network(boundary, setattr)
     clock = Clock(datetime.fromisoformat('2026-10-21T00:00:00+00:00').timestamp())
     with ThreadedServer(('127.0.0.1', 0), QuietHandler) as server:
@@ -57,12 +59,7 @@ def main():
                 row['status'] = int(value.split()[0])
                 return start_response(value, headers, exc_info)
             body = list(controlled.app(environ, started))
-            number = len(responses) + 1
-            filename = f'http-{number:04d}-response.bin'
-            (output / filename).write_bytes(b''.join(body))
-            row['response_body'] = filename
-            row['response_sha256'] = hashlib.sha256(b''.join(body)).hexdigest()
-            responses.append(row)
+            recorder.capture(row, {'response_body': b''.join(body)})
             return body
 
         server.set_app(app)
@@ -102,12 +99,15 @@ def main():
             thread.join(2)
             controlled.close()
             final = state()
+            verification = recorder.verify()
             (output / 'fixture-receipt.json').write_text(json.dumps({
                 'schema_version': 1, 'fixture_pid': os.getpid(), 'scope': 'synthetic upstreams; real product HTTP and stores',
                 'http_responses': responses, 'final': final, 'blocked_socket_attempts': [str(x) for x in boundary.blocked],
                 'socket_attempts': [{'host': x[0], 'port': x[1]} for x in boundary.connected],
+                'artifact_verification': verification,
                 'cleanup': {'fixture_close_completed': True, 'server_thread_exited': not thread.is_alive()}}, indent=2) + '\n')
             assert not thread.is_alive() and not boundary.blocked
+            assert verification['status'] == 'verified', 'artifact_reference_integrity_failed'
 
 
 if __name__ == '__main__':

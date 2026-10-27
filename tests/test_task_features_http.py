@@ -7,6 +7,7 @@ import hashlib
 import json
 import io
 import os
+from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 
@@ -472,3 +473,34 @@ def test_private_hidden_and_later_health_evidence_never_becomes_a_creation_input
     assert before['health_sha256'] != after['health_sha256']
     assert before['budget_sqlite_sha256'] == after['budget_sqlite_sha256']
     assert after['model_requests'] == after['source_requests'] == after['accounting_requests'] == []
+
+
+def test_parallel_public_http_preserves_every_distinct_body_artifact(task_features_http):
+    tracer = task_features_http
+    client = tracer.client('agent')
+    paths = ['/app.js', '/style.css', '/trace.js', '/queue.css',
+             '/capacity.js', '/candidates.css', '/billing.js', '/trace.css'] * 4
+    with ThreadPoolExecutor(8) as workers:
+        responses = list(workers.map(client.get, paths))
+    assert all(response.status_code == 200 for response in responses)
+    intended = {response.request.url.path: response.content for response in responses}
+    rows = tracer.evidence['http_responses']
+    assert len(rows) == len(responses) == 32
+    assert sorted(row['sequence'] for row in rows) == list(range(1, 33))
+    names = [row[field] for row in rows for field in ('request_body', 'response_body')]
+    assert len(names) == len(set(names)) == 64
+    for row in rows:
+        request_body = (tracer.artifacts / row['request_body']).read_bytes()
+        response_body = (tracer.artifacts / row['response_body']).read_bytes()
+        assert request_body == b''
+        assert response_body == intended[row['path']]
+        assert hashlib.sha256(request_body).hexdigest() == row['request_sha256']
+        assert hashlib.sha256(response_body).hexdigest() == row['response_sha256']
+    verified = tracer.verify_artifacts()
+    assert verified['status'] == 'verified'
+    assert verified['recorders']['http']['checked_references'] == 64
+    assert verified['recorders']['http']['unique_filenames'] == 64
+    effects = tracer.snapshot('after-parallel-public-artifacts')
+    assert effects['model_requests'] == effects['source_requests'] == effects['accounting_requests'] == []
+    assert effects['budget_sqlite_sha256'] == tracer.evidence['before']['budget_sqlite_sha256']
+    assert effects['health_sha256'] == tracer.evidence['before']['health_sha256']

@@ -142,7 +142,7 @@
         "ISSUE37"
       ],
       "consumed_interfaces": [],
-      "outcome": "Preserve original capacity/queue/window state through restart and controlled faults; same approved actual HTTP/desktop seam. No real APIs or data deletion."
+      "outcome": "Preserve original capacity/queue/window state through restart and controlled faults; same approved actual HTTP/desktop seam. New original-source public HTTP RED confirms observation retention-guard contention during acceptance. Root owns this plan; capacity-resilience worker may narrow only host-only observe in the configured controlled queue to existing read-only access validation independently of stale queue membership. Preserve legacy/default observation guards, all creation/status/result/execution guards, original retention limits and no dispatch authority from detached views. Public HTTP regressions and full acceptance remain pending; no real APIs or data deletion."
     }
   ]
 }

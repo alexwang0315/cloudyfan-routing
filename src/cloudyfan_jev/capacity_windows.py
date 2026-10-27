@@ -127,6 +127,8 @@ class CapacityWindows:
         if self.controlled_sources:
             definition['controlled_sources'] = self.controlled_sources
             definition['controlled_source_ids'] = self._source_records
+        if store.integrity.status()['affected_groups'] is None:
+            return
         with store.connection(write=True) as db:
             db.executescript('''
                 CREATE TABLE IF NOT EXISTS capacity_window_policies(version TEXT PRIMARY KEY,payload TEXT NOT NULL);
@@ -204,6 +206,11 @@ class CapacityWindows:
         return 'imported' if all(row.get(key) == value for key, value in expected.items()) else 'unknown'
 
     def check(self, db, scope, physical_groups, now):
+        with self.store.integrity.selection(db) as selection:
+            return self._check(selection, scope, physical_groups, now)
+
+    def _check(self, db, scope, physical_groups, now):
+        self.store.integrity.require(groups=[g['physical'] for g in physical_groups])
         try:
             _time(now)
             rules = self._scope(scope, physical_groups)
@@ -241,12 +248,13 @@ class CapacityWindows:
         with self.store.connection() as db:
             policy = json.loads(db.execute('SELECT payload FROM capacity_policies WHERE version=?',
                 (scope['policy_version'],)).fetchone()[0])
-        routes = [route for route in policy['routes'] if route['endpoint'] == scope['endpoint']
-            and route['model'] == scope['model'] and route['binding'] == scope['binding']['id']]
         configuration = intent.get('configuration')
         tool = isinstance(configuration, dict) and configuration.get('protocol') == 'capacity-tool-http-v1'
         frozen_transport = _hash({'root': str(root.absolute()), 'configuration': configuration})
-        if (len(routes) != 1 or routes[0]['transport_sha256'] != frozen_transport
+        routes = [route for route in policy['routes'] if route['endpoint'] == scope['endpoint']
+            and route['model'] == scope['model'] and route['binding'] == scope['binding']['id']
+            and route['transport_sha256'] == frozen_transport]
+        if (len(routes) != 1
                 or policy.get('windows_version') != self.version):
             raise ValueError('Original window transport differs from registered route')
         if tool:
@@ -387,7 +395,7 @@ class CapacityWindows:
 
     def snapshot(self):
         now = _time(self.store.clock())
-        with self.store.connection() as db:
+        with self.store.connection(projection=True) as db:
             count = db.execute('SELECT COUNT(*) FROM capacity_window_observations').fetchone()[0]
             events = [json.loads(row[0]) for row in db.execute(
                 'SELECT payload FROM capacity_window_observations ORDER BY rowid DESC LIMIT 100')]
@@ -405,6 +413,12 @@ class CapacityWindows:
                     pending.append({**required, 'status': status, 'source_kind': 'controlled_import',
                         'reason_code': 'capacity_window_source_not_imported' if status == 'pending'
                             else 'capacity_window_source_state_unavailable'})
+        integrity = self.store.integrity.status()
+        for group in groups:
+            if integrity['status'] != 'verified' and (integrity['affected_groups'] is None
+                    or group['physical'] in integrity['affected_groups']):
+                group.update(observation_status='unavailable', current_failure=integrity['reason_code'],
+                    retained_verified_metadata=integrity['retained_verified_metadata'])
         return {'schema_version': PROTOCOL, 'version': self.version, 'revision': count,
                 'groups': groups, 'active_group_count': group_count,
                 'active_group_history_complete': group_count == len(groups),

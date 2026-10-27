@@ -320,7 +320,12 @@ def _live_capacity(connection, now, *, pending_target=None):
 class CapacityStore:
     """Shared immutable configuration/evidence store; never a fee or slot ledger."""
     def __init__(self, path, *, clock=time.time):
+        from .capacity_integrity import CapacityIntegrity
+        fresh = not Path(path).exists()
         self.path, self.clock = _private_path(path, create=True), clock
+        self.integrity = CapacityIntegrity(self.path, fresh=fresh)
+        if self.integrity.status()['affected_groups'] is None:
+            return  # Retain failed established storage; the host can expose safe observation.
         with self.connection(write=True) as connection:
             connection.executescript("""
                 CREATE TABLE IF NOT EXISTS capacity_configurations (
@@ -333,21 +338,15 @@ class CapacityStore:
             """)
 
     @contextmanager
-    def connection(self, *, write=False):
-        _private_path(self.path)
-        connection = sqlite3.connect(self.path.as_uri() + ('?mode=rw' if write else '?mode=ro'),
-                                     uri=True, timeout=5)
-        try:
+    def connection(self, *, write=False, projection=False):
+        detached = self.integrity.reading_view
+        if not detached:
+            _private_path(self.path)
+        with self.integrity.transaction(write=write, projection=projection) as connection:
             if write:
                 connection.execute("PRAGMA journal_mode=DELETE")
             yield connection
-            if write:
-                connection.commit()
-        except BaseException:
-            connection.rollback()
-            raise
-        finally:
-            connection.close()
+        if not detached:
             _private_path(self.path)
 
     def configure(self, configuration):
@@ -355,6 +354,22 @@ class CapacityStore:
         configuration = _configuration(configuration)
         encoded = json.dumps(configuration, sort_keys=True, separators=(",", ":"), allow_nan=False)
         digest = hashlib.sha256(encoded.encode()).hexdigest()
+        self._observer_configuration = configuration, digest
+        if self.integrity.status()['status'] != 'verified':
+            # Reopening the exact frozen host may expose retained evidence.
+            # It cannot create/change a policy or certify damaged storage.
+            try:
+                with self.connection(projection=True) as connection:
+                    saved = connection.execute('SELECT digest,payload FROM capacity_configurations WHERE version=?',
+                        (configuration['version'],)).fetchone()
+                    active = connection.execute('SELECT version FROM capacity_control WHERE id=1').fetchone()
+            except (RuntimeError, OSError, ValueError, sqlite3.Error):
+                # Runtime host configuration is not historical capacity proof.
+                # Keep the observer available; require() still denies every POST.
+                return digest
+            if saved is None or saved != (digest, encoded) or active != (configuration['version'],):
+                self.integrity.require()
+            return digest
         with self.connection(write=True) as connection:
             connection.execute("BEGIN IMMEDIATE")
             active = connection.execute("SELECT version FROM capacity_control WHERE id=1").fetchone()
@@ -412,8 +427,29 @@ class CapacityStore:
         return {"sequence": sequence, **value}
 
     def snapshot(self, version=None):
+        integrity = self.integrity.status()
+        if integrity['status'] != 'verified' and not integrity['retained_verified_metadata']:
+            return self._unavailable_snapshot(integrity)
+        try:
+            return self._snapshot(version)
+        except (RuntimeError, OSError, ValueError, sqlite3.Error):
+            integrity = self.integrity.status()
+            if integrity['status'] == 'verified':
+                raise
+            return self._unavailable_snapshot(integrity)
+
+    def _unavailable_snapshot(self, integrity):
+        configuration, digest = getattr(self, '_observer_configuration', (None, None))
+        return {'schema_version': 'capacity-sources-v1', 'configured': configuration is not None,
+            'configuration_version': configuration['version'] if configuration else None,
+            'configuration_sha256': digest, 'execution_enabled': False,
+            'bindings': configuration['bindings'] if configuration else [], 'groups': [],
+            'integrity': integrity, 'reason_codes': [integrity['reason_code']],
+            'observation_status': 'unavailable', 'retained_verified_metadata': False}
+
+    def _snapshot(self, version=None):
         """Read only saved values; no network, accounting, health or dispatch work."""
-        with self.connection() as connection:
+        with self.connection(projection=True) as connection:
             saved = connection.execute("SELECT payload,digest FROM capacity_configurations " +
                 ("WHERE version=(SELECT version FROM capacity_control WHERE id=1)" if version is None else "WHERE version=?"),
                 () if version is None else (_identity(version),)).fetchone()
@@ -443,6 +479,7 @@ class CapacityStore:
         except ValueError:
             now = None
         groups = []
+        integrity = self.integrity.status()
         for group in configuration["groups"]:
             history, successful, count = refreshes[group["id"]]
             supplier = successful["observations"] if successful else group["supplier_limits"]
@@ -455,8 +492,14 @@ class CapacityStore:
                 "local_limits": _limits(group["local_limits"], group["scope"], now, local=True),
                 "last_refresh": summaries[-1] if summaries else None, "refresh_history": summaries,
                 "refresh_history_count": count, "refresh_history_complete": count == len(summaries),
-                "retained_after_refresh_failure": bool(last and last["status"] == "unavailable" and successful)})
+                "retained_after_refresh_failure": bool(last and last["status"] == "unavailable" and successful),
+                **({'observation_status': 'unavailable', 'current_failure': integrity['reason_code'],
+                    'retained_verified_metadata': True} if integrity['status'] != 'verified' and (
+                        integrity['affected_groups'] is None or hashlib.sha256(json.dumps(group['scope'],
+                            sort_keys=True, separators=(',', ':')).encode()).hexdigest() in integrity['affected_groups']) else {})})
         return {"schema_version": "capacity-sources-v1", "configured": True,
                 "configuration_version": configuration["version"], "configuration_sha256": digest,
                 "execution_enabled": False, "bindings": configuration["bindings"],
-                "groups": groups, "reason_codes": [] if now is not None else ["capacity_clock_invalid"]}
+                "groups": groups, 'integrity': integrity,
+                "reason_codes": ([] if now is not None else ["capacity_clock_invalid"])
+                    + ([integrity['reason_code']] if integrity['status'] != 'verified' else [])}

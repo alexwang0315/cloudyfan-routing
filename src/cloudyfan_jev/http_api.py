@@ -174,8 +174,12 @@ def _retained(method):
         if self.retention is None:
             return method(self, principal, *args, **kwargs)
         queue = getattr(self, 'queue_scheduler', None)
-        if (method.__name__ in {'status', 'observe', 'result'} and queue is not None
-                and queue.capacity_protocol is not None and queue.contains(principal, run_id)):
+        if (queue is not None and queue.capacity_protocol is not None
+                and (method.__name__ == 'observe' or method.__name__ in {'status', 'result'}
+                     and queue.contains(principal, run_id))):
+            # A detached queue may predate a newly visible host binding. Host
+            # observation still uses the original read-only access policy; it
+            # cannot acquire a retention writer's guard or initialize metadata.
             self.queue_access(principal, run_id)
             return method(self, principal, *args, **kwargs)
         try:
@@ -196,6 +200,16 @@ class TaskService:
     Separating creation and execution lets an outer scheduler queue a frozen job.
     Every execution gets a fresh private workspace for deterministic local replay.
     """
+    @property
+    def capacity_controller(self):
+        return self._capacity_controller
+
+    @capacity_controller.setter
+    def capacity_controller(self, controller):
+        self._capacity_controller = controller
+        if controller is not None and hasattr(self, 'root'):
+            controller.store.integrity.bind(self.root, 'capacity')
+
     def __init__(self, root, *, contracts, allowed_principal=None, allowed_principals=None, retention_policy=None,
                  principal_active=None, clock=time.time, retention_protected_paths=(), capacity_controller=None):
         self.capacity_controller = capacity_controller
@@ -218,6 +232,8 @@ class TaskService:
         self.allowed_principals = frozenset(principals)
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
         os.chmod(self.root, 0o700)
+        if capacity_controller is not None:
+            capacity_controller.store.integrity.bind(self.root, 'capacity')
         self.contracts = dict(contracts)
         self.allowed_principal, self.retention_policy = allowed_principal, retention_policy
         self.retention = (RetentionStore(self.root / '.retention', retention_policy, clock=clock)
@@ -354,9 +370,13 @@ class TaskService:
 
     def _task_status(self, principal, run_id):
         directory, job = self._job(principal, run_id)
-        return {**_read(directory / 'state.json'), 'costs': self._costs(principal, run_id, job),
-                **({'capacity': self.capacity_controller.own(self.internal_id(principal, run_id))}
-                   if self.capacity_controller is not None else {})}
+        result = {**_read(directory / 'state.json'), 'costs': self._costs(principal, run_id, job)}
+        if self.capacity_controller is not None:
+            try:
+                result['capacity'] = self.capacity_controller.own(self.internal_id(principal, run_id))
+            except (OSError, ValueError, RuntimeError):
+                result['capacity'] = {'status': 'unavailable', 'reason_code': 'capacity_store_integrity_unavailable'}
+        return result
 
     def _registered_contract(self, job):
         contract = self.contracts.get(job['request']['contract_id'])

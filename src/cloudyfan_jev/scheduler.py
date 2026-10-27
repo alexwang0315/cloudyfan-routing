@@ -48,27 +48,30 @@ class QueueScheduler:
         self.measurement_kind = measurement_kind
         if self.path.is_symlink(): raise ValueError('Queue storage cannot be a symlink')
         self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        with self._transaction() as db:
-            db.execute('CREATE TABLE IF NOT EXISTS configuration (singleton INTEGER PRIMARY KEY, body TEXT)')
-            value = {'limits': asdict(limits), 'principals': sorted(service.allowed_principals),
-                     'service_root': str(service.root.resolve()), 'measurement_kind': measurement_kind}
-            if capacity_protocol is not None:
-                value['capacity_preparation'] = capacity_protocol.descriptor()
-            config = _encode(value).decode()
-            old = db.execute('SELECT body FROM configuration').fetchone()
-            if old and old[0] != config: raise ValueError('Frozen queue configuration changed')
-            db.execute('INSERT OR IGNORE INTO configuration VALUES (1,?)', (config,))
-            db.execute('CREATE TABLE IF NOT EXISTS queue_clock (singleton INTEGER PRIMARY KEY, value REAL)')
-            db.execute('CREATE TABLE IF NOT EXISTS maintenance (singleton INTEGER PRIMARY KEY, token TEXT, active INTEGER)')
-            db.execute('CREATE TABLE IF NOT EXISTS rejections (principal TEXT, run_id TEXT, reason TEXT, at REAL)')
-            db.execute('CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, principal TEXT, run_id TEXT, request TEXT, '
-                       'created REAL, deadline REAL, state TEXT, reason TEXT, started REAL, finished REAL, cancel_requested INTEGER DEFAULT 0)')
-            if capacity_protocol is not None:
-                columns = {row[1] for row in db.execute('PRAGMA table_info(jobs)')}
-                for name, declaration in (('claim', 'TEXT'), ('epoch', 'INTEGER DEFAULT 0'), ('detail', 'TEXT'),
-                                          ('waiting_since', 'REAL'), ('wait_seconds', 'REAL DEFAULT 0')):
-                    if name not in columns:
-                        db.execute('ALTER TABLE jobs ADD COLUMN ' + name + ' ' + declaration)
+        self.integrity = None
+        if capacity_protocol is not None:
+            from .capacity_integrity import CapacityIntegrity
+            fresh = not self.path.exists()
+            if fresh:
+                descriptor = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+                os.close(descriptor)
+            self.integrity = CapacityIntegrity(self.path, fresh=fresh, role='queue')
+            self.integrity.bind(service.root, 'queue')
+        unavailable = self.integrity is not None and self.integrity.status()['status'] != 'verified'
+        value = {'limits': asdict(limits), 'principals': sorted(service.allowed_principals),
+                 'service_root': str(service.root.resolve()), 'measurement_kind': measurement_kind}
+        if capacity_protocol is not None:
+            value['capacity_preparation'] = capacity_protocol.descriptor()
+        config = _encode(value).decode()
+        observable = not unavailable or self.integrity.status()['retained_verified_metadata']
+        if observable:
+            with self._readonly() if unavailable else self._transaction() as db:
+                if unavailable:
+                    old = db.execute('SELECT body FROM configuration').fetchone()
+                    if old and old[0] != config:
+                        raise ValueError('Frozen queue configuration changed')
+                else:
+                    self._initialize(db, config)
         os.chmod(self.path, 0o600)
         if capacity_protocol is not None:
             service.queue_scheduler = self
@@ -78,13 +81,40 @@ class QueueScheduler:
                 raise ValueError('Retention cannot span independent queue stores')
             if self.path.absolute() not in service.retention_protected_paths:
                 service.retention_protected_paths += (self.path.absolute(),)
+            if self.integrity is not None and self.integrity.root not in service.retention_protected_paths:
+                service.retention_protected_paths += (self.integrity.root,)
             service.retention_guard = self.retention_snapshot
             service.retention_erase_queue = self.retention_erase
             if service.retention_maintenance is None:
                 service.retention_maintenance = self.retention_maintenance
 
+    def _initialize(self, db, config):
+        db.execute('CREATE TABLE IF NOT EXISTS configuration (singleton INTEGER PRIMARY KEY, body TEXT)')
+        old = db.execute('SELECT body FROM configuration').fetchone()
+        if old and old[0] != config: raise ValueError('Frozen queue configuration changed')
+        db.execute('INSERT OR IGNORE INTO configuration VALUES (1,?)', (config,))
+        db.execute('CREATE TABLE IF NOT EXISTS queue_clock (singleton INTEGER PRIMARY KEY, value REAL)')
+        db.execute('CREATE TABLE IF NOT EXISTS maintenance (singleton INTEGER PRIMARY KEY, token TEXT, active INTEGER)')
+        db.execute('CREATE TABLE IF NOT EXISTS rejections (principal TEXT, run_id TEXT, reason TEXT, at REAL)')
+        db.execute('CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, principal TEXT, run_id TEXT, request TEXT, '
+                   'created REAL, deadline REAL, state TEXT, reason TEXT, started REAL, finished REAL, cancel_requested INTEGER DEFAULT 0)')
+        if self.capacity_protocol is not None:
+            columns = {row[1] for row in db.execute('PRAGMA table_info(jobs)')}
+            for name, declaration in (('claim', 'TEXT'), ('epoch', 'INTEGER DEFAULT 0'), ('detail', 'TEXT'),
+                                      ('waiting_since', 'REAL'), ('wait_seconds', 'REAL DEFAULT 0')):
+                if name not in columns:
+                    db.execute('ALTER TABLE jobs ADD COLUMN ' + name + ' ' + declaration)
+
     @contextmanager
     def _transaction(self):
+        if self.integrity is not None:
+            self.integrity.require(groups=[])
+            with self.integrity.transaction(write=True) as db:
+                db.row_factory = sqlite3.Row
+                db.execute('PRAGMA secure_delete=ON')
+                db.execute('BEGIN IMMEDIATE')
+                yield db
+            return
         db = sqlite3.connect(self.path, timeout=30, isolation_level=None)
         db.row_factory = sqlite3.Row
         try:
@@ -100,6 +130,12 @@ class QueueScheduler:
 
     @contextmanager
     def _readonly(self):
+        if self.integrity is not None:
+            with self.integrity.transaction(projection=True) as db:
+                db.row_factory = sqlite3.Row
+                db.execute('PRAGMA query_only=ON')
+                yield db
+            return
         db = sqlite3.connect(self.path.resolve().as_uri() + '?mode=ro', uri=True, timeout=30)
         db.row_factory = sqlite3.Row
         try:
@@ -158,6 +194,7 @@ class QueueScheduler:
         if not isinstance(payload, dict) or set(payload) != {'run_id', 'contract_id', 'prompt'}:
             raise ServiceError('unsupported_task_fields')
         identity = self.service.internal_id(principal, payload['run_id'])
+        self.integrity.require(task=identity)
         contract = self.service.contracts.get(payload['contract_id'])
         if contract is None:
             raise ServiceError('unregistered_contract')
@@ -183,8 +220,12 @@ class QueueScheduler:
                 if prior['request'] != encoded:
                     raise ServiceError('frozen_task_changed', 409)
             else:
-                count = db.execute('SELECT COUNT(*) FROM jobs WHERE state IN ("queued","accepting")').fetchone()[0]
-                active = db.execute('SELECT COUNT(*) FROM jobs WHERE principal=? AND state IN ("accepting","queued","claiming","running","interrupted_pending")', (principal,)).fetchone()[0]
+                now = self._now(db)
+                with self.integrity.selection(db) as selection:
+                    count = selection.execute('SELECT COUNT(*) FROM jobs WHERE state IN ("queued","accepting") AND deadline>?', (now,)).fetchone()[0]
+                    active = selection.execute('SELECT COUNT(*) FROM jobs WHERE principal=? AND '
+                        '(state IN ("claiming","running","interrupted_pending") OR '
+                        '(state IN ("accepting","queued") AND deadline>?))', (principal, now)).fetchone()[0]
                 if count >= self.limits.capacity:
                     rejection = 'queue_full'
                 elif active >= self.limits.per_principal:
@@ -204,11 +245,17 @@ class QueueScheduler:
             try:
                 with self.capacity_protocol.accepting(self):
                     self.service.create(principal, payload)
-                    with self._readonly() as db:
+                    with self._transaction() as db:
                         accepted = dict(self._job(db, principal, payload['run_id']))
-                    self.capacity_protocol.accept(self.service, accepted)
-                    self.service.mark_queued(principal, payload['run_id'])
+                        if accepted['state'] == 'accepting' and not accepted['cancel_requested']:
+                            self.capacity_protocol.accept(self.service, accepted)
+                            self.service.mark_queued(principal, payload['run_id'])
+                            db.execute('UPDATE jobs SET state="queued",reason="queue_waiting_worker" WHERE id=?', (identity,))
+                        else:
+                            self.service.capacity_controller.terminal(identity)
             except ServiceError as error:
+                if error.code == 'capacity_acceptance_closed':
+                    return self.status(principal, payload['run_id'])
                 if error.code != 'task_busy':
                     if error.code in {'queue_environment_contract_changed', 'queue_preparation_contract_changed'}:
                         with self._transaction() as db:
@@ -220,10 +267,6 @@ class QueueScheduler:
                 # under its original nonblocking service/retention lock. This
                 # duplicate is a pending lookup, not a second execution owner.
                 return self.status(principal, payload['run_id'])
-            with self._transaction() as db:
-                row = self._job(db, principal, payload['run_id'])
-                if row['state'] == 'accepting':
-                    db.execute('UPDATE jobs SET state="queued",reason="queue_waiting_worker" WHERE id=?', (identity,))
         return self.status(principal, payload['run_id'])
 
     @contextmanager
@@ -302,7 +345,17 @@ class QueueScheduler:
         if self.capacity_protocol is None:
             db.execute('UPDATE jobs SET state="expired",reason="queue_deadline_expired",finished=? WHERE state="queued" AND deadline<=?', (now, now))
         else:
-            for row in db.execute('SELECT * FROM jobs WHERE state IN ("queued","accepting") AND deadline<=?', (now,)).fetchall():
+            with self.integrity.selection(db) as selection:
+                selection.row_factory = sqlite3.Row
+                rows = selection.execute('SELECT * FROM jobs WHERE state IN ("queued","accepting") AND deadline<=?', (now,)).fetchall()
+            for row in rows:
+                from .capacity_integrity import CapacityIntegrityError
+                try:
+                    self.integrity.require(task=row['id'])
+                except CapacityIntegrityError:
+                    # Preserve the damaged original and its original deadline.
+                    # Expiry of A is not a reason to stop unrelated B or certify A.
+                    continue
                 self._close_waiting(db, row, 'expired', 'queue_deadline_expired', row['deadline'])
 
     def _close_waiting(self, db, row, state, reason, finished):
@@ -339,6 +392,13 @@ class QueueScheduler:
         with self._readonly() as db:
             row = dict(self._job(db, principal, run_id))
             now = self._observed_now(db)
+        if self.capacity_protocol is not None and self.service.retention_policy is not None:
+            lifecycle = self.service.retention.lookup(row['id'])
+            expires = lifecycle['expires_at'] if lifecycle is not None else row['created'] + self.service.retention_policy.ttl_seconds
+            if now >= expires:
+                raise ServiceError('task_expired', 410)
+            if lifecycle is not None:
+                self.service.queue_access(principal, run_id)
         return self._status(row, now)
 
     def _observed_now(self, db):
@@ -359,8 +419,10 @@ class QueueScheduler:
             row = {**row, 'state': 'expired', 'reason': 'queue_deadline_expired', 'finished': row['deadline']}
         if unavailable is not None:
             task = {'status': row['state'], 'costs': {'complete_api_usd': None, 'known_api_usd': None, 'unknown_events': None}}
-        elif row['state'] == 'accepting':
-            task = {'status': 'accepting', 'costs': {'complete_api_usd': None, 'known_api_usd': '0', 'unknown_events': 0}}
+        elif (row['state'] == 'accepting' or row['state'] in {'cancelled', 'expired', 'rejected'}
+                and row['started'] is None and not (self.service.root / row['id'] / 'job.json').exists()):
+            task = {'status': row['state'], 'costs': {'complete_api_usd': None if row['state'] == 'accepting' else '0',
+                'known_api_usd': '0', 'unknown_events': 0}}
         else:
             task = (self.service.queue_observe(principal, run_id) if self.capacity_protocol is not None
                     else self.service.status(principal, run_id))
@@ -378,7 +440,7 @@ class QueueScheduler:
                 'effective_expiry_only': row['state'] == 'expired' and row['finished'] == row['deadline']}
             try:
                 directory, job = self.service._job(principal, run_id)
-                adoption = self.service.capacity_controller.context(row['id'], principal, job['registered'])
+                adoption = self.service.capacity_controller.read_context(row['id'], principal, job['registered'])
                 with self.service.capacity_controller.store.connection() as db:
                     policy_row = db.execute('SELECT payload FROM capacity_policies WHERE version=?', (adoption['policy_version'],)).fetchone()
                 policy = json.loads(policy_row[0]) if policy_row is not None else {}
@@ -388,7 +450,7 @@ class QueueScheduler:
                     'mode': job['registered']['mode'], 'access_expires_at': lifecycle['expires_at'] if lifecycle else None,
                     'capacity': {'policy_version': adoption['policy_version'], **{key: policy[key] for key in
                         ('configuration_version', 'configuration_sha256', 'queue_version', 'windows_version') if key in policy}}}
-            except (ServiceError, ValueError, KeyError):
+            except (ServiceError, ValueError, KeyError, RuntimeError):
                 view['queue']['frozen'] = {'status': 'unavailable'}
             if unavailable is not None:
                 view['observation_error'] = unavailable
@@ -400,6 +462,14 @@ class QueueScheduler:
 
     def snapshot(self):
         """Trusted operator projection. No prompts, credentials or body paths."""
+        if self.integrity is not None and not self.integrity.status()['retained_verified_metadata']:
+            return {'schema_version': 'capacity-queue-v1', 'configured': True,
+                'version': self.capacity_protocol.version, 'limits': asdict(self.limits),
+                'now': None, 'jobs': [], 'job_count': None, 'active_count': None, 'retained_active_count': None,
+                'active_history_complete': False, 'rejections': [], 'rejection_count': None,
+                'rejection_history_complete': False, 'history_complete': False,
+                'measurement_kind': self.measurement_kind, 'production_slo_validated': False,
+                'integrity': self.integrity.status(), 'observation_status': 'unavailable'}
         with self._readonly() as db:
             now = self._observed_now(db)
             active = '(state IN ("claiming","running","interrupted_pending") OR (state IN ("accepting","queued") AND deadline>?))'
@@ -426,6 +496,7 @@ class QueueScheduler:
                 'rejections': rejections, 'rejection_count': rejection_count,
                 'rejection_history_complete': rejection_count == len(rejections),
                 'history_complete': total == len(rows), 'measurement_kind': self.measurement_kind,
+                **({'integrity': self.integrity.status()} if self.integrity is not None else {}),
                 'production_slo_validated': False}
 
     def _notify_transition(self, row):
@@ -450,6 +521,8 @@ class QueueScheduler:
 
     def cancel(self, principal, run_id):
         self.service.authorize(principal)
+        if self.integrity is not None:
+            self.integrity.require(task=self.service.internal_id(principal, run_id))
         with self._transaction() as db:
             self._expire(db)
             row = self._job(db, principal, run_id)
@@ -489,6 +562,7 @@ class QueueScheduler:
 
     def verify_claim(self, identity, claim):
         from .capacity_dispatch import CapacityDenied
+        self.integrity.require(task=identity)
         with self._readonly() as db:
             row = db.execute('SELECT * FROM jobs WHERE id=?', (identity,)).fetchone()
             now = self._observed_now(db)
@@ -509,15 +583,24 @@ class QueueScheduler:
             if db.execute('SELECT 1 FROM maintenance WHERE active=1').fetchone():
                 return None
             self._expire(db)
-            active = db.execute('SELECT COUNT(*) FROM jobs WHERE state IN ("claiming","running","interrupted_pending")').fetchone()[0]
+            with self.integrity.selection(db) as selection:
+                selection.row_factory = sqlite3.Row
+                active = selection.execute('SELECT COUNT(*) FROM jobs WHERE state IN ("claiming","running","interrupted_pending")').fetchone()[0]
+                candidates = selection.execute('SELECT * FROM jobs WHERE state="queued" ORDER BY created,rowid').fetchall()
             if active >= self.limits.concurrency:
                 db.execute('UPDATE jobs SET reason="queue_waiting_slot" WHERE state="queued"')
                 return None
             blocked = set()
             # The queue itself is bounded; old terminal history is not scanned.
-            for value in db.execute('SELECT * FROM jobs WHERE state="queued" ORDER BY created,rowid').fetchall():
+            for value in candidates:
                 row = dict(value)
                 prepared = None
+                from .capacity_integrity import CapacityIntegrityError
+                try:
+                    self.integrity.require(task=row['id'])
+                except CapacityIntegrityError:
+                    blocked.update(json.loads(row.get('detail') or '{}').get('groups', []))
+                    continue
                 try:
                     self.service.authorize(row['principal'])
                     self.service.queue_observe(row['principal'], row['run_id'])

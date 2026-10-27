@@ -257,6 +257,23 @@ def main():
                     worker = threading.Thread(target=work, name=f"resilience-worker-{worker_id}", daemon=True)
                     workers.append(worker)
                     worker.start()
+                    timing = {"command": name, "worker_id": worker_id,
+                        "started_elapsed_seconds": command_started - started,
+                        "duration_before_ack_seconds": time.monotonic() - command_started}
+                    commands.append(timing)
+                    acknowledgement = {"type": "work_started", "completion_confirmed": False,
+                        "pid": os.getpid(), "worker_id": worker_id,
+                        "thread_running_count": sum(item.is_alive() for item in workers),
+                        "requests_count": len(requests),
+                        "held": not args.minimal and controlled.held.is_set() and not controlled.released.is_set()}
+                    descriptor = os.open(output / "private-work-starts.jsonl",
+                        os.O_CREAT | os.O_APPEND | os.O_WRONLY, 0o600)
+                    with os.fdopen(descriptor, "a") as stream:
+                        stream.write(json.dumps({**timing, **acknowledgement}) + "\n")
+                        stream.flush()
+                        os.fsync(stream.fileno())
+                    print(json.dumps(acknowledgement), flush=True)
+                    continue
                 elif name == "advance":
                     seconds = request.get("seconds")
                     if type(seconds) not in (int, float) or not 0 <= seconds <= 366 * 86400:
@@ -330,9 +347,9 @@ def main():
                     if not controlled.held.is_set() or controlled.released.is_set():
                         raise ValueError("Planned crash requires an actual unreleased model POST")
                     commands.append({"command": name})
-                    save()
+                    snapshot = save()
                     with (output / "planned-crash.json").open("x") as stream:
-                        json.dump({"intentional_exit": 86, "released": False, **receipt()}, stream, indent=2)
+                        json.dump({"intentional_exit": 86, "released": False, **snapshot}, stream, indent=2)
                     (service_root / "private-planned-stop.json").write_text(json.dumps({"pid": os.getpid()}))
                     print(json.dumps({"type": "planned_crash", "pid": os.getpid(), "intentional_exit": 86}), flush=True)
                     os._exit(86)
@@ -365,9 +382,9 @@ def main():
                     **({"reauth_token": host.app.admin_token} if name == "rotate_operator" else {})}), flush=True)
         finally:
             if not args.minimal and controlled.held.is_set() and not controlled.released.is_set():
-                save()
+                snapshot = save()
                 with (output / "unreleased-failure-shutdown.json").open("x") as stream:
-                    json.dump({"intentional_exit": 87, "released": False, **receipt()}, stream, indent=2)
+                    json.dump({"intentional_exit": 87, "released": False, **snapshot}, stream, indent=2)
                 os._exit(87)  # Failed-run cleanup preserves uncertainty; never a passing restart proof.
             server.shutdown()
             serving.join(3)

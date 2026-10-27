@@ -174,8 +174,12 @@ def _retained(method):
         if self.retention is None:
             return method(self, principal, *args, **kwargs)
         queue = getattr(self, 'queue_scheduler', None)
-        if (method.__name__ in {'status', 'observe', 'result'} and queue is not None
-                and queue.capacity_protocol is not None and queue.contains(principal, run_id)):
+        if (queue is not None and queue.capacity_protocol is not None
+                and (method.__name__ == 'observe' or method.__name__ in {'status', 'result'}
+                     and queue.contains(principal, run_id))):
+            # A detached queue may predate a newly visible host binding. Host
+            # observation still uses the original read-only access policy; it
+            # cannot acquire a retention writer's guard or initialize metadata.
             self.queue_access(principal, run_id)
             return method(self, principal, *args, **kwargs)
         try:

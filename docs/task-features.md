@@ -62,4 +62,4 @@ Envelope為 `creation-task-features-v1`，資料使用政策為 `creation-featur
 
 真實loopback HTTP使用原Core、Budget、Store、身分、受控Queue／Health與MockTransport；同步四模式／類別相容案例使用自己的原fixture，不冒稱具備未接入的Health能力。實際headed桌機保存PNG、ARIA、console／network與自有程序退出紀錄，觀察不新增上游請求。
 
-目前工作單仍須以固定版本的原始完整Coreintegration、Monitorfull／build、獨立審查及合併收據確認。[目前交接](handoff.md)記錄實際狀態；單一focused測試或畫面通過不等於完整套件驗收、供應商資格、真實節費、部署或工作單結案。
+#39已在固定來源完成本機驗收及正常整合：47focused（新增45＋原2）、真實桌機3、原Core2069／8及其兩個Mock示範／打包、修正後原Monitor472／26／打包、兩軸審查各0。最後Monitor修正沒有改Core；Core完整結果只沿用精確不變的Core6c01來源，並非另跑新Core。[目前交接](handoff.md)保留前次失敗、封存讀取errno5原因未知與後續獨立核對的範圍。這是受控Mock接線驗收，不建立供應商資格、真實節費或部署；整體#29–33仍在進行。

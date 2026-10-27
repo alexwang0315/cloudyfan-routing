@@ -706,3 +706,14 @@ stages are not complete yet. No real provider, spend, push, deployment or deleti
 Core40569c54 / Monitor2f8bc84c implement bounded creation-time observation and safe host readers. The candidate reports34 focused HTTP passes and3 headed desktop business-flow passes with source596 frozen; these are not original full-suite checks or complete39. Root independent readback found concurrent HTTP artifact filenames overwritten in the new QA recorder: the image/business assertions remain their original reports, while complete referenced-response evidence needs a recorder fix and fresh run. Original records are retained without retroactive repair or relabelling.
 
 The [feature contract](task-features.md) separates legal acceptance, immutable first-owner capture, unknown values, expired safe observation and the existing explicit financial reconciliation authority. Core original full/integration, Monitor full/build, two independent review axes, final source/evidence checks and normal integration merge are still required before39closure. Whole29–33 remains in_progress/current_verification null; production gates, original canonical dirty work and earlier accepted38 receipts remain unchanged. No real provider/spend/push/deployment or deletion authority follows from these documents.
+
+
+## Issue39 complete; Issue40 read-only design frontier — 2026-10-28
+
+#39 已完成受控本機驗收，GitHub 九項驗收全部勾選並結案。最終來源為 Core `6c01bd7e`／Monitor `efe8f11b`；真實 loopback HTTP、身分及排程使用原套件，模型與供應商上游全為 MockTransport。47 項針對測試包含新增45項及原來兩個到期回歸，另有 Chrome156／1280x900 的三個真實桌機流程；來源597檔一致，鍵盤焦點、console、network及程序退出均已核對。
+
+Core 原完整2,069測試／8步驟、兩個Mock示範及sdist/wheel只沿用精確不變的Core6c01來源；最後修正只改Monitor，Core429檔及其無Monitor匯入的檢查範圍已另核對。這不是新的Core測試，也沒有改寫歷史Monitor情境。修正後的原Monitor完整472測試／26步驟及sdist/wheel通過，最終兩軸獨立審查各0項。正常整合為Core087e29c8／Monitor20765124，原secret guard及quick4／24實際通過；原始工作目錄576檔、模式、HEAD與狀態未變。後續文件／工作紀錄修改不建立另一輪完整測試結果。
+
+原Monitor full01的2failed／460passed、各次故障與測試作者oracle失敗保留。Full02實際checker成功後，外層檔案封存曾errno5／exit1，未記錄失敗路徑，原路徑與原因仍未知；原收據及缺少的artifact-index均未改寫。另存恢復封存索引涵蓋26,212個regular檔、291個symlink metadata與3,806對native原件／副本，Root已獨立回讀，包含44份新HTTP fixture及pair參照。CloudyFan的.scratch/issues29-33-implementation/issue39/結構化收據記錄各次來源、時間與適用範圍。
+
+[特徵契約](task-features.md)區分建立時特徵與執行後安全歷史；後者不進特徵或選模。#40已指派、原生#39阻擋已結案，目前只做固定Git來源的設計；具體source ownership及介面須先宣告才可修改。父規格#30仍需#40與#41，整體#29–33／20張子單仍為in_progress／current_verification null，production gates全部維持待資格。沒有真實API、支出、來源推送、部署或刪除授權。

@@ -11,6 +11,7 @@ from cloudyfan_jev.engine import Core
 from cloudyfan_jev.http_api import TaskService
 from cloudyfan_jev.identity import IdentityStore
 from cloudyfan_jev.retention import RetentionPolicy
+from cloudyfan_jev.scores.backup_runtime import BackupCategoryCore
 
 from .app import App
 from .demo import ADMIN_TOKEN, CATEGORY, TOKENS, build_demo
@@ -74,6 +75,16 @@ class RunBoundCore(Core):
         return core.run(run_id, task, environment_factory, contract_version=contract_version, mode=mode)
 
     def read_completed(self, run_id):
+        # Core's reader accepts the saved run identity and revalidates its
+        # manifest and original receipts. It does not need a new execution
+        # instance or its per-run policy construction on each observation.
+        # Only the known run-independent readers use this path. A subclass can
+        # depend on per-run state even when it inherits Core.read_completed.
+        template = self._template
+        if (type(template) in (Core, BackupCategoryCore)
+                and self.client is template.client
+                and self.local_backend is template.local_backend):
+            return template.read_completed(run_id)
         return self._bound(run_id).read_completed(run_id)
 
 
@@ -105,7 +116,8 @@ def assemble_monitor(store, service, registry, identities, *, operator_token, so
         if type(capacity_observer) is not CapacityObserver:
             raise ValueError("Controlled capacity source observer required")
         service.retention_protected_paths = tuple(set(service.retention_protected_paths)
-            | {capacity_observer.store.path.resolve(), capacity_observer.store.path.with_suffix(".refresh.lock").resolve()})
+            | {capacity_observer.store.path.resolve(), capacity_observer.store.path.with_suffix(".refresh.lock").resolve(),
+               capacity_observer.store.integrity.root.resolve()})
     if capacity_controller is not None:
         from cloudyfan_jev.capacity_dispatch import CapacityController
         if (type(capacity_controller) is not CapacityController or capacity_observer is None

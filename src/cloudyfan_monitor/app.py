@@ -1,4 +1,5 @@
 """Private WSGI monitor and controlled task ingress. No model calls on dashboard reads."""
+from contextlib import contextmanager
 from http import HTTPStatus
 import hmac
 import ipaddress
@@ -121,6 +122,20 @@ class App:
                 return self._request(environ, start_response)
         return self._request(environ, start_response)
 
+    @contextmanager
+    def _observation(self):
+        # Capture under queue->capacity shared locks, then release both before
+        # original budget/history reads. Only immutable private copies remain.
+        from cloudyfan_jev.capacity_integrity import read_views
+        stores = []
+        queue = self.gateway.queue
+        if queue is not None and queue.integrity is not None:
+            stores.append(queue.integrity)
+        if self.capacity_controller is not None:
+            stores.append(self.capacity_controller.store.integrity)
+        with read_views(stores):
+            yield
+
     def _request(self, environ, start_response):
         status, content_type = 200, "application/json; charset=utf-8"
         method, path = environ.get("REQUEST_METHOD"), environ.get("PATH_INFO", "")
@@ -155,7 +170,11 @@ class App:
                 if path.startswith("/monitor/"):
                     if not hmac.compare_digest(token, self.admin_token):
                         raise MonitorError("unauthorized", 401)
-                    body = self._admin(method, path, environ)
+                    if method == 'GET' and path in {'/monitor/capacity', '/monitor/queue', '/monitor/snapshot'}:
+                        with self._observation():
+                            body = self._admin(method, path, environ)
+                    else:
+                        body = self._admin(method, path, environ)
                 elif path.startswith("/v1/"):
                     principal = self._authenticate(token, method, environ)
                     body = self._client(principal, method, path, environ)
@@ -172,6 +191,13 @@ class App:
             detail = error.code if path.startswith("/api/") else {"code": error.code}
             status, body = error.status, encode({"error": detail}).encode()
         except Exception as error:
+            from cloudyfan_jev.capacity_integrity import CapacityIntegrityError
+            if isinstance(error, CapacityIntegrityError):
+                body = encode({'error': {'code': error.code}}).encode()
+                start_response(f"{error.status} {HTTPStatus(error.status).phrase}", [
+                    ("Content-Type", content_type), ("Content-Length", str(len(body))),
+                    ("Cache-Control", "no-store"), *SECURITY_HEADERS])
+                return [body]
             if self.capacity_controller is not None:
                 from cloudyfan_jev.capacity_dispatch import CapacityDenied
                 if isinstance(error, CapacityDenied):
@@ -188,6 +214,15 @@ class App:
         return [body]
 
     def _admin(self, method, path, environ):
+        if path == '/monitor/session':
+            if method != 'GET':
+                raise MonitorError('endpoint_not_supported', 404)
+            if environ.get('QUERY_STRING'):
+                raise MonitorError('unsupported_operator_session_query')
+            if environ.get('CONTENT_LENGTH') not in (None, '', '0') or environ.get('HTTP_TRANSFER_ENCODING'):
+                raise MonitorError('unsupported_operator_session_body')
+            return {'schema_version': 'monitor-operator-session-v1',
+                    'authenticated': True, 'demo': self.gateway.demo is True}
         if method == 'GET' and path == '/monitor/queue':
             if environ.get('QUERY_STRING'):
                 raise MonitorError('unsupported_queue_query')

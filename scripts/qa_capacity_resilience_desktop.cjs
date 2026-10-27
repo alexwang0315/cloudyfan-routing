@@ -162,6 +162,17 @@ async function lifecycleMain() {
   const root=path.resolve(__dirname,'..'),core=process.env.CLOUDYFAN_CORE_ROOT;
   assert.ok(core,'An explicitly matched Core root is required');
   assert.ok(process.argv[2],'Use a new private output directory');
+  const restartConsoleObserve=process.argv.includes('--restart-console-observe');
+  const caseArguments=process.argv.filter(value=>value.startsWith('--restart-console-case='));
+  const restartConsoleCase=caseArguments.length?caseArguments[0].slice('--restart-console-case='.length):'positive';
+  assert.ok(caseArguments.length<=1&&['positive','post','outside','forged'].includes(restartConsoleCase),
+    'Unknown private stopped-service diagnostic case');
+  assert.ok(!caseArguments.length||restartConsoleObserve,'Private cases require the observation diagnostic');
+  assert.ok(!restartConsoleObserve||process.argv.includes('--focused-restart'),
+    'The private stopped-service observation requires the focused restart slice');
+  assert.ok(!restartConsoleObserve||!['--storage','--queue-fault','--local-fault','--companion-loss',
+    '--policy-rejection-delay','--operator-session-delay'].some(flag=>process.argv.includes(flag)),
+  'Private console diagnostics cannot replace another focused slice');
   const output=path.resolve(process.argv[2]),service=path.join(output,'service');
   await fs.mkdir(path.dirname(output),{recursive:true});
   await fs.mkdir(output,{recursive:false,mode:0o700});
@@ -169,6 +180,7 @@ async function lifecycleMain() {
   const owned=['src/cloudyfan_monitor/static/capacity.js','src/cloudyfan_monitor/static/capacity.css',
     'src/cloudyfan_monitor/static/queue.js','src/cloudyfan_monitor/static/queue.css',
     'scripts/qa_capacity_resilience_http.py','scripts/qa_capacity_resilience_desktop.cjs',
+    'scripts/qa_capacity_resilience_console.cjs',
     'tests/test_operator_session_http.py'];
   async function capture(directory,extra=[]) {
     const git=(...args)=>execFileSync('git',args,{cwd:directory,encoding:'utf8'}).trim();
@@ -189,6 +201,7 @@ async function lifecycleMain() {
   if(process.argv.includes('--policy-rejection-delay'))report.scope+='; tiny genuine policy rejection with bounded delivery of completed HTTP snapshots; N101 not run';
   if(process.argv.includes('--operator-session-delay'))report.scope+='; tiny real operator rotation and completed old-auth delivery barrier; N101 not run';
   if(process.argv.includes('--focused-restart'))report.scope+='; focused restart slice: >100 paid history and refusal steps explicitly not run';
+  if(restartConsoleObserve)report.scope+='; private stopped-service browser observation diagnostic; strict outage verdict and original HTTP-status rule';
   const fullWorkflow=report.planned_check_count===13,heldTimeoutSeconds=fullWorkflow?3600:600;
   const heldTimeoutMs=heldTimeoutSeconds*1000;
   report.private_fixture_limits={held_timeout_seconds:heldTimeoutSeconds,idle_maximum_elapsed_ms:120000,
@@ -233,6 +246,13 @@ async function lifecycleMain() {
     }
   };
   let fixture,ready,browser,context,page,boot=0,operator,client,agent,originalWindow,deliveryInterceptor=null;
+  let browserObservation,currentStep='setup';
+  let consoleFrozen=false;
+  const recordConsole=message=>{
+    if(message.type()!=='error')return;
+    if(consoleFrozen){report.console_errors_after_gate ||= [];report.console_errors_after_gate.push(message.text());}
+    else report.console_errors.push(message.text());
+  };
   const headers=token=>({Authorization:'Bearer '+token});
   const start=async port=>{
     const bootOutput=path.join(output,'boot-'+String(++boot).padStart(2,'0'));
@@ -242,6 +262,8 @@ async function lifecycleMain() {
       {cwd:root,env:{...process.env,PYTHONDONTWRITEBYTECODE:'1',PYTHONPATH:[path.join(root,'src'),path.join(core,'src')].join(path.delimiter)}});
     ready=await fixture.next();assert.equal(ready.type,'ready');
     assert.equal(ready.held_timeout_seconds,heldTimeoutSeconds,'Actual configured private held-response bound');
+    browserObservation?.ready({pid:ready.pid,sameOrigin:ready.origin===report.boots[0].origin,
+      samePort:new URL(ready.origin).port===new URL(report.boots[0].origin).port});
     report.boots.push({pid:ready.pid,origin:ready.origin,output:path.basename(bootOutput),
       held_timeout_seconds:ready.held_timeout_seconds});
     operator=headers(ready.operator_token);client=headers(ready.credentials.studio);agent=headers(ready.credentials.agent);
@@ -274,11 +296,13 @@ async function lifecycleMain() {
     await fs.writeFile(path.join(output,name+'.aria.txt'),await safeAria(page));
   };
   const step=async(name,action)=>{
+    currentStep=name;
     const row={name,started_at:new Date().toISOString(),passed:false};report.checks.push(row);
     await resourceCheck('before:'+name);
     requireLiveHold();await action();requireLiveHold();
     await resourceCheck('after:'+name);row.passed=true;row.finished_at=new Date().toISOString();
     await fs.writeFile(path.join(output,'desktop-progress.json'),JSON.stringify({checks:report.checks},null,2));
+    currentStep='between_steps';
   };
   function unchanged(before,after) {
     for(const key of ['model_requests','source_requests','accounting_requests','budget','health_sqlite_sha256',
@@ -353,8 +377,12 @@ async function lifecycleMain() {
     });
     page=await context.newPage();page.setDefaultTimeout(6000);
     page.on('pageerror',error=>report.page_errors.push(error.message));
-    page.on('console',message=>{if(message.type()==='error')report.console_errors.push(message.text());});
+    page.on('console',recordConsole);
     page.on('response',response=>report.http_responses.push({method:response.request().method(),path:new URL(response.url()).pathname,status:response.status()}));
+    const {observeBrowserConsole}=require('./qa_capacity_resilience_console.cjs');
+    browserObservation=await observeBrowserConsole({page,output,origin:ready.origin,
+      step:()=>currentStep,boot:()=>boot});
+    browserObservation.ready({pid:ready.pid,initial:true});
     await page.goto(ready.origin);await page.locator('#environment').filter({hasText:/模擬/}).waitFor();
     await page.locator('#logout').click();await login(ready.operator_token);
     await step('actual_configuration_and_explicit_registered_policy_activation',async()=>{
@@ -454,13 +482,42 @@ async function lifecycleMain() {
     } else {
       await lifecycleSteps();
     }
+    if(restartConsoleObserve&&restartConsoleCase==='outside'){
+      currentStep='diagnostic_outside_closed_restart_window';
+      const stopped=await fixture.stop();report.fixture_stop=stopped;
+      browserObservation.normalStop(stopped,ready.pid);fixture=null;
+      assert.equal(stopped.code,0);assert.equal(stopped.cleanup_failed,false);assert.equal(stopped.timed_out,false);
+      const result=await page.evaluate(async token=>{
+        try{
+          const response=await fetch('/monitor/queue',{method:'GET',headers:{Authorization:'Bearer '+token}});
+          return {kind:'response',status:response.status};
+        }catch{return {kind:'transport_failed'};}
+      },ready.operator_token);
+      browserObservation.diagnosticRead({...result,method:'GET'});report.restart_console_outside_diagnostic=result;
+      assert.equal(result.kind,'transport_failed');
+    }
+    if(restartConsoleObserve&&restartConsoleCase==='forged'){
+      currentStep='diagnostic_console_API_without_network_request';
+      const literal='Failed to load resource: net::ERR_CONNECTION_REFUSED';
+      const observed=page.waitForEvent('console',{predicate:message=>message.type()==='error'&&message.text()===literal,timeout:6000});
+      await page.evaluate(value=>console.error(value),literal);await observed;
+      report.restart_console_forged_diagnostic={actual_console_API:true,no_request_injected:true};
+    }
+    consoleFrozen=true;
+    const consoleEvidence=await browserObservation.verdict(report.console_errors);
+    report.browser_observation=consoleEvidence.observation;report.console_verdict=consoleEvidence.verdict;
     assert.deepEqual(report.page_errors,[]);assert.deepEqual(report.blocked_browser_requests,[]);
-    assert.ok(report.console_errors.every(value=>/^Failed to load resource: the server responded with a status of (401|403|404|409|410|429|503) \(/.test(value)));
+    assert.ok(report.console_verdict.passed,'Browser console evidence does not establish an allowed observation');
     report.status='passed';
   } catch(error) {
     report.status='failed';report.failure={name:error.name,message:error.message,stack:error.stack};process.exitCode=1;
     if(page)await shot('failure').catch(()=>{});
   } finally {
+    if(browserObservation){
+      consoleFrozen=true;
+      report.browser_observation=await browserObservation.finish();
+      if(!report.browser_observation.complete){report.status='failed';process.exitCode=1;}
+    }
     if(browser){
       const started=performance.now();report.browser_close={attempted:true,resolved:false};
       try{await browser.close();report.browser_close.resolved=true;}
@@ -473,6 +530,13 @@ async function lifecycleMain() {
       if(!report.source_inputs_unchanged){report.status='failed';process.exitCode=1;}}
     try{await resourceCheck('after_fixture_exit');}
     catch(error){report.resource_guard.final_measurement_error=error.name;report.status='failed';process.exitCode=1;}
+    const lateConsole=report.console_errors_after_gate||[];
+    const rejectedLateIndexes=lateConsole.flatMap((value,index)=>
+      /^Failed to load resource: the server responded with a status of (401|403|404|409|410|429|503) \(/.test(value)?[]:[index]);
+    report.console_after_gate_verdict={passed:rejectedLateIndexes.length===0,error_count:lateConsole.length,
+      rejected_indexes:rejectedLateIndexes,
+      scope:'After the original pre-teardown CDP evidence boundary; only original HTTP status errors are allowed, with no late outage exception'};
+    if(rejectedLateIndexes.length){report.status='failed';process.exitCode=1;}
     report.check_counts={planned:report.planned_check_count,attempted:report.checks.length,
       passed:report.checks.filter(row=>row.passed).length,failed:report.checks.filter(row=>!row.passed).length,
       not_run:report.planned_check_count-report.checks.length};
@@ -940,12 +1004,25 @@ async function lifecycleMain() {
       const before=await inspect();assert.equal(before.model_response_held,true);assert.equal(before.worker_running_count,1);
       requireLiveHold();
       const oldReady=ready;fixture.send({command:'planned_crash'});const crash=await fixture.next();assert.equal(crash.type,'planned_crash');
+      browserObservation.plannedAck({expectedOldPid:oldReady.pid,pid:crash.pid,intentionalExit:crash.intentional_exit});
       requireLiveHold();
       report.live_hold_guard.live_claim_ended_at=new Date().toISOString();
       report.live_hold_guard.end_reason='actual planned crash confirmed; post-restart occupancy is uncertain, not a live HTTP claim';
       liveHoldStarted=null;
       const exited=await fixture.stop();report.boots[0].exit=exited;assert.equal(exited.code,86);assert.equal(exited.cleanup_failed,false);
-      fixture=null;await start(new URL(oldReady.origin).port);assert.notEqual(ready.pid,oldReady.pid);assert.deepEqual(ready.credentials,oldReady.credentials);
+      browserObservation.oldExit(exited);fixture=null;
+      if(restartConsoleObserve&&restartConsoleCase!=='outside'){
+        const observationMethod=restartConsoleCase==='post'?'POST':'GET';
+        const result=await page.evaluate(async({token,method})=>{
+          try{
+            const response=await fetch('/monitor/queue',{method,headers:{Authorization:'Bearer '+token}});
+            return {kind:'response',status:response.status};
+          }catch{return {kind:'transport_failed'};}
+        },{token:ready.operator_token,method:observationMethod});
+        browserObservation.diagnosticRead({...result,method:observationMethod});report.restart_console_diagnostic={...result,method:observationMethod};
+        assert.equal(result.kind,'transport_failed');
+      }
+      await start(new URL(oldReady.origin).port);assert.notEqual(ready.pid,oldReady.pid);assert.deepEqual(ready.credentials,oldReady.credentials);
       const after=await inspect();assert.equal(after.model_requests.length,0);
       for(const key of ['budget','health_sqlite_sha256','wire_files_sha256','receipt_artifacts_sha256','task_jobs_sha256',
         'raw_mock_request_sha256','raw_mock_method_counts'])assert.deepEqual(after[key],before[key],key);

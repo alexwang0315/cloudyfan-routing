@@ -741,3 +741,22 @@ Only the first genuine loopback HTTP RED on the separate40 branch is released;
 there is no40 product or acceptance claim. External issue40/first-red-ownership-
 release-01.json records the precise paths, interfaces, bounds and next evidence
 checks. No real API, spend, source push, deployment or deletion is authorized.
+
+
+## Issue40 bounded calibration validator ownership — 2026-10-28
+
+The scoped first creation-time recommendation tracer has passed; this is not the
+full Issue40 acceptance. Before changing the exact calibration validator, add
+selector_research.py as a fourth owned Core path under route-advice-worker. The
+existing selector and admission do not consume recommendations and their original
+validation calls retain their existing behavior.
+
+A host-only, optional immutable source-bytes mapping may let the existing exact
+validator verify the same bytes that the controlled bounded source reader actually
+opened. The caller must provide the declared source names and real bytes from the
+approved public root; size, count, non-regular/symlink/path, hash and expiry checks
+remain mandatory. It is not a client input, a new evidence authority, a generic
+callback, or proof of independent calibration or real-world savings. A missing
+verified source remains unknown; offline fixtures remain explicit MockTransport
+simulations. Current work remains in_progress with no current full-verification or
+production qualification claim.

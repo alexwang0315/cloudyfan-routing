@@ -42,6 +42,14 @@
         "scripts/research_parallel/test_parallel_runner.py"
       ],
       "provided_by": "CORE-CHECK-PARALLEL-COMPLETION"
+    },
+    {
+      "id": "EXACT-CALIBRATION-BOUNDED-SOURCE-BYTES",
+      "owner": "route-advice-worker",
+      "owned_files": [
+        "src/cloudyfan_jev/scores/selector_research.py"
+      ],
+      "provided_by": "ISSUE40"
     }
   ],
   "tasks": [
@@ -176,7 +184,8 @@
       "owned_files": [
         "src/cloudyfan_jev/task_features.py",
         "src/cloudyfan_jev/http_api.py",
-        "src/cloudyfan_jev/task_recommendations.py"
+        "src/cloudyfan_jev/task_recommendations.py",
+        "src/cloudyfan_jev/scores/selector_research.py"
       ],
       "depends_on": [
         "ISSUE39"
@@ -184,7 +193,7 @@
       "consumed_interfaces": [
         "CONTROLLED-QUEUE-WINDOW-HOOKS"
       ],
-      "outcome": "First public HTTP RED authorized only on separate40 branch after current ownership commit. Bounded creation-time observational recommendation; new host-only opt-in requires valid explicit feature capture; no selector/scheduler/routing adoption or later-state inputs. No feature/advice capability is implemented or verified yet. Root owns common metadata/docs; external issue40/first-red-ownership-release-01.json declares exact Mon paths and evidence limits. Preserve39/38 acceptance, legacy bytes, canonical dirty work, original failures and all production gates."
+      "outcome": "Issue40 active: Root independently verified first persisted unknown recommendation; route-advice-worker owns the creation observation and bounded calibration-validation shared interfaces. Continue all9AC, real HTTP/desktop MockTransport tests, fault/legacy and exact calibration; original full gates/review/merge pending. External remaining-implementation release and bounded-selector ownership record identify limits. Preserve original test suite, canonical dirty work, historical failures and pending production gates."
     }
   ]
 }

@@ -1,5 +1,7 @@
 """A controlled Core TaskService adapter, not a second routing algorithm."""
+from contextlib import nullcontext
 from decimal import Decimal
+from functools import wraps
 from types import MappingProxyType
 import hashlib
 import json
@@ -23,6 +25,15 @@ def _bound_task_id(binding):
     identity = json.dumps([binding["client"], binding["run"]], sort_keys=True,
                           ensure_ascii=False, allow_nan=False).encode()
     return "http-" + hashlib.sha256(identity).hexdigest()[:48]
+
+
+def _creation_computation(method):
+    @wraps(method)
+    def create(self, *args, **kwargs):
+        recorder = self.service.creation_features
+        with recorder.operation() if recorder is not None else nullcontext():
+            return method(self, *args, **kwargs)
+    return create
 
 
 class Gateway:
@@ -67,6 +78,17 @@ class Gateway:
             raise MonitorError("new_pool_missing_configured_modes", 409)
         return self.store.change(revision=revision, routing=pool)
 
+    def _bind(self, principal, payload, expected_contract):
+        recorder = self.service.creation_features
+        return self.store.bind(principal, payload, self.registry, expected_contract=expected_contract,
+            feature_policy=recorder.policy if recorder is not None else None,
+            feature_contracts=recorder.registered if recorder is not None else None, with_creation=True)
+
+    def _creation_owner(self, binding, created):
+        recorder = self.service.creation_features
+        return recorder.submitting(binding, created) if recorder is not None else nullcontext()
+
+    @_creation_computation
     def create(self, principal, payload, *, expected_contract=None):
         self.service.authorize(principal)
         if self.queue is not None and (self.service.capacity_controller.queue_policy() is not None
@@ -76,27 +98,29 @@ class Gateway:
                 if isinstance(payload, dict) and isinstance(payload.get('run_id'), str) else None)
             if prior is not None and (expired := self._expiry(prior)):
                 raise ServiceError(expired, 410)
-            binding = self.store.bind(principal, payload, self.registry, expected_contract=expected_contract)
-            state = self.queue.submit(principal, {'run_id': binding['run'], 'contract_id': binding['contract'],
-                                                'prompt': payload['prompt']})
+            binding, created = self._bind(principal, payload, expected_contract)
+            with self._creation_owner(binding, created):
+                state = self.queue.submit(principal, {'run_id': binding['run'], 'contract_id': binding['contract'],
+                                                    'prompt': payload['prompt']})
             self.capture(binding)
             return self.queue_view(binding, state)
         prior = (self.store.existing_binding(principal, payload.get("run_id"))
                  if isinstance(payload, dict) and isinstance(payload.get("run_id"), str) else None)
         if prior is not None:
-            binding = self.store.bind(principal, payload, self.registry, expected_contract=expected_contract)
+            binding, _ = self._bind(principal, payload, expected_contract)
             return self.status(principal, binding["run"])
         try:
             with self.admission.acquire():
                 prior = (self.store.existing_binding(principal, payload.get("run_id"))
                          if isinstance(payload, dict) and isinstance(payload.get("run_id"), str) else None)
-                binding = self.store.bind(principal, payload, self.registry, expected_contract=expected_contract)
+                binding, created = self._bind(principal, payload, expected_contract)
                 if prior is not None:
                     return self.status(principal, binding["run"])
                 self.store.record(binding, {"status": "bound"})
                 try:
-                    self.service.create(principal, {"run_id": binding["run"], "contract_id": binding["contract"],
-                                                    "prompt": payload["prompt"]})
+                    with self._creation_owner(binding, created):
+                        self.service.create(principal, {"run_id": binding["run"], "contract_id": binding["contract"],
+                                                        "prompt": payload["prompt"]})
                 except Exception:
                     self.capture(binding, unavailable=True)
                     raise
@@ -109,7 +133,7 @@ class Gateway:
                      if isinstance(payload, dict) and isinstance(payload.get("run_id"), str) else None)
             if prior is None:
                 raise
-            binding = self.store.bind(principal, payload, self.registry, expected_contract=expected_contract)
+            binding, _ = self._bind(principal, payload, expected_contract)
             return self.status(principal, binding["run"])
 
     def status(self, principal, run):
@@ -251,6 +275,8 @@ class Gateway:
                        "complete_api_usd": costs.get("complete_api_usd"),
                        "unknown_events": costs.get("unknown_events"),
                        "error_code": (status.get("error") or {}).get("code"), "observation": None}
+            if 'task_features' in status:
+                summary['task_features'] = status['task_features']
             if 'queue' in status:
                 summary.update({key: status.get(key) for key in ('queue', 'queue_state', 'reason',
                     'queue_seconds', 'end_to_end_seconds', 'cancellation_requested', 'provider_cancellation_confirmed')})
@@ -274,7 +300,8 @@ class Gateway:
                 try:
                     self.service.authorize(principal)
                     summary.update(self._task_costs(binding))
-                    summary.update(self._completed_summary(binding, expired=True))
+                    # Keep the previously verified public completion/trace.
+                    # Expiry must not reopen raw results or prompts to fill it.
                 except ServiceError as denied:
                     if denied.status == 401:
                         summary["observation"] = "client_inactive"
@@ -320,8 +347,9 @@ class Gateway:
                 observed.append(self.capture(binding, persist=persist))
         return observed
 
-    def ledger(self):
+    def ledger(self, *, include_retained_financial_metadata=False):
         seen, accounts, rows = set(), [], []
+        expired = {}
         known, unknown = Decimal(0), 0
         clients = {}
         with self.store.db() as db:
@@ -359,6 +387,17 @@ class Gateway:
                         by_client[owner["client"]] += Decimal(event["cost"])
                     else:
                         unattributed += Decimal(event["cost"])
+                if owner is not None and include_retained_financial_metadata is not True:
+                    key = owner['client'], owner['run']
+                    if key not in expired:
+                        expired[key] = self._expiry(owner)
+                    if expired[key]:
+                        # Ordinary observation retains original Budget facts,
+                        # without reopening expired requests for UI enrichment.
+                        row.update(metadata_unavailable=True, metadata_reason='original_raw_access_expired',
+                                   request_kind='unknown')
+                        rows.append(row)
+                        continue
                 try:
                     kind, root_id, call_id = event["id"].split(":", 2)
                     client = clients[root_id]

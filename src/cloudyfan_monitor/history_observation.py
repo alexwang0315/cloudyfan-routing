@@ -21,6 +21,7 @@ from .observation_fields import configuration, identifier
 from cloudyfan_jev.scores.backup_pools import verify_backup_pools
 from cloudyfan_jev.scores.backup_runtime import backup_classifier_contract_hash, backup_pool_contract_hash
 from cloudyfan_jev.scores.qcs import SelectionPolicy, classifier_contract_hash
+from cloudyfan_jev.task_features import public_features, unavailable
 
 SCHEMA_VERSION = "mrc-observation-v1"
 TIERS = ("open_source", "low", "mid", "high")
@@ -461,6 +462,9 @@ class TaskDecisionObserver:
                   "distributions_are_correctness_probabilities": False}
         try:
             binding = self.store.binding(task["client"], task["run"])
+            if task.get('access_expired') or task.get('status') in ('expired', 'retired'):
+                result['reason'] = 'historical_evidence_not_complete'
+                return result  # Safe metadata stays separate; never reopen expired prompts.
             if self.registry.get((binding["pool"], binding["category"], binding["mode"])) != binding["contract"]:
                 return result
             contract = self.service.contracts[binding["contract"]]
@@ -528,7 +532,15 @@ class TaskDecisionObserver:
 
 
 def task_observation(observer, task):
+    features = unavailable()
+    if observer is not None:
+        try:
+            # Independent saved metadata is legal for operator history after
+            # raw client access expires; do not reopen a prompt to fill it.
+            features = public_features(observer.service.feature_observation(task['client'], task['run']))
+        except Exception:
+            pass
     if observer is None:
         return {"schema_version": SCHEMA_VERSION, "task_decision": {
-            "status": "not_provided", "reason": "runner_observation_not_provided"}}
-    return {"schema_version": SCHEMA_VERSION, "task_decision": observer.project(task)}
+            "status": "not_provided", "reason": "runner_observation_not_provided"}, 'task_features': features}
+    return {"schema_version": SCHEMA_VERSION, "task_decision": observer.project(task), 'task_features': features}

@@ -9,7 +9,11 @@ import os
 from pathlib import Path
 import re
 import sqlite3
+import stat
 import time
+
+from cloudyfan_jev.task_features import (feature_digest, original_digest, public_features,
+                                        unavailable, validate_adoption, feature_computation, feature_budget_available)
 
 MODES = {"cloudyfan": "CloudyFan MRC", "fixed_high": "全大模型優先",
          "low_first": "全便宜模型優先", "open_source_first": "全開源模型優先"}
@@ -89,6 +93,35 @@ class Store:
                     last_used REAL, PRIMARY KEY(pool,contract));
             """)
         os.chmod(self.path, 0o600)
+        try:
+            with self._feature_db(write=True) as db:
+                db.execute('CREATE TABLE IF NOT EXISTS creation_feature_adoptions '
+                    '(client TEXT, run TEXT, adoption TEXT NOT NULL, adoption_sha TEXT NOT NULL, '
+                    'record_sha TEXT, request_sha TEXT, registered_sha TEXT, PRIMARY KEY(client,run))')
+        except Exception:
+            pass  # An unavailable auxiliary store cannot reject original tasks.
+
+    @contextmanager
+    def _feature_db(self, *, write=False):
+        """One nonwaiting auxiliary transaction; never the original ten-second db()."""
+        path = self.path.absolute()
+        info = path.lstat()
+        if path != path.resolve() or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+            raise ValueError('Unsafe feature binding store')
+        mode = 'rw' if write else 'ro'
+        db = sqlite3.connect(path.as_uri() + '?mode=' + mode, uri=True, timeout=0, isolation_level=None)
+        db.row_factory = sqlite3.Row
+        try:
+            if not write:
+                db.execute('PRAGMA query_only=ON')
+            db.execute('BEGIN IMMEDIATE' if write else 'BEGIN')
+            yield db
+            db.commit()
+        except BaseException:
+            db.rollback()
+            raise
+        finally:
+            db.close()
 
     @contextmanager
     def db(self):
@@ -204,7 +237,8 @@ class Store:
                 raise MonitorError("pool_integrity_failed", 409)
             return {"id": key, **data}
 
-    def bind(self, client, payload, registry, *, expected_contract=None):
+    def bind(self, client, payload, registry, *, expected_contract=None,
+             feature_policy=None, feature_contracts=None, with_creation=False):
         if not isinstance(payload, dict) or set(payload) != {"run_id", "category", "prompt"}:
             raise MonitorError("unsupported_task_fields")
         if not isinstance(payload["run_id"], str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", payload["run_id"]):
@@ -217,6 +251,7 @@ class Store:
         except ValueError:
             raise MonitorError("unknown_category") from None
         fingerprint = digest({**payload, "category": category})
+        created = False
         with self.db() as db:
             prior = db.execute("SELECT * FROM bindings WHERE client=? AND run=?", (client, payload["run_id"])).fetchone()
             if prior:
@@ -224,28 +259,109 @@ class Store:
                     raise MonitorError("ollama_contract_changed", 409)
                 if prior["fingerprint"] != fingerprint:
                     raise MonitorError("frozen_task_changed", 409)
-                return dict(prior)
-            config = db.execute("SELECT * FROM control").fetchone()
-            client_row = db.execute("SELECT * FROM clients WHERE id=? AND enabled=1", (client,)).fetchone()
-            if client_row is None:
-                raise MonitorError("unauthorized", 401)
-            mode = client_row["mode"] or config["mode"]
-            pool = config["routing_pool"]
-            contract = registry.get((pool, category, mode))
-            if contract is None:
-                raise MonitorError("routing_configuration_unavailable", 409)
-            if expected_contract is not None and contract != expected_contract:
-                raise MonitorError("ollama_contract_changed", 409)
-            row = {"client": client, "run": payload["run_id"], "fingerprint": fingerprint,
-                   "pool": pool, "mode": mode, "category": category, "contract": contract, "created": self.clock()}
-            db.execute("INSERT INTO bindings VALUES(:client,:run,:fingerprint,:pool,:mode,:category,:contract,:created)", row)
-            from .billing import freeze_policy
-            freeze_policy(db, row)
-            db.execute("INSERT INTO version_uses VALUES(?,?,?,?) ON CONFLICT(pool,contract) "
-                       "DO UPDATE SET last_used=MAX(last_used,excluded.last_used)",
-                       (pool, contract, row["created"], row["created"]))
-            self.audit(db, "task_bound", {k: v for k, v in row.items() if k != "fingerprint"})
-            return row
+                row = dict(prior)
+            else:
+                config = db.execute("SELECT * FROM control").fetchone()
+                client_row = db.execute("SELECT * FROM clients WHERE id=? AND enabled=1", (client,)).fetchone()
+                if client_row is None:
+                    raise MonitorError("unauthorized", 401)
+                mode = client_row["mode"] or config["mode"]
+                pool = config["routing_pool"]
+                contract = registry.get((pool, category, mode))
+                if contract is None:
+                    raise MonitorError("routing_configuration_unavailable", 409)
+                if expected_contract is not None and contract != expected_contract:
+                    raise MonitorError("ollama_contract_changed", 409)
+                row = {"client": client, "run": payload["run_id"], "fingerprint": fingerprint,
+                       "pool": pool, "mode": mode, "category": category, "contract": contract, "created": self.clock()}
+                db.execute("INSERT INTO bindings VALUES(:client,:run,:fingerprint,:pool,:mode,:category,:contract,:created)", row)
+                from .billing import freeze_policy
+                freeze_policy(db, row)
+                db.execute("INSERT INTO version_uses VALUES(?,?,?,?) ON CONFLICT(pool,contract) "
+                           "DO UPDATE SET last_used=MAX(last_used,excluded.last_used)",
+                           (pool, contract, row["created"], row["created"]))
+                self.audit(db, "task_bound", {k: v for k, v in row.items() if k != "fingerprint"})
+                self._adopt_features(db, row, payload, feature_policy, feature_contracts)
+                created = True
+        # No producer qualification escapes a failed original binding commit.
+        return (row, created) if with_creation else row
+
+    def _adopt_features(self, db, binding, payload, policy, contracts):
+        if policy is None:
+            return
+        try:
+            with feature_computation():
+                policy = dict(policy)
+                adoption = {'schema_version': 'creation-feature-adoption-v1', 'binding': dict(binding),
+                    'policy': policy, 'policy_sha256': feature_digest(policy),
+                    'request_sha256': original_digest({'run_id': binding['run'], 'contract_id': binding['contract'],
+                                                      'prompt': payload['prompt']}),
+                    'registered_sha256': contracts[binding['contract']]}
+                validate_adoption(adoption)
+                body, adoption_sha = encode(adoption), feature_digest(adoption)
+            if not feature_budget_available():
+                return
+            db.execute('SAVEPOINT creation_features')
+            try:
+                db.execute('INSERT INTO creation_feature_adoptions '
+                    '(client,run,adoption,adoption_sha) VALUES(?,?,?,?)',
+                    (binding['client'], binding['run'], body, adoption_sha))
+            except Exception:
+                db.execute('ROLLBACK TO creation_features')
+            finally:
+                db.execute('RELEASE creation_features')
+        except Exception:
+            if not db.in_transaction:
+                # SQLITE_FULL may roll back the entire original binding, not
+                # just its auxiliary savepoint. Never admit that lost binding.
+                raise MonitorError('monitor_store_unavailable', 503) from None
+            pass  # No adoption for this first owner; replay must not fill it.
+
+    def _feature_snapshot(self, db, client, run):
+        binding = db.execute('SELECT * FROM bindings WHERE client=? AND run=?', (client, run)).fetchone()
+        row = db.execute('SELECT CASE WHEN length(CAST(adoption AS BLOB))<=16384 THEN adoption END AS adoption, '
+            'adoption_sha,record_sha,request_sha,registered_sha FROM creation_feature_adoptions '
+            'WHERE client=? AND run=?', (client, run)).fetchone()
+        if binding is None or row is None or row['adoption'] is None:
+            raise ValueError('Original feature adoption unavailable')
+        with feature_computation():
+            adoption = validate_adoption(json.loads(row['adoption']))
+            if adoption['binding'] != dict(binding) or feature_digest(adoption) != row['adoption_sha']:
+                raise ValueError('Original feature binding changed')
+            seal = None
+            if any(row[key] is not None for key in ('record_sha', 'request_sha', 'registered_sha')):
+                if (row['request_sha'] != adoption['request_sha256']
+                        or row['registered_sha'] != adoption['registered_sha256']
+                        or not isinstance(row['record_sha'], str) or re.fullmatch(r'[a-f0-9]{64}', row['record_sha']) is None):
+                    raise ValueError('Original feature seal invalid')
+                seal = {'record_sha256': row['record_sha'], 'request_sha256': row['request_sha'],
+                        'registered_sha256': row['registered_sha']}
+            return {'adoption': adoption, 'adoption_sha256': row['adoption_sha'], 'seal': seal}
+
+    def feature_binding(self, client, run):
+        """Read-only host port; a lookup never creates producer ownership."""
+        with self._feature_db() as db:
+            return self._feature_snapshot(db, client, run)
+
+    def seal_features(self, client, run, adoption_sha, registered_sha, record_sha):
+        """Called once by the trusted capture owner; no public seal endpoint."""
+        if not isinstance(record_sha, str) or re.fullmatch(r'[a-f0-9]{64}', record_sha) is None:
+            raise ValueError('Invalid captured record digest')
+        with self._feature_db(write=True) as db:
+            snapshot = self._feature_snapshot(db, client, run)
+            adoption = snapshot['adoption']
+            if (snapshot['adoption_sha256'] != adoption_sha or snapshot['seal'] is not None
+                    or adoption['registered_sha256'] != registered_sha):
+                raise ValueError('Original capture adoption or empty seal unavailable')
+            if not feature_budget_available():
+                raise ValueError('Feature compute deadline exceeded before seal')
+            changed = db.execute('UPDATE creation_feature_adoptions SET record_sha=?,request_sha=?,registered_sha=? '
+                'WHERE client=? AND run=? AND adoption_sha=? '
+                'AND record_sha IS NULL AND request_sha IS NULL AND registered_sha IS NULL',
+                (record_sha, adoption['request_sha256'], registered_sha, client, run, adoption_sha))
+            if changed.rowcount != 1:
+                raise ValueError('Original feature seal already consumed')
+        return True
 
     def binding(self, client, run):
         with self.db() as db:
@@ -265,7 +381,13 @@ class Store:
                   "wall_seconds", "known_api_usd", "complete_api_usd", "unknown_events", "path", "error_code",
                   "completed_status", "access_expired", "observation", "trace", "ingress",
                   "queue", "queue_state", "reason", "queue_seconds", "end_to_end_seconds",
-                  "cancellation_requested", "provider_cancellation_confirmed")
+                  "cancellation_requested", "provider_cancellation_confirmed", "task_features")
+        if 'task_features' in summary:
+            summary = dict(summary)
+            try:
+                summary['task_features'] = public_features(summary['task_features'])
+            except Exception:
+                summary['task_features'] = unavailable()
         with self.db() as db:
             previous = db.execute("SELECT data FROM tasks WHERE client=? AND run=?",
                                   (binding["client"], binding["run"])).fetchone()

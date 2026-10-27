@@ -159,12 +159,50 @@ window.CloudyFanTrace = (() => {
     const triggers={initial:'原任務首答',availability_failure:'供應商可用性故障後的同池備援',public_validation_failed:'公開驗收未通過後的品質補救',public_validation_unavailable:'公開驗收未知後的品質補救'};
     return `<section class="trace-section" data-history-observation><div class="trace-section-title"><h3>任務當時的決策依據</h3>${badge(labelFrom(statuses,history.status),history.status==='available'?'blue':'amber')}</div><p>${historyReason(history.reason)}</p><p class="metadata muted">這是當時的凍結紀錄，不使用現在健康重算。合成或研究證據仍限原範圍；觀測不授予新的模型資格或派送權限。</p><dl class="trace-facts"><div><dt>原候選版本</dt><dd><code>${knownText(binding.pool_version)}</code></dd></div><div><dt>原類別與模式</dt><dd>${knownText(binding.category)}<br>${knownText(binding.mode)}</dd></div><div><dt>原契約</dt><dd>${knownText(binding.contract_id)}<br>${knownText(binding.contract_version)}</dd></div><div><dt>原路由規則與綁定時間</dt><dd>${knownText(binding.routing_version)}<br>${time(binding.bound_at)}</dd></div><div><dt>已知 API 實付 · USD</dt><dd>${estimateAmount(costs.known_api_usd)}</dd></div><div><dt>完整 API 實付 · USD</dt><dd>${estimateAmount(costs.complete_api_usd)}</dd></div><div><dt>客戶用量費</dt><dd>依原費率另列於客戶帳務</dd></div><div><dt>可強制費用上界</dt><dd>未提供可安全對應的完整上界</dd></div></dl>${stages.length?stages.map(stage=>`<article class="trace-decision" data-history-stage><h4>${stage.stage==='low_mid'?'低／中階段':stage.stage==='mid_high'?'中／高階段':'首答與同池候選'}</h4><p><strong>${stage.state==='not_entered'?'未進入此階段':stage.state==='unknown'?'證據未知':labelFrom(triggers,stage.trigger)}</strong></p><p>${historyReason(stage.reason)} <code>${knownText(stage.reason)}</code></p>${stage.state==='recorded'?`<p>原決策：${stage.action==='classify'?'呼叫 Jev 分類':stage.action==='direct'?'直接選模':'停止派送'} · 實際選池：${tierName(stage.selected_tier)}</p>`:''}${historicalEconomics(stage)}${historicalCandidates(stage.candidates)}</article>`).join(''):'<p class="trace-empty">未提供逐候選歷史證據；已有作答與分類紀錄繼續列於下方，缺少紀錄不代表未呼叫。</p>'}</section>`;
   }
+  function featuresSection(task) {
+    const feature=task.operator_observation?.task_features || task.task_features;
+    const valid=record(feature)&&feature.schema_version==='creation-task-features-v1'&&feature.status==='available';
+    const key='creation-features-'+encodeURIComponent(JSON.stringify([task.client??'',task.run??'']));
+    const labels={input_utf8_bytes:'輸入文字大小',input_codepoints:'輸入字元數',input_tokens:'精確輸入 token',
+      original_category:'原 canonical 類別',original_mode:'原模式',messages_count:'訊息數',reference_blocks_count:'參考區塊數',
+      output_schema:'輸出 schema 要求',modality_requirements:'模態要求',deadline_requirements:'執行期限要求',
+      fee_requirements:'整體任務費用要求',input_modality:'已接受的輸入型態',tools_required:'必要工具能力',
+      context_requirements:'明示上下文需求',data_location_policy:'資料位置政策',runtime_limits:'原執行上限'};
+    const kinds={explicit:'明示',deterministic:'確定性量測',heuristic:'啟發式提示',unknown:'未知',not_applicable:'不適用',unsupported:'未支援'};
+    const units={utf8_bytes:'UTF-8 bytes',unicode_codepoints:'Unicode codepoints',tokens:'tokens',category:'canonical 類別',
+      mode:'模式',messages:'訊息',reference_blocks:'參考區塊',schema:'schema',modalities:'模態',seconds:'秒',usd:'USD',
+      modality:'輸入型態',boolean:'是否需要',context_tokens:'需求 tokens',location_policy:'執行位置限制',runtime_limits:'契約上限'};
+    const sources={accepted_request:'已接受原請求',trusted_binding:'原任務綁定',frozen_requirements:'凍結能力要求',
+      frozen_contract:'原受控契約',not_provided:'未提供'};
+    const reasons={measured_original_text:'直接量測當時的文字，未估算 tokens',exact_tokenizer_not_provided:'未提供精確 tokenizer、序列化及模型版本，維持未知',
+      original_binding:'保留原類別與模式，不推定任務難度',structured_messages_not_provided:'原請求沒有結構化訊息欄位，不能推定一輪對話',
+      structured_references_not_provided:'原請求沒有結構化參考區塊，不能推定零份文件',output_schema_not_provided:'受控契約未明示輸出 schema；提示文字不能建立此要求',
+      required_modalities_not_provided:'未提供受控模態要求，文字表示不等於完整模態需求',execution_deadline_not_provided:'未明示執行期限；排隊等待期限另列',
+      whole_task_fee_requirement_not_provided:'未提供完整任務費用上界；每次呼叫上界、客戶費率與實付分開',plain_text_request:'此入口接受文字 prompt，未解析文件或其他模態',
+      required_capabilities_only:'只讀原能力要求；允許工具清單不等於必需工具',frozen_requirements_not_provided:'原契約未提供這項明示要求',
+      required_context_not_measured_usage:'這是需求 tokens，並非本次量測或上游實際用量',original_execution_policy:'保留原執行位置限制，不公開私人來源位置',
+      caps_are_not_requirements_or_measured_usage:'執行上限與明示需求、實際 tokens 分開'};
+    function value(item) {
+      if(item.kind==='unknown'||item.value==null)return '未知';
+      if(item.id==='tools_required')return item.value===true?'是':item.value===false?'否':'未知';
+      if(item.id==='input_modality')return item.value==='text'?'文字':'未知';
+      if(item.id==='data_location_policy')return item.value==='local_only'?'原來源同一地點':item.value==='unrestricted'?'原政策未限同一地點':'未知';
+      if(item.id==='runtime_limits'){
+        const names={max_context_bytes:'上下文 UTF-8 bytes',max_tokens:'每回合輸出 tokens',max_tool_calls:'工具次數',max_turns:'回合數'};
+        return record(item.value)?Object.entries(names).map(([field,label])=>`${label}：${quantity(item.value[field])}`).join('<br>'):'未知';
+      }
+      if(['original_category','original_mode'].includes(item.id))return knownText(item.value);
+      return quantity(item.value);
+    }
+    const items=valid&&Array.isArray(feature.features)?feature.features.filter(item=>record(item)&&Object.hasOwn(labels,item.id)).slice(0,16):[];
+    return `<section class="trace-section" data-task-features><div class="trace-section-title"><h3>任務建立時特徵</h3>${badge(valid?'當時紀錄':'無法確認',valid?'blue':'amber')}</div><p>僅供觀察，不改原類別、模型、路由或費用。</p>${!valid?'<p class="trace-empty">當時特徵未提供或無法確認；不回讀原文補算，也不推定曾經停用。</p>':`<dl class="trace-facts"><div><dt>特徵規則版本</dt><dd><code>${knownText(feature.feature_version)}</code></dd></div><div><dt>資料使用政策版本</dt><dd><code>${knownText(feature.data_policy_version)}</code></dd></div><div><dt>原接受時間</dt><dd>${time(feature.captured_at)}</dd></div></dl>${feature.feature_version==='local-deterministic-v1'?'<p class="metadata muted">此版本只記錄三項量測；其他欄位未提供，不用新規則補算。</p>':''}<details data-observation-detail="${escape(key)}"><summary id="${escape(key)}-summary">查看單位、來源與未知原因</summary><div class="table-wrap"><table class="trace-call-table"><thead><tr><th>特徵</th><th>值</th><th>取得類型</th><th>單位</th><th>來源與原因</th></tr></thead><tbody>${items.map(item=>`<tr><td>${escape(labels[item.id])}</td><td>${value(item)}</td><td>${labelFrom(kinds,item.kind)}</td><td>${labelFrom(units,item.unit)}</td><td>${labelFrom(sources,item.source)}<details data-observation-detail="${escape(key+'-'+item.id)}" data-feature-reasons="${escape(item.id)}"><summary id="${escape(key+'-'+item.id)}-reason">查看原因</summary>${Array.isArray(item.reasons)?item.reasons.slice(0,4).map(reason=>`<p>${labelFrom(reasons,reason)}</p>`).join(''):'未知原因'}</details></td></tr>`).join('')}</tbody></table></div></details>`}</section>`;
+  }
   function render(task) {
     task = record(task) ? task : {};
     const trace = record(task.trace) ? task.trace : {}, ingress = record(task.ingress) ? task.ingress : {};
     const attempts = Array.isArray(trace.attempts) ? trace.attempts.filter(record) : [];
     const decisions = Array.isArray(trace.decisions) ? trace.decisions.filter(record) : [];
-    return `<div class="task-trace" data-task-trace><div class="trace-header"><div><h3>呼叫與選池明細</h3><p>API 呼叫費用與客戶扣款分開。未知費用保留待核，<a href="#billing">查看客戶帳務 →</a></p></div><span class="badge">不含提示與答案</span></div>${historySection(task)}<section class="trace-section trace-ingress"><h3>客戶端入口</h3><dl class="trace-facts"><div><dt>入口協定</dt><dd>${ingress.protocol === 'ollama' ? 'Ollama' : '未知'}</dd></div><div><dt>請求端點</dt><dd class="mono">${knownText(ingress.endpoint)}</dd></div><div><dt>模型別名</dt><dd class="mono">${knownText(ingress.alias)}</dd></div><div><dt>接收時間</dt><dd>${time(ingress.received_at)}</dd></div></dl><p class="metadata muted">入口的模型別名與各次呼叫實際使用的模型分開列示。</p></section><section class="trace-section"><div class="trace-section-title"><h3>四池嘗試紀錄</h3><span class="metadata muted">開源集合可與品質分組重疊</span></div>${poolCards(task,trace,attempts,decisions)}</section>${attemptsSection(trace,attempts)}${decisionsSection(trace,decisions)}</div>`;
+    return `<div class="task-trace" data-task-trace><div class="trace-header"><div><h3>呼叫與選池明細</h3><p>API 呼叫費用與客戶扣款分開。未知費用保留待核，<a href="#billing">查看客戶帳務 →</a></p></div><span class="badge">不含提示與答案</span></div>${featuresSection(task)}${historySection(task)}<section class="trace-section trace-ingress"><h3>客戶端入口</h3><dl class="trace-facts"><div><dt>入口協定</dt><dd>${ingress.protocol === 'ollama' ? 'Ollama' : '未知'}</dd></div><div><dt>請求端點</dt><dd class="mono">${knownText(ingress.endpoint)}</dd></div><div><dt>模型別名</dt><dd class="mono">${knownText(ingress.alias)}</dd></div><div><dt>接收時間</dt><dd>${time(ingress.received_at)}</dd></div></dl><p class="metadata muted">入口的模型別名與各次呼叫實際使用的模型分開列示。</p></section><section class="trace-section"><div class="trace-section-title"><h3>四池嘗試紀錄</h3><span class="metadata muted">開源集合可與品質分組重疊</span></div>${poolCards(task,trace,attempts,decisions)}</section>${attemptsSection(trace,attempts)}${decisionsSection(trace,decisions)}</div>`;
   }
   return {render};
 })();

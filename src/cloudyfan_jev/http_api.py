@@ -23,6 +23,7 @@ from .diagnostics import DiagnosticContract
 from .privacy import ExecutionPolicy, PolicyDenied
 from .retention import (RetentionError, RetentionPolicy, RetentionStore, digest,
                         inventory, open_file_paths, maintenance_lock, purge_exact)
+from .task_features import FeatureRecorder, not_provided, unavailable
 
 
 class ServiceError(Exception):
@@ -210,9 +211,36 @@ class TaskService:
         if controller is not None and hasattr(self, 'root'):
             controller.store.integrity.bind(self.root, 'capacity')
 
+    @property
+    def creation_features(self):
+        return self._creation_features
+
+    @creation_features.setter
+    def creation_features(self, configuration):
+        """Trusted host-only observation policy and independent binding port."""
+        if configuration is None:
+            self._creation_features = None
+            return  # Disabling new capture must not erase the independent reader.
+        try:
+            options = dict(configuration)
+        except Exception:
+            options = {}
+        capture = options.pop('capture', True)
+        if type(capture) is not bool:
+            options, capture = {}, True
+        recorder = FeatureRecorder(self.root, options, self.contracts)
+        self._creation_features = recorder if capture else None
+        if recorder.port is not None:
+            self._feature_reader = recorder
+        if recorder.records not in self.retention_protected_paths:
+            self.retention_protected_paths += (recorder.records,)
+
     def __init__(self, root, *, contracts, allowed_principal=None, allowed_principals=None, retention_policy=None,
                  principal_active=None, clock=time.time, retention_protected_paths=(), capacity_controller=None):
         self.capacity_controller = capacity_controller
+        self._creation_features = None
+        self._feature_reader = None
+        self.clock = clock
         self.queue_scheduler = None
         self.root = Path(root)
         if allowed_principal is not None and allowed_principals is not None:
@@ -274,12 +302,14 @@ class TaskService:
     @_retained
     def create(self, principal, payload):
         self.authorize(principal)
+        controlled_queue_required = False
         if self.capacity_controller is not None and self.capacity_controller.queue_policy() is not None:
             from .capacity_queue import QueuePreparation
             if self.queue_scheduler is None:
                 raise ServiceError('capacity_queue_backend_unavailable', 503)
             if not QueuePreparation.is_accepting(self.queue_scheduler):
                 return self.queue_scheduler.submit(principal, payload)
+            controlled_queue_required = True
         if not isinstance(payload, dict) or set(payload) != {'run_id', 'contract_id', 'prompt'}:
             raise ServiceError('unsupported_task_fields')
         if (not isinstance(payload['prompt'], str) or not payload['prompt'].strip()
@@ -310,7 +340,35 @@ class TaskService:
                         raise
                 _write(path, frozen)
                 _write(directory / 'state.json', {'run_id': payload['run_id'], 'status': 'ready'})
+                if self.creation_features is not None:
+                    try:
+                        lifecycle = self.retention.lookup(directory.name) if self.retention is not None else None
+                        accepted_at = lifecycle['created_at'] if lifecycle is not None else self.clock()
+                        self.creation_features.capture(principal, payload['run_id'], directory, frozen, accepted_at,
+                                                       controlled_queue_required=controlled_queue_required)
+                    except Exception:
+                        pass  # Auxiliary evidence never changes original creation or dispatch.
         return self.status(principal, payload['run_id'])
+
+    def feature_observation(self, principal, run_id, job=None):
+        """Trusted host metadata projection; caller retains the original access guard."""
+        reader = self._feature_reader or self.creation_features
+        if reader is None:
+            return not_provided()
+        try:
+            internal = self.internal_id(principal, run_id)
+            require_anchor = True
+            if job is None and self.retention is not None:
+                import math
+                lifecycle, now = self.retention.lookup(internal), self.clock()
+                if (lifecycle is not None and type(now) in (int, float) and math.isfinite(now)
+                        and now >= lifecycle['expires_at']):
+                    # Long-lived operator metadata relies on the independent
+                    # seal; expired raw evidence is never reopened to fill it.
+                    require_anchor = False
+            return reader.observe(principal, run_id, internal, job, require_anchor=require_anchor)
+        except Exception:
+            return unavailable()
 
     def _costs(self, principal, run_id, job, *, refresh=False):
         contract = self.contracts.get(job['request']['contract_id'])
@@ -370,7 +428,8 @@ class TaskService:
 
     def _task_status(self, principal, run_id):
         directory, job = self._job(principal, run_id)
-        result = {**_read(directory / 'state.json'), 'costs': self._costs(principal, run_id, job)}
+        result = {**_read(directory / 'state.json'), 'costs': self._costs(principal, run_id, job),
+                  'task_features': self.feature_observation(principal, run_id, job)}
         if self.capacity_controller is not None:
             try:
                 result['capacity'] = self.capacity_controller.own(self.internal_id(principal, run_id))
@@ -407,7 +466,8 @@ class TaskService:
             completed = self._verified_completed(principal, run_id, directory, job)
         else:
             self._registered_contract(job)
-        return {'state': {**state, 'costs': self._costs(principal, run_id, job)},
+        return {'state': {**state, 'costs': self._costs(principal, run_id, job),
+                          'task_features': self.feature_observation(principal, run_id, job)},
                 'completed_result': completed}
 
     @_retained
@@ -418,6 +478,7 @@ class TaskService:
         result = self._verified_completed(principal, run_id, directory, job)
         return {**_read(directory / 'outcome.json'),
                 'provenance': _provenance(result, job['registered']),
+                'task_features': self.feature_observation(principal, run_id, job),
                 'costs': self._costs(principal, run_id, job, refresh=refresh)}
 
     @_retained

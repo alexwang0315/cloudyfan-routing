@@ -1,5 +1,5 @@
 """Bounded private task admission and explicit workers, with no background service."""
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import asdict, dataclass
 from http import HTTPStatus
 import math
@@ -208,6 +208,7 @@ class QueueScheduler:
                 if prior['state'] != 'accepting':
                     return self.status(principal, payload['run_id'])
         rejection = None
+        new_accepting, accepted_at = False, None
         # This committed accepting row is a recovery journal across the queue,
         # original TaskService job and capacity adoption stores. No cross-store
         # transaction is claimed; resubmit can only finish the same frozen row.
@@ -237,13 +238,16 @@ class QueueScheduler:
                     db.execute('INSERT INTO jobs(id,principal,run_id,request,created,deadline,state,reason,waiting_since) VALUES(?,?,?,?,?,?,?,?,?)',
                         (identity, principal, payload['run_id'], encoded, now, now + self.limits.max_wait_seconds,
                          'accepting', 'queue_acceptance_incomplete', now))
+                    new_accepting, accepted_at = True, now
         if rejection:
             raise ServiceError(rejection, 429)
         with self._readonly() as db:
             state = self._job(db, principal, payload['run_id'])['state']
         if state == 'accepting':
             try:
-                with self.capacity_protocol.accepting(self):
+                recorder = self.service.creation_features
+                feature_owner = recorder.accepting(new_accepting, accepted_at) if recorder is not None else nullcontext()
+                with self.capacity_protocol.accepting(self), feature_owner:
                     self.service.create(principal, payload)
                     with self._transaction() as db:
                         accepted = dict(self._job(db, principal, payload['run_id']))
@@ -433,6 +437,8 @@ class QueueScheduler:
                 'measurement_kind': self.measurement_kind, 'production_slo_validated': False,
                 'queue_seconds': None if row['started'] is None else row['started'] - row['created'],
                 'end_to_end_seconds': None if row['finished'] is None else row['finished'] - row['created']}
+        view['task_features'] = (task['task_features'] if 'task_features' in task
+                                 else self.service.feature_observation(principal, run_id))
         if self.capacity_protocol is not None:
             view['queue'] = {'protocol': self.capacity_protocol.protocol, 'version': self.capacity_protocol.version,
                 'limits': asdict(self.limits), 'accepted_at': row['created'], 'deadline': row['deadline'],

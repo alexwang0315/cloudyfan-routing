@@ -11,11 +11,19 @@
         "src/cloudyfan_jev/capacity.py",
         "src/cloudyfan_jev/capacity_dispatch.py",
         "src/cloudyfan_jev/capacity_queue.py",
-        "src/cloudyfan_jev/http_api.py",
-        "src/cloudyfan_jev/scheduler.py",
         "src/cloudyfan_jev/capacity_integrity.py"
       ],
       "provided_by": "ISSUE38"
+    },
+    {
+      "id": "CREATION-TIME-TASK-OBSERVATION",
+      "owner": "task-features-worker",
+      "owned_files": [
+        "src/cloudyfan_jev/task_features.py",
+        "src/cloudyfan_jev/http_api.py",
+        "src/cloudyfan_jev/scheduler.py"
+      ],
+      "provided_by": "ISSUE39"
     },
     {
       "id": "RATE-WINDOW-POLICY",
@@ -127,7 +135,7 @@
     {
       "id": "ISSUE38",
       "owner": "capacity-resilience-worker",
-      "status": "in_progress",
+      "status": "completed",
       "owned_files": [
         "src/cloudyfan_jev/capacity.py",
         "src/cloudyfan_jev/capacity_dispatch.py",
@@ -142,7 +150,24 @@
         "ISSUE37"
       ],
       "consumed_interfaces": [],
-      "outcome": "Preserve original capacity/queue/window state through restart and controlled faults; same approved actual HTTP/desktop seam. New original-source public HTTP RED confirms observation retention-guard contention during acceptance. Root owns this plan; capacity-resilience worker may narrow only host-only observe in the configured controlled queue to existing read-only access validation independently of stale queue membership. Preserve legacy/default observation guards, all creation/status/result/execution guards, original retention limits and no dispatch authority from detached views. Public HTTP regressions and full acceptance remain pending; no real APIs or data deletion."
+      "outcome": "Issue38 accepted and GitHub38/parent29 CLOSED in the approved actual loopback HTTP/real headed Chrome plus MockTransport scope: original desktop13/allconsole/cleanup PASS, Core2069/full integration8steps/demos/build and Monitor427/full25steps/build. Exact tested Core770/Mon0f500 trees merged as36336893/7afd3b2e; Markdown-only Mon7ddbd708. Original failures and unknown causes retained. Immutable external issue38/issue38-local-completion-01.json SHA61c7c79cc360678f1cb057b9979905da557ac2dcc1827e13cb9afb1801b04a64 and tracker-closed-and39-claimed-01.json record the source/evidence/closure. Broad29-33 all20 remain in progress; production gates unchanged."
+    },
+    {
+      "id": "ISSUE39",
+      "owner": "task-features-worker",
+      "status": "in_progress",
+      "owned_files": [
+        "src/cloudyfan_jev/task_features.py",
+        "src/cloudyfan_jev/http_api.py",
+        "src/cloudyfan_jev/scheduler.py"
+      ],
+      "depends_on": [
+        "ISSUE38"
+      ],
+      "consumed_interfaces": [
+        "CONTROLLED-QUEUE-WINDOW-HOOKS"
+      ],
+      "outcome": "Actual native parent29 CLOSED and GitHub39 assigned to alexwang0315. Implement opt-in bounded deterministic creation-time task features and trusted original identity/request/contract binding at the previously approved real loopback HTTP plus desktop seam, with MockTransport upstreams. Preserve immutable old tasks, safe unknown/not_provided, original routing/fees/deadlines and no extra upstream requests. task_features.py is the planned NEW producer path; http_api.py and scheduler.py are confirmed existing creation boundaries. No feature code has been implemented at this metadata transition. Root declares additional concrete Monitor/test ownership before any corresponding edits; later40-53 remain on the external native graph."
     }
   ]
 }

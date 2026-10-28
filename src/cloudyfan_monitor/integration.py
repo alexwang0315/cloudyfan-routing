@@ -104,7 +104,8 @@ class RunBoundCore(Core):
 def assemble_monitor(store, service, registry, identities, *, operator_token, source=None,
                      origin="http://127.0.0.1:8766", demo=False, labels=None, billing_source=None,
                      ollama_models=None, simulation=None, candidate_observer=None, task_observer=None,
-                     capacity_observer=None, capacity_controller=None, queue=None, creation_features=None):
+                     capacity_observer=None, capacity_controller=None, queue=None, creation_features=None,
+                     creation_recommendations=None):
     """Consume an explicitly controlled host service; never create qualifications."""
     if (not isinstance(store, Store) or not isinstance(service, TaskService)
             or not isinstance(identities, IdentityStore)):
@@ -132,6 +133,8 @@ def assemble_monitor(store, service, registry, identities, *, operator_token, so
         # capture disabled. No policy is adopted for a new task by this reader.
         service.creation_features = {'policy_bundle': FEATURE_POLICY,
             'binding_port': StoreFeatureBindingPort(store), 'capture': False}
+    if creation_recommendations is not None:
+        service.creation_recommendations = creation_recommendations
     if capacity_observer is not None:
         from .capacity import CapacityObserver
         if type(capacity_observer) is not CapacityObserver:

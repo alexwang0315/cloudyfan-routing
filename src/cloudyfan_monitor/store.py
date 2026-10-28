@@ -15,6 +15,7 @@ import time
 from .observation_fields import identifier as observation_identifier
 from cloudyfan_jev.task_features import (feature_digest, original_digest, public_features,
                                         unavailable, validate_adoption, feature_computation, feature_budget_available)
+from cloudyfan_jev import task_recommendations as advice
 
 MODES = {"cloudyfan": "CloudyFan MRC", "fixed_high": "全大模型優先",
          "low_first": "全便宜模型優先", "open_source_first": "全開源模型優先"}
@@ -299,7 +300,7 @@ class Store:
             return {"id": key, **data}
 
     def bind(self, client, payload, registry, *, expected_contract=None,
-             feature_policy=None, feature_contracts=None, with_creation=False):
+             feature_policy=None, feature_contracts=None, feature_recommendations=None, with_creation=False):
         if not isinstance(payload, dict) or set(payload) != {"run_id", "category", "prompt"}:
             raise MonitorError("unsupported_task_fields")
         if not isinstance(payload["run_id"], str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", payload["run_id"]):
@@ -342,12 +343,12 @@ class Store:
                            "DO UPDATE SET last_used=MAX(last_used,excluded.last_used)",
                            (pool, contract, row["created"], row["created"]))
                 self.audit(db, "task_bound", {k: v for k, v in row.items() if k != "fingerprint"})
-                self._adopt_features(db, row, payload, feature_policy, feature_contracts)
+                self._adopt_features(db, row, payload, feature_policy, feature_contracts, feature_recommendations)
                 created = True
         # No producer qualification escapes a failed original binding commit.
         return (row, created) if with_creation else row
 
-    def _adopt_features(self, db, binding, payload, policy, contracts):
+    def _adopt_features(self, db, binding, payload, policy, contracts, recommendations=None):
         if policy is None:
             return
         try:
@@ -358,6 +359,9 @@ class Store:
                     'request_sha256': original_digest({'run_id': binding['run'], 'contract_id': binding['contract'],
                                                       'prompt': payload['prompt']}),
                     'registered_sha256': contracts[binding['contract']]}
+                if recommendations is not None and binding['contract'] in recommendations:
+                    adoption.update(schema_version='creation-feature-adoption-v2',
+                                    recommendation=dict(recommendations[binding['contract']]))
                 validate_adoption(adoption)
                 body, adoption_sha = encode(adoption), feature_digest(adoption)
             if not feature_budget_available():
@@ -443,6 +447,14 @@ class Store:
                   "completed_status", "access_expired", "observation", "trace", "ingress",
                   "queue", "queue_state", "reason", "queue_seconds", "end_to_end_seconds",
                   "cancellation_requested", "provider_cancellation_confirmed", "task_features")
+        if 'routing_recommendation' in summary:
+            fields += ('routing_recommendation',)
+            summary = dict(summary)
+            with feature_computation():
+                try:
+                    summary['routing_recommendation'] = advice.public_recommendation(summary['routing_recommendation'])
+                except Exception:
+                    summary['routing_recommendation'] = advice.unavailable()
         if 'task_features' in summary:
             summary = dict(summary)
             try:
@@ -460,8 +472,13 @@ class Store:
                 data["completed_status"] = data["status"]
             for key in ("generation_attempts", "classifier_calls"):
                 data[key] = data[key] or 0
+            if 'routing_recommendation' in data:
+                with feature_computation():
+                    body = encode(data)
+            else:
+                body = encode(data)
             db.execute("INSERT INTO tasks VALUES(?,?,?) ON CONFLICT(client,run) DO UPDATE SET data=excluded.data",
-                       (binding["client"], binding["run"], encode(data)))
+                       (binding["client"], binding["run"], body))
 
     def observation(self, client, run):
         with self.db() as db:

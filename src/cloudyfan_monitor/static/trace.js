@@ -197,12 +197,178 @@ window.CloudyFanTrace = (() => {
     const items=valid&&Array.isArray(feature.features)?feature.features.filter(item=>record(item)&&Object.hasOwn(labels,item.id)).slice(0,16):[];
     return `<section class="trace-section" data-task-features><div class="trace-section-title"><h3>任務建立時特徵</h3>${badge(valid?'當時紀錄':'無法確認',valid?'blue':'amber')}</div><p>僅供觀察，不改原類別、模型、路由或費用。</p>${!valid?'<p class="trace-empty">當時特徵未提供或無法確認；不回讀原文補算，也不推定曾經停用。</p>':`<dl class="trace-facts"><div><dt>特徵規則版本</dt><dd><code>${knownText(feature.feature_version)}</code></dd></div><div><dt>資料使用政策版本</dt><dd><code>${knownText(feature.data_policy_version)}</code></dd></div><div><dt>原接受時間</dt><dd>${time(feature.captured_at)}</dd></div></dl>${feature.feature_version==='local-deterministic-v1'?'<p class="metadata muted">此版本只記錄三項量測；其他欄位未提供，不用新規則補算。</p>':''}<details data-observation-detail="${escape(key)}"><summary id="${escape(key)}-summary">查看單位、來源與未知原因</summary><div class="table-wrap"><table class="trace-call-table"><thead><tr><th>特徵</th><th>值</th><th>取得類型</th><th>單位</th><th>來源與原因</th></tr></thead><tbody>${items.map(item=>`<tr><td>${escape(labels[item.id])}</td><td>${value(item)}</td><td>${labelFrom(kinds,item.kind)}</td><td>${labelFrom(units,item.unit)}</td><td>${labelFrom(sources,item.source)}<details data-observation-detail="${escape(key+'-'+item.id)}" data-feature-reasons="${escape(item.id)}"><summary id="${escape(key+'-'+item.id)}-reason">查看原因</summary>${Array.isArray(item.reasons)?item.reasons.slice(0,4).map(reason=>`<p>${labelFrom(reasons,reason)}</p>`).join(''):'未知原因'}</details></td></tr>`).join('')}</tbody></table></div></details>`}</section>`;
   }
+  // Saved HTTP projection only; no recommendation
+  // calculation, source reads, fetches, adoption action or routing controls.
+  const recommendationStatuses = {
+    available:'已保存建議',unknown:'未知：現有證據不足以判斷',
+    not_provided:'未提供：此任務沒有可確認的建議紀錄',
+    not_applicable:'不適用：原模式或建立時條件不需此比較',
+    unsupported:'未支援：目前不能解讀此類建議資料',
+    unavailable:'無法取得：建議紀錄目前無法確認',
+    unconfirmed:'未確認：不能確認原建議證據完整'
+  };
+  const recommendationKinds = {
+    observe_original_route:'沿原路由觀察',
+    compare_skipping_classification:'可比較略過分類',
+    need_capability_context_evidence:'需補能力與上下文證據'
+  };
+  const recommendationNotes = {
+    observe_original_route:'沿原流程觀察。只有已保存的成本比較才能解讀為估計；缺少證據不代表分類無效或不划算。',
+    compare_skipping_classification:'僅建議在已保存的條件範圍內比較略過分類；尚未採用、略過分類或改派。',
+    need_capability_context_evidence:'依下列原因區分缺少資料、無法比對與已知不相符；本建議不重新批准或排除原候選。'
+  };
+  // Fixed safe codes observed in the frozen synthetic HTTP projections.
+  const recommendationReasons = {
+    creation_recommendation_not_provided:'未提供當時的建議紀錄；不能從現在設定推定當時曾停用。',
+    creation_recommendation_evidence_unavailable:'建立時建議的保存證據目前無法確認，不補算原建議。',
+    exact_classifier_calibration_missing:'缺少完整精確的分類校準，無法確認支付分類費是否有利。',
+    exact_classifier_calibration_unverified:'現有校準尚無法確認適用性，無法判定分類是否划算。',
+    original_mode_has_no_classification:'原模式沒有分類流程，此分類比較不適用；原模式與呼叫紀錄仍保留。',
+    exact_input_tokens_unknown:'本次精確輸入 tokens 未知；不能以字元數估成實際用量或推定模型上下文足夠。',
+    declared_context_is_not_measured_usage:'明示上下文需求不是本次實測用量，也不保證整件任務能放入模型上下文。',
+    classification_proven_not_economic:'在已保存的完整精確條件及成本估計範圍內，分類淨節省不足；這是可比較略過分類的建議，未採用。',
+    conditional_saving_estimated_positive:'保存條件下的分類淨節省估計為正；不是已實現節費，也不改原路由。',
+    conditional_saving_interval_uncertain:'保存的淨節省區間仍不確定，不能確認值得略過分類，沿原流程觀察。',
+    exact_calibration_source_unavailable:'精確校準來源目前無法安全取得或核對，成本比較維持未知；不顯示私人來源位置。',
+    exact_calibration_bounds_unsupported:'校準資料超出已支援的範圍或大小，不能把截取的一部分當完整比較。',
+    exact_classifier_calibration_expired_at_acceptance:'原接受時間已超出校準效期，不能據此判定分類是否划算。',
+    exact_classifier_calibration_later_than_acceptance:'校準資料晚於原接受時間，不能倒用後來證據形成建立時建議。',
+    exact_calibration_scope_or_cost_invalid:'校準範圍或完整成本目前無法核對，成本比較維持未知。',
+    classification_flow_time_exceeds_original_limit:'分類流程超出原契約的執行時間上限，不能據此形成成本比較。',
+    exact_calibration_source_schema_unsupported:'校準來源種類未支援，未讀取該來源，不能據此形成成本比較。',
+    candidate_evidence_expired_at_acceptance:'原接受時間已超出候選證據的快照、目錄、資格或來源效期，成本比較維持未知。',
+    candidate_evidence_later_than_acceptance:'候選證據晚於原接受時間，不能倒用後來資料形成建立時建議。',
+    exact_calibration_execution_contract_mismatch:'校準對應的執行或驗收版本與本次註冊契約不同，不能據此比較成本。',
+    exact_calibration_execution_adapter_unsupported:'此執行核心尚無可確認的成本校準對照方式，成本比較維持未知。'
+  };
+  const recommendationUIReasons = {
+    ui_recommendation_not_provided:'未提供當時的建議紀錄；不能從現在設定推定當時曾停用。',
+    ui_recommendation_schema_unsupported:'目前無法解讀此版本或操作員建議資料，保留原任務其他已知明細。',
+    ui_recommendation_evidence_unconfirmed:'建議欄位、成本比較或未採用標記無法確認，不推定原建議內容。',
+    ui_recommendation_reason_unrecognized:'此原因尚無可辨識的白話說明；不顯示未核對的原始文字。',
+    ui_recommendation_state_not_applicable:'此狀態不適用分類比較；未提供更多已保存原因。',
+    ui_recommendation_state_not_provided:'此狀態未提供建議，不從後來設定補算當時紀錄。',
+    ui_recommendation_state_unsupported:'此狀態尚未支援，不能推定比較已成立。',
+    ui_recommendation_state_unconfirmed:'此狀態的建立時證據尚未確認。',
+    ui_recommendation_state_unknown:'現有資料不足以判斷，未提供更多已保存原因。'
+  };
+  const recommendationEconomics = {
+    unknown:'分類成本比較未知，不能據此宣稱分類不划算',
+    proven_insufficient:'保存條件下的分類淨節省不足（估計）',
+    estimated_positive:'保存條件下的分類淨節省估計為正；未採用',
+    uncertain:'分類淨節省區間不確定，不改原流程'
+  };
+  const recommendationSources = {
+    offline_fixture:'離線合成校準',observed_calibration:'觀測校準資料（來源種類標記）'
+  };
+  const recommendationVersions = {
+    rule_version:{'route-recommendation-rules-v1':'route-recommendation-rules-v1'},
+    data_policy_version:{'creation-recommendation-data-v1':'creation-recommendation-data-v1'}
+  };
+  const ownCode = (labels,value) => typeof value==='string' && Object.hasOwn(labels,value);
+  const recommendationHash = value => typeof value==='string' && /^[a-f0-9]{64}$/.test(value);
+  const recommendationReason = value => ownCode(recommendationReasons,value)
+    ?{code:value,text:recommendationReasons[value]}
+    :{code:'ui_recommendation_reason_unrecognized',text:recommendationUIReasons.ui_recommendation_reason_unrecognized};
+  const recommendationDecimal = value => typeof value==='string'&&value.length<=128
+    &&/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(value);
+  function recommendationInterval(value) {
+    if(!record(value)||!recommendationDecimal(value.lower)||!recommendationDecimal(value.upper))return false;
+    // Exact bounded comparison only; never recompute the saved estimate.
+    const decimal=amount=>{
+      const fraction=amount.split('.')[1]||'';
+      return {integer:BigInt(amount.replace('.','')),scale:fraction.length};
+    };
+    const lower=decimal(value.lower),upper=decimal(value.upper),scale=Math.max(lower.scale,upper.scale);
+    return lower.integer*10n**BigInt(scale-lower.scale)<=upper.integer*10n**BigInt(scale-upper.scale);
+  }
+  function recommendationComparison(value) {
+    return record(value)&&ownCode(recommendationSources,value.source_kind)
+      &&Number.isSafeInteger(value.conditional_scopes)&&value.conditional_scopes>0&&value.conditional_scopes<=128
+      &&value.distribution_is_answer_probability===false&&recommendationInterval(value.net_saving_usd)
+      &&Array.isArray(value.source_sha256)&&value.source_sha256.length>0&&value.source_sha256.length<=16
+      &&value.source_sha256.every(recommendationHash);
+  }
+  function recommendationSection(task) {
+    // A present operator envelope is authoritative, including absence or bad data.
+    // Never use a root copy to hide a malformed operator envelope/projection.
+    const operatorPresent=Object.hasOwn(task,'operator_observation');
+    const envelope=operatorPresent?task.operator_observation:null;
+    const malformedOperator=operatorPresent&&(!record(envelope)||envelope.schema_version!=='mrc-observation-v1');
+    const present=operatorPresent?!malformedOperator&&Object.hasOwn(envelope,'routing_recommendation')
+      :Object.hasOwn(task,'routing_recommendation');
+    const saved=operatorPresent?(malformedOperator?undefined:envelope.routing_recommendation):task.routing_recommendation;
+    let status='not_provided',uiReason='ui_recommendation_not_provided',valid=false,rows=[];
+    if(malformedOperator){status='unsupported';uiReason='ui_recommendation_schema_unsupported';}
+    else if(present){
+      const supported=record(saved)&&saved.schema_version==='creation-routing-recommendation-v1';
+      if(!supported){status='unsupported';uiReason='ui_recommendation_schema_unsupported';}
+      else if(saved.adopted!==false||!ownCode(recommendationStatuses,saved.status)){
+        status='unconfirmed';uiReason='ui_recommendation_evidence_unconfirmed';
+      }else{
+        status=saved.status;
+        const compactReason={not_provided:'creation_recommendation_not_provided',unavailable:'creation_recommendation_evidence_unavailable'};
+        const compact=ownCode(compactReason,status)&&saved.reason===compactReason[status]
+          &&Object.keys(saved).length===4&&saved.suggestions===undefined;
+        const full=['available','unknown','not_applicable','unsupported'].includes(status)
+          &&typeof saved.captured_at==='number'&&Number.isFinite(saved.captured_at)&&saved.captured_at>=0
+          &&recommendationHash(saved.feature_sha256)&&recommendationHash(saved.context_sha256)
+          &&recommendationHash(saved.input_sha256)
+          &&ownCode(recommendationVersions.rule_version,saved.rule_version)
+          &&ownCode(recommendationVersions.data_policy_version,saved.data_policy_version)
+          &&Array.isArray(saved.suggestions)&&saved.suggestions.length<=3
+          &&(saved.suggestions.length>0||!['available','unknown'].includes(status))
+          &&new Set(saved.suggestions.map(row=>record(row)?row.kind:null)).size===saved.suggestions.length
+          &&saved.suggestions.every(row=>record(row)&&ownCode(recommendationKinds,row.kind)
+            &&ownCode(recommendationEconomics,row.economics)
+            &&Array.isArray(row.reasons)&&row.reasons.length>0&&row.reasons.length<=4
+            &&row.reasons.every(reason=>typeof reason==='string'&&/^[a-z][a-z0-9_]{0,79}$/.test(reason))
+            &&(!Object.hasOwn(row,'comparison')||recommendationComparison(row.comparison))
+            &&(row.economics==='unknown'||recommendationComparison(row.comparison))
+            &&(row.kind!=='compare_skipping_classification'||row.economics==='proven_insufficient'));
+        valid=compact||full;
+        if(valid){uiReason=null;rows=compact?[]:saved.suggestions;}
+        else{status='unconfirmed';uiReason='ui_recommendation_evidence_unconfirmed';}
+      }
+    }
+    const identity=value=>typeof value==='string'&&/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,159}$/.test(value);
+    const key=identity(task.client)&&identity(task.run)
+      ?'routing-recommendation-'+encodeURIComponent(JSON.stringify([task.client,task.run])):null;
+    const reasonList=reasons=>`<ul>${reasons.map(reason=>`<li><p>${escape(reason.text)} <code>${escape(reason.code)}</code></p></li>`).join('')}</ul>`;
+    const reasonDetail=(suffix,reasons)=>{
+      const content=reasonList(reasons);
+      if(!key)return `<p class="metadata muted">${reasons.length} 項原因</p>${content}`;
+      const detailKey=key+'-'+suffix;
+      return `<details data-observation-detail="${escape(detailKey)}" data-recommendation-reasons="${escape(suffix)}"><summary id="${escape(detailKey)}-summary">${ownCode(recommendationKinds,suffix)?escape(recommendationKinds[suffix]):'建議狀態'}：查看原因（${reasons.length} 項）</summary>${content}</details>`;
+    };
+    const comparisonHTML=row=>{
+      if(!Object.hasOwn(row,'comparison'))return '';
+      const value=row.comparison,amount=value.net_saving_usd;
+      const fingerprints=value.source_sha256.map(hash=>`<code>${escape(hash)}</code>`).join('<br>');
+      const sourceKey=key?key+'-'+row.kind+'-comparison-source':null;
+      const sourceDetails=sourceKey?`<details data-observation-detail="${escape(sourceKey)}"><summary id="${escape(sourceKey)}-summary">查看校準來源摘要</summary>${fingerprints}</details>`:fingerprints;
+      const note=value.source_kind==='offline_fixture'
+        ?'合成校準只支持此離線情境的規則與算術，不代表真實節費。'
+        :'來源種類標記不證明真實成效；需另核對原資料來源與執行環境。使用此格式的合成資料仍是合成證據。';
+      return `<dl class="trace-facts" data-recommendation-comparison><div><dt>估計來源</dt><dd>${escape(recommendationSources[value.source_kind])}<br><code>${escape(value.source_kind)}</code></dd></div><div><dt>條件範圍數</dt><dd>${value.conditional_scopes}</dd></div><div><dt>分類淨節省區間 · USD</dt><dd><code>${escape(amount.lower)}</code> 至 <code>${escape(amount.upper)}</code></dd></div><div><dt>已保存來源指紋</dt><dd>${sourceDetails}</dd></div></dl><p class="metadata muted">${note} 這是保存條件下的完整 API 成本比較估計，不是本任務實付差額。分類分布不是答案通過機率；條件範圍細項未在此摘要提供，不擴大其適用範圍。</p>`;
+    };
+    const version=field=>ownCode(recommendationVersions[field],saved?.[field])
+      ?escape(recommendationVersions[field][saved[field]]):'未提供可辨識版本';
+    const metadata=valid&&rows.length?`<dl class="trace-facts"><div><dt>建議規則版本</dt><dd><code>${version('rule_version')}</code></dd></div><div><dt>資料使用政策版本</dt><dd><code>${version('data_policy_version')}</code></dd></div><div><dt>原接受時間</dt><dd>${time(saved.captured_at)}</dd></div><div><dt>對應特徵指紋</dt><dd><code>${escape(saved.feature_sha256)}</code></dd></div></dl>`:'';
+    const stateCode=Object.hasOwn(recommendationUIReasons,'ui_recommendation_state_'+status)
+      ?'ui_recommendation_state_'+status:'ui_recommendation_state_unconfirmed';
+    const emptyReason=uiReason?{code:uiReason,text:recommendationUIReasons[uiReason]}
+      :valid&&ownCode(recommendationReasons,saved.reason)?recommendationReason(saved.reason)
+      :{code:stateCode,text:recommendationUIReasons[stateCode]};
+    return `<section class="trace-section" data-routing-recommendation><div class="trace-section-title"><h3>建立時路由建議</h3>${badge(valid?'建議／未採用':'建議紀錄待確認',valid?'blue':'amber')}</div><p><strong>${escape(recommendationStatuses[status])}</strong></p><p>僅查看建立時保存的觀察性建議。此區不提供採用或改派操作，原類別、候選、模型、路由與費用沿原任務紀錄。</p>${metadata}${rows.length?rows.map(row=>`<article class="trace-decision" data-recommendation-kind="${escape(row.kind)}"><div class="trace-attempt-heading"><h4>${escape(recommendationKinds[row.kind])}</h4>${badge('未採用','blue')}</div><p>${escape(recommendationNotes[row.kind])}</p><p>成本比較：${escape(recommendationEconomics[row.economics])} <code>${escape(row.economics)}</code></p>${comparisonHTML(row)}${reasonDetail(row.kind,row.reasons.map(recommendationReason))}</article>`).join(''):reasonDetail('state',[emptyReason])}<p class="metadata muted">建議不代表已驗證的真實節費、答案通過率或模型資格。精確 tokens、能力需求與原執行上限各自解讀；合成校準僅限其合成範圍。</p></section>`;
+  }
+
   function render(task) {
     task = record(task) ? task : {};
     const trace = record(task.trace) ? task.trace : {}, ingress = record(task.ingress) ? task.ingress : {};
     const attempts = Array.isArray(trace.attempts) ? trace.attempts.filter(record) : [];
     const decisions = Array.isArray(trace.decisions) ? trace.decisions.filter(record) : [];
-    return `<div class="task-trace" data-task-trace><div class="trace-header"><div><h3>呼叫與選池明細</h3><p>API 呼叫費用與客戶扣款分開。未知費用保留待核，<a href="#billing">查看客戶帳務 →</a></p></div><span class="badge">不含提示與答案</span></div>${featuresSection(task)}${historySection(task)}<section class="trace-section trace-ingress"><h3>客戶端入口</h3><dl class="trace-facts"><div><dt>入口協定</dt><dd>${ingress.protocol === 'ollama' ? 'Ollama' : '未知'}</dd></div><div><dt>請求端點</dt><dd class="mono">${knownText(ingress.endpoint)}</dd></div><div><dt>模型別名</dt><dd class="mono">${knownText(ingress.alias)}</dd></div><div><dt>接收時間</dt><dd>${time(ingress.received_at)}</dd></div></dl><p class="metadata muted">入口的模型別名與各次呼叫實際使用的模型分開列示。</p></section><section class="trace-section"><div class="trace-section-title"><h3>四池嘗試紀錄</h3><span class="metadata muted">開源集合可與品質分組重疊</span></div>${poolCards(task,trace,attempts,decisions)}</section>${attemptsSection(trace,attempts)}${decisionsSection(trace,decisions)}</div>`;
+    return `<div class="task-trace" data-task-trace><div class="trace-header"><div><h3>呼叫與選池明細</h3><p>API 呼叫費用與客戶扣款分開。未知費用保留待核，<a href="#billing">查看客戶帳務 →</a></p></div><span class="badge">不含提示與答案</span></div>${featuresSection(task)}${recommendationSection(task)}${historySection(task)}<section class="trace-section trace-ingress"><h3>客戶端入口</h3><dl class="trace-facts"><div><dt>入口協定</dt><dd>${ingress.protocol === 'ollama' ? 'Ollama' : '未知'}</dd></div><div><dt>請求端點</dt><dd class="mono">${knownText(ingress.endpoint)}</dd></div><div><dt>模型別名</dt><dd class="mono">${knownText(ingress.alias)}</dd></div><div><dt>接收時間</dt><dd>${time(ingress.received_at)}</dd></div></dl><p class="metadata muted">入口的模型別名與各次呼叫實際使用的模型分開列示。</p></section><section class="trace-section"><div class="trace-section-title"><h3>四池嘗試紀錄</h3><span class="metadata muted">開源集合可與品質分組重疊</span></div>${poolCards(task,trace,attempts,decisions)}</section>${attemptsSection(trace,attempts)}${decisionsSection(trace,decisions)}</div>`;
   }
   return {render};
 })();

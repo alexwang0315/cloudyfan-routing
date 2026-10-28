@@ -86,7 +86,9 @@ class Gateway:
         recorder = self.service.creation_features
         return self.store.bind(principal, payload, self.registry, expected_contract=expected_contract,
             feature_policy=recorder.policy if recorder is not None else None,
-            feature_contracts=recorder.registered if recorder is not None else None, with_creation=True)
+            feature_contracts=recorder.registered if recorder is not None else None,
+            feature_recommendations=recorder.recommendation_adoptions if recorder is not None else None,
+            with_creation=True)
 
     def _creation_owner(self, binding, created):
         recorder = self.service.creation_features
@@ -209,6 +211,9 @@ class Gateway:
             self.capture(binding, retain_metadata=True)
 
     def queue_view(self, binding, status):
+        recommendation = self.service.recommendation_observation(binding['client'], binding['run'], client_summary=True)
+        if recommendation is not None:
+            status = {**status, 'routing_recommendation': recommendation}
         if 'queue' not in status:
             return status
         with self.store.db() as db:
@@ -286,6 +291,8 @@ class Gateway:
                        "error_code": (status.get("error") or {}).get("code"), "observation": None}
             if 'task_features' in status:
                 summary['task_features'] = status['task_features']
+            if 'routing_recommendation' in status:
+                summary['routing_recommendation'] = status['routing_recommendation']
             if 'queue' in status:
                 summary.update({key: status.get(key) for key in ('queue', 'queue_state', 'reason',
                     'queue_seconds', 'end_to_end_seconds', 'cancellation_requested', 'provider_cancellation_confirmed')})

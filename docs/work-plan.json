@@ -241,7 +241,8 @@
       "status": "in_progress",
       "owned_files": [
         "src/cloudyfan_jev/saved_policy_comparison.py",
-        "docs/saved-evidence-comparison.md"
+        "docs/saved-evidence-comparison.md",
+        "tests/test_saved_policy_comparison.py"
       ],
       "depends_on": [
         "ISSUE41"

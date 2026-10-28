@@ -357,8 +357,7 @@ def _receipt(source, access, row, call):
 
 def _references(source, access, current, rows):
     remaining = {row['id']: row for row in rows}
-    tasks = [current['task'], *(task for task in access['tasks'] if task != current['task']
-                              and task['client'] == current['task']['client'])]
+    tasks = [current['task'], *(task for task in access['tasks'] if task != current['task'])]
     blocked = None
     for task in tasks:
         try:

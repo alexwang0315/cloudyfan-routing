@@ -153,12 +153,24 @@ def _generation_verified(bundle):
     return isinstance(bundle, dict) and _hash(bundle.get('receipts_sha256')) and bool(bundle.get('calls'))
 
 
-def _number(value, *, probability=False):
-    _require(type(value) in (str, int, float, Decimal), 'classifier_response_invalid')
+def _number(value, *, probability=False, allow_string=False):
+    _require(type(value) in (int, float, Decimal) or allow_string and type(value) is str,
+             'classifier_response_invalid')
     number = Decimal(str(value))
     _require(number.is_finite() and number >= 0 and (not probability or number <= 1),
              'classifier_response_invalid')
     return number
+
+
+def _probability_text(value):
+    reason = 'classifier_numeric_representation_unavailable'
+    _require(value.is_finite(), reason)
+    parts = value.as_tuple()
+    _require(not parts.sign and value.adjusted() <= 64 and parts.exponent >= -64, reason)
+    length = (len(parts.digits) + parts.exponent if parts.exponent >= 0
+              else max(len(parts.digits) + 1, 2 - parts.exponent))
+    _require(length <= 128, reason)
+    return format(value, 'f')
 
 
 def _response_values(raw, stage, version, provider):
@@ -199,12 +211,14 @@ def _response_values(raw, stage, version, provider):
             for key in ('input_tokens', 'output_tokens')), 'classifier_response_invalid')
         if 'cost' in usage:
             _number(usage['cost'])
-        return {'parse_status': 'valid', 'reported_choice': answer['choice'],
-            'probabilities': {key: format(value, 'f') for key, value in probabilities.items()} if probabilities is not None else None,
-            'abstain_reason': 'distribution_missing' if probabilities is None else None,
-            'probability_decimals': decimals}
     except (OSError, ValueError, TypeError, KeyError, ArithmeticError, RecursionError, SourceUnavailable):
         return invalid
+    # A valid original reply outside the pure DTO's numeric representation is
+    # unavailable evidence, not an original parse-failure fallback.
+    return {'parse_status': 'valid', 'reported_choice': answer['choice'],
+        'probabilities': {key: _probability_text(value) for key, value in probabilities.items()} if probabilities is not None else None,
+        'abstain_reason': 'distribution_missing' if probabilities is None else None,
+        'probability_decimals': decimals}
 
 
 def _classifier(source, registered, manifest, result, saved, stage, previous, template, contract_sha):
@@ -246,7 +260,10 @@ def _classifier(source, registered, manifest, result, saved, stage, previous, te
     usage = decoded.get('usage')
     cost_known = isinstance(usage, dict) and usage.get('cost') is not None
     if cost_known:
-        _require(_number(usage['cost']) == _number(call.get('cost_usd')), 'classifier_binding_mismatch')
+        # Transport accounting accepts serialized money independently of the
+        # original Decisions parser's strict JSON numeric response grammar.
+        _require(_number(usage['cost'], allow_string=True) == _number(call.get('cost_usd'), allow_string=True),
+                 'classifier_binding_mismatch')
     _require(type(call.get('cost_unknown')) is bool and call['cost_unknown'] is not cost_known,
              'classifier_binding_mismatch')
     parsed = _response_values(raw, stage, profile['version'], decoded.get('provider'))
@@ -357,8 +374,9 @@ def reproduce_saved_policy(source, binding, job, manifest, result, run, trusted,
                     # Missing/bad original classifier evidence leaves the known
                     # classify gate partial; it must not unlock a later decision.
                     value['classifier'] = None
-                    classifier_failure = ('classifier_binding_mismatch' if isinstance(error, SourceUnavailable)
-                        and error.args == ('classifier_binding_mismatch',) else 'classifier_evidence_unavailable')
+                    classifier_failure = (error.args[0] if isinstance(error, SourceUnavailable)
+                        and len(error.args) == 1 and error.args[0] in ('classifier_binding_mismatch',
+                            'classifier_numeric_representation_unavailable') else 'classifier_evidence_unavailable')
             values.append(value)
             reproduced = source.reproduce(value)
             if classifier_failure and reproduced['status'] != 'reproduced':

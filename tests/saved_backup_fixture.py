@@ -39,11 +39,14 @@ class SavedBackupHTTP:
     validations: list
     tools: list
     side: dict
+    clients: list
 
     def client(self, principal='operator'):
         token = self.host.operator_token if principal == 'operator' else self.host.credentials[principal].token
-        return self.stack.enter_context(httpx.Client(base_url=self.origin, trust_env=False, timeout=10,
+        client = self.stack.enter_context(httpx.Client(base_url=self.origin, trust_env=False, timeout=10,
             headers={'Authorization': 'Bearer ' + token}))
+        self.clients.append(client)
+        return client
 
     def create_original(self):
         client = self.client('studio')
@@ -129,7 +132,8 @@ class SavedBackupHTTP:
     def remove_or_corrupt_original_evidence(self, fault):
         internal = self.host.service.internal_id('studio', 'saved-backup-original')
         root = self.host.root / 'receipts'
-        if fault in ('missing_classifier', 'request_hash', 'classifier_choice_mismatch'):
+        if fault in ('missing_classifier', 'request_hash', 'classifier_choice_mismatch',
+                     'classifier_duplicate_key', 'classifier_model', 'classifier_usage'):
             name = 'intent.json' if fault == 'request_hash' else 'response.json'
             target = root / 'calls' / ('run-' + internal + '-decision-low_mid') / name
         else:
@@ -155,6 +159,17 @@ class SavedBackupHTTP:
                 answer = raw['answers']['low_mid']
                 answer['choice'], answer['probabilities'] = 'mid', {'low': .1, 'mid': .9}
                 value['raw'] = json.dumps(raw)
+            elif fault in ('classifier_duplicate_key', 'classifier_model', 'classifier_usage'):
+                raw = json.loads(value['raw'])
+                if fault == 'classifier_model':
+                    raw['model'] = 'synthetic/unbound-classifier'
+                elif fault == 'classifier_usage':
+                    raw['usage']['cost'] = .002
+                encoded = json.dumps(raw)
+                if fault == 'classifier_duplicate_key':
+                    assert encoded.count('"choice": "low"') == 1
+                    encoded = encoded.replace('"choice": "low"', '"choice": "low", "choice": "low"', 1)
+                value['raw'] = encoded
             else:
                 tier = 'open_source' if fault in ('missing_initial_gate', 'missing_exhaustion_gate') else 'mid'
                 value['health'][tier][0]['assessment'].pop('snapshot_id')
@@ -180,12 +195,13 @@ def saved_backup_http(tmp_path, loopback_network, request):
     options = dict(getattr(request, 'param', {}))
     scenario = options.pop('scenario', 'direct')
     exhaustion = options.pop('availability_exhaustion', False)
+    classifier_reply = options.pop('classifier_reply', None)
     evidence = {'schema_version': 'saved-backup-http-fixture-v1', 'test': request.node.name,
         'scope': 'Real Backup/Core/BudgetedCore/TaskService admission/Store/Identity/Health; MockTransport upstreams',
         'scheduler': 'Original immediate TaskService admission; no QueueScheduler configured',
         'synthetic': True, 'python': platform.python_version(), 'sqlite': sqlite3.sqlite_version,
         'http_responses': recorder.rows, 'upstream_wire': wire.rows, 'fixture_pid': os.getpid()}
-    validations, tools, side = [], [], {'source': [], 'accounting': []}
+    validations, tools, side, clients = [], [], {'source': [], 'accounting': []}, []
     server = host = thread = tracer = None
     stack = ExitStack()
     try:
@@ -212,12 +228,64 @@ def saved_backup_http(tmp_path, loopback_network, request):
             evidence['original_health_control'] = {'blocked_configuration_sha256': blocked['configuration_sha256'],
                 'snapshot_id': snapshot, 'status': 1, 'scope': 'Original HealthStore publish before original task'}
 
-        def record_wire(wire_request):
-            wire.capture({'method': wire_request.method, 'path': wire_request.url.path},
-                {'body': wire_request.content,
-                 'headers': b'\r\n'.join(key + b': ' + value for key, value in wire_request.headers.raw)})
+        def record_wire(wire_request, response):
+            wire.capture({'method': wire_request.method, 'path': wire_request.url.path,
+                'status': response.status_code}, {'body': wire_request.content,
+                'response_body': response.content, 'headers': json.dumps({
+                    'request': [(key.decode('latin1'), value.decode('latin1'))
+                        for key, value in wire_request.headers.raw],
+                    'response': [(key.decode('latin1'), value.decode('latin1'))
+                        for key, value in response.headers.raw]}).encode()})
 
-        host.before_response = record_wire
+        original_client = host.service.contracts['history-backup-v1'].runner.core.client.http
+        assert isinstance(original_client._transport, httpx.MockTransport)
+        original_upstream = original_client._transport.handler
+
+        def upstream(wire_request):
+            response = original_upstream(wire_request)
+            if classifier_reply is not None and wire_request.url.path == '/api/alpha/decisions':
+                original = response.content
+                data = json.loads(original)
+                stage = next(iter(data['answers']))
+                answer = data['answers'][stage]
+                if classifier_reply == 'probability_strings':
+                    answer['probabilities'] = {key: str(value) for key, value in answer['probabilities'].items()}
+                elif classifier_reply == 'confidence_string':
+                    answer['confidence'] = '0.9'
+                elif classifier_reply == 'confidence_bool':
+                    answer['confidence'] = True
+                elif classifier_reply == 'probability_bools':
+                    assert stage == 'low_mid'
+                    answer['probabilities'] = {'low': True, 'mid': False}
+                elif classifier_reply == 'usage_cost_string':
+                    data['usage']['cost'] = str(data['usage']['cost'])
+                elif classifier_reply == 'distribution_missing':
+                    answer.pop('probabilities')
+                elif classifier_reply == 'tied_distribution':
+                    answer['probabilities'] = {key: .5 for key in answer['probabilities']}
+                elif classifier_reply == 'bounded_tiny_probability':
+                    assert stage == 'low_mid'
+                    answer['probabilities'] = {'low': 1e-65, 'mid': 1}
+                else:
+                    assert classifier_reply == 'numeric_confidence'
+                    answer['confidence'] = .9
+                archive = artifacts / 'producer-reply-before-control.bin'
+                with archive.open('xb') as stream:
+                    stream.write(original)
+                archive.chmod(0o600)
+                response = httpx.Response(response.status_code, json=data,
+                    headers=[(key, value) for key, value in response.headers.raw
+                        if key.lower() != b'content-length'])
+                evidence['classifier_reply_control'] = {'kind': classifier_reply,
+                    'timing': 'Original MockTransport reply before original Client/Core parsing and persistence',
+                    'original_reference': archive.name, 'original_bytes': len(original),
+                    'original_sha256': hashlib.sha256(original).hexdigest(),
+                    'actual_reply_sha256': hashlib.sha256(response.content).hexdigest()}
+            record_wire(wire_request, response)
+            return response
+
+        original_client._transport.handler = upstream
+        clients.append(original_client)
 
         class ObservedArithmetic(ArithmeticEnvironment):
             def validate(self, final_text):
@@ -236,9 +304,11 @@ def saved_backup_http(tmp_path, loopback_network, request):
         for kind in side:
             def unexpected(wire_request, current=kind):
                 side[current].append({'method': wire_request.method, 'path': wire_request.url.path})
-                record_wire(wire_request)
-                return httpx.Response(503, json={'error': 'PRIVATE_SAVED_BACKUP_SIDE_CANARY'})
+                response = httpx.Response(503, json={'error': 'PRIVATE_SAVED_BACKUP_SIDE_CANARY'})
+                record_wire(wire_request, response)
+                return response
             transport = stack.enter_context(httpx.Client(transport=httpx.MockTransport(unexpected), trust_env=False))
+            clients.append(transport)
             if kind == 'source':
                 host.app.source = OpenRouterPoolSource(transport, fixtures()[2])
             else:
@@ -271,7 +341,7 @@ def saved_backup_http(tmp_path, loopback_network, request):
         server.set_app(app)
         thread = threading.Thread(target=server.serve_forever, kwargs={'poll_interval': .01}, daemon=True)
         thread.start()
-        tracer = SavedBackupHTTP(host, origin, artifacts, stack, evidence, wire, validations, tools, side)
+        tracer = SavedBackupHTTP(host, origin, artifacts, stack, evidence, wire, validations, tools, side, clients)
         yield tracer
     finally:
         if thread is not None and thread.is_alive():
@@ -296,7 +366,8 @@ def saved_backup_http(tmp_path, loopback_network, request):
             'source': len(side['source']), 'accounting': len(side['accounting']),
             'validation': len(validations), 'tools': len(tools)}
         evidence['cleanup'] = {'thread_exited': thread is None or not thread.is_alive(),
-            'socket_closed': server is None or server.socket.fileno() == -1, 'owned_clients_closed': True}
+            'socket_closed': server is None or server.socket.fileno() == -1,
+            'owned_clients_closed': all(client.is_closed for client in clients)}
         _save(artifacts / 'fixture-receipt.json', evidence)
         assert all(evidence['cleanup'].values())
         assert evidence.get('original_state_unchanged', True)

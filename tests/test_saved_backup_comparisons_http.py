@@ -45,6 +45,172 @@ def test_classified_backup_reapplies_original_reply_without_calling_classifier(s
     assert tracer.snapshot('after-comparison') == before
 
 
+@pytest.mark.parametrize('saved_backup_http', [{'classifiers': ('low_mid',),
+    'classifier_reply': 'probability_strings'}], indirect=True)
+def test_saved_backup_probability_strings_reproduce_the_original_parse_failure(saved_backup_http):
+    tracer = saved_backup_http
+    tracer.create_original()
+    original = tracer.client().get('/monitor/snapshot')
+    assert original.status_code == 200
+    task = original.json()['tasks'][0]
+    decision = [row for row in task['trace']['decisions'] if row.get('model')][0]
+    assert decision['fallback'] is True and decision['fallback_reason'] == 'parse_failure'
+    assert decision['reported_choice'] is None and decision['probabilities'] is None
+    assert decision['selected_tier'] == 'mid'
+    assert task['operator_observation']['task_decision']['costs']['complete_api_usd'] == '0.021'
+    assert len(tracer.host.calls) == 3 and len(tracer.validations) == 2
+    before = tracer.snapshot('before-comparison')
+    response = tracer.compare()
+    report = response.json()
+    item = report['items'][0]
+    assert item['original']['task_status'] == 'passed'
+    assert item['reproduction']['status'] == 'reproduced', 'Saved numeric strings changed the original parse-failure fallback'
+    decisions = item['reproduction']['decisions']
+    assert [(row['stage'], row['action'], row['selected_tier']) for row in decisions] == [
+        ('initial', 'direct', 'open_source'), ('low_mid', 'classify', 'mid'), ('after_validation', 'stop', None)]
+    assert decisions[1]['reason'] == 'parse_failure' and all(row['match'] is True for row in decisions)
+    for _ in range(2):
+        read = tracer.client().get('/monitor/comparisons/' + report['comparison_id'])
+        assert read.status_code == 200 and read.content == response.content
+    assert tracer.snapshot('after-comparison-and-gets') == before
+
+
+@pytest.mark.parametrize('saved_backup_http', [{'classifiers': ('low_mid',),
+    'classifier_reply': 'confidence_string'}], indirect=True)
+def test_saved_backup_confidence_string_reproduces_the_original_parse_failure(saved_backup_http):
+    tracer = saved_backup_http
+    tracer.create_original()
+    original = tracer.client().get('/monitor/snapshot')
+    assert original.status_code == 200
+    task = original.json()['tasks'][0]
+    decision = [row for row in task['trace']['decisions'] if row.get('model')][0]
+    assert decision['fallback_reason'] == 'parse_failure' and decision['fallback'] is True
+    assert decision['reported_choice'] is None and decision['probabilities'] is None
+    assert decision['selected_tier'] == 'mid'
+    assert task['operator_observation']['task_decision']['costs']['complete_api_usd'] == '0.021'
+    before = tracer.snapshot('before-comparison')
+    response = tracer.compare()
+    report = response.json()
+    decisions = report['items'][0]['reproduction']['decisions']
+    assert report['items'][0]['reproduction']['status'] == 'reproduced'
+    assert decisions[1]['reason'] == 'parse_failure' and decisions[1]['selected_tier'] == 'mid'
+    assert all(row['match'] is True for row in decisions)
+    for _ in range(2):
+        read = tracer.client().get('/monitor/comparisons/' + report['comparison_id'])
+        assert read.status_code == 200 and read.content == response.content
+    assert tracer.snapshot('after-comparison-and-gets') == before
+
+
+@pytest.mark.parametrize('saved_backup_http', [{'classifiers': ('low_mid',),
+    'classifier_reply': 'numeric_confidence'}], indirect=True)
+def test_saved_backup_numeric_confidence_and_probabilities_preserve_a_legal_choice(saved_backup_http):
+    tracer = saved_backup_http
+    tracer.create_original()
+    original = tracer.client().get('/monitor/snapshot')
+    assert original.status_code == 200
+    task = original.json()['tasks'][0]
+    decision = [row for row in task['trace']['decisions'] if row.get('model')][0]
+    assert decision['fallback'] is False and decision['reported_choice'] == 'low'
+    assert decision['probabilities'] == {'low': '0.9', 'mid': '0.1'}
+    assert task['operator_observation']['task_decision']['costs']['complete_api_usd'] == '0.021'
+    before = tracer.snapshot('before-comparison')
+    response = tracer.compare()
+    report = response.json()
+    decisions = report['items'][0]['reproduction']['decisions']
+    assert report['items'][0]['reproduction']['status'] == 'reproduced'
+    assert decisions[1]['reason'] == 'reported_choice_applied' and decisions[1]['selected_tier'] == 'low'
+    assert all(row['match'] is True for row in decisions)
+    for _ in range(2):
+        read = tracer.client().get('/monitor/comparisons/' + report['comparison_id'])
+        assert read.status_code == 200 and read.content == response.content
+    assert tracer.snapshot('after-comparison-and-gets') == before
+
+
+@pytest.mark.parametrize('saved_backup_http', [{'classifiers': ('low_mid',),
+    'classifier_reply': 'bounded_tiny_probability'}], indirect=True)
+def test_saved_backup_unrepresentable_numeric_probability_stops_at_the_affected_point(saved_backup_http):
+    tracer = saved_backup_http
+    tracer.create_original()
+    original = tracer.client().get('/monitor/snapshot')
+    assert original.status_code == 200
+    task = original.json()['tasks'][0]
+    decision = [row for row in task['trace']['decisions'] if row.get('model')][0]
+    assert decision['reported_choice'] == 'low' and decision['probabilities'] == {'low': '1E-65', 'mid': '1'}
+    assert decision['fallback_reason'] == 'tied_or_inconsistent_distribution'
+    assert decision['selected_tier'] == 'mid'
+    assert task['operator_observation']['task_decision']['costs']['complete_api_usd'] == '0.021'
+    before = tracer.snapshot('before-comparison')
+    response = tracer.compare()
+    report = response.json()
+    assert report['status'] == 'completed' and report['items'][0]['original']['task_status'] == 'passed'
+    item = report['items'][0]
+    assert item['reproduction']['status'] == 'partial'
+    decisions = item['reproduction']['decisions']
+    assert decisions[0]['match'] is True and decisions[1]['match'] is None
+    assert decisions[1]['reason'] != 'parse_failure', 'A valid original number became an invalid-reply fallback'
+    assert all(row['match'] is not True for row in decisions[1:])
+    for _ in range(2):
+        read = tracer.client().get('/monitor/comparisons/' + report['comparison_id'])
+        assert read.status_code == 200 and read.content == response.content
+    assert tracer.snapshot('after-comparison-and-gets') == before
+
+
+@pytest.mark.parametrize(('saved_backup_http', 'reason', 'reported_choice'), [
+    ({'classifiers': ('low_mid',), 'classifier_reply': 'confidence_bool'}, 'parse_failure', None),
+    ({'classifiers': ('low_mid',), 'classifier_reply': 'probability_bools'}, 'parse_failure', None),
+    ({'classifiers': ('low_mid',), 'classifier_reply': 'usage_cost_string'}, 'parse_failure', None),
+    ({'classifiers': ('low_mid',), 'classifier_reply': 'distribution_missing'}, 'distribution_missing', 'low'),
+    ({'classifiers': ('low_mid',), 'classifier_reply': 'tied_distribution'}, 'tied_or_inconsistent_distribution', 'low'),
+], indirect=['saved_backup_http'])
+def test_saved_backup_original_numeric_and_abstention_guards_remain_distinct(saved_backup_http, reason, reported_choice):
+    tracer = saved_backup_http
+    tracer.create_original()
+    original = tracer.client().get('/monitor/snapshot')
+    assert original.status_code == 200
+    task = original.json()['tasks'][0]
+    decision = [row for row in task['trace']['decisions'] if row.get('model')][0]
+    assert decision['fallback'] is True and decision['fallback_reason'] == reason
+    assert decision['selected_tier'] == 'mid' and decision['reported_choice'] == reported_choice
+    assert task['operator_observation']['task_decision']['costs']['complete_api_usd'] == '0.021'
+    before = tracer.snapshot('before-comparison')
+    response = tracer.compare()
+    report = response.json()
+    item = report['items'][0]
+    decisions = item['reproduction']['decisions']
+    assert item['reproduction']['status'] == 'reproduced'
+    assert decisions[1]['reason'] == reason and decisions[1]['selected_tier'] == 'mid'
+    assert all(row['match'] is True for row in decisions)
+    for _ in range(2):
+        read = tracer.client().get('/monitor/comparisons/' + report['comparison_id'])
+        assert read.status_code == 200 and read.content == response.content
+    assert tracer.snapshot('after-comparison-and-gets') == before
+
+
+@pytest.mark.parametrize('saved_backup_http', [{'classifiers': ('low_mid',)}], indirect=True)
+@pytest.mark.parametrize(('fault', 'reason'), [
+    ('classifier_duplicate_key', 'original_saved_decision_mismatch'),
+    ('classifier_model', 'classifier_binding_mismatch'),
+    ('classifier_usage', 'classifier_binding_mismatch'),
+])
+def test_saved_backup_numeric_parser_does_not_loosen_original_raw_and_fee_bindings(saved_backup_http, fault, reason):
+    tracer = saved_backup_http
+    tracer.create_original()
+    tracer.remove_or_corrupt_original_evidence(fault)
+    before = tracer.snapshot('before-comparison')
+    response = tracer.compare()
+    report = response.json()
+    item = report['items'][0]
+    assert item['original']['task_status'] == 'passed' and item['reproduction']['status'] == 'partial'
+    decisions = item['reproduction']['decisions']
+    assert decisions[0]['match'] is True and decisions[1]['match'] is None
+    assert decisions[1]['reason'] == reason
+    assert all(row['match'] is not True for row in decisions[1:])
+    for _ in range(2):
+        read = tracer.client().get('/monitor/comparisons/' + report['comparison_id'])
+        assert read.status_code == 200 and read.content == response.content
+    assert tracer.snapshot('after-comparison-and-gets') == before
+
+
 @pytest.mark.parametrize('saved_backup_http', [{'classifiers': ('low_mid', 'mid_high'),
     'scenario': 'quality_chain'}], indirect=True)
 def test_both_backup_quality_stages_and_terminal_stop_reproduce(saved_backup_http):

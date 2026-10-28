@@ -15,7 +15,53 @@ const report={schema_version:'qa41-observation-policy-desktop-v1',phase,
  scope:'Focused #41; actual headed Chrome1280x900 + real loopback; all upstreams MockTransport',
  started_at:new Date().toISOString(),driver_pid:process.pid,steps:[],requests:[],network:[],console:[],page_errors:[],blocked:[]};
 let fixture,browser,page,currentStep='setup';
+const requestIds=new WeakMap();
+let nextRequestId=0;
 function check(value,code){if(!value){const error=new Error(code);error.qaCode=code;throw error;}}
+const conflictPath='/monitor/observation-policy/activate';
+const conflictText='Failed to load resource: the server responded with a status of 409 (Conflict)';
+const consolePaths=new Set([conflictPath,'/','/app.js','/observation-policy.js','/trace.js','/queue.js','/capacity.js','/billing.js','/candidates.js']);
+function safeConsoleLocation(location,origin){
+ const result={same_origin:false,pathname:null,has_query:false,has_fragment:false,has_credentials:false,
+  line_number:Number.isSafeInteger(location?.lineNumber)&&location.lineNumber>=0?location.lineNumber:null,
+  column_number:Number.isSafeInteger(location?.columnNumber)&&location.columnNumber>=0?location.columnNumber:null};
+ try{
+  const url=new URL(location?.url);result.same_origin=url.origin===origin;
+  result.has_query=!!url.search;result.has_fragment=!!url.hash;result.has_credentials=!!url.username||!!url.password;
+  if(result.same_origin&&consolePaths.has(url.pathname))result.pathname=url.pathname;
+ }catch{}
+ return result;
+}
+function verifyExpectedPolicyConflictConsole({consoleRows,networkRows,expected}){
+ check(Array.isArray(consoleRows)&&Array.isArray(networkRows),'qa_browser_diagnostic_rows_invalid');
+ check(expected?.schema_version==='qa41-expected-policy-conflict-v1'&&expected.verified===true
+  &&Number.isSafeInteger(expected.request_id)&&expected.request_id>0
+  &&expected.method==='POST'&&expected.path===conflictPath&&expected.status===409
+  &&expected.error_code==='configuration_changed_reload'
+  &&Number.isSafeInteger(expected.intent_revision)&&expected.intent_revision>=0
+  &&expected.request_revision===expected.intent_revision
+  &&expected.intent_version==='features-v2'&&expected.request_version===expected.intent_version
+  &&Number.isFinite(expected.armed_at_ms)&&Number.isFinite(expected.settled_at_ms)
+  &&expected.armed_at_ms>=0&&expected.settled_at_ms>=expected.armed_at_ms,'qa_expected_conflict_receipt_invalid');
+ const rejections=networkRows.filter(row=>row.status>=400);
+ check(rejections.length===1,'qa_unexpected_browser_http_rejection');
+ const response=rejections[0];
+ check(response.request_id===expected.request_id&&response.method==='POST'&&response.path===conflictPath
+  &&response.status===409&&response.same_origin===true&&!response.has_query&&!response.has_fragment
+  &&Number.isFinite(response.at_ms)&&response.at_ms>=expected.armed_at_ms&&response.at_ms<=expected.settled_at_ms,
+  'qa_browser_conflict_response_mismatch');
+ const diagnostics=consoleRows.map((row,index)=>({row,index})).filter(({row})=>['warning','error'].includes(row.level));
+ check(diagnostics.length===1,'qa_browser_console_warning_or_error');
+ const {row,index}=diagnostics[0],location=row.location;
+ check(row.level==='error'&&row.text===conflictText&&location?.same_origin===true&&location.pathname===conflictPath
+  &&location.has_query===false&&location.has_fragment===false&&location.has_credentials===false
+  &&Number.isSafeInteger(location.line_number)&&location.line_number>=0
+  &&Number.isSafeInteger(location.column_number)&&location.column_number>=0
+  &&Number.isFinite(row.at_ms)&&row.at_ms>=expected.armed_at_ms&&row.at_ms<=expected.settled_at_ms,
+  'qa_browser_console_conflict_mismatch');
+ return {expected_native_resource_errors:1,matched_console_index:index,matched_request_id:expected.request_id,
+  other_warnings_or_errors:0,unexpected_http_rejections:0};
+}
 async function save(){await fs.writeFile(path.join(OUT,'desktop-report.json'),JSON.stringify(report,null,2)+'\n',{mode:0o600});}
 function track(){
  const rows=execFileSync('/bin/ps',['-axo','pid=,ppid=,comm='],{encoding:'utf8'}).trim().split('\n').map(line=>line.trim().split(/\s+/));
@@ -203,10 +249,25 @@ async function desktop(ready){
  });
  await step('stale_operator_revision_is_rejected_with_safe_recovery',async()=>{
   await page.locator('nav a[href="#observations"]').click();await expectPolicy('features-v1');
+  const intentRevision=Number(await page.locator('#observation-policy-revision').innerText());
   await selectPolicy('features-v2');await command('external-change',{version:'features-v2-advice-v1'});
   const response=page.waitForResponse(value=>new URL(value.url()).pathname==='/monitor/observation-policy/activate'&&value.request().method()==='POST');
-  await page.locator('#apply-confirm').click();check((await response).status()===409,'qa_stale_revision_not_rejected');
+  const armedAt=performance.now();
+  await page.locator('#apply-confirm').click();const rejected=await response;
+  check(rejected.status()===409,'qa_stale_revision_not_rejected');
+  const body=await rejected.json(),request=rejected.request(),sent=request.postDataJSON(),url=new URL(rejected.url());
+  check(url.origin===ready.origin&&url.pathname===conflictPath&&!url.search&&!url.hash
+   &&request.method()==='POST'&&body.error?.code==='configuration_changed_reload'
+   &&Object.keys(sent).sort().join(',')==='revision,version'&&sent.revision===intentRevision&&sent.version==='features-v2',
+   'qa_stale_revision_response_not_original_intent');
   await page.getByText('設定已由另一位操作員更新。本次未套用，請重新讀取後再確認。',{exact:true}).first().waitFor();
+  await rejected.finished();await settle();
+  report.expected_policy_conflict={schema_version:'qa41-expected-policy-conflict-v1',verified:true,
+   request_id:requestIds.get(request),method:request.method(),path:url.pathname,status:rejected.status(),
+   error_code:body.error.code,intent_revision:intentRevision,request_revision:sent.revision,
+   intent_version:'features-v2',request_version:sent.version,armed_at_ms:armedAt,settled_at_ms:performance.now()};
+  report.expected_console_verification=verifyExpectedPolicyConflictConsole({consoleRows:report.console,
+   networkRows:report.network,expected:report.expected_policy_conflict});
   await page.locator('#reload').click();await expectPolicy('features-v2-advice-v1');await privacy();await snap('stale-revision-recovered');
  });
  await step('late_policy_response_cannot_replace_a_newer_read',async()=>{
@@ -237,7 +298,8 @@ async function desktop(ready){
   check(final.model_calls===ready.state.model_calls&&final.source_calls===0&&final.accounting_calls===0,'qa_observation_added_upstream_work');
   report.final_model_calls=final.model_calls;
   check(report.blocked.length===0&&report.page_errors.length===0,'qa_browser_runtime_or_network_error');
-  check(!report.console.some(row=>['warning','error'].includes(row.level)),'qa_browser_console_warning_or_error');
+  report.expected_console_verification=verifyExpectedPolicyConflictConsole({consoleRows:report.console,
+   networkRows:report.network,expected:report.expected_policy_conflict});
  });
 }
 async function main(){
@@ -260,10 +322,14 @@ async function main(){
   else{report.blocked.push({method:request.method(),same_origin:new URL(request.url()).origin===ready.origin});await route.abort();}
  });
  page=await context.newPage();page.setDefaultTimeout(6000);track();
- page.on('console',message=>report.console.push({level:message.type(),text:message.text()}));
+ page.on('console',message=>report.console.push({level:message.type(),text:message.text(),
+  location:safeConsoleLocation(message.location(),ready.origin),at_ms:performance.now()}));
  page.on('pageerror',error=>report.page_errors.push({name:error.name,message:error.message}));
- page.on('request',request=>report.requests.push({method:request.method(),path:new URL(request.url()).pathname,at_ms:performance.now()}));
- page.on('response',response=>report.network.push({method:response.request().method(),path:new URL(response.url()).pathname,status:response.status(),at_ms:performance.now()}));
+ page.on('request',request=>{const requestId=++nextRequestId;requestIds.set(request,requestId);
+  report.requests.push({request_id:requestId,method:request.method(),path:new URL(request.url()).pathname,at_ms:performance.now()});});
+ page.on('response',response=>{const url=new URL(response.url());report.network.push({request_id:requestIds.get(response.request()),
+  method:response.request().method(),path:url.pathname,status:response.status(),same_origin:url.origin===ready.origin,
+  has_query:!!url.search,has_fragment:!!url.hash,at_ms:performance.now()});});
  await page.goto(ready.origin+(phase==='desktop-frozen'?'/#observations':''),{waitUntil:'domcontentloaded'});
  if(phase==='desktop-frozen'){await desktop(ready);report.passed=true;return;}
  await page.getByRole('heading',{name:'路由運作，一眼掌握。'}).waitFor();
@@ -276,7 +342,7 @@ async function main(){
  check(report.observed.policy_navigation_count===1,'qa_observation_policy_control_missing');
  report.passed=true;
 }
-main().catch(async error=>{
+function runCli(){return main().catch(async error=>{
  report.passed=false;report.failure={step:currentStep,code:error.qaCode||'qa_desktop_failed'};process.exitCode=1;
  const original=String(error.stack||error);
  await fs.writeFile(path.join(OUT,'desktop-exception.txt'),original+'\n',{mode:0o600,flag:'wx'});
@@ -303,4 +369,6 @@ main().catch(async error=>{
  if(!report.source_unchanged){report.source_changed=true;process.exitCode=1;}
  report.finished_at=new Date().toISOString();await save();
  console.log(JSON.stringify({passed:report.passed,failure:report.failure,report:path.join(OUT,'desktop-report.json')}));
-});
+});}
+module.exports={safeConsoleLocation,verifyExpectedPolicyConflictConsole};
+if(require.main===module)void runCli();

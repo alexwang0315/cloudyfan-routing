@@ -25,10 +25,12 @@ The exact top-level keys are `schema_version`, `policy_version`, `mode`,
   `qcs-backup-policy-v1`. CategoryCore uses its saved `hierarchical-qcs-v1`
   descriptor; its category/matrix binding is verified by the host.
 - `mode`: `cloudyfan`, `fixed_high`, `low_first`, `open_source_first`.
-- `source`: exactly `binding_sha256`, `request_sha256`, `registered_sha256`,
+- `source`: requires `binding_sha256`, `request_sha256`, `registered_sha256`,
   `policy_sha256`, `checkpoint_sha256`, `candidate_set_sha256`. The first five
   require original lowercase 64-hex references, or null to express unavailable
   original evidence. Candidate-set hash may be null only for an empty list.
+  The only optional key is `availability_exhaustion_input_sha256`, described
+  below; the original six-field form remains valid. Other extra keys are rejected.
 - `context`: exactly `stage`, `previous_tier`,
   `previous_configuration_sha256`, `previous_public_passed`, `previous_stop`,
   `quality_phase`, `generation_calls`, `receipt_sha256`, `validation_sha256`.
@@ -65,6 +67,36 @@ subset it happened to load. A missing candidate cannot silently alter the rank.
 shape validation; its output does not verify that the host supplied a full set.
 Selection points require this hash even for a genuinely empty original pool;
 only a stop point which does not examine candidates may omit it.
+
+### Availability exhaustion evidence in v1
+
+`source.availability_exhaustion_input_sha256`, when present, must be a non-null
+lowercase 64-hex reference to the `input_sha256` of a prior same-pool reproduction.
+It is accepted only for `qcs-backup-policy-v1`, with the original
+`previous_stop` still `provider_rate_limited` or `provider_unavailable`,
+`previous_public_passed` null, and the next quality stage (`low_mid`, `mid_high`,
+or its `after_validation` alias). Baseline modes use `after_validation` for their
+original high-tier recovery. There must be a remaining quality stage. Initial,
+same-pool, non-Backup, public pass/failure and other stop contexts cannot carry it.
+
+The trusted host must verify the original empty same-pool checkpoint and its
+complete original pool/gate evidence, then call `reproduce_original_policy` on
+those original values. The prior result must be `reproduced` with
+`action=advance_quality_stage` and `reason=same_pool_exhausted`. The host verifies
+that the prior and next points belong to the same original binding, request,
+registered policy and attempt history, with matching previous tier/configuration,
+receipt, quality phase and generation count, before carrying the prior input hash.
+It must not manufacture this link from current health or a caller-supplied hash.
+
+Core receives only that verified value reference. It neither loads the prior
+checkpoint nor authenticates the hash, and accepts no execution or validation
+callback. The reference permits reproducing the already observed availability
+transition without inventing a public validation result or rewriting its stop as
+`validation_unknown`; `validation_sha256` need not exist for this no-answer path.
+Candidate gates, economics, classifier evidence and the original global 3/2
+generation-call limits still apply. Without the optional reference, the original
+availability context remains `unknown/original_context_unavailable`. The output
+always keeps `execution_authorized=false`.
 
 All decimal strings are plain notation, at most128 characters, exponent no less
 than-64 and magnitude below1e65. Monetary/time inputs are nonnegative;
@@ -207,11 +239,11 @@ still be reported separately. Report GET/poll reads saved results without
 calling this function again. No Issue43/44 alternative-policy/result matching
 is part of this module.
 
-The pure interface can express a saved same-pool exhaustion transition, but the
-current host loader does not support availability failure followed by advancement
-to the next quality stage. That loader case must remain unknown; this module's
-transition support and the focused public-interface tests do not establish main
-HTTP acceptance for that path.
+The pure interface can express a saved same-pool exhaustion transition and its
+next quality decision using the optional verified input reference above. A host
+which cannot verify the original checkpoint and prior result must keep that case
+unknown. These focused public-interface tests do not establish main HTTP
+acceptance for the host's loading and linkage of that path.
 
 Current handoff: the standalone source is written in the isolated policy-values
 candidate. Main loopback acceptance and affected full gates remain required.

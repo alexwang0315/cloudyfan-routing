@@ -246,12 +246,25 @@ def _validate(value):
         raise _Unavailable('unsupported_policy_version')
     if value['mode'] not in INITIAL:
         raise _Unavailable('saved_policy_values_invalid')
-    _keys(value['source'], SOURCE_FIELDS)
+    source_fields = SOURCE_FIELDS
+    exhaustion = 'availability_exhaustion_input_sha256'
+    if type(value['source']) is dict and exhaustion in value['source']:
+        source_fields = SOURCE_FIELDS | {exhaustion}
+    _keys(value['source'], source_fields)
     for key in SOURCE_FIELDS:
         _hash(value['source'][key], nullable=True)
         if key != 'candidate_set_sha256' and value['source'][key] is None:
             raise _Unavailable('original_binding_unavailable')
     _context(value['context'])
+    if exhaustion in value['source']:
+        _hash(value['source'][exhaustion])
+        context = value['context']
+        if (value['policy_version'] != 'qcs-backup-policy-v1'
+                or context['previous_stop'] not in ('provider_rate_limited', 'provider_unavailable')
+                or context['previous_public_passed'] is not None
+                or context['stage'] not in ('low_mid', 'mid_high', 'after_validation')
+                or context['quality_phase'] >= (2 if value['mode'] == 'cloudyfan' else 1)):
+            raise _Unavailable('policy_inputs_inconsistent')
     rows = value['candidates']
     if type(rows) is not list or len(rows) > BOUNDS['candidates']:
         raise _Unavailable('saved_policy_values_invalid')
@@ -498,9 +511,10 @@ def _reproduce(value, result):
                           reason='same_pool_exhausted', policy_reason='same_pool_exhausted')
             return result
         return _stopped(result, 'no_eligible_candidate')
-    if backup and availability:
+    exhaustion = 'availability_exhaustion_input_sha256' in value['source']
+    if backup and availability and not exhaustion:
         raise _Unavailable('original_context_unavailable')
-    if context['validation_sha256'] is None:
+    if context['validation_sha256'] is None and not exhaustion:
         raise _Unavailable('original_context_unavailable')
     if context['quality_phase'] >= (2 if mode == 'cloudyfan' else 1):
         return _stopped(result, 'quality_stage_limit' if backup else 'generation_attempt_limit')

@@ -788,7 +788,11 @@ def _load_task(context, source, task):
                             for saved, actual in zip(cached_path, original['path']))):
                     raise SourceUnavailable('original_public_metadata_inconsistent')
                 receipts = _original_receipts(source, registered, manifest, result, internal, run)
-                values, decisions = _reproduce_saved(source, binding, job, manifest, result, run, trusted,
+                # The family adapter receives plain, server-selected access
+                # authorities. Copy rather than mutating the shared contract
+                # map or introducing a cycle into this per-report context.
+                family_trusted = dict(trusted, comparison_access=context, internal_run=internal)
+                values, decisions = _reproduce_saved(source, binding, job, manifest, result, run, family_trusted,
                     original_path=original['path'], receipts=receipts)
                 status = ('reproduced' if decisions and all(row['match'] is True for row in decisions)
                           else 'partial' if any(row['match'] is True for row in decisions) else 'unknown')

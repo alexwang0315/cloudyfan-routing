@@ -78,9 +78,11 @@ def _candidates(source, trusted, manifest, saved, tiers, used, failed):
             if record['configuration_sha256'] in used:
                 expected.add('configuration_already_dispatched')
             window = observation.get('capacity_window')
-            _require(window is None or window == {'status': 'open', 'not_before': None,
-                'evidence_refs': [], 'revision': 0, 'reason_code': 'capacity_window_open'},
-                'original_window_inputs_unavailable')
+            if window is not None:
+                from .saved_window_comparison import verify_recorded_window
+                window_reason = verify_recorded_window(source, trusted, window, profile)
+                if window_reason is not None:
+                    expected.add(window_reason)
             _require(expected <= set(reasons) and not (set(reasons) - expected - FROZEN_EXTRA_REASONS),
                      'original_gate_evidence_invalid')
             if not reasons:

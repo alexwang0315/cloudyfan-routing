@@ -160,6 +160,8 @@ class App:
                       "/queue.css": ("queue.css", "text/css; charset=utf-8"),
                       "/observation-policy.js": ("observation-policy.js", "text/javascript; charset=utf-8"),
                       "/observation-policy.css": ("observation-policy.css", "text/css; charset=utf-8"),
+                      "/comparisons.js": ("comparisons.js", "text/javascript; charset=utf-8"),
+                      "/comparisons.css": ("comparisons.css", "text/css; charset=utf-8"),
                       "/style.css": ("style.css", "text/css; charset=utf-8")}
             if method == "GET" and path in static:
                 filename, content_type = static[path]
@@ -218,6 +220,17 @@ class App:
         return [body]
 
     def _admin(self, method, path, environ):
+        if path == '/monitor/comparisons' or path.startswith('/monitor/comparisons/'):
+            from .saved_comparisons import catalog, create_report, get_report
+            if environ.get('QUERY_STRING'):
+                raise MonitorError('unsupported_comparison_query')
+            if path == '/monitor/comparisons' and method == 'GET':
+                return catalog(self)
+            if path == '/monitor/comparisons' and method == 'POST':
+                return create_report(self, self._body(environ))
+            if method == 'GET' and path.count('/') == 3:
+                return get_report(self, path.rsplit('/', 1)[1])
+            raise MonitorError('endpoint_not_supported', 404)
         if method == 'GET' and path == '/monitor/observation-policy':
             if environ.get('QUERY_STRING'):
                 raise MonitorError('unsupported_observation_query')

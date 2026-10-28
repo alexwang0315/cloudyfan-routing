@@ -147,7 +147,9 @@ branch uses each candidate's saved complete cost and flow upper instead.
 
 Singleton QCS preserves its original cost/flow/preference/tier ordering,
 single-eligible and missing-estimate reasons, conditional-cost evidence,
-strict saving threshold and classified-flow check. Backup preserves its exact
+strict saving threshold and classified-flow check. Its original calibration
+must be `present`; `missing` remains unknown even if stale numeric paths,
+classifier fees or probabilities are still supplied. Backup preserves its exact
 variant requirement and cost/flow/tier ordering; absent original variant means
 `exact_classifier_calibration_missing`, not proven uneconomic. Contract
 mismatches or unknown source availability produce unknown, never a fallback
@@ -204,6 +206,12 @@ DTO. Existing actual traces and original known/unknown financial values may
 still be reported separately. Report GET/poll reads saved results without
 calling this function again. No Issue43/44 alternative-policy/result matching
 is part of this module.
+
+The pure interface can express a saved same-pool exhaustion transition, but the
+current host loader does not support availability failure followed by advancement
+to the next quality stage. That loader case must remain unknown; this module's
+transition support and the focused public-interface tests do not establish main
+HTTP acceptance for that path.
 
 Current handoff: the standalone source is written in the isolated policy-values
 candidate. Main loopback acceptance and affected full gates remain required.

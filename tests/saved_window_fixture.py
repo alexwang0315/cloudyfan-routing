@@ -33,6 +33,7 @@ class SavedWindowHTTP:
     artifacts: Path
     operator: object
     client: object
+    agent: object
     evidence: dict
     validations: list
     tools: list
@@ -43,25 +44,31 @@ class SavedWindowHTTP:
             'revision': 0, 'version': 'synthetic-window-admission-v1'})
         assert response.status_code == 200
 
-    def submit(self, run, *, scenario='success'):
+    def submit(self, run, *, scenario='success', principal='studio'):
+        assert principal in ('studio', 'agent')
         self.fixture.flags['scenario'] = scenario
-        response = self.client.post('/v1/tasks', json={'run_id': run,
+        client = self.client if principal == 'studio' else self.agent
+        response = client.post('/v1/tasks', json={'run_id': run,
             'category': self.fixture.host.category, 'prompt': 'Return only 1+1. PRIVATE_SAVED_WINDOW_TASK'})
         assert response.status_code == 200 and response.json()['status'] == 'passed'
         assert self.wire.rows and self.validations
         self.evidence.setdefault('completed_original_runs', []).append(run)
+        self.evidence.setdefault('completed_original_tasks', []).append({'client': principal, 'run_id': run})
         return response
 
-    def history(self, run):
+    def history(self, run, *, principal='studio'):
         response = self.operator.get('/monitor/snapshot')
         assert response.status_code == 200
-        task = next(row for row in response.json()['tasks'] if row['run'] == run)
+        task = next(row for row in response.json()['tasks'] if row['run'] == run and row['client'] == principal)
         return task, task['operator_observation']['task_decision']
 
     def compare(self, runs):
+        return self.compare_tasks([{'client': 'studio', 'run_id': run} for run in runs])
+
+    def compare_tasks(self, tasks):
         response = self.operator.post('/monitor/comparisons', json={
             'policy_version': 'original-policy-reproduction-v1',
-            'tasks': [{'client': 'studio', 'run_id': run} for run in runs]})
+            'tasks': tasks})
         assert response.status_code == 200
         assert 'PRIVATE_' not in response.text and str(self.fixture.host.root) not in response.text
         return response
@@ -86,6 +93,62 @@ class SavedWindowHTTP:
         self.evidence.setdefault('controlled_faults', []).append(info)
         _save(self.artifacts / ('missing-job-' + run + '.json'), info)
         return info
+
+    def preserve_unavailable_source_raw(self, run):
+        host = self.fixture.host
+        internal = host.service.internal_id('studio', run)
+        root = host.root / 'receipts'
+        result_path = root / 'runs' / internal / 'result.json'
+        original = json.loads(result_path.read_bytes())
+        preserved = [self.preserve_missing_job(run)]
+        targets = [(root / 'runs' / internal / 'manifest.json', 'manifest'), (result_path, 'result')]
+        targets.extend((root / 'calls' / call['call_id'] / 'response.json', 'response')
+            for attempt in original['attempts'] for call in attempt['calls'])
+        for index, (target, kind) in enumerate(targets):
+            body = target.read_bytes()
+            archive = self.artifacts / f'preserved-source-{run}-{index}.bin'
+            target.rename(archive)
+            archive.chmod(0o600)
+            info = {'run': run, 'kind': kind, 'target_relative': str(target.relative_to(host.root)),
+                'archive': archive.name, 'bytes': len(body), 'sha256': hashlib.sha256(body).hexdigest(),
+                'scope': 'Owned source raw unavailable before comparison; original bytes preserved, no deletion'}
+            self.evidence.setdefault('controlled_faults', []).append(info)
+            preserved.append(info)
+        _save(self.artifacts / ('unavailable-source-' + run + '.json'), preserved)
+        return [row['sha256'] for row in preserved if row.get('kind') != 'manifest']
+
+    def move_to_source_access_expiry(self, source, target):
+        service = self.fixture.host.service
+        with sqlite3.connect(service.retention.path.as_uri() + '?mode=ro', uri=True, timeout=0) as db:
+            db.execute('PRAGMA query_only=ON')
+            expires = {run: db.execute('SELECT expires FROM tasks WHERE id=?',
+                (service.internal_id('studio', run),)).fetchone()[0] for run in (source, target)}
+        self.fixture.clock.now = expires[source] + .5
+        assert expires[source] < self.fixture.clock() < expires[target]
+        value = {'source_expires': expires[source], 'target_expires': expires[target],
+            'comparison_clock': self.fixture.clock(), 'scope': 'Use original retention deadlines, no policy/row changes'}
+        _save(self.artifacts / 'source-expiry-clock.json', value)
+        self.evidence['source_expiry_clock'] = value
+
+    def corrupt_recorded_window(self, run, fault):
+        assert fault == 'missing_ref'
+        host = self.fixture.host
+        internal = host.service.internal_id('studio', run)
+        target = host.root / 'receipts' / 'runs' / internal / 'backup-selection-0.json'
+        original = target.read_bytes()
+        archive = self.artifacts / ('preserved-window-' + run + '-' + fault + '.bin')
+        with archive.open('xb') as stream:
+            stream.write(original)
+        archive.chmod(0o600)
+        value = json.loads(original)
+        value['health']['open_source'][0]['capacity_window']['evidence_refs'] = []
+        target.write_text(json.dumps(value))
+        info = {'run': run, 'fault': fault, 'target_relative': str(target.relative_to(host.root)),
+            'archive': archive.name, 'bytes': len(original), 'sha256': hashlib.sha256(original).hexdigest(),
+            'changed_sha256': hashlib.sha256(target.read_bytes()).hexdigest(),
+            'scope': 'Controlled corruption of owned saved gate only; original bytes preserved before comparison'}
+        self.evidence.setdefault('controlled_faults', []).append(info)
+        _save(self.artifacts / ('window-fault-' + fault + '.json'), info)
 
     def snapshot(self, name):
         host = self.fixture.host
@@ -218,8 +281,10 @@ def saved_window_http(tmp_path, loopback_network, request):
             headers={'Authorization': 'Bearer ' + fixture.host.operator_token}))
         client = stack.enter_context(httpx.Client(base_url=origin, trust_env=False, timeout=10,
             headers={'Authorization': 'Bearer ' + fixture.host.credentials['studio'].token}))
-        clients.extend((operator, client))
-        tracer = SavedWindowHTTP(fixture, artifacts, operator, client, evidence, validations, tools, wire)
+        agent = stack.enter_context(httpx.Client(base_url=origin, trust_env=False, timeout=10,
+            headers={'Authorization': 'Bearer ' + fixture.host.credentials['agent'].token}))
+        clients.extend((operator, client, agent))
+        tracer = SavedWindowHTTP(fixture, artifacts, operator, client, agent, evidence, validations, tools, wire)
         yield tracer
     finally:
         if fixture is not None:

@@ -114,3 +114,104 @@ def test_unrelated_missing_job_cannot_make_window_reference_depend_on_scope_orde
         target = next(item for item in report['items'] if item['task']['run_id'] == 'window-target-c')
         assert target['reproduction']['status'] == 'reproduced', 'Unrelated missing job blocked a valid selected window source'
         assert all(row['match'] is True for row in target['reproduction']['decisions'])
+
+
+def test_unselected_window_source_stays_unavailable_without_opening_its_raw(saved_window_http):
+    tracer = saved_window_http
+    tracer.activate()
+    tracer.submit('window-source', scenario='window')
+    tracer.history('window-source')
+    tracer.fixture.clock.now += 1
+    tracer.submit('window-target')
+    tracer.history('window-target')
+    assert len(tracer.fixture.requests) == 3 and len(tracer.validations) == 2
+    forbidden_raw = tracer.preserve_unavailable_source_raw('window-source')
+    before = tracer.snapshot('before-comparison')
+    response = tracer.compare(['window-target'])
+    tracer.read_twice(response)
+    assert tracer.snapshot('after-comparison-and-gets') == before
+    item = response.json()['items'][0]
+    assert item['original']['task_status'] == 'passed'
+    assert Decimal(item['original']['costs']['complete_api_usd']) == Decimal('.01')
+    assert item['reproduction']['status'] == 'unknown'
+    assert 'original_window_reference_unselected' in item['reproduction']['reasons']
+    assert all(row['match'] is not True for row in item['reproduction']['decisions'])
+    assert not set(forbidden_raw).intersection(row['sha256'] for row in item['evidence'])
+
+
+def test_expired_window_dependency_does_not_open_raw_while_target_remains_legal(saved_window_http):
+    tracer = saved_window_http
+    tracer.activate()
+    tracer.submit('window-source', scenario='window')
+    tracer.history('window-source')
+    tracer.fixture.clock.now += 1
+    tracer.submit('window-target')
+    tracer.history('window-target')
+    assert len(tracer.fixture.requests) == 3 and len(tracer.validations) == 2
+    forbidden_raw = tracer.preserve_unavailable_source_raw('window-source')
+    tracer.move_to_source_access_expiry('window-source', 'window-target')
+    # Do not invoke the original snapshot/pruner after moving the Clock.
+    before = tracer.snapshot('before-comparison')
+    response = tracer.compare(['window-source', 'window-target'])
+    tracer.read_twice(response)
+    assert tracer.snapshot('after-comparison-and-gets') == before
+    items = response.json()['items']
+    source = next(item for item in items if item['task']['run_id'] == 'window-source')
+    target = next(item for item in items if item['task']['run_id'] == 'window-target')
+    assert source['reproduction']['status'] == 'not_evaluable'
+    assert target['original']['task_status'] == 'passed'
+    assert Decimal(target['original']['costs']['complete_api_usd']) == Decimal('.01')
+    assert target['reproduction']['status'] == 'unknown'
+    assert 'original_window_reference_access_expired' in target['reproduction']['reasons']
+    assert all(row['match'] is not True for row in target['reproduction']['decisions'])
+    assert not set(forbidden_raw).intersection(row['sha256'] for item in items for row in item['evidence'])
+
+
+def test_missing_saved_window_reference_stops_the_affected_task_only(saved_window_http):
+    tracer = saved_window_http
+    tracer.activate()
+    tracer.submit('window-source', scenario='window')
+    tracer.history('window-source')
+    tracer.submit('window-target')
+    tracer.history('window-target')
+    assert len(tracer.fixture.requests) == 3 and len(tracer.validations) == 2
+    tracer.corrupt_recorded_window('window-target', 'missing_ref')
+    before = tracer.snapshot('before-comparison')
+    response = tracer.compare(['window-source', 'window-target'])
+    tracer.read_twice(response)
+    assert tracer.snapshot('after-comparison-and-gets') == before
+    items = response.json()['items']
+    source = next(item for item in items if item['task']['run_id'] == 'window-source')
+    target = next(item for item in items if item['task']['run_id'] == 'window-target')
+    assert source['reproduction']['status'] == 'reproduced'
+    assert target['original']['task_status'] == 'passed'
+    assert Decimal(target['original']['costs']['complete_api_usd']) == Decimal('.01')
+    assert target['reproduction']['status'] == 'unknown'
+    assert 'original_window_evidence_invalid' in target['reproduction']['reasons']
+    assert all(row['match'] is not True for row in target['reproduction']['decisions'])
+
+
+def test_explicit_cross_client_window_source_reproduces_a_shared_account_gate(saved_window_http):
+    tracer = saved_window_http
+    tracer.activate()
+    tracer.submit('window-source', scenario='window', principal='agent')
+    tracer.history('window-source', principal='agent')
+    tracer.submit('window-target')
+    task, original = tracer.history('window-target')
+    skipped = original['stages'][0]['candidates'][0]
+    assert skipped['state'] == 'excluded_before_dispatch' and 'capacity_window_wait' in skipped['reasons']
+    assert skipped['capacity_window']['status'] == 'wait' and skipped['capacity_window']['revision'] == 1
+    assert task['generation_attempts'] == 1 and len(tracer.fixture.requests) == 3 and len(tracer.validations) == 2
+    before = tracer.snapshot('before-comparison')
+    response = tracer.compare_tasks([{'client': 'agent', 'run_id': 'window-source'},
+        {'client': 'studio', 'run_id': 'window-target'}])
+    tracer.read_twice(response)
+    assert tracer.snapshot('after-comparison-and-gets') == before
+    items = response.json()['items']
+    source = next(item for item in items if item['task']['client'] == 'agent')
+    target = next(item for item in items if item['task']['client'] == 'studio')
+    assert source['reproduction']['status'] == 'reproduced'
+    assert target['original']['task_status'] == 'passed'
+    assert Decimal(target['original']['costs']['complete_api_usd']) == Decimal('.01')
+    assert target['reproduction']['status'] == 'reproduced', 'A legal selected source was skipped because it belongs to another client'
+    assert all(row['match'] is True for row in target['reproduction']['decisions'])

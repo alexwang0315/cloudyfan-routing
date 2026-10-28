@@ -27,6 +27,8 @@ def _assert_read_only(tracer, before, after, response):
     assert str(tracer.host.root) not in response.text
     assert tracer.host.operator_token not in response.text
     assert not any(credential.token in response.text for credential in tracer.host.credentials.values())
+    assert all(not any('saving' in key for key in decision)
+        for item in response.json()['items'] for decision in item['reproduction']['decisions'])
 
 
 @pytest.mark.parametrize('saved_qcs_http', [False, True], indirect=True, ids=['direct', 'classify'])
@@ -162,7 +164,6 @@ def test_original_sequential_core_uses_its_frozen_profiles_without_qcs_qualifica
     assert decisions[-1]['action'] == 'stop' and decisions[-1]['reason'] == 'public_validation_passed'
     assert sum(row['action'] == 'classify' for row in decisions) == classifiers
     assert all(row['config_id'] == 'cfg-' + row['configuration_sha256'] for row in item['original']['path'])
-    assert all(row['net_saving_lower_usd'] is None for row in decisions)
     assert len(tracer.host.calls) == len(tiers) + classifiers
     assert item['original']['costs']['complete_api_usd'] is not None
     assert tracer.client().get('/monitor/comparisons/' + response.json()['comparison_id']).json() == response.json()

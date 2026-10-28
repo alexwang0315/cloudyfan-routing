@@ -119,15 +119,18 @@ def _interval(value, *, probability=False):
     return lower, upper
 
 
-def _paths(value, *, nullable=False):
+def _paths(value, *, nullable=False, flow_required=True):
     if value is None and nullable:
         return
     if type(value) is not dict or len(value) > 2 or set(value) - set(TIERS):
         raise _Unavailable('saved_policy_values_invalid')
     for path in value.values():
-        _keys(path, {'cost_usd', 'flow_ms_upper'})
+        fields = {'cost_usd'} if not flow_required and type(path) is dict and set(path) == {'cost_usd'} else {
+            'cost_usd', 'flow_ms_upper'}
+        _keys(path, fields)
         _interval(path['cost_usd'])
-        _decimal(path['flow_ms_upper'])
+        if flow_required or path.get('flow_ms_upper') is not None:
+            _decimal(path['flow_ms_upper'])
 
 
 def _candidate(value):
@@ -200,7 +203,9 @@ def _economics(value):
     for key in ('contract_sha256', 'expected_contract_sha256'):
         _hash(value[key], nullable=True)
     _paths(value['paths'], nullable=True)
-    _paths(value['classified_paths'], nullable=True)
+    # Original QCS conditional costs have one separate complete classified-flow
+    # forecast. Never invent per-branch timing to replay those saved costs.
+    _paths(value['classified_paths'], nullable=True, flow_required=False)
     for key in ('classifier_cost_usd', 'lower_probability'):
         if value[key] is not None:
             _interval(value[key], probability=key == 'lower_probability')

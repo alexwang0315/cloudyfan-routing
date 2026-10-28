@@ -243,13 +243,16 @@ def _task_id(client, run):
         ensure_ascii=False, allow_nan=False).encode()).hexdigest()[:48]
 
 
-def _scope(body):
+def _scope(body, *, maximum=None):
     if not isinstance(body, dict) or set(body) != {'policy_version', 'tasks'}:
         fail('unsupported_comparison_fields')
     if body['policy_version'] != POLICY:
         fail('comparison_policy_not_registered', 409)
     tasks = body['tasks']
-    if not isinstance(tasks, list) or not 1 <= len(tasks) <= LIMITS['max_tasks']:
+    maximum = LIMITS['max_tasks'] if maximum is None else maximum
+    if type(maximum) is not int or not 1 <= maximum <= 100:
+        fail('comparison_scope_invalid')
+    if not isinstance(tasks, list) or not 1 <= len(tasks) <= maximum:
         fail('comparison_scope_invalid')
     seen, result = set(), []
     for task in tasks:
@@ -352,9 +355,17 @@ class _Sources:
                                min(maximum, LIMITS['max_source_bytes'] - self.bytes))
         try:
             cursor = db.execute(query, params)
-            result = [dict(row) for row in cursor.fetchmany(max_rows + 1)]
-            if len(result) > max_rows:
-                raise SourceUnavailable('source_work_limit')
+            result, projected = [], 2
+            for number, row in enumerate(cursor):
+                if number >= max_rows:
+                    self.limited = True
+                    raise SourceUnavailable('source_work_limit')
+                value = dict(row)
+                projected += len(encoded(value)) + 1
+                if projected > LIMITS['max_source_bytes'] - self.bytes:
+                    self.limited = True
+                    raise SourceUnavailable('source_work_limit')
+                result.append(value)
         finally:
             db.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, previous)
         self.record(kind, encoded(result))
@@ -399,11 +410,21 @@ class _Reports:
             body = _read(self.root / (comparison_id + '.report.json'), LIMITS['max_output_bytes'])
             inputs = _read(self.root / (comparison_id + '.inputs.json'), LIMITS['max_source_bytes'])
             report = strict_json(body)
+            request = strict_json(request_body)
             if (set(seal) != {'request_sha256', 'report_sha256', 'inputs_sha256', 'comparison_id'}
                     or seal['comparison_id'] != comparison_id or seal['request_sha256'] != hashlib.sha256(request_body).hexdigest()
                     or seal['report_sha256'] != hashlib.sha256(body).hexdigest()
                     or seal['inputs_sha256'] != hashlib.sha256(inputs).hexdigest()
                     or report.get('data_sha256') != digest(strict_json(inputs))
+                    or request.get('comparison_id') != comparison_id
+                    or request.get('policy_version') != POLICY or report.get('policy_version') != POLICY
+                    or report.get('computation_version') != COMPUTATION
+                    or request.get('policy_sha256') != digest(request['implementation'])
+                    or report.get('policy_sha256') != request['policy_sha256']
+                    or report.get('scope') != {'tasks': request['tasks']}
+                    or report.get('created_at') != request['created_at'] or report.get('frozen_at') != request['frozen_at']
+                    or request.get('limits', report.get('limits')) != report.get('limits')
+                    or report.get('result_sha256') != _result_digest(request, report['items'], report['data_sha256'], report['limits'])
                     or report.get('comparison_id') != comparison_id or report.get('schema_version') != SCHEMA):
                 raise SourceUnavailable('comparison_evidence_invalid')
             return report
@@ -439,7 +460,8 @@ def catalog(app):
                             or COMPARISON.fullmatch(request['comparison_id']) is None
                             or entry.name != request['comparison_id'] + '.request.json'):
                         raise SourceUnavailable('comparison_evidence_invalid')
-                    _scope({'policy_version': request.get('policy_version'), 'tasks': request.get('tasks')})
+                    _scope({'policy_version': request.get('policy_version'), 'tasks': request.get('tasks')},
+                           maximum=request.get('limits', {}).get('max_tasks', 20))
                     status = 'incomplete'
                     if (reports.root / (request['comparison_id'] + '.seal.json')).exists():
                         status = reports.result(request['comparison_id'])['status']
@@ -501,6 +523,13 @@ def _source_context(app, tasks, now):
             'tasks': tasks, 'now': now}
 
 
+def _result_digest(request, items, data_sha256, limits):
+    return digest({'items': items, 'tasks': request['tasks'], 'frozen_at': request['frozen_at'],
+        'data_sha256': data_sha256, 'policy_sha256': request['policy_sha256'],
+        'limits': limits, 'policy_version': request['policy_version'],
+        'computation_version': request['implementation']['computation']})
+
+
 def _report(request, outcome):
     items = outcome['items']
     counts = {key: 0 for key in ('evaluated', 'reproduced', 'partial', 'unknown', 'not_evaluable',
@@ -513,15 +542,13 @@ def _report(request, outcome):
         counts['original_interrupted'] += int(item['original']['task_status'] in ('engineering_interrupted', 'accounting_interrupted'))
         costs = item['original']['costs']
         counts['unknown_fee_tasks'] += int(costs['unknown_events'] is None or costs['unknown_events'] > 0)
-    result_sha = digest({'items': items, 'tasks': request['tasks'], 'frozen_at': request['frozen_at'],
-        'data_sha256': outcome['data_sha256'], 'policy_sha256': request['policy_sha256'],
-        'limits': LIMITS, 'policy_version': POLICY, 'computation_version': COMPUTATION})
+    result_sha = _result_digest(request, items, outcome['data_sha256'], request['limits'])
     return {'schema_version': SCHEMA, 'comparison_id': request['comparison_id'],
         'status': 'incomplete' if outcome.get('incomplete') else 'completed',
         'policy_version': POLICY, 'computation_version': COMPUTATION,
         'created_at': request['created_at'], 'frozen_at': request['frozen_at'],
         'data_sha256': outcome['data_sha256'], 'policy_sha256': request['policy_sha256'],
-        'result_sha256': result_sha, 'scope': {'tasks': request['tasks']}, 'limits': dict(LIMITS),
+        'result_sha256': result_sha, 'scope': {'tasks': request['tasks']}, 'limits': request['limits'],
         'counts': counts, 'items': items}
 
 
@@ -543,19 +570,28 @@ def create_report(app, body):
                 fail('comparison_busy', 409)
             comparison_id = 'cmp-' + uuid.uuid4().hex
             import cloudyfan_jev.saved_policy_comparison as policy_module
+            import platform
+            core_source = Path(policy_module.__file__).absolute().parent
             implementation = {'policy': POLICY, 'computation': COMPUTATION,
                 'core_policy_sha256': hashlib.sha256(_read(Path(policy_module.__file__).absolute(), 1048576)).hexdigest(),
-                'host_loader_sha256': hashlib.sha256(_read(Path(__file__).absolute(), 1048576)).hexdigest()}
+                'host_loader_sha256': hashlib.sha256(_read(Path(__file__).absolute(), 1048576)).hexdigest(),
+                'host_family_sha256': {name: hashlib.sha256(_read(Path(__file__).with_name(name).absolute(), 1048576)).hexdigest()
+                    for name in ('saved_qcs_comparison.py', 'saved_backup_comparison.py')},
+                'host_validation_sha256': {name: hashlib.sha256(_read(Path(__file__).with_name(name).absolute(), 1048576)).hexdigest()
+                    for name in ('store.py', 'observation_fields.py')},
+                'core_parser_sha256': {name: hashlib.sha256(_read(core_source / name, 1048576)).hexdigest()
+                    for name in ('routing.py', 'decisions.py', 'client.py', 'generation_request.py', 'errors.py', 'receipt_store.py')},
+                'runtime': {'python': platform.python_version(), 'sqlite': sqlite3.sqlite_version}}
             request = {'comparison_id': comparison_id, 'created_at': now, 'frozen_at': now,
                        'tasks': tasks, 'policy_version': POLICY, 'implementation': implementation,
-                       'policy_sha256': digest(implementation)}
+                       'policy_sha256': digest(implementation), 'limits': dict(LIMITS)}
             request_sha = reports.write(comparison_id + '.request.json', request, 16384)
             context = _source_context(app, tasks, now)
             control = encoded(context)
             if len(control) > LIMITS['max_source_bytes']:
                 raise SourceUnavailable('comparison_control_oversized')
             import cloudyfan_jev
-            bootstrap = ('import sys;sys.path[:0]=sys.argv[1:3];'
+            bootstrap = ('import sys;sys.dont_write_bytecode=True;sys.path[:0]=sys.argv[1:3];'
                          'from cloudyfan_monitor.saved_comparisons import _worker;_worker()')
             argv = [sys.executable, '-I', '-S', '-c', bootstrap, str(Path(__file__).parents[1]),
                     str(Path(cloudyfan_jev.__file__).parent.parent)]
@@ -756,7 +792,13 @@ def _load_task(context, source, task):
                     original_path=original['path'], receipts=receipts)
                 status = ('reproduced' if decisions and all(row['match'] is True for row in decisions)
                           else 'partial' if any(row['match'] is True for row in decisions) else 'unknown')
-                reasons = list(dict.fromkeys(row['reason'] for row in decisions)) or ['original_decision_inputs_unavailable']
+                reasons = list(dict.fromkeys(code for row in decisions for code in (row['reason'], row.get('policy_reason'))
+                    if code is not None)) or ['original_decision_inputs_unavailable']
+                # Economic forecasts stay in the frozen inputs. The public
+                # projection lists original fees and policy reason codes; it
+                # never presents a forecast as achieved model-cost savings.
+                decisions = [{key: row[key] for key in ('index', 'stage', 'action', 'selected_tier',
+                    'config_id', 'reason', 'match')} for row in decisions]
                 return {'task': dict(task), 'original': original, 'reproduction': {
                     'status': status, 'scope': 'decision_from_saved_inputs', 'adopted': False,
                     'reasons': reasons, 'decisions': decisions, 'financial_admissibility': 'not_replayed'},

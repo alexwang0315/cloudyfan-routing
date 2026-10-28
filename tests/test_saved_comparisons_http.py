@@ -6,6 +6,9 @@ import threading
 from dataclasses import replace
 import os
 import signal
+import hashlib
+
+import pytest
 
 from task_features_fixture import task_features_http as task_features_http
 from test_local_http_integration import loopback_network as loopback_network
@@ -121,9 +124,11 @@ def test_comparison_rejects_browser_sources_and_corrupt_original_hash(task_featu
     assert not item['reproduction']['decisions']
 
 
-def test_saved_report_reads_do_not_refresh_after_sources_change(task_features_http):
+def test_saved_report_reads_do_not_refresh_after_sources_change(task_features_http, monkeypatch):
+    from cloudyfan_monitor import saved_comparisons
     tracer = task_features_http
     operator, body = _completed(tracer)
+    body['tasks'].append({'client': 'agent', 'run_id': 'zz-never-created'})
     response = operator.post('/monitor/comparisons', json=body)
     assert response.status_code == 200
     report = response.json()
@@ -131,11 +136,17 @@ def test_saved_report_reads_do_not_refresh_after_sources_change(task_features_ht
     inputs = json.loads((store / (report['comparison_id'] + '.inputs.json')).read_bytes())
     assert inputs[0]['values'] and 'PRIVATE_SAVED_POLICY_CANARY' not in json.dumps(inputs)
     before = tracer.snapshot('before-source-change-polls')
+    # A later host admission limit is not an input to an already-saved report.
+    monkeypatch.setitem(saved_comparisons.LIMITS, 'max_tasks', 1)
     tracer.controlled.host.service.contracts.clear()
     tracer.clock.now += 366 * 86400
     for _ in range(2):
         actual = operator.get('/monitor/comparisons/' + report['comparison_id'])
         assert actual.status_code == 200 and actual.json() == report
+    catalog = operator.get('/monitor/comparisons')
+    assert catalog.status_code == 200
+    assert any(row['comparison_id'] == report['comparison_id'] and row['requested_tasks'] == 2
+               for row in catalog.json()['reports'])
     after = tracer.snapshot('after-source-change-polls')
     for key in ('model_requests', 'source_requests', 'accounting_requests', 'health_sha256',
                 'budget_sqlite_sha256', 'capacity_sha256', 'queue_sha256', 'raw_files_sha256'):
@@ -390,6 +401,53 @@ def test_rollback_journal_is_not_silently_ignored_by_a_private_sqlite_copy(task_
     assert 'PRIVATE_ROLLBACK_JOURNAL_CANARY' not in response.text
     journal.rename(journal.with_name('rejected-original-rollback-journal'))
     after = tracer.snapshot('after-rollback-journal-control')
+    for key in ('model_requests', 'source_requests', 'accounting_requests', 'health_sha256',
+                'budget_sqlite_sha256', 'capacity_sha256', 'queue_sha256'):
+        assert before[key] == after[key]
+
+
+@pytest.mark.parametrize('code_kind', ['helper', 'parser'])
+def test_code_fingerprint_inputs_change_new_report_but_never_refresh_old_report(
+        task_features_http, monkeypatch, code_kind):
+    from cloudyfan_monitor import saved_comparisons
+    import cloudyfan_jev.saved_policy_comparison as pure
+    tracer = task_features_http
+    operator, body = _completed(tracer)
+    original = operator.post('/monitor/comparisons', json=body)
+    assert original.status_code == 200
+    frozen = original.json()
+    target = (Path(saved_comparisons.__file__).with_name('saved_backup_comparison.py') if code_kind == 'helper'
+              else Path(pure.__file__).with_name('routing.py')).absolute()
+    variant = tracer.artifacts / ('code-fingerprint-' + code_kind + '.py')
+    variant.write_bytes(target.read_bytes() + b'\n# Synthetic comment-only code identity control.\n')
+    variant.chmod(0o600)
+    original_read = saved_comparisons._read
+    code_reads = []
+
+    def code_source(path, maximum):
+        if Path(path).absolute() == target:
+            code_reads.append(code_kind)
+            return original_read(variant, maximum)
+        return original_read(path, maximum)
+
+    # Control only the trusted code-fingerprint file input, using real private
+    # file bytes. Product source/execution, HTTP/Core/Store and upstream wiring
+    # remain real. This is not evidence of an application deployment/upgrade.
+    monkeypatch.setattr(saved_comparisons, '_read', code_source)
+    before = tracer.snapshot('before-code-input-' + code_kind)
+    created = operator.post('/monitor/comparisons', json=body)
+    assert created.status_code == 200
+    changed = created.json()
+    assert changed['policy_sha256'] != frozen['policy_sha256']
+    assert changed['items'] == frozen['items'] and code_reads == [code_kind]
+    request_file = Path(tracer.controlled.app.store.path).parent / '.saved-comparisons' / (changed['comparison_id'] + '.request.json')
+    implementation = json.loads(request_file.read_bytes())['implementation']
+    expected = hashlib.sha256(variant.read_bytes()).hexdigest()
+    assert (implementation['host_family_sha256']['saved_backup_comparison.py'] if code_kind == 'helper'
+            else implementation['core_parser_sha256']['routing.py']) == expected
+    assert operator.get('/monitor/comparisons/' + frozen['comparison_id']).json() == frozen
+    assert code_reads == [code_kind], 'Saved GET reread current code inputs'
+    after = tracer.snapshot('after-code-input-' + code_kind)
     for key in ('model_requests', 'source_requests', 'accounting_requests', 'health_sha256',
                 'budget_sqlite_sha256', 'capacity_sha256', 'queue_sha256'):
         assert before[key] == after[key]

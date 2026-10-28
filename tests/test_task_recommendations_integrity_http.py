@@ -54,8 +54,16 @@ def test_fifo_in_place_of_a_saved_record_cannot_block_a_public_read(task_feature
 @pytest.mark.parametrize('fault', ['missing', 'hash-mismatch', 'symlink', 'fifo', 'private',
     'outside-root', 'oversized', 'too-many', 'total-bytes', 'empty'])
 def test_calibration_source_faults_remain_unknown_without_unbounded_or_nonpublic_reads(task_features_http, monkeypatch, fault):
+    from task_features_fixture import POLICY_BUNDLE, StoreFeatureBindingPort
     from task_recommendations_fixture import calibrated_contracts
     tracer = task_features_http
+    def source_fault_clock(_source, _values):
+        # Isolate source rejection from host scheduling; the separate budget
+        # tests retain the real 50 ms policy and controlled exhaustion cases.
+        tracer.controlled.host.service.creation_features = {
+            'policy_bundle': {**POLICY_BUNDLE, 'feature_version': 'local-deterministic-v2'},
+            'binding_port': StoreFeatureBindingPort(tracer.controlled.app.store),
+            'compute_clock': lambda: 0.0}
     opened = []
     original_open = os.open
     def observe_open(path, flags, *args, **kwargs):
@@ -67,7 +75,7 @@ def test_calibration_source_faults_remain_unknown_without_unbounded_or_nonpublic
         return original_open(path, flags, *args, **kwargs)
     with monkeypatch.context() as patch:
         patch.setattr(os, 'open', observe_open)
-        calibrated_contracts(tracer, source_fault=fault)
+        calibrated_contracts(tracer, source_fault=fault, before_enable=source_fault_clock)
     client = activate(tracer)
     accepted = client.post('/v1/tasks', json=task_payload(tracer, 'source-fault'))
     assert accepted.status_code == 202 and accepted.json()['task_features']['status'] == 'available'
@@ -84,6 +92,78 @@ def test_calibration_source_faults_remain_unknown_without_unbounded_or_nonpublic
     assert not tracer.controlled.requests
     tracer.evidence['source_guard'] = {'fault': fault, 'actual_source_opens_during_bootstrap': opened,
                                      'source_opens_from_public_get': 0}
+
+
+def test_post_seal_compute_exhaustion_hides_only_that_response_and_preserves_saved_unknown(task_features_http):
+    """Controlled post-seal exhaustion, not a diagnosis of original full01 timing."""
+    from task_features_fixture import POLICY_BUNDLE, StoreFeatureBindingPort
+    tracer = task_features_http
+    service, store = tracer.controlled.host.service, tracer.controlled.app.store
+    real_port = StoreFeatureBindingPort(store)
+    phase = {'exhaust': False, 'now': 0.0}
+    sealed = []
+
+    def compute_clock():
+        # Like the original budget regression, each measured interval can use
+        # 51 ms, but only after a real seal. No observe/call count selects it.
+        if phase['exhaust']:
+            phase['now'] += 0.051
+        return phase['now']
+
+    class NotifyAfterRealSeal:
+        def snapshot(self, principal, run_id):
+            return real_port.snapshot(principal, run_id)
+
+        def seal(self, principal, run_id, adoption_sha, registered_sha, record_sha):
+            result = real_port.seal(principal, run_id, adoption_sha, registered_sha, record_sha)
+            if result is True:
+                sealed.append({'principal': principal, 'run_id': run_id, 'record_sha256': record_sha})
+                phase['exhaust'] = True
+            return result
+
+    service.creation_features = {
+        'policy_bundle': {**POLICY_BUNDLE, 'feature_version': 'local-deterministic-v2'},
+        'binding_port': NotifyAfterRealSeal(), 'compute_clock': compute_clock}
+    enable_recommendations(tracer)
+    client = activate(tracer)
+    budget_before = {lane: ledger.report() for lane, ledger in tracer.controlled.budgets.items()}
+    run_id = 'post-seal-compute-budget'
+    accepted = client.post('/v1/tasks', json=task_payload(tracer, run_id))
+    assert accepted.status_code == 202 and accepted.json()['status'] == 'queued'
+    assert accepted.json()['routing_recommendation'] == {
+        'schema_version': 'creation-routing-recommendation-v1', 'status': 'unavailable',
+        'adopted': False, 'reason': 'creation_recommendation_evidence_unavailable'}
+    assert len(sealed) == 1 and phase['exhaust'] is True and phase['now'] > 0.05
+    internal = service.internal_id('agent', run_id)
+    record = service.root / '.task-features' / (internal + '.json')
+    anchor = service.root / internal / 'creation-feature-anchor.json'
+    record_bytes, anchor_bytes = record.read_bytes(), anchor.read_bytes()
+    record_sha = hashlib.sha256(record_bytes).hexdigest()
+    saved = json.loads(record_bytes)['routing_recommendation']
+    binding = real_port.snapshot('agent', run_id)
+    assert saved['status'] == 'unknown' and saved['adopted'] is False
+    assert record_sha == sealed[0]['record_sha256'] == binding['seal']['record_sha256']
+    assert json.loads(anchor_bytes)['record_sha256'] == record_sha
+    before_read = tracer.snapshot('post-seal-before-independent-read')
+    # Restore a steady monotonic test clock, not the policy, rules or evidence.
+    phase['exhaust'] = False
+    for _ in range(2):
+        observed = client.get('/v1/tasks/' + run_id)
+        assert observed.status_code == 202 and observed.json()['status'] == 'queued'
+        assert observed.json()['routing_recommendation'] == saved
+    assert record.read_bytes() == record_bytes and anchor.read_bytes() == anchor_bytes
+    assert real_port.snapshot('agent', run_id) == binding and len(sealed) == 1
+    assert tracer.snapshot('post-seal-after-independent-read') == before_read
+    assert {lane: ledger.report() for lane, ledger in tracer.controlled.budgets.items()} == budget_before
+    assert not tracer.controlled.requests
+    assert not tracer.controlled.side_requests['source'] and not tracer.controlled.side_requests['accounting']
+    tracer.evidence['post_seal_compute_exhaustion'] = {
+        'trigger': 'real Store seal returned True; only then clock advances 51ms per read',
+        'original_full01_cause_or_exact_phase_claimed': False, 'clock_not_rewound': True,
+        'post_status': 202, 'post_recommendation': 'unavailable', 'saved_recommendation': 'unknown',
+        'subsequent_independent_get_recommendation': 'unknown', 'record_sha256': record_sha,
+        'anchor_sha256': hashlib.sha256(anchor_bytes).hexdigest(), 'seal': binding['seal'],
+        'model_calls': 0, 'source_calls': 0, 'accounting_calls': 0}
 
 
 @pytest.mark.parametrize('phase', ['bound-before-core', 'previous-accepting'])

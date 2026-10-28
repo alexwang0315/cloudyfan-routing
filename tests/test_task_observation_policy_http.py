@@ -129,6 +129,43 @@ def test_new_tasks_follow_the_persisted_operator_rule_after_old_host_defaults_ar
     assert observed['model_requests'] == observed['source_requests'] == observed['accounting_requests'] == []
 
 
+@pytest.mark.parametrize('clock_type', [int, float], ids=['integer-clock', 'float-clock'])
+def test_explicit_operator_disable_survives_sqlite_time_storage_and_reopen(task_features_http, clock_type):
+    tracer = task_features_http
+    tracer.clock.now = clock_type(tracer.clock.now)
+    operator, client = tracer.client('operator'), tracer.client('agent')
+    capacity = operator.get('/monitor/capacity')
+    assert operator.post('/monitor/capacity/activate', json={
+        'revision': capacity.json()['dispatch']['revision'], 'version': tracer.controlled.policy_version,
+    }).status_code == 200
+    initial = operator.get('/monitor/observation-policy').json()
+    off = operator.post('/monitor/observation-policy/activate', json={
+        'revision': initial['revision'], 'version': None})
+    assert off.status_code == 200 and off.json()['capture_enabled'] is False
+    payload = {'run_id': 'numeric-clock-explicit-disable', 'category': tracer.controlled.category,
+               'prompt': 'PRIVATE_NUMERIC_CLOCK_CANARY 中文1+1'}
+    accepted = client.post('/v1/tasks', json=payload)
+    assert accepted.status_code == 202
+    assert accepted.json()['task_features']['status'] == 'not_provided'
+    assert accepted.json()['routing_recommendation']['status'] == 'not_provided'
+    binding = tracer.controlled.app.store.binding('agent', payload['run_id'])
+    internal = tracer.controlled.host.service.internal_id('agent', payload['run_id'])
+    original_expiry = tracer.controlled.host.service.retention.lookup(internal)['expires_at']
+    tracer.reopen_disabled()
+    assert operator.get('/monitor/observation-policy').json() == off.json()
+    for response in (client.get('/v1/tasks/' + payload['run_id']), client.post('/v1/tasks', json=payload)):
+        assert response.status_code == 202
+        assert response.json()['task_features']['status'] == response.json()['routing_recommendation']['status'] == 'not_provided'
+        assert 'PRIVATE_NUMERIC_CLOCK_CANARY' not in response.text
+    assert tracer.controlled.app.store.binding('agent', payload['run_id']) == binding
+    assert tracer.controlled.host.service.retention.lookup(internal)['expires_at'] == original_expiry
+    assert not (tracer.controlled.host.service.root / '.task-features' / (internal + '.json')).exists()
+    observed = tracer.snapshot('after_numeric_clock_explicit_disable_and_reopen')
+    assert observed['model_requests'] == observed['source_requests'] == observed['accounting_requests'] == []
+    tracer.evidence['numeric_clock'] = {'supplied_type': clock_type.__name__,
+        'binding_time_preserved': binding['created'] == tracer.clock.now, 'original_deadline_unchanged': True}
+
+
 def test_operator_disable_reopen_and_rollback_keep_the_original_versions_and_access_deadline(task_features_http, monkeypatch):
     tracer = task_features_http
     operator, client = tracer.client('operator'), tracer.client('agent')
@@ -454,7 +491,8 @@ def test_a_lost_operator_disable_cannot_reenable_capture_from_old_host_defaults(
     assert observed['model_requests'] == observed['source_requests'] == observed['accounting_requests'] == []
 
 
-@pytest.mark.parametrize('column', ['revision', 'version', 'fingerprint', 'marker', 'binding_sha'])
+@pytest.mark.parametrize('column', ['revision', 'version', 'fingerprint', 'marker', 'binding_sha',
+                                  'adoption_sha', 'record_sha', 'request_sha', 'registered_sha'])
 def test_corrupt_observation_columns_are_bounded_before_they_can_reach_python(task_features_http, column):
     tracer = task_features_http
     operator, client = tracer.client('operator'), tracer.client('agent')
@@ -469,10 +507,12 @@ def test_corrupt_observation_columns_are_bounded_before_they_can_reach_python(ta
     assert activated.status_code == 200
     payload = {'run_id': 'bounded-control-column', 'category': tracer.controlled.category,
                'prompt': 'PRIVATE_OVERSIZED_COLUMN_CANARY 中文1+1'}
-    if column == 'binding_sha':
+    saved_column = column in ('binding_sha', 'adoption_sha', 'record_sha', 'request_sha', 'registered_sha')
+    if saved_column:
         assert client.post('/v1/tasks', json=payload).status_code == 202
     blob = b'PRIVATE_DATABASE_COLUMN_CANARY' + b'x' * (8 * 1024 * 1024)
     table = ('creation_observation_absences' if column == 'binding_sha' else
+             'creation_feature_adoptions' if column in ('adoption_sha', 'record_sha', 'request_sha', 'registered_sha') else
              'creation_observation_initialization' if column == 'marker' else 'creation_observation_control')
     with sqlite3.connect(tracer.controlled.app.store.path) as db:
         db.execute('UPDATE ' + table + ' SET ' + column + '=?', (sqlite3.Binary(blob),))
@@ -482,7 +522,7 @@ def test_corrupt_observation_columns_are_bounded_before_they_can_reach_python(ta
     baseline = tracemalloc.get_traced_memory()[0]
     tracemalloc.reset_peak()
     try:
-        response = (client.get('/v1/tasks/' + payload['run_id']) if column == 'binding_sha'
+        response = (client.get('/v1/tasks/' + payload['run_id']) if saved_column
                     else client.post('/v1/tasks', json=payload))
         peak_extra = tracemalloc.get_traced_memory()[1] - baseline
     finally:

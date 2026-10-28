@@ -42,7 +42,7 @@ app = assemble_monitor(
 
 控制列與初始化標記不一致、版本／指紋錯誤或資料庫不可讀時，控制回覆固定 `503 observation_policy_unavailable`。新合法任務仍走原接受與派送，輔助觀測明示不可確認，不退回舊主機配置重新啟用擷取。保留失敗證據後由原資料庫維運程序處理，不以目前規則重算舊任務；這不宣稱偵測整份資料庫及所有對照同時回滾。
 
-明示停用的新 binding 保存獨立且有摘要對照的「未擷取」標記，讀取才可明確回覆 `not_provided`。缺紀錄、錯摘要或不完整 seal 仍是 `unavailable`。未提供操作員 observer 的 runner 明示未提供；不遷移舊紀錄，也不從當前停用推測舊任務狀態。
+明示停用的新 binding 保存獨立且有摘要對照的「未擷取」標記，讀取才可明確回覆 `not_provided`。摘要在同一原交易內使用 SQLite 實際保存的 binding 表示，支援合法整數／浮點時鐘而不改原建立時間。缺紀錄、錯摘要或不完整 seal 仍是 `unavailable`。未提供操作員 observer 的 runner 明示未提供；不遷移舊紀錄，也不從當前停用推測舊任務狀態。
 
 ## 欄位、單位與未知
 
@@ -81,6 +81,7 @@ Core 在原新任務鎖內寫入獨占建立錨點、raw 目錄外的安全紀�
 - 新增的逐任務序列化、hash、白名單驗證與特徵萃取，累計純計算輸出期限為 50ms；受控時鐘回退或異常也不可產生成功特徵。SQLite 與檔案 I/O 分開；此期限不是 OS 硬即時或服務 SLO。
 - 輔助 snapshot／seal 使用 `timeout=0` 的一次非等待 SQLite 交易。原 binding 的交易與鎖等待契約保持原值。
 - 控制／初始化與未擷取標記查詢先核對 SQLite 型別、已知短版本及固定摘要格式，局部 native 欄位上限至多 4096 bytes，隨即還原連線原上限；損壞的大欄位不先整份載入 Python。這不改原合法 binding 的資料上限，也不是 OS I/O 耗時保證。
+- 原 adoption 查詢另以 32768-byte native row 上限容納原 16384-byte adoption，先核對正文與四個摘要的 SQL 型別／長度／NULL 形狀；不把損壞摘要轉成可補簽的空 seal。
 - 檔案採固定根目錄、非 symlink、single-link、有界讀取、0600 獨占寫入與 fsync；不覆寫另一份建立紀錄。
 - 安全 sidecar 位於 `TaskService.root/.task-features/`，受原 raw purge 保護。首版沒有安全中繼資料刪除入口，保守保留至少 365 天及未知費用所需證據。
 

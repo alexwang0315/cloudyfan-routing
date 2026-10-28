@@ -179,11 +179,11 @@ class Store:
 
     @staticmethod
     @contextmanager
-    def _bounded_observation_columns(db):
+    def _bounded_observation_columns(db, *, maximum=4096):
         # Also bound SQLite's record materialization, before Python gets a
         # value. Restore the original connection limit for the legal binding.
         previous = db.getlimit(sqlite3.SQLITE_LIMIT_LENGTH)
-        db.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, min(previous, 4096))
+        db.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, min(previous, maximum))
         try:
             yield
         finally:
@@ -443,8 +443,18 @@ class Store:
             try:
                 db.execute('SAVEPOINT creation_feature_absence')
                 saved = True
+                persisted = db.execute('SELECT * FROM bindings WHERE client=? AND run=?',
+                                       (binding['client'], binding['run'])).fetchone()
+                with feature_computation():
+                    if persisted is None or dict(persisted) != dict(binding):
+                        raise ValueError('Original disabled binding is inconsistent')
+                    # SQLite REAL affinity may store a legal integer clock as
+                    # float. Bind to its actual committed representation.
+                    binding_sha = digest(dict(persisted))
+                if not feature_budget_available():
+                    raise ValueError('Feature absence compute deadline exceeded')
                 db.execute('INSERT INTO creation_observation_absences VALUES(?,?,?)',
-                           (binding['client'], binding['run'], digest(dict(binding))))
+                           (binding['client'], binding['run'], binding_sha))
             except Exception:
                 if not db.in_transaction:
                     raise MonitorError('monitor_store_unavailable', 503) from None
@@ -487,9 +497,18 @@ class Store:
 
     def _feature_snapshot(self, db, client, run):
         binding = db.execute('SELECT * FROM bindings WHERE client=? AND run=?', (client, run)).fetchone()
-        row = db.execute('SELECT CASE WHEN length(CAST(adoption AS BLOB))<=16384 THEN adoption END AS adoption, '
-            'adoption_sha,record_sha,request_sha,registered_sha FROM creation_feature_adoptions '
-            'WHERE client=? AND run=?', (client, run)).fetchone()
+        hashes = ('adoption_sha', 'record_sha', 'request_sha', 'registered_sha')
+        valid = {key: "typeof(" + key + ")='text' AND length(CAST(" + key + " AS BLOB))=64 "
+            "AND length(" + key + ")=64 AND " + key + " NOT GLOB '*[^0-9a-f]*'" for key in hashes}
+        projection = ','.join('CASE WHEN ' + valid[key] + ' THEN ' + key + ' END AS ' + key for key in hashes)
+        shape = valid['adoption_sha'] + ' AND ' + ' AND '.join(
+            '(' + key + ' IS NULL OR (' + valid[key] + '))' for key in hashes[1:])
+        # The original adoption may occupy 16 KiB. Bound its full SQLite row
+        # separately from the smaller controls, before any digest is fetched.
+        with self._bounded_observation_columns(db, maximum=32768):
+            row = db.execute("SELECT CASE WHEN typeof(adoption)='text' AND length(CAST(adoption AS BLOB))<=16384 "
+                'THEN adoption END AS adoption, ' + projection + ',CASE WHEN ' + shape + ' THEN 1 ELSE 0 END AS hashes_valid '
+                'FROM creation_feature_adoptions WHERE client=? AND run=?', (client, run)).fetchone()
         if binding is None:
             raise ValueError('Original feature adoption unavailable')
         with self._bounded_observation_columns(db):
@@ -501,7 +520,7 @@ class Store:
             if row is not None or absent['binding_sha'] != digest(dict(binding)):
                 raise ValueError('Original feature absence is inconsistent')
             raise FeaturesNotProvided()
-        if row is None or row['adoption'] is None:
+        if row is None or row['adoption'] is None or row['hashes_valid'] != 1:
             raise ValueError('Original feature adoption unavailable')
         with feature_computation():
             adoption = validate_adoption(json.loads(row['adoption']))

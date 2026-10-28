@@ -42,3 +42,10 @@ First-version mode names map to the existing core: `cloudyfan`, `fixed_high`, `l
 Completion means the additive package and offline integration pass, the console interactions are inspected, and live integration boundaries are documented. It does not mean the main experiment or production service has been altered or qualified.
 
 Completed 2026-10-22: steps 1–6 delivered. Final monitor gate: 35 passed, Ruff, JS syntax and offline wheel/sdist; desktop/mobile browser walkthrough completed. Evidence and host integration follow-up are in `docs/verification-20261022.md` and `docs/main-thread-handoff.md`. No main workspace source, qualification, authorization or experiment state changed by this side task.
+
+
+## Issue40 Monitor check-fixture portability — 2026-10-28
+
+Before edits, monitor-check-path-worker exclusively owns `tests/test_acceptance_tooling.py` for the bounded SSD-path portability fix. Root owns this work plan and current handoff. A fresh targeted run from the relocated path failed during the original miniature dependency preparation (exit127); the original output is preserved externally under `issue40/monitor-path-preflight-red01/`. Retain the real subprocess, all existing tests and assertions, current offline checks, and all failure evidence; do not modify production acceptance behavior. The original Monitor full gate and independent review remain pending. No provider call, spend, push, deployment, or deletion is authorized.
+
+The targeted original Monitor acceptance-tooling module passed all24 tests in the relocated environment after the fixture-only repair. The prior focused127 failure and its raw evidence remain preserved; this is not a full Monitor verification or Issue40 completion.

@@ -97,3 +97,10 @@ Monitor全套235項／12步成功；核心整套2,055通過／50項SQL凍結suit
 - Q12：客戶端HTTP斷線後，只要伺服器正常，已接受任務繼續；以原client／run查詢狀態或結果。斷線不代表上游取消或無費用；服務程序真正中斷後不自動接續，仍依Q9及原帳務限制處理。
 
 十二項產品決定及整體方案已獲使用者確認，本機實作與驗收已執行；最新結果見[驗收清單](main-thread-integration-acceptance.md)與[執行檢查點](execution-checkpoint.md)。76 項 Monitor 測試、7 項其中的真實 HTTP、71 項受影響核心回歸及桌機 8 項操作通過；真實 metadata GET 15 次成功，但仍有 24 個端點未查。核心全工作區檢查另外記錄，不稱全部通過。手機端製作與測試依最新指示停止，規格已同步至 [Issue #20](https://github.com/alexwang0315/cloudyfan-routing/issues/20)。沒有付費模型呼叫、部署、推送或實際資料清除。
+
+
+## 2026-10-28：Issue40 驗收路徑修正責任
+
+SSD 重新掛載後的路徑含空格，Monitor 驗收工具測試生成的替身執行檔在一次獨立單項重現中無法啟動；失敗及原始輸出保留。monitor-check-path-worker 僅負責 `tests/test_acceptance_tooling.py` 的測試替身路徑修正，root 負責此工作紀錄。全部原測試與真實 subprocess 行為保留，完整 Monitor 驗收與獨立審查仍待完成；不因此宣稱服務或模型資格通過。
+
+路徑修正後，原 Monitor 驗收工具模組24項全部通過，仍實際執行原虛擬環境中的 pytest 與子程序；原127失敗保留。這不代表整套 Monitor 或 #40 已完成。

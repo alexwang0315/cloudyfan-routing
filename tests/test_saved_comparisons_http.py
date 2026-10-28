@@ -406,7 +406,7 @@ def test_rollback_journal_is_not_silently_ignored_by_a_private_sqlite_copy(task_
         assert before[key] == after[key]
 
 
-@pytest.mark.parametrize('code_kind', ['helper', 'parser', 'window_parser'])
+@pytest.mark.parametrize('code_kind', ['helper', 'parser', 'window_parser', 'window_helper'])
 def test_code_fingerprint_inputs_change_new_report_but_never_refresh_old_report(
         task_features_http, monkeypatch, code_kind):
     from cloudyfan_monitor import saved_comparisons
@@ -416,10 +416,12 @@ def test_code_fingerprint_inputs_change_new_report_but_never_refresh_old_report(
     original = operator.post('/monitor/comparisons', json=body)
     assert original.status_code == 200
     frozen = original.json()
+    assert frozen['items'][0]['reproduction']['status'] == 'reproduced'
     section, filename, module = {
         'helper': ('host_family_sha256', 'saved_backup_comparison.py', saved_comparisons),
         'parser': ('core_parser_sha256', 'routing.py', pure),
         'window_parser': ('core_parser_sha256', 'capacity_windows.py', pure),
+        'window_helper': ('host_family_sha256', 'saved_window_comparison.py', saved_comparisons),
     }[code_kind]
     target = Path(module.__file__).with_name(filename).absolute()
     variant = tracer.artifacts / ('code-fingerprint-' + code_kind + '.py')

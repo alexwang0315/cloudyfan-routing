@@ -576,7 +576,7 @@ def create_report(app, body):
                 'core_policy_sha256': hashlib.sha256(_read(Path(policy_module.__file__).absolute(), 1048576)).hexdigest(),
                 'host_loader_sha256': hashlib.sha256(_read(Path(__file__).absolute(), 1048576)).hexdigest(),
                 'host_family_sha256': {name: hashlib.sha256(_read(Path(__file__).with_name(name).absolute(), 1048576)).hexdigest()
-                    for name in ('saved_qcs_comparison.py', 'saved_backup_comparison.py')},
+                    for name in ('saved_qcs_comparison.py', 'saved_backup_comparison.py', 'saved_window_comparison.py')},
                 'host_validation_sha256': {name: hashlib.sha256(_read(Path(__file__).with_name(name).absolute(), 1048576)).hexdigest()
                     for name in ('store.py', 'observation_fields.py')},
                 'core_parser_sha256': {name: hashlib.sha256(_read(core_source / name, 1048576)).hexdigest()

@@ -1,0 +1,13 @@
+.observation-policy-boundary {margin-bottom:20px;line-height:1.7}
+.observation-policy-synthetic {margin-bottom:20px;color:var(--muted)}
+.observation-policy-warning {padding:16px 20px;border:1px solid var(--border);border-radius:10px;color:var(--amber);line-height:1.7}
+.observation-policy-current,.observation-policy-controls {margin-top:22px}
+#observation-policy-active {font-size:20px;font-weight:650;line-height:1.5;margin:0 0 24px}
+.observation-policy-facts {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px;margin:0 0 20px}
+.observation-policy-facts dt {font-size:12px;color:var(--muted);margin-bottom:7px}
+.observation-policy-facts dd {margin:0;line-height:1.6;overflow-wrap:anywhere}
+.observation-policy-controls label {display:block;color:var(--muted);font-size:13px;margin-bottom:10px}
+.observation-policy-actions {display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:16px}
+.observation-policy-actions select {min-width:280px;flex:1;max-width:100%;min-height:40px}
+.observation-policy-controls .metadata {line-height:1.8}
+@media(max-width:800px) {.observation-policy-facts {grid-template-columns:1fr}.observation-policy-actions {align-items:stretch;flex-direction:column}.observation-policy-actions select {min-width:0}}

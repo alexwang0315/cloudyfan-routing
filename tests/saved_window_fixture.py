@@ -79,59 +79,73 @@ class SavedWindowHTTP:
             read = self.operator.get('/monitor/comparisons/' + comparison_id)
             assert read.status_code == 200 and read.content == response.content
 
-    def preserve_missing_job(self, run):
+    def preserve_missing_job(self, run, *, principal='studio'):
         host = self.fixture.host
-        internal = host.service.internal_id('studio', run)
+        internal = host.service.internal_id(principal, run)
         target = host.service.root / internal / 'job.json'
         body = target.read_bytes()
-        archive = self.artifacts / ('preserved-job-' + run + '.json')
+        archive = self.artifacts / ('preserved-job-' + principal + '-' + run + '.json')
         target.rename(archive)
         archive.chmod(0o600)
-        info = {'run': run, 'target_relative': str(target.relative_to(host.root)),
+        info = {'client': principal, 'run': run, 'target_relative': str(target.relative_to(host.root)),
             'archive': archive.name, 'bytes': len(body), 'sha256': hashlib.sha256(body).hexdigest(),
             'scope': 'Owned fresh original evidence fault; job bytes preserved, no deletion'}
         self.evidence.setdefault('controlled_faults', []).append(info)
-        _save(self.artifacts / ('missing-job-' + run + '.json'), info)
+        _save(self.artifacts / ('missing-job-' + principal + '-' + run + '.json'), info)
         return info
 
-    def preserve_unavailable_source_raw(self, run):
+    def preserve_unavailable_source_raw(self, run, *, principal='studio'):
         host = self.fixture.host
-        internal = host.service.internal_id('studio', run)
+        internal = host.service.internal_id(principal, run)
         root = host.root / 'receipts'
         result_path = root / 'runs' / internal / 'result.json'
         original = json.loads(result_path.read_bytes())
-        preserved = [self.preserve_missing_job(run)]
+        preserved = [self.preserve_missing_job(run, principal=principal)]
         targets = [(root / 'runs' / internal / 'manifest.json', 'manifest'), (result_path, 'result')]
         targets.extend((root / 'calls' / call['call_id'] / 'response.json', 'response')
             for attempt in original['attempts'] for call in attempt['calls'])
         for index, (target, kind) in enumerate(targets):
             body = target.read_bytes()
-            archive = self.artifacts / f'preserved-source-{run}-{index}.bin'
+            archive = self.artifacts / f'preserved-source-{principal}-{run}-{index}.bin'
             target.rename(archive)
             archive.chmod(0o600)
-            info = {'run': run, 'kind': kind, 'target_relative': str(target.relative_to(host.root)),
+            info = {'client': principal, 'run': run, 'kind': kind, 'target_relative': str(target.relative_to(host.root)),
                 'archive': archive.name, 'bytes': len(body), 'sha256': hashlib.sha256(body).hexdigest(),
                 'scope': 'Owned source raw unavailable before comparison; original bytes preserved, no deletion'}
             self.evidence.setdefault('controlled_faults', []).append(info)
             preserved.append(info)
-        _save(self.artifacts / ('unavailable-source-' + run + '.json'), preserved)
+        _save(self.artifacts / ('unavailable-source-' + principal + '-' + run + '.json'), preserved)
         return [row['sha256'] for row in preserved if row.get('kind') != 'manifest']
 
-    def move_to_source_access_expiry(self, source, target):
+    def move_to_source_access_expiry(self, source, target, *, source_principal='studio', target_principal='studio'):
         service = self.fixture.host.service
         with sqlite3.connect(service.retention.path.as_uri() + '?mode=ro', uri=True, timeout=0) as db:
             db.execute('PRAGMA query_only=ON')
-            expires = {run: db.execute('SELECT expires FROM tasks WHERE id=?',
-                (service.internal_id('studio', run),)).fetchone()[0] for run in (source, target)}
-        self.fixture.clock.now = expires[source] + .5
-        assert expires[source] < self.fixture.clock() < expires[target]
-        value = {'source_expires': expires[source], 'target_expires': expires[target],
+            source_expiry = db.execute('SELECT expires FROM tasks WHERE id=?',
+                (service.internal_id(source_principal, source),)).fetchone()[0]
+            target_expiry = db.execute('SELECT expires FROM tasks WHERE id=?',
+                (service.internal_id(target_principal, target),)).fetchone()[0]
+        self.fixture.clock.now = source_expiry + .5
+        assert source_expiry < self.fixture.clock() < target_expiry
+        value = {'source_expires': source_expiry, 'target_expires': target_expiry,
+            'source_task': {'client': source_principal, 'run_id': source},
+            'target_task': {'client': target_principal, 'run_id': target},
             'comparison_clock': self.fixture.clock(), 'scope': 'Use original retention deadlines, no policy/row changes'}
         _save(self.artifacts / 'source-expiry-clock.json', value)
         self.evidence['source_expiry_clock'] = value
 
+    def deactivate_source_principal(self, principal):
+        identity = self.fixture.host.app.identity_store
+        identity.set_active(principal, False)
+        with sqlite3.connect(identity.path.as_uri() + '?mode=ro', uri=True, timeout=0) as db:
+            db.execute('PRAGMA query_only=ON')
+            assert db.execute('SELECT active FROM principals WHERE id=?', (principal,)).fetchone()[0] == 0
+        value = {'principal': principal, 'active': False, 'scope': 'Actual original IdentityStore.set_active before comparison'}
+        _save(self.artifacts / 'source-principal-deactivation.json', value)
+        self.evidence['source_principal_deactivation'] = value
+
     def corrupt_recorded_window(self, run, fault):
-        assert fault == 'missing_ref'
+        assert fault in ('missing_ref', 'oversized_revision')
         host = self.fixture.host
         internal = host.service.internal_id('studio', run)
         target = host.root / 'receipts' / 'runs' / internal / 'backup-selection-0.json'
@@ -141,7 +155,11 @@ class SavedWindowHTTP:
             stream.write(original)
         archive.chmod(0o600)
         value = json.loads(original)
-        value['health']['open_source'][0]['capacity_window']['evidence_refs'] = []
+        window = value['health']['open_source'][0]['capacity_window']
+        if fault == 'missing_ref':
+            window['evidence_refs'] = []
+        else:
+            window['revision'] = 2**63
         target.write_text(json.dumps(value))
         info = {'run': run, 'fault': fault, 'target_relative': str(target.relative_to(host.root)),
             'archive': archive.name, 'bytes': len(original), 'sha256': hashlib.sha256(original).hexdigest(),
@@ -149,6 +167,58 @@ class SavedWindowHTTP:
             'scope': 'Controlled corruption of owned saved gate only; original bytes preserved before comparison'}
         self.evidence.setdefault('controlled_faults', []).append(info)
         _save(self.artifacts / ('window-fault-' + fault + '.json'), info)
+
+    def corrupt_window_physical(self):
+        host, target = self.fixture.host, self.fixture.controller.store.path
+        before = {str(p.relative_to(host.root)): hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in host.root.rglob('*') if p.is_file()}
+        original = target.read_bytes()
+        archive = self.artifacts / 'preserved-capacity-wrong-physical.sqlite'
+        with archive.open('xb') as stream:
+            stream.write(original)
+        archive.chmod(0o600)
+        with sqlite3.connect(target.as_uri() + '?mode=rw', uri=True, timeout=5) as db:
+            row = db.execute('SELECT id,payload FROM capacity_window_observations ORDER BY rowid LIMIT 1').fetchone()
+            assert row is not None
+            value = json.loads(row[1])
+            value['physical'] = '0' * 64
+            db.execute('UPDATE capacity_window_observations SET payload=? WHERE id=?', (json.dumps(value), row[0]))
+        after = {str(p.relative_to(host.root)): hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in host.root.rglob('*') if p.is_file()}
+        relative = str(target.relative_to(host.root))
+        assert before.keys() == after.keys() and all(before[name] == after[name] for name in before if name != relative)
+        info = {'fault': 'wrong_physical', 'target_relative': relative, 'archive': archive.name,
+            'bytes': len(original), 'sha256': hashlib.sha256(original).hexdigest(),
+            'changed_sha256': hashlib.sha256(target.read_bytes()).hexdigest(),
+            'scope': 'Owned native row physical payload changed before comparison; all other original files/witnesses unchanged'}
+        self.evidence.setdefault('controlled_faults', []).append(info)
+        _save(self.artifacts / 'window-fault-wrong-physical.json', info)
+
+    def drift_source_response_bytes(self, run):
+        host = self.fixture.host
+        internal = host.service.internal_id('studio', run)
+        root = host.root / 'receipts'
+        result = json.loads((root / 'runs' / internal / 'result.json').read_bytes())
+        cid = result['attempts'][0]['calls'][0]['call_id']
+        target = root / 'calls' / cid / 'response.json'
+        original = target.read_bytes()
+        value = json.loads(original)
+        assert value['http_status'] == 429
+        changed = json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(',', ':')).encode()
+        if changed == original:
+            changed = json.dumps(value, sort_keys=True, ensure_ascii=False, indent=2).encode()
+        assert changed != original and json.loads(changed) == value
+        archive = self.artifacts / 'preserved-source-response-before-sha-drift.bin'
+        with archive.open('xb') as stream:
+            stream.write(original)
+        archive.chmod(0o600)
+        target.write_bytes(changed)
+        info = {'fault': 'response_sha_drift', 'target_relative': str(target.relative_to(host.root)),
+            'archive': archive.name, 'bytes': len(original), 'sha256': hashlib.sha256(original).hexdigest(),
+            'changed_sha256': hashlib.sha256(changed).hexdigest(), 'json_fields_unchanged': True,
+            'scope': 'Only owned original response file encoding changed; saved ref IDs, fields, fees and actual result untouched'}
+        self.evidence.setdefault('controlled_faults', []).append(info)
+        _save(self.artifacts / 'window-fault-response-sha-drift.json', info)
 
     def snapshot(self, name):
         host = self.fixture.host

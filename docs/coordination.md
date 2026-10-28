@@ -402,3 +402,12 @@ Root owns current metadata, source preservation and stage verification. capacity
 
 
 Issue35 frontier: capacity-dispatch-worker owns capacity store/admission, transport pre-POST, BudgetedCore forwarding, TaskService controlled execution and optional pre-tool dispatch interfaces, as declared in work-plan.json. Monitor counterpart owns the vertical policy/ingress/safe-status/UI/actual HTTP+desktop acceptance. Root alone owns current metadata. Later queue36 and windows37 remain blocked until35 completes.
+
+
+## Issue41 candidate ownership before shared edits — 2026-10-28
+
+The integration owner explicitly delegated current work-plan and necessary coordination edits only in the isolated41 candidate. Canonical and integration metadata remain untouched. Preserve the accepted40 integration at Core6be83b01/Monitor557fd16 and its original full02 wrapper sealing/exit1 failure; independent recovery never relabels that original failure.
+
+Route-advice-worker owns ISSUE41 and the creation-observation shared interface in http_api.py, task_features.py, task_recommendations.py and its task-features contract documentation. The exact calibration validator, selector, capacity/queue dispatch rules and original sealed history remain baseline interfaces. The Monitor counterpart owns operator policy persistence/control, assembly and Gateway creation snapshot, operator HTTP/UI and approved HTTP/desktop acceptance; concrete external ownership notes are maintained before any delegated edits.
+
+Tests use the already human-confirmed real loopback HTTP/desktop seams, original Core/Budget/Store/identity/scheduler and mocked model/provider upstreams. Rule adoption affects only new tasks; GET/replay/resume never recompute, migrate or refresh original features or recommendations. Complete affected original gates and applicable integration checks before a41 completion claim; keep broad29-33 in_progress/current_verificationnull and all qualification gates pending. No paid/provider call, push/deployment, source cleanup or evidence deletion is authorized.

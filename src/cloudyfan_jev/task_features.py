@@ -33,6 +33,10 @@ _OWNER = ContextVar('creation_feature_owner', default=None)
 _COMPUTE = ContextVar('creation_feature_compute_budget', default=None)
 
 
+class FeaturesNotProvided(LookupError):
+    """The original host binding explicitly recorded no creation capture."""
+
+
 class _ComputeBudget:
     def __init__(self, clock):
         self.clock, self.elapsed, self.depth, self.failed = clock, 0.0, 0, False
@@ -837,6 +841,9 @@ class FeatureRecorder:
             if new and not feature_budget_available():
                 raise ValueError('Creation observation compute budget exhausted')
             return projected if include_recommendation else features
+        except FeaturesNotProvided:
+            return ({'task_features': not_provided(), 'routing_recommendation': advice.not_provided()}
+                    if include_recommendation else not_provided())
         except Exception:
             if include_recommendation:
                 result = {'task_features': unavailable()}

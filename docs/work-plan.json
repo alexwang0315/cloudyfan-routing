@@ -23,7 +23,7 @@
         "src/cloudyfan_jev/http_api.py",
         "src/cloudyfan_jev/task_recommendations.py"
       ],
-      "provided_by": "ISSUE40"
+      "provided_by": "ISSUE41"
     },
     {
       "id": "RATE-WINDOW-POLICY",
@@ -180,7 +180,7 @@
     {
       "id": "ISSUE40",
       "owner": "route-advice-worker",
-      "status": "in_progress",
+      "status": "completed",
       "owned_files": [
         "src/cloudyfan_jev/task_features.py",
         "src/cloudyfan_jev/http_api.py",
@@ -193,7 +193,7 @@
       "consumed_interfaces": [
         "CONTROLLED-QUEUE-WINDOW-HOOKS"
       ],
-      "outcome": "Issue40 active: Root independently verified first persisted unknown recommendation; route-advice-worker owns the creation observation and bounded calibration-validation shared interfaces. Continue all9AC, real HTTP/desktop MockTransport tests, fault/legacy and exact calibration; original full gates/review/merge pending. External remaining-implementation release and bounded-selector ownership record identify limits. Preserve original test suite, canonical dirty work, historical failures and pending production gates."
+      "outcome": "Issue40 local integration completed at Core6be83b01b03b405e7685dc870c5862703b73d51c / Monitor557fd16d30ec45d2a4800252e7cfce63396d63af, as explicitly confirmed by integration owner before41 dispatch. Original full02 wrapper sealing/exit1 and missing artifact-index remain failures; later independent recovery records do not rewrite original history. Prior full/targeted/desktop results retain their exact original source and scope; no production qualification, real provider/spend, push/deploy or deletion follows. Parent30 still requires41."
     },
     {
       "id": "ISSUE40-CHECK-PATH-PORTABILITY",
@@ -207,6 +207,25 @@
       ],
       "consumed_interfaces": [],
       "outcome": "Fresh relocated-path red reproduced fixture executable launch errno13; after a test-fixture-only portability fix the original check-entrypoint module passed all 13 tests. Original Core full02 2058 passed/11 failed and focused red/green receipts remain preserved externally. Issue40 original full integration, Monitor full, desktop/wire and independent reviews remain pending."
+    },
+    {
+      "id": "ISSUE41",
+      "owner": "route-advice-worker",
+      "status": "in_progress",
+      "owned_files": [
+        "src/cloudyfan_jev/http_api.py",
+        "src/cloudyfan_jev/task_features.py",
+        "src/cloudyfan_jev/task_recommendations.py",
+        "docs/task-features.md"
+      ],
+      "depends_on": [
+        "ISSUE40"
+      ],
+      "consumed_interfaces": [
+        "CONTROLLED-QUEUE-WINDOW-HOOKS",
+        "EXACT-CALIBRATION-BOUNDED-SOURCE-BYTES"
+      ],
+      "outcome": "Candidate-only41 implementation from exact integrated40 bases, using pre-agreed actual loopback HTTP and desktop seams with real Core/Store/identity/scheduler and upstream MockTransport. Own immutable new-task policy selection and bounded safe observation compatibility; preserve legacy/version/retention/seals/original routing/accounting and every first failure. Monitor counterpart ownership is documented in external41 context; whole29-33 remains in_progress/current_verificationnull, all qualification gates pending. Original full gates, desktop and independent review remain pending for41."
     }
   ]
 }

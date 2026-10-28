@@ -4,6 +4,7 @@ No sockets or servers are started here. Authentication, registered validators,
 backend enforcement and retention approval belong to the embedding application.
 """
 from contextlib import contextmanager, ExitStack
+from contextvars import ContextVar
 from dataclasses import asdict, dataclass
 from decimal import Decimal
 import fcntl
@@ -25,6 +26,17 @@ from .retention import (RetentionError, RetentionPolicy, RetentionStore, digest,
                         inventory, open_file_paths, maintenance_lock, purge_exact)
 from .task_features import FeatureRecorder, feature_computation, not_provided, unavailable
 from . import task_recommendations as advice
+
+_CREATION_SELECTION = ContextVar('task_service_creation_selection', default=())
+_CREATION_UNSET = object()
+
+
+def _creation_scoped(method):
+    @wraps(method)
+    def selected(self, *args, **kwargs):
+        with self.creation_selection():
+            return method(self, *args, **kwargs)
+    return selected
 
 
 class ServiceError(Exception):
@@ -214,16 +226,51 @@ class TaskService:
 
     @property
     def creation_features(self):
+        for service, recorder in reversed(_CREATION_SELECTION.get()):
+            if service is self:
+                return recorder  # Explicit None is a captured disabled selection.
         return self._creation_features
+
+    def prepare_creation_observation(self, configuration, *, recommendations=None):
+        """Trusted host bootstrap only; no published recorder is modified."""
+        recorder = FeatureRecorder(self.root, configuration, self.contracts)
+        recorder.configure_recommendations(recommendations, self.contracts,
+                                          now=self.clock() if recommendations is not None else None)
+        recorder._creation_service = self
+        return recorder
+
+    def publish_creation_observation(self, prepared, *, capture=True):
+        """Publish one prepared host choice; retain independent old readers."""
+        if type(capture) is not bool or (prepared is not None and
+                (type(prepared) is not FeatureRecorder or getattr(prepared, '_creation_service', None) is not self)):
+            raise ValueError('Observation configuration belongs to another service')
+        if prepared is not None:
+            if prepared.port is not None:
+                self._feature_reader = prepared
+            if prepared.records not in self.retention_protected_paths:
+                self.retention_protected_paths += (prepared.records,)
+        self._creation_features = prepared if capture else None
+        self._creation_recommendations = (getattr(prepared, 'recommendation_policy', None)
+                                          if capture and prepared is not None else None)
+
+    @contextmanager
+    def creation_selection(self, prepared=_CREATION_UNSET):
+        """One service-owned recorder through original binding/accepting/create."""
+        if prepared is _CREATION_UNSET:
+            prepared = self.creation_features
+        if prepared is not None and getattr(prepared, '_creation_service', None) is not self:
+            raise ValueError('Observation configuration belongs to another service')
+        token = _CREATION_SELECTION.set((*_CREATION_SELECTION.get(), (self, prepared)))
+        try:
+            yield
+        finally:
+            _CREATION_SELECTION.reset(token)
 
     @creation_features.setter
     def creation_features(self, configuration):
         """Trusted host-only observation policy and independent binding port."""
-        self._creation_recommendations = None
-        if self._creation_features is not None:
-            self._creation_features.configure_recommendations(None, self.contracts)
         if configuration is None:
-            self._creation_features = None
+            self.publish_creation_observation(None)
             return  # Disabling new capture must not erase the independent reader.
         try:
             options = dict(configuration)
@@ -232,29 +279,26 @@ class TaskService:
         capture = options.pop('capture', True)
         if type(capture) is not bool:
             options, capture = {}, True
-        recorder = FeatureRecorder(self.root, options, self.contracts)
-        self._creation_features = recorder if capture else None
-        if recorder.port is not None:
-            self._feature_reader = recorder
-        if recorder.records not in self.retention_protected_paths:
-            self.retention_protected_paths += (recorder.records,)
+        self.publish_creation_observation(self.prepare_creation_observation(options), capture=capture)
 
     @property
     def creation_recommendations(self):
-        return json.loads(self._creation_recommendations) if self._creation_recommendations is not None else None
+        value = getattr(self.creation_features, 'recommendation_policy', None)
+        return json.loads(value) if value is not None else None
 
     @creation_recommendations.setter
     def creation_recommendations(self, configuration):
         """Explicit host configuration never enables feature capture implicitly."""
-        self._creation_recommendations = None
         recorder = self._creation_features
         if recorder is None:
             return
+        options = {'policy_bundle': dict(recorder.policy) if recorder.policy is not None else {},
+                   'binding_port': recorder.port, 'compute_clock': recorder.compute_clock}
         try:
-            if recorder.configure_recommendations(configuration, self.contracts, now=self.clock()):
-                self._creation_recommendations = recorder.recommendation_policy
+            prepared = self.prepare_creation_observation(options, recommendations=configuration)
         except Exception:
-            recorder.configure_recommendations(None, self.contracts)
+            prepared = self.prepare_creation_observation(options)
+        self.publish_creation_observation(prepared)
 
     def __init__(self, root, *, contracts, allowed_principal=None, allowed_principals=None, retention_policy=None,
                  principal_active=None, clock=time.time, retention_protected_paths=(), capacity_controller=None):
@@ -321,6 +365,7 @@ class TaskService:
             raise ServiceError('task_not_found', 404)
         return directory, _read(directory / 'job.json')
 
+    @_creation_scoped
     @_retained
     def create(self, principal, payload):
         self.authorize(principal)

@@ -30,6 +30,10 @@ app = assemble_monitor(
 
 `capture=False` 只安裝reader；未指定時，既有兩欄明示配置會啟用擷取。設定為 `None` 會停用新擷取而保留已接上的reader。重新開啟Monitor主機也會接回原Store reader。port與計算時鐘不進序列化政策或客戶JSON；`compute_clock` 預設為 `time.monotonic`。
 
+可信主機可用 `prepare_creation_observation` 在啟動時建立同一服務所屬、互相獨立的特徵／建議 recorder，再以 `publish_creation_observation` 採用；不在切換時修改已發布 recorder。`creation_selection` 將一份選擇（包括明示停用）固定到本次接受／建立範圍，以服務身分隔離並在離開時還原。這是主機內介面，不是 HTTP 請求權限，也不隔離同程序惡意程式。
+
+Monitor 操作員控制只採用已登記的 `features-v1`、`features-v2`、`features-v2-advice-v1` 或停用，沿原身份及 revision CAS。首次 binding 在原交易內採用持久選擇，並將該 recorder 固定給原 create；後來切換不替換已接受任務的規則或一次 producer 資格。新任務的開啟、停用、回退與重開流程見 [Monitor 文件](../../cloudyfan-monitor/docs/task-features.md)。Core 仍不 import Monitor，也不開放公開擷取或 seal 端點。
+
 ## 一次建立與獨立對照
 
 原Monitor binding交易確認本次是否真正首次建立，提交成功後才交出首次結果。Core必須在原job/state真正新建的分支擷取；受控Queue還須本次原accepting INSERT的資格。相同任務的查詢、重送、接續及恢復不能重新取得資格，也不能用先查不存在或目前仍是accepting代替真正首次建立。
@@ -39,6 +43,8 @@ app = assemble_monitor(
 SQLite busy、計算逾時、部分寫入或seal失敗令特徵不可確認，原合法任務照常執行。讀取與恢復不補檔、不補簽、不改原紀錄。若SQLite錯誤已回滾原binding外層交易，原任務尚未合法接受，則在排程前回覆儲存失敗，不能回成功再留下未綁定工作。
 
 這不保證跨庫全成全敗，也不隔離同程序惡意程式或偵測所有原資料與對照同時回滾。缺少兩份錨點表示未提供或無法確認，不能從現在停用推定舊任務曾停用。
+
+port 的 `FeaturesNotProvided` 僅表示原 binding 確認明示未擷取；其他缺失、毀損、身分或 seal 不一致維持不可確認，不從目前規則補資料。停用與冷重開仍安裝同 Store 的只讀 reader；同步長任務持鎖時，Monitor 沿原只讀存取／時鐘／到期檢查讀已封存特徵，不取得新派送名額。
 
 ## 版本、處理及保存界線
 
@@ -63,3 +69,5 @@ Envelope為 `creation-task-features-v1`，資料使用政策為 `creation-featur
 真實loopback HTTP使用原Core、Budget、Store、身分、受控Queue／Health與MockTransport；同步四模式／類別相容案例使用自己的原fixture，不冒稱具備未接入的Health能力。實際headed桌機保存PNG、ARIA、console／network與自有程序退出紀錄，觀察不新增上游請求。
 
 #39已在固定來源完成本機驗收及正常整合：47focused（新增45＋原2）、真實桌機3、原Core2069／8及其兩個Mock示範／打包、修正後原Monitor472／26／打包、兩軸審查各0。最後Monitor修正沒有改Core；Core完整結果只沿用精確不變的Core6c01來源，並非另跑新Core。[目前交接](handoff.md)保留前次失敗、封存讀取errno5原因未知與後續獨立核對的範圍。這是受控Mock接線驗收，不建立供應商資格、真實節費或部署；整體#29–33仍在進行。
+
+#41 的切換競態、持久停用、缺證及同步長任務由 Monitor 真 HTTP 驗收；目前完整 Core integration、Monitor check／打包與真 headed 桌面仍待收齊，不沿用舊收據宣告新來源完整通過。

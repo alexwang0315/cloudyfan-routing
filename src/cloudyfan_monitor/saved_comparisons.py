@@ -897,45 +897,6 @@ def _original_path(result, manifest=None):
     return path
 
 
-def _backup_candidates(source, trusted, manifest, checkpoint, tier):
-    pool = manifest['backup_plan']['pools'][tier]
-    observed = checkpoint['health'][tier]
-    if (len(pool) > LIMITS['max_candidate_configurations'] or checkpoint['previous'] is not None
-            or checkpoint['actions'] or set(checkpoint['health']) != {tier}
-            or [row['entry']['config_id'] for row in pool] != [row['config_id'] for row in observed]):
-        raise SourceUnavailable('original_candidate_scope_invalid')
-    candidates = []
-    for record, observation in zip(pool, observed):
-        configuration = record['configuration_sha256']
-        health = observation['assessment']
-        historical = source.rows(trusted['health_path'], 'SELECT payload FROM snapshots WHERE id=?',
-            (health['snapshot_id'],), kind='original_health_snapshot', maximum=1048576, max_rows=1)
-        snapshot = strict_json(historical[0]['payload']) if historical else None
-        if (snapshot is None or digest(snapshot) != health['snapshot_id']
-                or snapshot['policy_sha256'] != digest(manifest['health_policy'])
-                or health['observation'] not in snapshot['observations']
-                or health['observation']['configuration_sha256'] != configuration
-                or health['observation']['provider'] != record['entry']['profile']['provider']
-                or type(health['eligible']) is not bool or health['eligible'] != (not health['reasons'])
-                or not set(health['reasons']) <= set(observation['reasons'])):
-            raise SourceUnavailable('original_health_evidence_invalid')
-        reasons = observation['reasons']
-        if (not isinstance(reasons, list) or len(reasons) > 8
-                or any(not isinstance(reason, str) or re.fullmatch(r'[a-z0-9_]{1,80}', reason) is None for reason in reasons)):
-            raise SourceUnavailable('original_gate_evidence_invalid')
-        # Replay the saved admission predicates; this never requalifies a
-        # candidate against current health, quota, window or deadline state.
-        window = observation.get('capacity_window')
-        if window is not None and window != {'status': 'open', 'not_before': None,
-                'evidence_refs': [], 'revision': 0, 'reason_code': 'capacity_window_open'}:
-            raise SourceUnavailable('original_window_inputs_unavailable')
-        candidates.append({'tier': tier, 'config_id': record['entry']['config_id'],
-            'configuration_sha256': configuration, 'generation_cost_usd': record['evidence']['generation_cost_usd'],
-            'complete_cost_usd': record['evidence']['complete_cost_usd'],
-            'flow_ms_upper': record['evidence']['speed']['upper'], 'quality_score': None,
-            'gate': {'state': 'excluded' if reasons else 'eligible', 'reasons': reasons,
-                     'evidence_sha256': digest(observation)}})
-    return candidates
 
 
 def _original_receipts(source, registered, manifest, result, internal, run):
@@ -1006,59 +967,6 @@ def _reproduce_saved(source, binding, job, manifest, result, run, trusted, *, or
                                   original_path=original_path, receipts=receipts)
 
 
-def _reproduce_backup_initial(source, binding, job, manifest, result, run, trusted, *, original_path, receipts):
-    from cloudyfan_jev.saved_policy_comparison import candidate_set_digest
-    policy = manifest['routing_version']
-    if policy != 'qcs-backup-policy-v1':
-        return [], []  # Other families remain explicit unknown until original inputs are supported.
-    checkpoint = source.read(run / 'backup-selection-0.json', 'original_selection_checkpoint')
-    tier = {'cloudyfan': 'open_source', 'fixed_high': 'high', 'low_first': 'low',
-            'open_source_first': 'open_source'}[binding['mode']]
-    candidates = _backup_candidates(source, trusted, manifest, checkpoint, tier)
-    values = {'schema_version': 'saved-policy-values-v1', 'policy_version': policy, 'mode': binding['mode'],
-        'source': {'binding_sha256': digest(binding), 'request_sha256': original_digest(job['request']),
-                   'registered_sha256': original_digest(job['registered']), 'policy_sha256': original_digest(manifest),
-                   'checkpoint_sha256': digest(checkpoint), 'candidate_set_sha256': candidate_set_digest(candidates)},
-        'context': {'stage': 'initial', 'previous_tier': None, 'previous_configuration_sha256': None,
-                    'previous_public_passed': None, 'previous_stop': 'none', 'quality_phase': 0,
-                    'generation_calls': 0, 'receipt_sha256': None, 'validation_sha256': None},
-        'candidates': candidates, 'economics': None, 'classifier': None}
-    started = time.monotonic()
-    reproduced = source.reproduce(values)
-    if (time.monotonic() - started) * 1000 > LIMITS['max_policy_compute_milliseconds']:
-        raise SourceUnavailable('comparison_compute_limit')
-    path = original_path
-    match = (reproduced['status'] == 'reproduced' and bool(path)
-             and reproduced['selected_tier'] == path[0]['tier']
-             and reproduced['selected_configuration_sha256'] == path[0]['configuration_sha256']
-             and checkpoint['pair'].get(tier) in manifest['backup_plan']['pools'][tier]
-             and checkpoint['pair'][tier]['configuration_sha256'] == path[0]['configuration_sha256'])
-    decisions = [{'index': 0, 'stage': 'initial', 'action': reproduced['action'],
-        'selected_tier': reproduced['selected_tier'],
-        'config_id': next((row['config_id'] for row in candidates if row['configuration_sha256'] == reproduced['selected_configuration_sha256']), None),
-        'reason': reproduced['reason'], 'match': match if reproduced['status'] == 'reproduced' else None}]
-    inputs = [values]
-    # The saved validation result is public input, never a new validator run or
-    # the answer/diagnostic prose. Its provenance includes the original raw
-    # response hashes and the independently retained public outcome above.
-    if len(path) == 1 and path[0]['public_status'] == 'passed' and receipts and receipts[0]['status'] == 'verified':
-        stopped = strict_json(encoded(values))
-        stopped['context'] = {'stage': 'after_validation', 'previous_tier': path[0]['tier'],
-            'previous_configuration_sha256': path[0]['configuration_sha256'],
-            'previous_public_passed': True, 'previous_stop': 'validation_passed', 'quality_phase': 0,
-            'generation_calls': len(result['attempts'][0]['calls']), 'receipt_sha256': receipts[0]['receipts_sha256'],
-            'validation_sha256': receipts[0]['validation_sha256']}
-        stop = source.reproduce(stopped)
-        decisions.append({'index': 1, 'stage': 'after_validation', 'action': stop['action'],
-            'selected_tier': stop['selected_tier'], 'config_id': None, 'reason': stop['reason'],
-            'match': stop['status'] == 'reproduced' and stop['action'] == 'stop'})
-        inputs.append(stopped)
-    else:
-        decisions.append({'index': 1, 'stage': 'after_validation', 'action': None,
-            'selected_tier': None, 'config_id': None, 'reason': 'original_decision_inputs_unavailable', 'match': None})
-    if (time.monotonic() - started) * 1000 > LIMITS['max_policy_compute_milliseconds']:
-        raise SourceUnavailable('comparison_compute_limit')
-    return inputs, decisions
 
 
 if __name__ == '__main__' and sys.argv[1:] == ['--worker']:

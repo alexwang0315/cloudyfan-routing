@@ -43,6 +43,8 @@ class App:
             if type(capacity_observer) is not CapacityObserver:
                 raise ValueError("Controlled capacity observer required")
         self.capacity_observer, self.capacity_controller = capacity_observer, capacity_controller
+        from .observation_policy import ObservationPolicy
+        self.observation_policy = ObservationPolicy(gateway)
         from .history_observation import TaskDecisionObserver
         for observer, kind in ((candidate_observer, CandidateObserver), (task_observer, TaskDecisionObserver)):
             if observer is not None and (type(observer) is not kind
@@ -156,6 +158,8 @@ class App:
                       "/capacity.css": ("capacity.css", "text/css; charset=utf-8"),
                       "/queue.js": ("queue.js", "text/javascript; charset=utf-8"),
                       "/queue.css": ("queue.css", "text/css; charset=utf-8"),
+                      "/observation-policy.js": ("observation-policy.js", "text/javascript; charset=utf-8"),
+                      "/observation-policy.css": ("observation-policy.css", "text/css; charset=utf-8"),
                       "/style.css": ("style.css", "text/css; charset=utf-8")}
             if method == "GET" and path in static:
                 filename, content_type = static[path]
@@ -214,6 +218,16 @@ class App:
         return [body]
 
     def _admin(self, method, path, environ):
+        if method == 'GET' and path == '/monitor/observation-policy':
+            if environ.get('QUERY_STRING'):
+                raise MonitorError('unsupported_observation_query')
+            return self.observation_policy.snapshot()
+        if method == 'POST' and path == '/monitor/observation-policy/activate':
+            if environ.get('QUERY_STRING'):
+                raise MonitorError('unsupported_observation_query')
+            body = self._body(environ)
+            self._fields(body, {'revision', 'version'})
+            return self.observation_policy.activate(body['revision'], body['version'])
         if path == '/monitor/session':
             if method != 'GET':
                 raise MonitorError('endpoint_not_supported', 404)

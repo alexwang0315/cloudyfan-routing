@@ -1,5 +1,5 @@
 """A controlled Core TaskService adapter, not a second routing algorithm."""
-from contextlib import closing, nullcontext
+from contextlib import closing, nullcontext, contextmanager
 from decimal import Decimal
 from functools import wraps
 from types import MappingProxyType
@@ -34,9 +34,12 @@ def _bound_task_id(binding):
 def _creation_computation(method):
     @wraps(method)
     def create(self, *args, **kwargs):
-        recorder = self.service.creation_features
-        with recorder.operation() if recorder is not None else nullcontext():
-            return method(self, *args, **kwargs)
+        with self.service.creation_selection():
+            recorder = self.service.creation_features
+            controller = getattr(self, 'observation_policy', None)
+            clock_recorder = recorder or (controller.prepared['features-v1'] if controller is not None else None)
+            with clock_recorder.operation() if clock_recorder is not None else nullcontext():
+                return method(self, *args, **kwargs)
     return create
 
 
@@ -84,15 +87,23 @@ class Gateway:
 
     def _bind(self, principal, payload, expected_contract):
         recorder = self.service.creation_features
-        return self.store.bind(principal, payload, self.registry, expected_contract=expected_contract,
+        controller = getattr(self, 'observation_policy', None)
+        binding, created, selection = self.store.bind(principal, payload, self.registry, expected_contract=expected_contract,
             feature_policy=recorder.policy if recorder is not None else None,
             feature_contracts=recorder.registered if recorder is not None else None,
             feature_recommendations=recorder.recommendation_adoptions if recorder is not None else None,
-            with_creation=True)
+            feature_versions=controller.binding_versions() if controller is not None else None,
+            with_creation=True, with_selection=True)
+        if selection['source'] != 'host':
+            recorder = (controller.prepared.get(selection['version'])
+                        if selection['source'] == 'operator' else None)
+        return binding, created, recorder
 
-    def _creation_owner(self, binding, created):
-        recorder = self.service.creation_features
-        return recorder.submitting(binding, created) if recorder is not None else nullcontext()
+    @contextmanager
+    def _creation_owner(self, binding, created, recorder):
+        with self.service.creation_selection(recorder):
+            with recorder.submitting(binding, created) if recorder is not None else nullcontext():
+                yield
 
     @_creation_computation
     def create(self, principal, payload, *, expected_contract=None):
@@ -104,8 +115,8 @@ class Gateway:
                 if isinstance(payload, dict) and isinstance(payload.get('run_id'), str) else None)
             if prior is not None and (expired := self._expiry(prior)):
                 raise ServiceError(expired, 410)
-            binding, created = self._bind(principal, payload, expected_contract)
-            with self._creation_owner(binding, created):
+            binding, created, recorder = self._bind(principal, payload, expected_contract)
+            with self._creation_owner(binding, created, recorder):
                 state = self.queue.submit(principal, {'run_id': binding['run'], 'contract_id': binding['contract'],
                                                     'prompt': payload['prompt']})
             self.capture(binding, retain_metadata=created)
@@ -113,18 +124,18 @@ class Gateway:
         prior = (self.store.existing_binding(principal, payload.get("run_id"))
                  if isinstance(payload, dict) and isinstance(payload.get("run_id"), str) else None)
         if prior is not None:
-            binding, _ = self._bind(principal, payload, expected_contract)
+            binding, _, _ = self._bind(principal, payload, expected_contract)
             return self.status(principal, binding["run"])
         try:
             with self.admission.acquire():
                 prior = (self.store.existing_binding(principal, payload.get("run_id"))
                          if isinstance(payload, dict) and isinstance(payload.get("run_id"), str) else None)
-                binding, created = self._bind(principal, payload, expected_contract)
+                binding, created, recorder = self._bind(principal, payload, expected_contract)
                 if prior is not None:
                     return self.status(principal, binding["run"])
                 self.store.record(binding, {"status": "bound"})
                 try:
-                    with self._creation_owner(binding, created):
+                    with self._creation_owner(binding, created, recorder):
                         self.service.create(principal, {"run_id": binding["run"], "contract_id": binding["contract"],
                                                         "prompt": payload["prompt"]})
                 except Exception:
@@ -139,7 +150,7 @@ class Gateway:
                      if isinstance(payload, dict) and isinstance(payload.get("run_id"), str) else None)
             if prior is None:
                 raise
-            binding, _ = self._bind(principal, payload, expected_contract)
+            binding, _, _ = self._bind(principal, payload, expected_contract)
             return self.status(principal, binding["run"])
 
     def status(self, principal, run):
@@ -160,10 +171,15 @@ class Gateway:
             return status
         except ServiceError as error:
             if error.code == "task_busy":
+                # Reuse the original nonwaiting read access/clock/expiry
+                # policy; a held execution never grants or renews access.
+                self.service.queue_access(principal, run)
+                creation = self.service.creation_observation(principal, run, client_summary=True)
+                self.service.queue_access(principal, run)
                 previous = self.store.observation(principal, run) or {"status": "running"}
                 return {"run_id": run, "status": previous["status"], "observation": "busy",
                         "costs": {key: previous.get(key) for key in
-                                  ("known_api_usd", "complete_api_usd", "unknown_events")}}
+                                  ("known_api_usd", "complete_api_usd", "unknown_events")}, **creation}
             if error.status == 410:
                 self.capture(binding)
             raise

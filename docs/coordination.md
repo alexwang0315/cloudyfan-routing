@@ -412,9 +412,18 @@ Route-advice-worker owns ISSUE41 and the creation-observation shared interface i
 
 Tests use the already human-confirmed real loopback HTTP/desktop seams, original Core/Budget/Store/identity/scheduler and mocked model/provider upstreams. Rule adoption affects only new tasks; GET/replay/resume never recompute, migrate or refresh original features or recommendations. Complete affected original gates and applicable integration checks before a41 completion claim; keep broad29-33 in_progress/current_verificationnull and all qualification gates pending. No paid/provider call, push/deployment, source cleanup or evidence deletion is authorized.
 
-
 ## Issue42 candidate ownership before implementation — 2026-10-29
 
 Root released42 from exact Corea631c774/Monitor911ddeb bases. Only this isolated candidate changes its plan/coordination; integration/canonical metadata and all historical failures remain untouched. Policy-comparison-worker owns the new pure saved_policy_comparison.py and Core contract documentation, with no engine/selector/transport mutation. The new shared interface accepts only bounded, verified JSON values; it has no service, runner, client, filesystem path, execute/tool callback or live source capability. Original branch decisions are recomputed only when original legal inputs support them; otherwise unknown, never copying actual decisions as proof of reproduction.
 
 Monitor backend ownership covers saved_comparisons.py, App operator endpoints and the actual-HTTP fixtures/tests. The independently isolated UI worker owns comparisons.js/css, static app.js/index.html and saved-comparison desktop/HTTP QA entry scripts only; the explicit external ownership/HTTP contract is reviewed before consumers edit. Existing task/features/history/accounting/expiry paths stay their original authorities. No alternative-policy/result matching, upstream call, fee, push/deployment or cleanup is authorized by this candidate.
+
+The isolated `codex/stage31-42-policy-values` candidate carries only the declared
+Core module and its contract documentation for policy-comparison-worker. The
+Monitor backend and UI remain independently owned. During initial source
+preparation the UI worker owned runtime, so this worker performed source/static
+reads and the explicitly requested project-state/work-plan declaration checks
+only. After the primary owner confirmed the old UI RED had fully quit, this
+candidate was authorized to prepare its own locked offline Python3.13.13
+environment and commit with the unchanged shared secret/quick hooks. Product
+tests, full gates and services remain with the primary owner.

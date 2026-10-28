@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import sqlite3
 import threading
+from dataclasses import replace
 
 from task_features_fixture import task_features_http as task_features_http
 from test_local_http_integration import loopback_network as loopback_network
@@ -298,4 +299,31 @@ def test_comparison_get_rejects_changed_frozen_input_without_recompute(task_feat
     after = tracer.snapshot('after-corrupted-report-poll')
     for key in ('model_requests', 'source_requests', 'accounting_requests', 'health_sha256',
                 'budget_sqlite_sha256', 'capacity_sha256', 'queue_sha256', 'raw_files_sha256'):
+        assert before[key] == after[key]
+
+
+def test_reused_contract_cannot_replace_original_fee_authority_with_an_empty_account(task_features_http):
+    from cloudyfan_jev.budget import BudgetStore, BudgetedCore
+    tracer = task_features_http
+    operator, body = _completed(tracer)
+    baseline = operator.post('/monitor/comparisons', json=body)
+    assert baseline.status_code == 200
+    assert baseline.json()['items'][0]['original']['costs']['complete_api_usd'] == '0.01'
+    service = tracer.controlled.host.service
+    original = service.contracts['health-backup-v1']
+    runner = original.runner
+    different = BudgetStore(tracer.controlled.host.root / 'different-empty-account.sqlite')
+    service.contracts['health-backup-v1'] = replace(original, runner=BudgetedCore(runner.core, different,
+        model_bounds=runner.model_bounds, tool_bounds=runner.tool_bounds, verify_bound=runner.verify_bound))
+    before = tracer.snapshot('before-reused-contract-comparison')
+    response = operator.post('/monitor/comparisons', json=body)
+    assert response.status_code == 200
+    item = response.json()['items'][0]
+    assert item['reproduction']['status'] == 'not_evaluable'
+    assert item['original']['costs']['complete_api_usd'] is None
+    assert item['original']['costs']['known_api_usd'] is None
+    assert not any(row['kind'] == 'original_budget_events' for row in item['evidence'])
+    after = tracer.snapshot('after-reused-contract-comparison')
+    for key in ('model_requests', 'source_requests', 'accounting_requests', 'health_sha256',
+                'budget_sqlite_sha256', 'capacity_sha256', 'queue_sha256'):
         assert before[key] == after[key]

@@ -41,7 +41,8 @@ STATUSES = {'passed', 'failed', 'unverifiable', 'ready', 'running', 'bound', 'qu
             'policy_denied', 'capacity_denied'}
 STOPS = {'final', 'passed', 'validation_failed', 'validation_unknown', 'provider_rate_limited',
          'provider_unavailable', 'unknown_charge', 'turn_limit', 'tool_limit',
-         'context_limit', 'time_limit', 'policy_denied', 'none'}
+         'context_limit', 'time_limit', 'policy_denied', 'none', 'stop', 'length',
+         'content_filter', 'tool_calls', 'empty_or_exhausted'}
 
 
 def encoded(value):
@@ -498,10 +499,10 @@ def create_report(app, body):
             if len(control) > LIMITS['max_source_bytes']:
                 raise SourceUnavailable('comparison_control_oversized')
             import cloudyfan_jev
-            bootstrap = ('import runpy,sys;sys.path[:0]=sys.argv[1:3];'
-                         'sys.argv=sys.argv[3:];runpy.run_path(sys.argv[0],run_name="__main__")')
+            bootstrap = ('import sys;sys.path[:0]=sys.argv[1:3];'
+                         'from cloudyfan_monitor.saved_comparisons import _worker;_worker()')
             argv = [sys.executable, '-I', '-S', '-c', bootstrap, str(Path(__file__).parents[1]),
-                    str(Path(cloudyfan_jev.__file__).parent.parent), str(Path(__file__).absolute()), '--worker']
+                    str(Path(cloudyfan_jev.__file__).parent.parent)]
             stdout_path, stderr_path = (reports.root / (comparison_id + ending) for ending in ('.worker.stdout', '.worker.stderr'))
             timed_out = False
             started = time.time()
@@ -644,9 +645,6 @@ def _load_task(context, source, task):
     if trusted is None:
         return _unknown(task, 'original_contract_unavailable', original, evidence()), None
     registered = trusted['registered']
-    original['contract_version'] = identifier(registered.get('version'))
-    original['routing_version'] = identifier(registered.get('routing_version'))
-    original['costs'] = _original_costs(context, source, registered, task, internal)
     directory = Path(context['tasks_root']) / internal
     try:
         with (_shared(Path(context['retention_path']).parent / (internal + '.lock')),
@@ -658,6 +656,12 @@ def _load_task(context, source, task):
                     or set(request) != {'run_id', 'contract_id', 'prompt'}
                     or digest({'run_id': request['run_id'], 'category': binding['category'], 'prompt': request['prompt']}) != binding['fingerprint']):
                 raise SourceUnavailable('original_task_binding_invalid')
+            # Only the task's original registered descriptor can identify the
+            # fee authority. Reusing a host contract ID must not substitute a
+            # different empty account and turn the original fee into zero.
+            original['contract_version'] = identifier(registered.get('version'))
+            original['routing_version'] = identifier(registered.get('routing_version'))
+            original['costs'] = _original_costs(context, source, registered, task, internal)
             run = Path(registered['receipt_root']) / 'runs' / internal
             with _shared(run / '.lock'):
                 manifest = source.read(run / 'manifest.json', 'original_manifest')
@@ -671,7 +675,7 @@ def _load_task(context, source, task):
                         or result.get('mode') != binding['mode']):
                     raise SourceUnavailable('original_manifest_binding_invalid')
                 original['task_status'] = result['status'] if result.get('status') in STATUSES else 'unknown'
-                original['path'] = _original_path(result)
+                original['path'] = _original_path(result, manifest)
                 cached_path = cached.get('path')
                 if (not isinstance(cached_path, list) or len(cached_path) != len(original['path'])
                         or any(saved.get('tier') != actual['tier'] or saved.get('stop') != actual['stop']
@@ -679,8 +683,9 @@ def _load_task(context, source, task):
                                 else False if actual['public_status'] == 'failed' else None)
                             for saved, actual in zip(cached_path, original['path']))):
                     raise SourceUnavailable('original_public_metadata_inconsistent')
-                receipts = _original_receipts(source, registered, result, internal)
-                values, decisions = _reproduce_saved(context, source, binding, job, manifest, result, run, trusted, receipts)
+                receipts = _original_receipts(source, registered, manifest, result, internal, run)
+                values, decisions = _reproduce_saved(source, binding, job, manifest, result, run, trusted,
+                    original_path=original['path'], receipts=receipts)
                 status = 'reproduced' if decisions and all(row['match'] is True for row in decisions) else 'partial'
                 if not decisions:
                     status = 'unknown'
@@ -759,19 +764,25 @@ def _original_costs(context, source, registered, task, internal, *, retained_ids
             'unknown_events': unknown, 'customer_usage_charge': customer}
 
 
-def _original_path(result):
+def _original_path(result, manifest=None):
     attempts = result.get('attempts')
     if not isinstance(attempts, list) or len(attempts) > LIMITS['max_decision_points']:
         raise SourceUnavailable('original_result_invalid')
     path = []
     for index, attempt in enumerate(attempts):
-        if (attempt.get('tier') not in TIERS or identifier(attempt.get('config_id')) is None
-                or HASH.fullmatch(str(attempt.get('configuration_sha256'))) is None
-                or attempt.get('stop') not in STOPS or type(attempt.get('public', {}).get('passed')) not in (bool, type(None))):
+        if (attempt.get('tier') not in TIERS or attempt.get('stop') not in STOPS
+                or type(attempt.get('public', {}).get('passed')) not in (bool, type(None))):
             raise SourceUnavailable('original_result_invalid')
+        if manifest is not None and manifest.get('routing_version') != 'qcs-backup-policy-v1':
+            from cloudyfan_monitor.saved_qcs_comparison import attempt_identity
+            identity = attempt_identity(manifest, attempt)
+        else:
+            identity = {key: attempt.get(key) for key in ('config_id', 'configuration_sha256')}
+        if (identifier(identity['config_id']) is None
+                or HASH.fullmatch(str(identity['configuration_sha256'])) is None):
+            raise SourceUnavailable('original_result_identity_invalid')
         passed = attempt.get('public', {}).get('passed')
-        path.append({'index': index, 'tier': attempt['tier'], 'config_id': attempt['config_id'],
-            'configuration_sha256': attempt['configuration_sha256'],
+        path.append({'index': index, 'tier': attempt['tier'], **identity,
             'public_status': 'passed' if passed is True else 'failed' if passed is False else 'unknown',
             'stop': attempt['stop']})
     return path
@@ -818,38 +829,75 @@ def _backup_candidates(source, trusted, manifest, checkpoint, tier):
     return candidates
 
 
-def _original_receipts(source, registered, result, internal):
-    hashes = []
+def _original_receipts(source, registered, manifest, result, internal, run):
+    from cloudyfan_jev.client import usage
+    receipts = []
     total = 0
-    for attempt in result['attempts']:
-        calls = attempt.get('calls')
-        if not isinstance(calls, list) or not calls:
-            raise SourceUnavailable('original_receipts_unavailable')
-        attempt_hashes = []
-        for call in calls:
-            total += 1
-            cid = call.get('call_id')
-            if (total > 64 or not isinstance(cid, str) or '..' in cid
-                    or re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,159}', cid) is None
-                    or not cid.startswith('run-' + internal + '-')):
-                raise SourceUnavailable('original_receipt_identity_invalid')
-            root = Path(registered['receipt_root']) / 'calls' / cid
-            intent = source.read(root / 'intent.json', 'original_call_intent')
-            response = source.read(root / 'response.json', 'original_call_response')
-            response_hash = source.evidence[-1]['sha256']
-            if (intent.get('call_id') != cid or response.get('call_id') != cid
-                    or original_digest({'url': intent['url'], 'payload': intent['payload']}) != intent.get('request_sha256')
-                    or response.get('request_sha256') != intent['request_sha256']
-                    or call.get('configuration_sha256') != attempt['configuration_sha256']
-                    or intent['payload'].get('model') != call.get('model')
-                    or type(response.get('http_status')) is not int):
-                raise SourceUnavailable('original_receipt_binding_invalid')
-            attempt_hashes.append(response_hash)
-        hashes.append(digest(attempt_hashes))
-    return hashes
+    seen = set()
+    for index, attempt in enumerate(result['attempts']):
+        bundle = {'status': 'unavailable', 'receipts_sha256': None, 'validation_sha256': None,
+                  'calls': [], 'reason': 'original_receipts_unavailable'}
+        try:
+            if manifest['routing_version'] == 'qcs-backup-policy-v1':
+                profiles = [row['entry']['profile'] for row in manifest['backup_plan']['pools'][attempt['tier']]
+                            if row['configuration_sha256'] == attempt['configuration_sha256']
+                            and row['entry']['config_id'] == attempt['config_id']]
+                if len(profiles) != 1:
+                    raise SourceUnavailable('original_result_identity_invalid')
+                profile = profiles[0]
+            else:
+                profile = manifest['profiles'][attempt['tier']]
+            calls = attempt.get('calls')
+            if not isinstance(calls, list) or not calls:
+                raise SourceUnavailable('original_receipts_unavailable')
+            for call in calls:
+                total += 1
+                cid = call.get('call_id')
+                if (total > 64 or not isinstance(cid, str) or '..' in cid or cid in seen
+                        or re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,159}', cid) is None
+                        or not cid.startswith('run-' + internal + '-')):
+                    raise SourceUnavailable('original_receipt_identity_invalid')
+                seen.add(cid)
+                root = Path(registered['receipt_root']) / 'calls' / cid
+                intent = source.read(root / 'intent.json', 'original_call_intent')
+                response = source.read(root / 'response.json', 'original_call_response')
+                response_hash = source.evidence[-1]['sha256']
+                actual = usage(response)
+                if (intent.get('call_id') != cid or response.get('call_id') != cid
+                        or original_digest({'url': intent['url'], 'payload': intent['payload']}) != intent.get('request_sha256')
+                        or response.get('request_sha256') != intent['request_sha256']
+                        or call.get('configuration_sha256') is not None and call['configuration_sha256'] != attempt.get('configuration_sha256')
+                        or intent['payload'].get('model') != profile['model_version']
+                        or type(response.get('http_status')) is not int
+                        or any(call.get(key) != actual.get(key) for key in ('model', 'provider', 'generation_id'))
+                        or actual['model'] is not None and actual['model'] not in profile['accepted_models']
+                        or actual['provider'] is not None and actual['provider'] != profile['provider_name']):
+                    raise SourceUnavailable('original_receipt_binding_invalid')
+                bundle['calls'].append({'call_id': cid, 'request_sha256': intent['request_sha256'],
+                    'response_sha256': response_hash, 'http_status': response['http_status'],
+                    'cost_known': actual.get('cost_unknown') is False})
+            bundle['receipts_sha256'] = digest([row['response_sha256'] for row in bundle['calls']])
+            public = source.read(Path(run) / f'validation-a{index}.json', 'original_public_validation')
+            if public != attempt['public']:
+                raise SourceUnavailable('original_validation_binding_invalid')
+            bundle['validation_sha256'] = source.evidence[-1]['sha256']
+            bundle.update(status='verified', reason=None)
+        except (OSError, ValueError, TypeError, KeyError, SourceUnavailable):
+            pass
+        receipts.append(bundle)
+    return receipts
 
 
-def _reproduce_saved(context, source, binding, job, manifest, result, run, trusted, receipts):
+def _reproduce_saved(source, binding, job, manifest, result, run, trusted, *, original_path, receipts):
+    if manifest.get('routing_version') == 'qcs-backup-policy-v1':
+        from cloudyfan_monitor.saved_backup_comparison import reproduce_saved_policy
+    else:
+        from cloudyfan_monitor.saved_qcs_comparison import reproduce_saved_policy
+    return reproduce_saved_policy(source, binding, job, manifest, result, run, trusted,
+                                  original_path=original_path, receipts=receipts)
+
+
+def _reproduce_backup_initial(source, binding, job, manifest, result, run, trusted, *, original_path, receipts):
     from cloudyfan_jev.saved_policy_comparison import candidate_set_digest, reproduce_original_policy
     policy = manifest['routing_version']
     if policy != 'qcs-backup-policy-v1':
@@ -870,7 +918,7 @@ def _reproduce_saved(context, source, binding, job, manifest, result, run, trust
     reproduced = reproduce_original_policy(values)
     if (time.monotonic() - started) * 1000 > LIMITS['max_policy_compute_milliseconds']:
         raise SourceUnavailable('comparison_compute_limit')
-    path = _original_path(result)
+    path = original_path
     match = (reproduced['status'] == 'reproduced' and bool(path)
              and reproduced['selected_tier'] == path[0]['tier']
              and reproduced['selected_configuration_sha256'] == path[0]['configuration_sha256']
@@ -884,13 +932,13 @@ def _reproduce_saved(context, source, binding, job, manifest, result, run, trust
     # The saved validation result is public input, never a new validator run or
     # the answer/diagnostic prose. Its provenance includes the original raw
     # response hashes and the independently retained public outcome above.
-    if len(path) == 1 and path[0]['public_status'] == 'passed' and receipts:
+    if len(path) == 1 and path[0]['public_status'] == 'passed' and receipts and receipts[0]['status'] == 'verified':
         stopped = strict_json(encoded(values))
         stopped['context'] = {'stage': 'after_validation', 'previous_tier': path[0]['tier'],
             'previous_configuration_sha256': path[0]['configuration_sha256'],
             'previous_public_passed': True, 'previous_stop': 'validation_passed', 'quality_phase': 0,
-            'generation_calls': len(result['attempts'][0]['calls']), 'receipt_sha256': receipts[0],
-            'validation_sha256': digest({'passed': True, 'result_sha256': digest(result)})}
+            'generation_calls': len(result['attempts'][0]['calls']), 'receipt_sha256': receipts[0]['receipts_sha256'],
+            'validation_sha256': receipts[0]['validation_sha256']}
         stop = reproduce_original_policy(stopped)
         decisions.append({'index': 1, 'stage': 'after_validation', 'action': stop['action'],
             'selected_tier': stop['selected_tier'], 'config_id': None, 'reason': stop['reason'],

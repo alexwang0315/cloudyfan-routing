@@ -194,6 +194,19 @@
         "CONTROLLED-QUEUE-WINDOW-HOOKS"
       ],
       "outcome": "Issue40 active: Root independently verified first persisted unknown recommendation; route-advice-worker owns the creation observation and bounded calibration-validation shared interfaces. Continue all9AC, real HTTP/desktop MockTransport tests, fault/legacy and exact calibration; original full gates/review/merge pending. External remaining-implementation release and bounded-selector ownership record identify limits. Preserve original test suite, canonical dirty work, historical failures and pending production gates."
+    },
+    {
+      "id": "ISSUE40-CHECK-PATH-PORTABILITY",
+      "owner": "check-path-worker",
+      "status": "completed",
+      "owned_files": [
+        "tests/test_check_entrypoint.py"
+      ],
+      "depends_on": [
+        "ISSUE39"
+      ],
+      "consumed_interfaces": [],
+      "outcome": "Fresh relocated-path red reproduced fixture executable launch errno13; after a test-fixture-only portability fix the original check-entrypoint module passed all 13 tests. Original Core full02 2058 passed/11 failed and focused red/green receipts remain preserved externally. Issue40 original full integration, Monitor full, desktop/wire and independent reviews remain pending."
     }
   ]
 }

@@ -760,3 +760,23 @@ callback, or proof of independent calibration or real-world savings. A missing
 verified source remains unknown; offline fixtures remain explicit MockTransport
 simulations. Current work remains in_progress with no current full-verification or
 production qualification claim.
+
+
+## Issue40 check-entrypoint fixture portability ownership — 2026-10-28
+
+The original Core full02 gate finished with 2,058 passed and 11 failures in the
+existing check-entrypoint tests. Its raw outputs and failed result remain intact.
+The new SSD mount path contains a space; generated test executable shebangs that
+embed the current interpreter path are the leading hypothesis, pending a focused
+red/green verification. Before edits, check-path-worker exclusively owns
+tests/test_check_entrypoint.py for this bounded fixture fix. Root owns current
+metadata. No original tests, product check entrypoint, or failure evidence may be
+removed or bypassed. Original Core integration and Monitor full checks, independent
+reviews and actual local acceptance remain required; no production qualification,
+provider call, spend, push, deployment or deletion is authorized.
+
+The fresh relocated-path RED reproduced errno13 while launching the test fixture.
+After changing only fixture interpreter startup, all13 original check-entrypoint
+tests passed under the relocated path, with the original RED and full02 receipts
+preserved in the external Issue40 evidence. This focused result is not a full
+Core integration or Issue40 acceptance result.

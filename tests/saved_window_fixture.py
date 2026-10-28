@@ -72,6 +72,21 @@ class SavedWindowHTTP:
             read = self.operator.get('/monitor/comparisons/' + comparison_id)
             assert read.status_code == 200 and read.content == response.content
 
+    def preserve_missing_job(self, run):
+        host = self.fixture.host
+        internal = host.service.internal_id('studio', run)
+        target = host.service.root / internal / 'job.json'
+        body = target.read_bytes()
+        archive = self.artifacts / ('preserved-job-' + run + '.json')
+        target.rename(archive)
+        archive.chmod(0o600)
+        info = {'run': run, 'target_relative': str(target.relative_to(host.root)),
+            'archive': archive.name, 'bytes': len(body), 'sha256': hashlib.sha256(body).hexdigest(),
+            'scope': 'Owned fresh original evidence fault; job bytes preserved, no deletion'}
+        self.evidence.setdefault('controlled_faults', []).append(info)
+        _save(self.artifacts / ('missing-job-' + run + '.json'), info)
+        return info
+
     def snapshot(self, name):
         host = self.fixture.host
         files = {}
@@ -94,6 +109,8 @@ class SavedWindowHTTP:
             'validation_calls': list(self.validations), 'tool_calls': list(self.tools)}
         _save(self.artifacts / (name + '.json'), value)
         self.evidence[name] = value
+        if name.startswith('before-'):
+            self.evidence['readonly_baseline'] = name
         return value
 
 
@@ -215,10 +232,15 @@ def saved_window_http(tmp_path, loopback_network, request):
         stack.close()
         if tracer is not None:
             final = tracer.snapshot('after-fixture')
-            if 'before-comparison' in evidence:
-                evidence['original_state_unchanged'] = final == evidence['before-comparison']
+            baseline = evidence.get('readonly_baseline')
+            if baseline is not None:
+                evidence['original_state_unchanged'] = final == evidence[baseline]
         evidence['artifact_verification'] = {'http': http.verify(), 'upstream': wire.verify(),
             'upstream_request_headers': request_headers.verify()}
+        for fault in evidence.get('controlled_faults', []):
+            body = (artifacts / fault['archive']).read_bytes()
+            assert len(body) == fault['bytes'] and hashlib.sha256(body).hexdigest() == fault['sha256']
+        evidence['fault_original_bytes_preserved'] = True
         evidence['observed_calls'] = {'models': len(fixture.requests) if fixture else None,
             'source': len(fixture.side_requests['source']) if fixture else None,
             'accounting': len(fixture.side_requests['accounting']) if fixture else None,

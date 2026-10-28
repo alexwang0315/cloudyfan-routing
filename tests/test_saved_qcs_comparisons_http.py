@@ -1,4 +1,5 @@
 """Original QCS saved decisions through the main operator HTTP interface."""
+import hashlib
 import json
 from decimal import Decimal
 
@@ -259,4 +260,60 @@ def test_original_small_direct_qcs_outcome_uses_the_same_numeric_comparison(save
     assert Decimal(item['original']['costs']['complete_api_usd']) == Decimal('.00000002')
     assert len(tracer.host.calls) == 2
     after = tracer.snapshot('after-small-direct-amount')
+    _assert_read_only(tracer, before, after, response)
+
+
+@pytest.mark.parametrize('saved_qcs_http,exponent,representable', [
+    ({'family': 'qcs_controlled', 'variant': 'probability_exp_-64'}, -64, True),
+    ({'family': 'qcs_controlled', 'variant': 'probability_exp_-65'}, -65, False),
+    ({'family': 'qcs_controlled', 'variant': 'probability_exp_-1000'}, -1000, False),
+], indirect=['saved_qcs_http'], ids=['exact-exponent-boundary', 'outside-exponent-bound', 'safe-small-expansion-control'])
+def test_valid_original_classifier_probability_preserves_numeric_projection_boundary(
+        saved_qcs_http, exponent, representable):
+    tracer = saved_qcs_http
+    body = _completed(tracer)
+    run = tracer.original_run()
+    original = json.loads((run / 'result.json').read_bytes())
+    decision = original['selection']['decisions'][0]
+    assert decision['reported_choice'] == decision['selected_tier'] == 'mid'
+    assert decision['fallback'] is False and decision['fallback_reason'] is None
+    assert Decimal(decision['probabilities']['low']).as_tuple().exponent == exponent
+    assert decision['probabilities']['mid'] == '1'
+    call = tracer.host.root / 'receipts/calls' / ('run-' + run.name + '-decision-low_mid')
+    recorded = json.loads((call / 'response.json').read_bytes())
+    assert '1e' + str(exponent) in recorded['raw'] and len(recorded['raw']) < 2048
+    assert len(tracer.host.calls) == 3
+    before = tracer.snapshot('before-numeric-projection')
+    response = tracer.client().post('/monitor/comparisons', json=body)
+    assert response.status_code == 200
+    report, item = response.json(), response.json()['items'][0]
+    assert [row['tier'] for row in item['original']['path']] == ['open_source', 'mid']
+    assert item['original']['path'][-1]['public_status'] == 'passed'
+    assert Decimal(item['original']['costs']['complete_api_usd']) == Decimal('.021')
+    decisions = item['reproduction']['decisions']
+    if representable:
+        assert item['reproduction']['status'] == 'reproduced'
+        assert [row['selected_tier'] for row in decisions] == ['open_source', 'mid', None]
+        assert all(row['match'] is True for row in decisions)
+        assert decisions[1]['reason'] == 'reported_choice_applied'
+    else:
+        # The original reply is valid. An unrepresentable pure value cannot
+        # become a parse-failure fallback or borrow the later actual answer.
+        assert item['reproduction']['status'] == 'partial'
+        assert len(decisions) == 2 and decisions[0]['match'] is True
+        assert decisions[1]['action'] == 'classify' and decisions[1]['selected_tier'] is None
+        assert decisions[1]['match'] is None and decisions[1]['reason'] in (
+            'classifier_evidence_unavailable', 'classifier_numeric_representation_unavailable')
+        assert not any(row['stage'] == 'after_validation' for row in decisions)
+    frozen = (tracer.host.root / '.saved-comparisons' / (report['comparison_id'] + '.inputs.json')).read_bytes()
+    assert len(frozen) < 65536 and hashlib.sha256(frozen).hexdigest() == report['data_sha256']
+    projected = json.loads(frozen)[0]['values']['decisions'][1]['classifier']
+    if representable:
+        assert len(projected['probabilities']['low']) == 66
+        assert Decimal(projected['probabilities']['low']) == Decimal('1e-64')
+    else:
+        assert projected is None
+    for _ in range(2):
+        assert tracer.client().get('/monitor/comparisons/' + report['comparison_id']).content == response.content
+    after = tracer.snapshot('after-numeric-projection-and-gets')
     _assert_read_only(tracer, before, after, response)

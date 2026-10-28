@@ -115,10 +115,22 @@ def _qcs_variant_host(root, origin, clock, variant):
                 answer.pop('probabilities')
             elif variant == 'tie':
                 answer['probabilities'] = {lower: .5, upper: .5}
-            return httpx.Response(200, json={'id': 'gen-saved-qcs-variant-' + str(len(calls)),
+            literals = {'probability_exp_-64': '1e-64', 'probability_exp_-65': '1e-65',
+                        'probability_exp_-1000': '1e-1000'}
+            if variant in literals:
+                # Preserve a JSON number through the real Decimal parser;
+                # a Python float would underflow the safe overscale control.
+                answer.update(choice=upper, probabilities={lower: '__numeric_probability__', upper: 1})
+            response = {'id': 'gen-saved-qcs-variant-' + str(len(calls)),
                 'model': payload['model'], 'provider': 'TypeSafe', 'usage': {
                     'cost': .000000001 if variant in ('scaled', 'scaled_direct') else .001,
-                    'input_tokens': 1, 'output_tokens': 1}, 'answers': {stage: answer}})
+                    'input_tokens': 1, 'output_tokens': 1}, 'answers': {stage: answer}}
+            if variant in literals:
+                raw = json.dumps(response)
+                assert raw.count('"__numeric_probability__"') == 1
+                return httpx.Response(200, content=raw.replace('"__numeric_probability__"', literals[variant]),
+                                      headers={'Content-Type': 'application/json'})
+            return httpx.Response(200, json=response)
         failed = tiers[payload['model']] == 'open_source' or variant == 'mid_high' and tiers[payload['model']] == 'low'
         return httpx.Response(200, json={'id': 'gen-saved-qcs-variant-' + str(len(calls)),
             'model': payload['model'], 'provider': 'Example',

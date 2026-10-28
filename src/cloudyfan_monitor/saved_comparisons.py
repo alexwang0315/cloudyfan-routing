@@ -838,7 +838,7 @@ def _original_projection(binding, cached):
 
 def _money(value):
     if (not isinstance(value, str) or len(value) > 128
-            or re.fullmatch(r'(?:\d+(?:\.\d+)?|\.\d+)', value, re.ASCII) is None):
+            or re.fullmatch(r'(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d{1,3})?', value, re.ASCII) is None):
         raise SourceUnavailable('original_financial_evidence_invalid')
     number = Decimal(value)
     if not number.is_finite() or number.adjusted() > 64 or number.as_tuple().exponent < -64:
@@ -866,10 +866,10 @@ def _original_costs(context, source, registered, task, internal, *, retained_ids
         with localcontext() as arithmetic:
             arithmetic.prec = 512
             charged = sum((_money(row['amount_usd']) for row in charges), Decimal(0))
-        customer = {'status': 'unknown' if pending else 'available', 'known_usd': str(charged),
-                    'complete_usd': None if pending else str(charged),
+        customer = {'status': 'unknown' if pending else 'available', 'known_usd': format(charged, 'f'),
+                    'complete_usd': None if pending else format(charged, 'f'),
                     'unknown_events': len(pending), 'basis': 'original_customer_ledger'}
-    return {'known_api_usd': str(known), 'complete_api_usd': None if unknown else str(known),
+    return {'known_api_usd': format(known, 'f'), 'complete_api_usd': None if unknown else format(known, 'f'),
             'unknown_events': unknown, 'customer_usage_charge': customer}
 
 

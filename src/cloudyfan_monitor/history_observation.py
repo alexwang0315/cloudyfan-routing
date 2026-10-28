@@ -21,7 +21,8 @@ from .observation_fields import configuration, identifier
 from cloudyfan_jev.scores.backup_pools import verify_backup_pools
 from cloudyfan_jev.scores.backup_runtime import backup_classifier_contract_hash, backup_pool_contract_hash
 from cloudyfan_jev.scores.qcs import SelectionPolicy, classifier_contract_hash
-from cloudyfan_jev.task_features import public_features, unavailable
+from cloudyfan_jev.task_features import public_features, unavailable, not_provided
+from cloudyfan_jev import task_recommendations as advice
 
 SCHEMA_VERSION = "mrc-observation-v1"
 TIERS = ("open_source", "low", "mid", "high")
@@ -553,7 +554,8 @@ def task_observation(observer, task):
             pass
     if observer is None:
         return {"schema_version": SCHEMA_VERSION, "task_decision": {
-            "status": "not_provided", "reason": "runner_observation_not_provided"}, 'task_features': features}
+            "status": "not_provided", "reason": "runner_observation_not_provided"},
+            'task_features': not_provided(), 'routing_recommendation': advice.not_provided()}
     result = {"schema_version": SCHEMA_VERSION, "task_decision": observer.project(task), 'task_features': features}
     if recommendation is not None:
         result['routing_recommendation'] = recommendation

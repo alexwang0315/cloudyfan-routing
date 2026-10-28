@@ -4,7 +4,7 @@
 
 ## 主機設定
 
-既有任務 HTTP 仍只接受 `run_id`、`category`、`prompt`。新設定只在可信主機程式內使用，沒有新的公開擷取、封存或規則設定端點。
+既有任務 HTTP 仍只接受 `run_id`、`category`、`prompt`。政策內容、來源與 port 只在可信主機程式內設定；操作員可透過下列受原身份與 session 保護的控制，採用已登記版本。沒有公開擷取或 seal 端點。
 
 `assemble_monitor` 預設安裝唯讀的安全紀錄 reader，新任務不擷取。明示啟用完整首版欄位：
 
@@ -22,6 +22,27 @@ app = assemble_monitor(
 較低層的 `TaskService.creation_features` 配置包含 `policy_bundle`、真實 `binding_port`，可選 `compute_clock` 與嚴格布林值 `capture`。`compute_clock` 預設為 `time.monotonic`，是外部時間依賴，不是序列化政策的一部分。`capture=False` 只安裝 reader；未指定時，既有兩欄明示配置會啟用擷取。設定為 `None` 會停用新擷取，保留原 reader。重新開啟主機時，Monitor 也會重新接上原 Store reader。
 
 主機配置先複製採用的已知政策；首次綁定把版本與摘要固定在原交易內。資料使用政策目前為 `creation-feature-data-v1`。政策、主機或版本改變都不會重算舊任務。
+
+## 操作員採用、停用與回退
+
+桌面「建立時觀測規則」頁面與 `GET /monitor/observation-policy` 顯示目前 revision、設定來源、是否擷取及可用版本。首次尚未由操作員設定時，`configuration_source=host` 沿用可信主機原配置；此時 `active_version=null` 不代表已停用，須看 `capture_enabled`。
+
+| 採用版本 | 新任務特徵 | 新任務建議 |
+| --- | --- | --- |
+| `features-v1` | 原 `local-deterministic-v1` 三項 | 未提供 |
+| `features-v2` | `local-deterministic-v2` 白名單 | 未提供 |
+| `features-v2-advice-v1` | `local-deterministic-v2` 白名單 | 原 `route-recommendation-rules-v1`；缺精確校準仍為未知 |
+| `null` | 明示停用新擷取 | 未提供 |
+
+操作流程是先讀取目前狀態，在頁面確認後以 `POST /monitor/observation-policy/activate` 提交且只提交 `revision`、`version`。不能指定任意政策、檔案或校準來源。舊 revision 回覆 `409 configuration_changed_reload`，須重新讀取再作決定；不自動重送覆蓋另一位操作員的選擇。無效、撤銷、客戶及只有任務讀取權限的憑證不能操作此控制。
+
+新任務在原 binding 交易內採用持久版本與指紋，並將同一份 prepared recorder 固定到原接受／建立範圍。即使另一個操作員在建立途中停用，已接受任務仍完成其原一次擷取；相同任務重送、接續、GET 與重開都不取得補算資格。已發布的 recorder 不再被另一版本清空或改寫。版本與建議資料只在主機啟動準備，控制與輪詢不重讀校準來源。
+
+維運回退使用同一控制：重新讀取 revision，再明示選擇 `features-v1`／`features-v2`，或以 `null` 停用。這只改後續新 binding，保留既有特徵、建議、規則版本、原費用及存取期限。重開主機會還原持久選擇，同時接回只讀 reader；停用不隱藏舊紀錄。這不是原路由、模型或費率的回退入口。
+
+控制列與初始化標記不一致、版本／指紋錯誤或資料庫不可讀時，控制回覆固定 `503 observation_policy_unavailable`。新合法任務仍走原接受與派送，輔助觀測明示不可確認，不退回舊主機配置重新啟用擷取。保留失敗證據後由原資料庫維運程序處理，不以目前規則重算舊任務；這不宣稱偵測整份資料庫及所有對照同時回滾。
+
+明示停用的新 binding 保存獨立且有摘要對照的「未擷取」標記，讀取才可明確回覆 `not_provided`。缺紀錄、錯摘要或不完整 seal 仍是 `unavailable`。未提供操作員 observer 的 runner 明示未提供；不遷移舊紀錄，也不從當前停用推測舊任務狀態。
 
 ## 欄位、單位與未知
 
@@ -59,6 +80,7 @@ Core 在原新任務鎖內寫入獨占建立錨點、raw 目錄外的安全紀�
 - 最多 16 項、每項最多 4 個原因、每個原因最多 80 個 ASCII 代碼字元。
 - 新增的逐任務序列化、hash、白名單驗證與特徵萃取，累計純計算輸出期限為 50ms；受控時鐘回退或異常也不可產生成功特徵。SQLite 與檔案 I/O 分開；此期限不是 OS 硬即時或服務 SLO。
 - 輔助 snapshot／seal 使用 `timeout=0` 的一次非等待 SQLite 交易。原 binding 的交易與鎖等待契約保持原值。
+- 控制／初始化與未擷取標記查詢先核對 SQLite 型別、已知短版本及固定摘要格式，局部 native 欄位上限至多 4096 bytes，隨即還原連線原上限；損壞的大欄位不先整份載入 Python。這不改原合法 binding 的資料上限，也不是 OS I/O 耗時保證。
 - 檔案採固定根目錄、非 symlink、single-link、有界讀取、0600 獨占寫入與 fsync；不覆寫另一份建立紀錄。
 - 安全 sidecar 位於 `TaskService.root/.task-features/`，受原 raw purge 保護。首版沒有安全中繼資料刪除入口，保守保留至少 365 天及未知費用所需證據。
 
@@ -82,6 +104,8 @@ Core 在原新任務鎖內寫入獨占建立錨點、raw 目錄外的安全紀�
 
 任務明細的「任務建立時特徵」可展開單位、來源及未知原因；沿用原頁面的鍵盤焦點與輪詢展開狀態。未完成任務也能查閱原建立紀錄，缺紀錄顯示無法確認。畫面不顯示 prompt、答案、隱藏 grader、另一策略答案、文件名稱、私人錯誤或憑證。
 
+同步長任務持有原執行鎖時，查詢以原只讀身份、有限時鐘與存取期限檢查核對已封存投影；不取得派送名額、不補擷取。長任務原本占用的共享名額維持，其他任務依原政策拒絕或排隊。規則頁的小型直接查詢不等待完整歷史刷新；登出、撤銷及較晚返回的舊 session 回應不恢復私有畫面。
+
 新增驗收位於 `tests/test_task_features_http.py`、`tests/test_task_features_integrity_http.py`，使用真實 loopback HTTP、原 Core／Store／身份／Budget，以及受控 Queue／Health 主機。另用原同步四模式合成 fixture 核對既有模式與 canonical 類別的接受／未註冊界線；不宣稱未註冊類別已有模型能力。
 
 `scripts/qa_task_features_desktop.cjs` 啟動自有 headed Chrome 1280×900 與真 HTTP fixture，保存 PNG、ARIA、原網路／console 與程序退出收據。所有模型、來源及對帳上游均為 MockTransport。
@@ -98,3 +122,7 @@ Core 在原新任務鎖內寫入獨占建立錨點、raw 目錄外的安全紀�
 原Monitorfull01的2failed／460passed與未跑build、各次故障及測試作者oracle失敗完整保留。full02實際checker成功後，外層封存曾errno5／exit1，原失敗路徑及原因未知；原收據未覆寫。另存恢復索引涵蓋26212regular／291symlinkmetadata、3806對native原件／副本，Root均已獨立回讀。詳細時間與SHA在本機CloudyFan的issue39收據；不將舊失敗改標成功。
 
 [工作單39](https://github.com/alexwang0315/cloudyfan-routing/issues/39)已結案。父規格30仍需40／41，整體20張子單目前完成6張；所有模型／供應商上游為MockTransport，沒有來源推送、部署、真實支出或節費／容量／SLO資格主張。
+
+## #41 驗收狀態
+
+新增真 HTTP 案例位於 `tests/test_task_observation_policy_http.py`；桌面流程為 `scripts/qa_observation_policy_desktop.cjs`。完整 Core integration、Monitor check／打包、真 headed 桌面及最終獨立審查尚未收齊，工作單仍在實作。局部 RED／GREEN 與舊版本完整收據各保留其原始範圍，不能代替目前來源的完整驗收。

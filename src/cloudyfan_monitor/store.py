@@ -14,7 +14,8 @@ import time
 
 from .observation_fields import identifier as observation_identifier
 from cloudyfan_jev.task_features import (feature_digest, original_digest, public_features,
-                                        unavailable, validate_adoption, feature_computation, feature_budget_available)
+                                        unavailable, validate_adoption, feature_computation, feature_budget_available,
+                                        FeaturesNotProvided)
 from cloudyfan_jev import task_recommendations as advice
 
 MODES = {"cloudyfan": "CloudyFan MRC", "fixed_high": "全大模型優先",
@@ -160,8 +161,70 @@ class Store:
                 db.execute('CREATE TABLE IF NOT EXISTS creation_feature_adoptions '
                     '(client TEXT, run TEXT, adoption TEXT NOT NULL, adoption_sha TEXT NOT NULL, '
                     'record_sha TEXT, request_sha TEXT, registered_sha TEXT, PRIMARY KEY(client,run))')
+                db.execute('CREATE TABLE IF NOT EXISTS creation_observation_control '
+                    '(id INTEGER PRIMARY KEY, revision INTEGER NOT NULL, version TEXT, fingerprint TEXT NOT NULL)')
+                db.execute('CREATE TABLE IF NOT EXISTS creation_observation_absences '
+                    '(client TEXT, run TEXT, binding_sha TEXT NOT NULL, PRIMARY KEY(client,run))')
+                db.execute('CREATE TABLE IF NOT EXISTS creation_observation_initialization '
+                    '(id INTEGER PRIMARY KEY, marker TEXT NOT NULL)')
         except Exception:
             pass  # An unavailable auxiliary store cannot reject original tasks.
+
+    def observation_control(self):
+        try:
+            with self._feature_db() as db:
+                return self._observation_state(db)
+        except Exception:
+            raise MonitorError('observation_policy_unavailable', 503) from None
+
+    @staticmethod
+    @contextmanager
+    def _bounded_observation_columns(db):
+        # Also bound SQLite's record materialization, before Python gets a
+        # value. Restore the original connection limit for the legal binding.
+        previous = db.getlimit(sqlite3.SQLITE_LIMIT_LENGTH)
+        db.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, min(previous, 4096))
+        try:
+            yield
+        finally:
+            db.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, previous)
+
+    @staticmethod
+    def _observation_state(db):
+        version = "typeof(version)='text' AND length(CAST(version AS BLOB))<=32 AND version IN " \
+                  "('features-v1','features-v2','features-v2-advice-v1')"
+        with Store._bounded_observation_columns(db):
+            row = db.execute("SELECT CASE WHEN typeof(revision)='integer' AND revision>0 THEN revision END AS revision, "
+                "CASE WHEN " + version + " THEN version END AS version, "
+                "CASE WHEN version IS NULL OR (" + version + ") THEN 1 ELSE 0 END AS version_valid, "
+                "CASE WHEN typeof(fingerprint)='text' AND length(CAST(fingerprint AS BLOB))=64 "
+                "AND length(fingerprint)=64 AND fingerprint NOT GLOB '*[^0-9a-f]*' THEN fingerprint END AS fingerprint "
+                "FROM creation_observation_control WHERE id=1").fetchone()
+            initialized = db.execute("SELECT CASE WHEN typeof(marker)='text' "
+                "AND length(CAST(marker AS BLOB))=length('creation-observation-initialized-v1') "
+                "AND marker='creation-observation-initialized-v1' THEN 'creation-observation-initialized-v1' END AS marker "
+                "FROM creation_observation_initialization WHERE id=1").fetchone()
+        if row is None and initialized is None:
+            return None  # Original host configuration has never been replaced.
+        if (row is None or initialized is None
+                or initialized['marker'] != 'creation-observation-initialized-v1'
+                or row['revision'] is None or row['fingerprint'] is None or row['version_valid'] != 1):
+            raise MonitorError('observation_policy_unavailable', 503)
+        return {key: row[key] for key in ('revision', 'version', 'fingerprint')}
+
+    def change_observation_control(self, revision, version, fingerprint):
+        with self.db() as db:
+            row = self._observation_state(db)
+            current = row['revision'] if row is not None else 0
+            if revision != current:
+                raise MonitorError('configuration_changed_reload', 409)
+            state = {'revision': current + 1, 'version': version, 'fingerprint': fingerprint}
+            db.execute("INSERT OR IGNORE INTO creation_observation_initialization VALUES(1,'creation-observation-initialized-v1')")
+            db.execute('INSERT INTO creation_observation_control VALUES(1,:revision,:version,:fingerprint) '
+                       'ON CONFLICT(id) DO UPDATE SET revision=excluded.revision,version=excluded.version, '
+                       'fingerprint=excluded.fingerprint', state)
+            self.audit(db, 'observation_policy_changed', {'revision': state['revision'], 'version': version})
+        return state
 
     @contextmanager
     def _feature_db(self, *, write=False):
@@ -300,7 +363,8 @@ class Store:
             return {"id": key, **data}
 
     def bind(self, client, payload, registry, *, expected_contract=None,
-             feature_policy=None, feature_contracts=None, feature_recommendations=None, with_creation=False):
+             feature_policy=None, feature_contracts=None, feature_recommendations=None,
+             feature_capture_absent=False, feature_versions=None, with_creation=False, with_selection=False):
         if not isinstance(payload, dict) or set(payload) != {"run_id", "category", "prompt"}:
             raise MonitorError("unsupported_task_fields")
         if not isinstance(payload["run_id"], str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", payload["run_id"]):
@@ -314,6 +378,7 @@ class Store:
             raise MonitorError("unknown_category") from None
         fingerprint = digest({**payload, "category": category})
         created = False
+        selection = {'source': 'host', 'version': None}
         with self.db() as db:
             prior = db.execute("SELECT * FROM bindings WHERE client=? AND run=?", (client, payload["run_id"])).fetchone()
             if prior:
@@ -343,13 +408,51 @@ class Store:
                            "DO UPDATE SET last_used=MAX(last_used,excluded.last_used)",
                            (pool, contract, row["created"], row["created"]))
                 self.audit(db, "task_bound", {k: v for k, v in row.items() if k != "fingerprint"})
-                self._adopt_features(db, row, payload, feature_policy, feature_contracts, feature_recommendations)
+                if feature_versions is not None:
+                    selected = None
+                    try:
+                        selected = self._observation_state(db)
+                    except Exception:
+                        if not db.in_transaction:
+                            raise MonitorError('monitor_store_unavailable', 503) from None
+                        selection = {'source': 'unavailable', 'version': None}
+                    if selected is not None:
+                        option = feature_versions.get(selected['version'])
+                        if (option is None or type(selected['revision']) is not int or selected['revision'] < 1
+                                or option['fingerprint'] != selected['fingerprint']):
+                            selection = {'source': 'unavailable', 'version': None}
+                        else:
+                            selection = {'source': 'operator', 'version': selected['version']}
+                            feature_policy, feature_contracts = option['policy'], option['contracts']
+                            feature_recommendations, feature_capture_absent = option['recommendations'], option['capture_absent']
+                    if selection['source'] == 'unavailable':
+                        feature_policy, feature_contracts, feature_recommendations, feature_capture_absent = None, None, None, False
+                self._adopt_features(db, row, payload, feature_policy, feature_contracts, feature_recommendations,
+                                     capture_absent=feature_capture_absent)
                 created = True
         # No producer qualification escapes a failed original binding commit.
-        return (row, created) if with_creation else row
+        return (row, created, selection) if with_selection else (row, created) if with_creation else row
 
-    def _adopt_features(self, db, binding, payload, policy, contracts, recommendations=None):
+    def _adopt_features(self, db, binding, payload, policy, contracts, recommendations=None, *, capture_absent=False):
         if policy is None:
+            if capture_absent is not True:
+                return
+            # Record absence only for this genuine original binding. A missing
+            # failed capture must never be relabelled as deliberately disabled.
+            saved = False
+            try:
+                db.execute('SAVEPOINT creation_feature_absence')
+                saved = True
+                db.execute('INSERT INTO creation_observation_absences VALUES(?,?,?)',
+                           (binding['client'], binding['run'], digest(dict(binding))))
+            except Exception:
+                if not db.in_transaction:
+                    raise MonitorError('monitor_store_unavailable', 503) from None
+                if saved:
+                    db.execute('ROLLBACK TO creation_feature_absence')
+            finally:
+                if saved and db.in_transaction:
+                    db.execute('RELEASE creation_feature_absence')
             return
         try:
             with feature_computation():
@@ -387,7 +490,18 @@ class Store:
         row = db.execute('SELECT CASE WHEN length(CAST(adoption AS BLOB))<=16384 THEN adoption END AS adoption, '
             'adoption_sha,record_sha,request_sha,registered_sha FROM creation_feature_adoptions '
             'WHERE client=? AND run=?', (client, run)).fetchone()
-        if binding is None or row is None or row['adoption'] is None:
+        if binding is None:
+            raise ValueError('Original feature adoption unavailable')
+        with self._bounded_observation_columns(db):
+            absent = db.execute("SELECT CASE WHEN typeof(binding_sha)='text' "
+                "AND length(CAST(binding_sha AS BLOB))=64 AND length(binding_sha)=64 "
+                "AND binding_sha NOT GLOB '*[^0-9a-f]*' THEN binding_sha END AS binding_sha "
+                "FROM creation_observation_absences WHERE client=? AND run=?", (client, run)).fetchone()
+        if absent is not None:
+            if row is not None or absent['binding_sha'] != digest(dict(binding)):
+                raise ValueError('Original feature absence is inconsistent')
+            raise FeaturesNotProvided()
+        if row is None or row['adoption'] is None:
             raise ValueError('Original feature adoption unavailable')
         with feature_computation():
             adoption = validate_adoption(json.loads(row['adoption']))

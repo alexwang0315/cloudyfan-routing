@@ -42,3 +42,17 @@ First-version mode names map to the existing core: `cloudyfan`, `fixed_high`, `l
 Completion means the additive package and offline integration pass, the console interactions are inspected, and live integration boundaries are documented. It does not mean the main experiment or production service has been altered or qualified.
 
 Completed 2026-10-22: steps 1–6 delivered. Final monitor gate: 35 passed, Ruff, JS syntax and offline wheel/sdist; desktop/mobile browser walkthrough completed. Evidence and host integration follow-up are in `docs/verification-20261022.md` and `docs/main-thread-handoff.md`. No main workspace source, qualification, authorization or experiment state changed by this side task.
+
+
+## Issue40 Monitor check-fixture portability — 2026-10-28
+
+Before edits, monitor-check-path-worker exclusively owns `tests/test_acceptance_tooling.py` for the bounded SSD-path portability fix. Root owns this work plan and current handoff. A fresh targeted run from the relocated path failed during the original miniature dependency preparation (exit127); the original output is preserved externally under `issue40/monitor-path-preflight-red01/`. Retain the real subprocess, all existing tests and assertions, current offline checks, and all failure evidence; do not modify production acceptance behavior. The original Monitor full gate and independent review remain pending. No provider call, spend, push, deployment, or deletion is authorized.
+
+The targeted original Monitor acceptance-tooling module passed all24 tests in the relocated environment after the fixture-only repair. The prior focused127 failure and its raw evidence remain preserved; this is not a full Monitor verification or Issue40 completion.
+
+
+## Issue40 source-fault test clock ownership — 2026-10-28
+
+Before test edits, route-advice-test-clock-worker exclusively owns `tests/task_recommendations_fixture.py` and `tests/test_task_recommendations_integrity_http.py`; root owns this plan and handoff. Original Monitor full01 had558 passed and one FIFO assertion failure, and its external seal also failed; native output and evidence are preserved. The original saved advice was unknown but the POST projection was unavailable. An instrumented synthetic late budget exhaustion reproduced the same symptom; the original full01 elapsed/cause was not recorded, so its cause remains unknown. Isolate FIFO/source-validation tests from unrelated wall-clock scheduling with the existing host compute-clock injection; retain every existing source/read/privacy assertion. Independently test controlled exhaustion and preserved original advice over real local HTTP. Keep real bound/timeout tests and product behavior unchanged. Fresh full Monitor, full readback and desktop/wire evidence remain required. No model/source network, spending, push, deployment, or deletion.
+
+Source-fault isolation, original controlled budget cases and a new real-local-HTTP post-seal exhaustion/recovery case passed13 tests. The new case uses the actual Store port and checks that a safe unavailable response does not replace the independently sealed unknown recommendation or change billing/upstream calls. The original full01 timing and cause remain unknown. A separate FIFO-aware recovery retained 10,668 regular files, three symlink targets and three FIFO node modes; the original failed full01 result was not changed. Fresh complete Monitor verification remains pending.

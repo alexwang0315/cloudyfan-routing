@@ -541,14 +541,20 @@ class TaskDecisionObserver:
 
 def task_observation(observer, task):
     features = unavailable()
+    recommendation = None
     if observer is not None:
         try:
             # Independent saved metadata is legal for operator history after
             # raw client access expires; do not reopen a prompt to fill it.
-            features = public_features(observer.service.feature_observation(task['client'], task['run']))
+            creation = observer.service.creation_observation(task['client'], task['run'])
+            features = public_features(creation['task_features'])
+            recommendation = creation.get('routing_recommendation')
         except Exception:
             pass
     if observer is None:
         return {"schema_version": SCHEMA_VERSION, "task_decision": {
             "status": "not_provided", "reason": "runner_observation_not_provided"}, 'task_features': features}
-    return {"schema_version": SCHEMA_VERSION, "task_decision": observer.project(task), 'task_features': features}
+    result = {"schema_version": SCHEMA_VERSION, "task_decision": observer.project(task), 'task_features': features}
+    if recommendation is not None:
+        result['routing_recommendation'] = recommendation
+    return result

@@ -6,6 +6,7 @@ from pathlib import Path
 import subprocess
 import sys
 import shutil
+import shlex
 import signal
 import time
 
@@ -13,6 +14,14 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def python_script(body):
+    # The shell quotes a path containing spaces; Python treats the trampoline as
+    # a string and keeps the original virtual environment and script arguments.
+    return ("#!/bin/sh\n"
+            f"'''exec' {shlex.quote(sys.executable)} \"$0\" \"$@\"\n"
+            "' '''\n" + body)
 
 
 def command(*args, env=None):
@@ -149,8 +158,8 @@ def successful_small_run(tmp_path, request):
             (root / "scripts/qa/test_additional.py").write_text(
                 "def test_first(): assert True\ndef test_second(): assert True\n")
         check = root / "scripts/check"
-        check.write_text(f"#!{sys.executable}\nimport subprocess,sys\n"
-            "raise SystemExit(subprocess.call([sys.executable,'-m','pytest','-q','-p','no:cacheprovider']))\n")
+        check.write_text(python_script("import subprocess,sys\n"
+            "raise SystemExit(subprocess.call([sys.executable,'-m','pytest','-q','-p','no:cacheprovider']))\n"))
         check.chmod(0o755)
     shutil.copy2(ROOT / "scripts/acceptance.py", monitor / "scripts/acceptance.py")
     (monitor / "config").mkdir()
@@ -160,11 +169,11 @@ def successful_small_run(tmp_path, request):
     binaries = tmp_path / "mini-bin"
     binaries.mkdir()
     uv = binaries / "uv"
-    wrapper = f"#!{sys.executable}\nimport os,sys\nos.execv({sys.executable!r},[{sys.executable!r},*sys.argv[1:]])\n"
-    uv.write_text(f"#!{sys.executable}\nfrom pathlib import Path\nimport sys\n"
+    wrapper = python_script(f"import os,sys\nos.execv({sys.executable!r},[{sys.executable!r},*sys.argv[1:]])\n")
+    uv.write_text(python_script("from pathlib import Path\nimport sys\n"
         "root=Path(sys.argv[sys.argv.index('--project')+1])\n"
         "target=root/'.venv/bin/python'\ntarget.parent.mkdir(parents=True,exist_ok=True)\n"
-        f"target.write_text({wrapper!r})\ntarget.chmod(0o755)\n")
+        f"target.write_text({wrapper!r})\ntarget.chmod(0o755)\n"))
     uv.chmod(0o755)
     frozen = tmp_path / "mini-frozen"
     script = monitor / "scripts/acceptance.py"
@@ -425,21 +434,21 @@ def test_failed_core_run_keeps_original_stderr_and_cannot_finalize(tmp_path, out
     if outcome == "failure":
         entry.write_text("#!/bin/sh\necho synthetic-core-failure >&2\nexit 7\n")
     else:
-        entry.write_text(f"#!{sys.executable}\nimport time\n"
-                         "print('controlled core started',flush=True)\ntime.sleep(30)\n")
+        entry.write_text(python_script("import time\n"
+                         "print('controlled core started',flush=True)\ntime.sleep(30)\n"))
     entry.chmod(0o755)
     fake_python = tmp_path / "fixture-python"
-    fake_python.write_text(f"#!{sys.executable}\nimport os,sys\n"
+    fake_python.write_text(python_script("import os,sys\n"
         "assert 'PYTEST_ADDOPTS' not in os.environ\n"
-        "print('tests/test_fixture.py::test_fixture')\nprint('1 test collected')\n")
+        "print('tests/test_fixture.py::test_fixture')\nprint('1 test collected')\n"))
     fake_python.chmod(0o755)
     binaries = tmp_path / "bin"
     binaries.mkdir()
     fake_uv = binaries / "uv"
-    fake_uv.write_text(f"#!{sys.executable}\nimport pathlib,shutil,sys\n"
+    fake_uv.write_text(python_script("import pathlib,shutil,sys\n"
         "root=pathlib.Path(sys.argv[sys.argv.index('--project')+1])\n"
         "target=root/'.venv/bin/python'\ntarget.parent.mkdir(parents=True,exist_ok=True)\n"
-        f"shutil.copy2({str(fake_python)!r},target)\n")
+        f"shutil.copy2({str(fake_python)!r},target)\n"))
     fake_uv.chmod(0o755)
     frozen = tmp_path / "frozen"
     result = command("snapshot", "--core-root", core, "--output", frozen)

@@ -43,7 +43,7 @@ def main():
     os.umask(0o077)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', required=True, type=Path)
-    parser.add_argument('--phase', choices=('desktop-frozen',), required=True)
+    parser.add_argument('--phase', choices=('desktop-frozen', 'desktop-stored-limits'), required=True)
     args = parser.parse_args()
     output = args.output.resolve()
     output.mkdir(mode=0o700, parents=True, exist_ok=False)
@@ -265,6 +265,41 @@ def main():
                     controlled.app.admin_token = secrets.token_urlsafe(32)
                     private_values.append(controlled.app.admin_token)
                     result['operator_token'] = controlled.app.admin_token
+                elif command == 'seed-old-comparison-limits':
+                    check(args.phase == 'desktop-stored-limits', 'qa_stored_limits_phase_required')
+                    from cloudyfan_monitor import saved_comparisons
+                    before = state()
+                    original_maximum = saved_comparisons.LIMITS['max_tasks']
+                    check(original_maximum == 20, 'qa_original_creation_limit_changed')
+                    try:
+                        saved_comparisons.LIMITS['max_tasks'] = 2
+                        created = client.post('/monitor/comparisons', headers=operator_headers(), json={
+                            'policy_version': 'original-policy-reproduction-v1', 'tasks': [
+                                {'client': 'agent', 'run_id': 'qa42-original-task'},
+                                {'client': 'agent', 'run_id': 'qa42-unstarted-task'}]})
+                    finally:
+                        saved_comparisons.LIMITS['max_tasks'] = original_maximum
+                    check(created.status_code == 200, 'qa_legacy_limits_report_not_created')
+                    stored = created.json()
+                    check(stored['limits']['max_tasks'] == 2 and len(stored['scope']['tasks']) == 2,
+                          'qa_legacy_limits_not_frozen')
+                    check(state() == before, 'qa_legacy_report_changed_original_authority')
+                    result.update(comparison_id=stored['comparison_id'], frozen_limits=stored['limits'],
+                        requested_tasks=2, response_sha256=hashlib.sha256(created.content).hexdigest(),
+                        response_bytes=len(created.content), original_state_unchanged=True)
+                    receipt['legacy_limits_report'] = dict(result)
+                elif command == 'tighten-comparison-creation-limit':
+                    check(args.phase == 'desktop-stored-limits', 'qa_stored_limits_phase_required')
+                    from cloudyfan_monitor import saved_comparisons
+                    before = state()
+                    check(saved_comparisons.LIMITS['max_tasks'] == 20, 'qa_original_creation_limit_changed')
+                    saved_comparisons.LIMITS['max_tasks'] = 1
+                    actual = client.get('/monitor/comparisons', headers=operator_headers())
+                    check(actual.status_code == 200 and actual.json()['limits']['max_tasks'] == 1,
+                          'qa_new_creation_limit_not_published')
+                    check(state() == before, 'qa_creation_limit_changed_original_authority')
+                    result.update(creation_limits=actual.json()['limits'], original_state_unchanged=True)
+                    receipt['tightened_creation_limits'] = actual.json()['limits']
                 elif command == 'release-model':
                     controlled.flags['hold'] = False
                     controlled.released.set()

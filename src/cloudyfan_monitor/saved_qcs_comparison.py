@@ -26,6 +26,7 @@ HORIZON = 'remaining_after_previous_validation'
 COMPLETE_PATH = {'generation', 'failure', 'retry', 'repair', 'escalation',
                  'later_classification', 'cache', 'reasoning'}
 HASH = re.compile(r'[a-f0-9]{64}')
+CLASSIFIER_NUMERIC_UNAVAILABLE = 'classifier_numeric_representation_unavailable'
 
 
 def _decimal(value, *, probability=False):
@@ -36,6 +37,25 @@ def _decimal(value, *, probability=False):
     if number.adjusted() > 64 or number.as_tuple().exponent < -64 or probability and number > 1:
         raise SourceUnavailable('original_economics_unavailable')
     return value
+
+
+def _fixed_decimal(value, *, probability=False, code=CLASSIFIER_NUMERIC_UNAVAILABLE):
+    """Bound the pure DTO representation before allocating fixed-point text."""
+    if type(value) is not str or len(value) > 128:
+        raise SourceUnavailable(code)
+    try:
+        number = Decimal(value)
+    except ArithmeticError:
+        raise SourceUnavailable(code) from None
+    if not number.is_finite() or number.adjusted() > 64:
+        raise SourceUnavailable(code)
+    sign, digits, exponent = number.as_tuple()
+    if exponent < -64 or probability and not 0 <= number <= 1:
+        raise SourceUnavailable(code)
+    width = sign + (len(digits) + exponent if exponent >= 0 else max(len(digits) + 1, 2 - exponent))
+    if width > 128:
+        raise SourceUnavailable(code)
+    return format(number, 'f')
 
 
 def _interval(value, *, probability=False):
@@ -144,13 +164,7 @@ def _candidates(plan, manifest, tiers):
         if score is not None:
             if type(score) not in (str, int, float) or len(str(score)) > 128:
                 raise SourceUnavailable('original_candidate_evidence_invalid')
-            try:
-                score = Decimal(str(score))
-            except ArithmeticError:
-                raise SourceUnavailable('original_candidate_evidence_invalid') from None
-            if not score.is_finite() or score.adjusted() > 64 or score.as_tuple().exponent < -64:
-                raise SourceUnavailable('original_candidate_evidence_invalid')
-            score = format(score, 'f')
+            score = _fixed_decimal(str(score), code='original_candidate_evidence_invalid')
         candidates.append({'tier': tier, **identity,
             'generation_cost_usd': _interval(record['generation_cost_usd']),
             'complete_cost_usd': _interval(record['complete_cost_usd']),
@@ -304,7 +318,7 @@ def _classifier(source, manifest, result, run, stage, index):
         'context_sha256': digest(intent['payload']['state']), 'expected_context_sha256': digest(payload['state']),
         'cost_known': actual['cost_unknown'] is False, 'parse_status': 'valid' if valid else 'invalid',
         'reported_choice': parsed['reported_choice'] if valid else None,
-        'probabilities': {tier: _decimal(format(Decimal(value), 'f'), probability=True)
+        'probabilities': {tier: _decimal(_fixed_decimal(value, probability=True), probability=True)
             for tier, value in parsed['probabilities'].items()} if valid and parsed['probabilities'] is not None else None,
         'abstain_reason': parsed['fallback_reason'] if valid and parsed['fallback_reason'] in (
             'distribution_missing', 'explicit_abstention_choice') else None,
@@ -423,8 +437,9 @@ def reproduce_saved_policy(source, binding, job, manifest, result, run, trusted,
                     if isinstance(error, SourceUnavailable) and error.args in (
                             ('comparison_compute_limit',), ('source_work_limit',)):
                         raise
-                    reproduced['reason'] = ('classifier_binding_mismatch' if isinstance(error, SourceUnavailable)
-                        and error.args == ('classifier_binding_mismatch',) else 'classifier_evidence_unavailable')
+                    reproduced['reason'] = (error.args[0] if isinstance(error, SourceUnavailable) and error.args in (
+                        ('classifier_binding_mismatch',), (CLASSIFIER_NUMERIC_UNAVAILABLE,))
+                        else 'classifier_evidence_unavailable')
             elif plan is not None and not _same_economic_outcome(result['selection']['decisions'][index], expected):
                 raise SourceUnavailable('original_economic_checkpoint_invalid')
             inputs.append(values)

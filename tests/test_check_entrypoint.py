@@ -28,12 +28,12 @@ def runner(tmp_path):
     (root / 'scripts').mkdir(parents=True)
     shutil.copy(ROOT / 'scripts/check.py', root / 'scripts/check.py')
     trace = tmp_path / 'trace.jsonl'
-    program = f'''#!{sys.executable}
+    program = '''#!/usr/bin/env python3
 import json, os, pathlib, sys
 name = pathlib.Path(sys.argv[0]).name
 args = sys.argv[1:]
 with open(os.environ['TRACE'], 'a') as f:
-    f.write(json.dumps({{'name': name, 'args': args, 'env': {{k: os.environ.get(k) for k in ['UV_PROJECT_ENVIRONMENT', 'UV_OFFLINE', 'PYTHONPATH', 'VIRTUAL_ENV']}}}}) + '\\n')
+    f.write(json.dumps({'name': name, 'args': args, 'env': {k: os.environ.get(k) for k in ['UV_PROJECT_ENVIRONMENT', 'UV_OFFLINE', 'PYTHONPATH', 'VIRTUAL_ENV']}}) + '\\n')
 code = int(os.environ.get('FAIL_SYNC', '0')) if args[:1] == ['sync'] else 0
 if name == 'python' and args[:2] == ['-m', 'pytest']:
     code = int(os.environ.get('FAIL_TESTS', '0'))
@@ -42,6 +42,7 @@ if name == 'python' and args and args[0].endswith('project_state.py'):
 sys.exit(code)
 '''
     executable(tmp_path / 'bin/uv', program)
+    (tmp_path / 'bin/python3').symlink_to(sys.executable)
     for name in ['python', 'cloudyfan-jev-demo', 'cloudyfan-score-demo']:
         executable(root / '.venv/bin' / name, program)
     env = dict(os.environ, PATH=str(tmp_path / 'bin'), TRACE=str(trace),
@@ -143,7 +144,7 @@ def streaming_runner(runner):
     root, _ = runner
     control = root.parent / 'stream-control'
     control.mkdir()
-    executable(root.parent / 'bin/uv', f'''#!{sys.executable}
+    executable(root.parent / 'bin/uv', '''#!/usr/bin/env python3
 import os, pathlib, sys, time
 control = pathlib.Path(os.environ['CONTROL'])
 (control / 'child-pid').write_text(str(os.getpid()))
@@ -339,7 +340,7 @@ signal.signal(signal.SIGTERM, terminated)
 while True:
     time.sleep(0.01)
 '''
-    executable(root.parent / 'bin/uv', f'''#!{sys.executable}
+    executable(root.parent / 'bin/uv', f'''#!/usr/bin/env python3
 import os, pathlib, signal, subprocess, sys
 control = pathlib.Path(os.environ['CONTROL'])
 signal.signal(signal.SIGINT, lambda *_: (control / 'child-interrupted').touch())

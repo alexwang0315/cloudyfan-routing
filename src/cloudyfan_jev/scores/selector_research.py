@@ -8,6 +8,7 @@ from decimal import localcontext
 import hashlib
 from itertools import product
 from pathlib import Path
+from types import MappingProxyType
 
 from .. import routing
 from .backup_runtime import backup_classifier_contract_hash, backup_pool_contract_hash
@@ -62,20 +63,60 @@ def selector_flow_contract_hash(plan):
         'envelope': ENVELOPE, 'recovery_prompt': recovery_descriptor()})
 
 
-def validate_selector_calibration(plan, decision, *, data_kind, now=None):
+def validate_selector_calibration(plan, decision, *, data_kind, now=None, source_bytes=None):
     """Validate supplied data without turning historical evaluation into training.
 
     Offline fixtures deliberately cannot certify a live comparison. Observed
     records need hash-bound raw sources; operator provenance is not a supplier
     guarantee or proof of a universal success rate.
     """
+    if source_bytes is not None:
+        if not isinstance(source_bytes, MappingProxyType):
+            raise ValueError('Immutable bounded actual calibration source bytes required')
+        own_sources, total = {}, 0
+        for index, (name, body) in enumerate(source_bytes.items()):
+            if (index >= 16 or type(name) is not str or not Path(name).is_absolute()
+                    or type(body) is not bytes or len(body) > 262144):
+                raise ValueError('Immutable bounded actual calibration source bytes required')
+            total += len(body)
+            if total > 1048576:
+                raise ValueError('Bounded source byte total exceeded')
+            own_sources[name] = body
+        if not own_sources:
+            raise ValueError('Explicit source bytes cannot be empty')
+        source_bytes = MappingProxyType(own_sources)
+        pools = plan.get('pools', {})
+        if (set(pools) != {'open_source', 'low', 'mid', 'high'}
+                or any(not isinstance(rows, list) or not rows for rows in pools.values())):
+            raise ValueError('Bounded exact calibration pools required')
+        size = {tier: len(rows) for tier, rows in pools.items()}
+        combinations = (size['open_source'] * size['low'] * size['mid']
+                        + (size['low'] + size['mid']) * size['mid'] * size['high'])
+        if sum(size.values()) > 12 or combinations > 128:
+            raise ValueError('Bounded exact calibration candidate or conditional count exceeded')
     routing._reject_private(plan['qcs_policy'])
     report = calibration_readiness(plan, decision)
     if not report['ready']:
         raise CalibrationRequired(report)
     if data_kind not in ('observed_calibration', 'offline_fixture'):
         raise ValueError('Explicit calibration data kind required')
+    used_sources = set()
     contracts = required_contracts(plan, decision)
+    supplied_hashes = None
+    if source_bytes is not None:
+        declarations = {}
+        for key, needed in contracts.items():
+            calibration = plan['qcs_policy']['stages'][needed['stage']]['variants'][key]['calibration']
+            files = calibration.get('source_files')
+            if not isinstance(files, dict) or not files or calibration.get('raw_sha256') not in files.values():
+                raise ValueError('Complete required source declarations need raw SHA association')
+            for name, expected in files.items():
+                if name in declarations and declarations[name] != expected:
+                    raise ValueError('Contradictory required source SHA')
+                declarations[name] = expected
+        if set(declarations) != set(source_bytes):
+            raise ValueError('Supplied source keys differ from complete required source union')
+        supplied_hashes = {name: hashlib.sha256(body).hexdigest() for name, body in source_bytes.items()}
     rows = {r['entry']['config_id']: r for pool in plan['pools'].values() for r in pool}
     for key, needed in contracts.items():
         variant = plan['qcs_policy']['stages'][needed['stage']]['variants'][key]
@@ -102,16 +143,19 @@ def validate_selector_calibration(plan, decision, *, data_kind, now=None):
                 or set(calibration.get('includes', [])) != COMPLETE_PATH
                 or calibration.get('effective_probability_includes_fallback') is not True):
             raise ValueError('Selector calibration exact contract mismatch')
-        if data_kind == 'observed_calibration':
+        if data_kind == 'observed_calibration' or source_bytes is not None:
             sources = calibration.get('source_files', {})
             if not sources or calibration['raw_sha256'] not in sources.values():
                 raise ValueError('Hash-bound observed calibration sources required')
             for name, expected in sources.items():
                 path = Path(name)
-                if (not path.is_absolute() or path.is_symlink()
-                        or any(p in ('private', 'authoring') or p.startswith('.env') for p in path.parts)
-                        or hashlib.sha256(path.read_bytes()).hexdigest() != expected):
+                if (not path.is_absolute() or (source_bytes is None and path.is_symlink())
+                        or any((p.casefold() if source_bytes is not None else p) in ('private', 'authoring')
+                               or (p.casefold() if source_bytes is not None else p).startswith('.env') for p in path.parts)
+                        or (hashlib.sha256(path.read_bytes()).hexdigest() if source_bytes is None else supplied_hashes.get(name)) != expected
+                        or source_bytes is not None and name not in source_bytes):
                     raise ValueError('Observed calibration source changed or is not public')
+                used_sources.add(name)
         if _interval(variant['lower_probability'])[1] > 1:
             raise ValueError('Calibrated probability out of range')
         _interval(variant['classifier_cost_usd'])
@@ -130,6 +174,8 @@ def validate_selector_calibration(plan, decision, *, data_kind, now=None):
                 raise ValueError('Calibration cost path omits required generation/continuation')
             if _d(variant['paths'][tier]['flow_ms_upper']) > _d(plan['qcs_policy']['max_flow_ms']):
                 raise ValueError('Calibrated direct continuation exceeds the execution window')
+    if source_bytes is not None and used_sources != set(source_bytes):
+        raise ValueError('Calibration source byte names differ from original source_files')
     return report
 
 

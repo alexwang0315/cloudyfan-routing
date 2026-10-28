@@ -9,6 +9,7 @@ from pathlib import Path
 import platform
 import sqlite3
 import threading
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -16,6 +17,8 @@ import pytest
 import cloudyfan_jev
 import cloudyfan_monitor
 from cloudyfan_jev.client import CHAT, DECISIONS, GENERATION
+from cloudyfan_monitor.demo import CATEGORY
+from cloudyfan_monitor.integration import build_local_integration
 
 from candidate_observation_fixture import assemble_candidate_host
 from task_features_fixture import ArtifactRecorder
@@ -107,10 +110,24 @@ def saved_qcs_http(tmp_path, loopback_network, request):
         stack.callback(server.server_close)
         loopback_network.ports.add(server.server_port)
         origin = f'http://127.0.0.1:{server.server_port}'
-        clock = Clock(datetime.fromisoformat('2026-10-21T00:00:00+00:00').timestamp())
-        host = assemble_candidate_host(artifacts / 'service', origin, clock=clock,
-            fail_first=True, classify=bool(getattr(request, 'param', False)))
-        original_http = host.service.contracts['category-host-v1'].runner.core._template.client.http
+        options = getattr(request, 'param', False)
+        if isinstance(options, dict) and options.get('family') == 'sequential':
+            clock = Clock()
+            bundle = build_local_integration(artifacts / 'service', origin=origin, clock=clock, seed=False)
+            bundle.upstream.fail_tiers = set(options['fail_tiers'])
+            service = bundle.app.gateway.service
+            core = service.contracts['demo-cloudyfan'].runner.core
+            host = SimpleNamespace(app=bundle.app, service=service,
+                budget=service.contracts['demo-cloudyfan'].runner.store, credentials=bundle.credentials,
+                calls=bundle.upstream.calls, root=bundle.root, category=CATEGORY,
+                operator_token=bundle.operator_token)
+            original_http = core.client.http
+            evidence['scope'] = 'Real loopback HTTP/Core/BudgetedCore/TaskService/Store/Identity; upstreams MockTransport'
+        else:
+            clock = Clock(datetime.fromisoformat('2026-10-21T00:00:00+00:00').timestamp())
+            host = assemble_candidate_host(artifacts / 'service', origin, clock=clock,
+                fail_first=True, classify=bool(options))
+            original_http = host.service.contracts['category-host-v1'].runner.core._template.client.http
 
         def record_model(request):
             wire.capture({'method': request.method, 'url': str(request.url)},

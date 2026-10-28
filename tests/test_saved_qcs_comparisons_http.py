@@ -124,3 +124,47 @@ def test_reproduced_choice_cannot_borrow_another_actual_branch_answer(saved_qcs_
     assert item['original']['costs']['complete_api_usd'] == '0.021'
     after = tracer.snapshot('after-divergent-choice')
     _assert_read_only(tracer, before, after, compared)
+
+
+@pytest.mark.parametrize('saved_qcs_http,mode,tiers,classifiers', [
+    ({'family': 'sequential', 'fail_tiers': ['open_source', 'mid']}, 'cloudyfan',
+        ['open_source', 'mid', 'high'], 2),
+    ({'family': 'sequential', 'fail_tiers': ['low']}, 'low_first', ['low', 'high'], 0),
+    ({'family': 'sequential', 'fail_tiers': ['open_source']}, 'open_source_first', ['open_source', 'high'], 0),
+    ({'family': 'sequential', 'fail_tiers': []}, 'fixed_high', ['high'], 0),
+], indirect=['saved_qcs_http'], ids=['ordinary-classification', 'low-high-recovery', 'oss-high-recovery', 'no-score-card-initial'])
+def test_original_sequential_core_uses_its_frozen_profiles_without_qcs_qualification(
+        saved_qcs_http, mode, tiers, classifiers):
+    tracer = saved_qcs_http
+    snapshot = tracer.client().get('/monitor/snapshot')
+    assert snapshot.status_code == 200
+    switched = tracer.client().post('/monitor/mode', json={
+        'revision': snapshot.json()['control']['revision'], 'mode': mode})
+    assert switched.status_code == 200
+    run = 'saved-sequential-' + mode
+    created = tracer.client('studio').post('/v1/tasks', json={
+        'run_id': run, 'category': tracer.host.category, 'prompt': '1+1 PRIVATE_SAVED_QCS_CANARY'})
+    assert created.status_code == 200 and created.json()['status'] == 'passed'
+    manifest = json.loads((tracer.original_run() / 'manifest.json').read_bytes())
+    assert manifest['routing_version'] == 'hierarchical-sequential-v1'
+    assert 'selection_policy' not in manifest
+    assert all('score_selection' not in profile['capability_card'] for profile in manifest['profiles'].values())
+    before = tracer.snapshot('before-ordinary-' + mode)
+    response = tracer.client().post('/monitor/comparisons', json={
+        'policy_version': 'original-policy-reproduction-v1', 'tasks': [{'client': 'studio', 'run_id': run}]})
+    assert response.status_code == 200
+    item = response.json()['items'][0]
+    assert item['original']['routing_version'] == 'hierarchical-sequential-v1'
+    assert item['reproduction']['status'] == 'reproduced'
+    decisions = item['reproduction']['decisions']
+    assert [row['selected_tier'] for row in decisions] == [*tiers, None]
+    assert all(row['match'] is True for row in decisions)
+    assert decisions[-1]['action'] == 'stop' and decisions[-1]['reason'] == 'public_validation_passed'
+    assert sum(row['action'] == 'classify' for row in decisions) == classifiers
+    assert all(row['config_id'] == 'cfg-' + row['configuration_sha256'] for row in item['original']['path'])
+    assert all(row['net_saving_lower_usd'] is None for row in decisions)
+    assert len(tracer.host.calls) == len(tiers) + classifiers
+    assert item['original']['costs']['complete_api_usd'] is not None
+    assert tracer.client().get('/monitor/comparisons/' + response.json()['comparison_id']).json() == response.json()
+    after = tracer.snapshot('after-ordinary-' + mode)
+    _assert_read_only(tracer, before, after, response)

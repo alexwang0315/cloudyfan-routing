@@ -1,10 +1,12 @@
-"""Bounded host loading of the original frozen QCS admission/decision plan.
+"""Bounded host loading of original frozen sequential/QCS decision inputs.
 
 This replays the admitted singleton per tier, not a missing source snapshot's
 whole-pool qualification. Original prose stays here while request/context hashes
 are verified; only the Core value DTO crosses into the pure comparator.
 The first unavailable or divergent choice terminates reproduction, so no later
 actual branch answer can stand in for an unobserved reproduced branch.
+A cfg-<digest> identifies fixed executable content when no original config ID
+exists. It never claims quality evidence, qualification or new admission.
 """
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -65,9 +67,8 @@ def attempt_identity(manifest, attempt):
     tier = attempt['tier']
     profile = manifest['profiles'][tier]
     card = profile.get('capability_card', {})
-    config_id = card.get('score_selection', {}).get('config_id')
-    if identifier(config_id) is None:
-        raise SourceUnavailable('original_configuration_identity_unavailable')
+    selection = card.get('score_selection', {}) if type(card) is dict else {}
+    config_id = selection.get('config_id') if type(selection) is dict else None
     # Match the fixed scores/configuration.py identity contract without loading
     # scores/__init__ and its optional source/network adapters in the worker.
     identity = {key: profile.get(key) for key in ('model', 'model_version', 'accepted_models',
@@ -78,6 +79,10 @@ def attempt_identity(manifest, attempt):
         identity['reasoning_parameter'] = profile['reasoning_parameter']
     configuration_sha = digest(identity)
     plan = manifest.get('selection_policy')
+    if config_id is None and plan is None and manifest['routing_version'] == routing.VERSION:
+        config_id = 'cfg-' + configuration_sha
+    if identifier(config_id) is None:
+        raise SourceUnavailable('original_configuration_identity_unavailable')
     if plan is not None and (plan['profiles'][tier] != profile
             or card['qcs']['configuration_sha256'] != configuration_sha
             or plan['records'][tier]['configuration_sha256'] != configuration_sha):
@@ -156,13 +161,23 @@ def _candidates(plan, manifest, tiers):
     return candidates
 
 
-def _contract(profiles, version, stage, previous_tier):
+def _fixed_candidates(manifest, tiers):
+    # Plain Core's original profile is fixed execution configuration, not a QCS
+    # candidate qualification. Unknown forecasts stay absent, not estimated.
+    return [{'tier': tier, **attempt_identity(manifest, {'tier': tier}),
+        'generation_cost_usd': None, 'complete_cost_usd': None, 'flow_ms_upper': None, 'quality_score': None,
+        'gate': {'state': 'eligible', 'reasons': [], 'evidence_sha256': digest({
+            'tier': tier, 'routing_version': manifest['routing_version'],
+            'fixed_profile_sha256': digest(manifest['profiles'][tier])})}} for tier in tiers]
+
+
+def _contract(profiles, version, stage, previous_tier, *, policy_version=VERSION):
     state = {'task': '<public-workload-task>', 'previous_answer': '<latest-public-answer>',
         'previous_tier': previous_tier, 'tool_results': [],
         'previous_configuration': {key: profiles[previous_tier][key]
             for key in (*routing.PROFILE_FIELDS, *routing.OPTIONAL_IDENTITY_FIELDS) if key in profiles[previous_tier]},
         'public_diagnostics': '<latest-public-diagnostics>'}
-    _, _, payload = routing.build_request(stage, state, profiles, version, version, policy_version=VERSION)
+    _, _, payload = routing.build_request(stage, state, profiles, version, version, policy_version=policy_version)
     return digest({'payload': payload, 'effective_fallback': 'upper_on_invalid_abstain_or_tie',
                    'unknown_charge': 'stop', 'horizon': HORIZON})
 
@@ -215,7 +230,7 @@ def _economics(plan, manifest, binding, stage, previous_tier):
 
 
 def _values(binding, job, manifest, checkpoint, candidates, context, economics=None):
-    return {'schema_version': 'saved-policy-values-v1', 'policy_version': VERSION, 'mode': binding['mode'],
+    return {'schema_version': 'saved-policy-values-v1', 'policy_version': manifest['routing_version'], 'mode': binding['mode'],
         'source': {'binding_sha256': digest(binding), 'request_sha256': original_digest(job['request']),
             'registered_sha256': original_digest(job['registered']), 'policy_sha256': original_digest(manifest),
             'checkpoint_sha256': digest(checkpoint), 'candidate_set_sha256': candidate_set_digest(candidates)},
@@ -261,8 +276,11 @@ def _classifier(source, manifest, result, run, stage, index):
             for key in (*routing.PROFILE_FIELDS, *routing.OPTIONAL_IDENTITY_FIELDS) if key in profiles[previous['tier']]},
         'tool_results': [{key: action[key] for key in ('name', 'arguments', 'result')} for action in actions[:count]],
         'public_diagnostics': previous['public']}
+    # Ordinary Core omitted the optional step.policy_version wire field. Its
+    # default context version is still routing.VERSION; preserve both details.
+    classifier_policy = manifest['routing_version'] if manifest.get('selection_policy') is not None else None
     context, questions, payload = routing.build_request(stage, state, profiles,
-        decision['version'], decision['version'], policy_version=VERSION)
+        decision['version'], decision['version'], policy_version=classifier_policy)
     request_sha = original_digest({'url': DECISIONS, 'payload': payload})
     actual = usage(response)
     if (intent.get('call_id') != cid or response.get('call_id') != cid or intent.get('url') != DECISIONS
@@ -277,7 +295,8 @@ def _classifier(source, manifest, result, run, stage, index):
         decision['version'], (decision['version'],))
     if parsed != result['selection']['decisions'][index]:
         raise SourceUnavailable('classifier_binding_mismatch')
-    contract = _contract(profiles, decision['version'], stage, previous['tier'])
+    contract = _contract(profiles, decision['version'], stage, previous['tier'],
+                         policy_version=classifier_policy)
     valid = parsed['reported_choice'] is not None
     return {'stage': stage, 'contract_sha256': contract, 'expected_contract_sha256': contract,
         'request_sha256': intent['request_sha256'], 'expected_request_sha256': request_sha,
@@ -313,11 +332,22 @@ def _unknown(index, stage, reason):
 
 def reproduce_saved_policy(source, binding, job, manifest, result, run, trusted, *, original_path, receipts):
     inputs, decisions = [], []
-    plan = _plan(manifest)
-    if binding['mode'] != 'cloudyfan' or not original_path or len(original_path) > 3:
+    policy = manifest['routing_version']
+    if policy not in (VERSION, routing.VERSION):
         raise SourceUnavailable('original_frozen_plan_invalid')
-    candidates = _candidates(plan, manifest, ('open_source',))
-    initial = _values(binding, job, manifest, {'plan_id': plan['plan_id'], 'stage': 'initial'}, candidates,
+    plan = _plan(manifest) if policy == VERSION else None
+    mode = binding['mode']
+    if (plan is not None and mode != 'cloudyfan' or mode not in (
+            'cloudyfan', 'fixed_high', 'low_first', 'open_source_first') or not original_path
+            or len(original_path) > (3 if mode == 'cloudyfan' else 2)):
+        raise SourceUnavailable('original_frozen_plan_invalid')
+    tier = {'cloudyfan': 'open_source', 'fixed_high': 'high', 'low_first': 'low',
+            'open_source_first': 'open_source'}[mode]
+    candidates = _candidates(plan, manifest, (tier,)) if plan is not None else _fixed_candidates(manifest, (tier,))
+    checkpoint = {'stage': 'initial', 'frozen_profiles_sha256': digest(manifest['profiles'])}
+    if plan is not None:
+        checkpoint['plan_id'] = plan['plan_id']
+    initial = _values(binding, job, manifest, checkpoint, candidates,
         {'stage': 'initial', 'previous_tier': None, 'previous_configuration_sha256': None,
          'previous_public_passed': None, 'previous_stop': 'none', 'quality_phase': 0,
          'generation_calls': 0, 'receipt_sha256': None, 'validation_sha256': None})
@@ -326,33 +356,44 @@ def reproduce_saved_policy(source, binding, job, manifest, result, run, trusted,
     if decisions[-1]['match'] is not True:
         return inputs, decisions
     for index, previous in enumerate(result['attempts']):
-        stage = ('low_mid' if index == 0 else 'mid_high') if index + 1 < len(original_path) else 'after_validation'
+        following = index + 1 < len(original_path)
+        stage = ('low_mid' if index == 0 else 'mid_high') if following and mode == 'cloudyfan' else 'after_validation'
         try:
             context = _context(index, result, original_path, receipts, stage)
             if stage == 'after_validation':
-                values = _values(binding, job, manifest, {'stage': stage, 'attempt_index': index}, [], context)
+                candidates = _fixed_candidates(manifest, ('high',)) if following else []
+                values = _values(binding, job, manifest, {'stage': stage, 'attempt_index': index}, candidates, context)
                 reproduced = source.reproduce(values)
                 inputs.append(values)
-                decisions.append(_public(len(decisions), stage, reproduced, [], None))
+                decisions.append(_public(len(decisions), stage, reproduced, candidates,
+                    original_path[index + 1] if following else None))
+                if decisions[-1]['match'] is not True:
+                    break
                 continue
-            checkpoint = source.read(run / ('economics-' + stage + '.json'), 'original_economic_checkpoint')
-            if (checkpoint.get('previous_tier') != previous['tier'] or checkpoint.get('previous_answer') != previous['final']
-                    or checkpoint.get('public_diagnostics') != previous['public']):
-                raise SourceUnavailable('original_context_unavailable')
-            candidates = _candidates(plan, manifest, routing.STAGES[stage])
-            economic = _economics(plan, manifest, binding, stage, previous['tier'])
+            if plan is not None:
+                checkpoint = source.read(run / ('economics-' + stage + '.json'), 'original_economic_checkpoint')
+                if (checkpoint.get('previous_tier') != previous['tier'] or checkpoint.get('previous_answer') != previous['final']
+                        or checkpoint.get('public_diagnostics') != previous['public']):
+                    raise SourceUnavailable('original_context_unavailable')
+                candidates = _candidates(plan, manifest, routing.STAGES[stage])
+                economic = _economics(plan, manifest, binding, stage, previous['tier'])
+            else:
+                checkpoint = {'stage': stage, 'frozen_profiles_sha256': digest(manifest['profiles'])}
+                candidates = _fixed_candidates(manifest, routing.STAGES[stage])
+                economic = None
             values = _values(binding, job, manifest, checkpoint, candidates, context, economic)
             reproduced = source.reproduce(values)
             if reproduced['status'] not in ('reproduced', 'partial'):
                 inputs.append(values)
                 decisions.append(_public(len(decisions), stage, reproduced, candidates, original_path[index + 1]))
                 break
-            expected = {'stage': stage, 'previous_tier': previous['tier'], 'action': reproduced['action'],
-                'selected_tier': reproduced['selected_tier'] if reproduced['action'] == 'direct' else None,
-                'reason': reproduced['policy_reason'], 'net_saving_lower_usd': reproduced['net_saving_lower_usd'],
-                'plan_id': plan['plan_id']}
-            if checkpoint.get('outcome') != expected:
-                raise SourceUnavailable('original_economic_checkpoint_invalid')
+            if plan is not None:
+                expected = {'stage': stage, 'previous_tier': previous['tier'], 'action': reproduced['action'],
+                    'selected_tier': reproduced['selected_tier'] if reproduced['action'] == 'direct' else None,
+                    'reason': reproduced['policy_reason'], 'net_saving_lower_usd': reproduced['net_saving_lower_usd'],
+                    'plan_id': plan['plan_id']}
+                if checkpoint.get('outcome') != expected:
+                    raise SourceUnavailable('original_economic_checkpoint_invalid')
             if reproduced['action'] == 'classify':
                 try:
                     values['classifier'] = _classifier(source, manifest, result, run, stage, index)
@@ -363,7 +404,7 @@ def reproduce_saved_policy(source, binding, job, manifest, result, run, trusted,
                         raise
                     reproduced['reason'] = ('classifier_binding_mismatch' if isinstance(error, SourceUnavailable)
                         and error.args == ('classifier_binding_mismatch',) else 'classifier_evidence_unavailable')
-            elif result['selection']['decisions'][index] != expected:
+            elif plan is not None and result['selection']['decisions'][index] != expected:
                 raise SourceUnavailable('original_economic_checkpoint_invalid')
             inputs.append(values)
             decisions.append(_public(len(decisions), stage, reproduced, candidates, original_path[index + 1]))

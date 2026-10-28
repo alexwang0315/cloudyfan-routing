@@ -1,5 +1,6 @@
 """Original QCS saved decisions through the main operator HTTP interface."""
 import json
+from decimal import Decimal
 
 import pytest
 
@@ -168,4 +169,94 @@ def test_original_sequential_core_uses_its_frozen_profiles_without_qcs_qualifica
     assert item['original']['costs']['complete_api_usd'] is not None
     assert tracer.client().get('/monitor/comparisons/' + response.json()['comparison_id']).json() == response.json()
     after = tracer.snapshot('after-ordinary-' + mode)
+    _assert_read_only(tracer, before, after, response)
+
+
+@pytest.mark.parametrize('saved_qcs_http,variant,tiers,reasons,cost', [
+    ({'family': 'qcs_controlled', 'variant': 'mid_high'}, 'mid_high', ['open_source', 'low', 'mid'],
+        ['reported_choice_applied', 'reported_choice_applied'], '.032'),
+    ({'family': 'qcs_controlled', 'variant': 'parse_failure'}, 'parse_failure', ['open_source', 'mid'],
+        ['parse_failure'], '.021'),
+    ({'family': 'qcs_controlled', 'variant': 'abstain'}, 'abstain', ['open_source', 'mid'],
+        ['distribution_missing'], '.021'),
+    ({'family': 'qcs_controlled', 'variant': 'tie'}, 'tie', ['open_source', 'mid'],
+        ['tied_or_inconsistent_distribution'], '.021'),
+], indirect=['saved_qcs_http'], ids=['mid-high-classification', 'parse-failure', 'native-abstention', 'tied-distribution'])
+def test_original_qcs_saved_second_stage_and_conservative_fallbacks(
+        saved_qcs_http, variant, tiers, reasons, cost):
+    tracer = saved_qcs_http
+    body = _completed(tracer)
+    before = tracer.snapshot('before-original-' + variant)
+    response = tracer.client().post('/monitor/comparisons', json=body)
+    assert response.status_code == 200
+    item = response.json()['items'][0]
+    assert item['reproduction']['status'] == 'reproduced'
+    decisions = item['reproduction']['decisions']
+    assert [row['tier'] for row in item['original']['path']] == tiers
+    assert [row['selected_tier'] for row in decisions] == [*tiers, None]
+    assert [row['reason'] for row in decisions[1:-1]] == reasons
+    assert all(row['match'] is True for row in decisions)
+    assert decisions[-1]['action'] == 'stop'
+    assert 'conservative_net_saving_positive' in item['reproduction']['reasons']
+    assert sum(row['action'] == 'classify' for row in decisions) == len(tiers) - 1
+    assert Decimal(item['original']['costs']['complete_api_usd']) == Decimal(cost)
+    assert len(tracer.host.calls) == len(tiers) * 2 - 1
+    assert tracer.client().get('/monitor/comparisons/' + response.json()['comparison_id']).json() == response.json()
+    after = tracer.snapshot('after-original-' + variant)
+    _assert_read_only(tracer, before, after, response)
+
+
+@pytest.mark.parametrize('saved_qcs_http', [{'family': 'qcs_controlled', 'variant': 'scaled'}], indirect=True)
+@pytest.mark.parametrize('different_amount', [False, True], ids=['equal-scientific-decimal', 'unequal-saved-amount'])
+def test_original_small_qcs_saving_compares_decimal_value_without_weakening_other_bindings(
+        saved_qcs_http, different_amount):
+    tracer = saved_qcs_http
+    body = _completed(tracer)
+    checkpoint = tracer.original_run() / 'economics-low_mid.json'
+    saved = json.loads(checkpoint.read_bytes())
+    # This representation is emitted by the original QCS Decimal computation.
+    assert saved['outcome']['net_saving_lower_usd'] == '8.0E-8'
+    if different_amount:
+        checkpoint.rename(checkpoint.with_name('economics-low_mid-before-unequal-amount.json'))
+        saved['outcome']['net_saving_lower_usd'] = '8.1E-8'
+        checkpoint.write_text(json.dumps(saved))
+        checkpoint.chmod(0o600)
+    before = tracer.snapshot('before-small-amount')
+    response = tracer.client().post('/monitor/comparisons', json=body)
+    assert response.status_code == 200
+    item = response.json()['items'][0]
+    decisions = item['reproduction']['decisions']
+    if different_amount:
+        assert item['reproduction']['status'] == 'partial'
+        assert len(decisions) == 2 and decisions[0]['match'] is True
+        assert decisions[1]['match'] is None
+        assert decisions[1]['reason'] == 'original_economic_checkpoint_invalid'
+        assert not any(row['stage'] == 'after_validation' for row in decisions)
+    else:
+        assert item['reproduction']['status'] == 'reproduced'
+        assert [row['selected_tier'] for row in decisions] == ['open_source', 'low', None]
+        assert all(row['match'] is True for row in decisions)
+    assert Decimal(item['original']['costs']['complete_api_usd']) == Decimal('.000000021')
+    assert len(tracer.host.calls) == 3
+    after = tracer.snapshot('after-small-amount')
+    _assert_read_only(tracer, before, after, response)
+
+
+@pytest.mark.parametrize('saved_qcs_http', [{'family': 'qcs_controlled', 'variant': 'scaled_direct'}], indirect=True)
+def test_original_small_direct_qcs_outcome_uses_the_same_numeric_comparison(saved_qcs_http):
+    tracer = saved_qcs_http
+    body = _completed(tracer)
+    outcome = json.loads((tracer.original_run() / 'economics-low_mid.json').read_bytes())['outcome']
+    assert outcome['action'] == 'direct' and outcome['net_saving_lower_usd'] == '8.0E-8'
+    before = tracer.snapshot('before-small-direct-amount')
+    response = tracer.client().post('/monitor/comparisons', json=body)
+    assert response.status_code == 200
+    item = response.json()['items'][0]
+    assert item['reproduction']['status'] == 'reproduced'
+    assert [row['selected_tier'] for row in item['reproduction']['decisions']] == ['open_source', 'mid', None]
+    assert all(row['match'] is True for row in item['reproduction']['decisions'])
+    assert item['reproduction']['decisions'][1]['reason'] == 'classified_flow_estimate_unknown'
+    assert Decimal(item['original']['costs']['complete_api_usd']) == Decimal('.00000002')
+    assert len(tracer.host.calls) == 2
+    after = tracer.snapshot('after-small-direct-amount')
     _assert_read_only(tracer, before, after, response)

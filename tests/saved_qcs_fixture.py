@@ -2,6 +2,7 @@
 from contextlib import ExitStack
 from dataclasses import dataclass, field
 from datetime import datetime
+from decimal import Decimal
 import hashlib
 import json
 import os
@@ -17,11 +18,14 @@ import pytest
 import cloudyfan_jev
 import cloudyfan_monitor
 from cloudyfan_jev.client import CHAT, DECISIONS, GENERATION
+from cloudyfan_jev.scores.category_routing import prepare_category_selection
+from cloudyfan_jev.scores.qcs import classifier_contract_hash, flow_contract_hash
 from cloudyfan_monitor.demo import CATEGORY
-from cloudyfan_monitor.integration import build_local_integration
+from cloudyfan_monitor.integration import assemble_monitor, build_local_integration
 
 from candidate_observation_fixture import assemble_candidate_host
 from task_features_fixture import ArtifactRecorder
+from test_category_host_integration import OPERATOR, assemble_category_host, category_values
 from test_local_http_integration import Clock, QuietHandler, ThreadedServer
 
 
@@ -34,6 +38,98 @@ def _save(path, value):
         json.dump(value, stream, ensure_ascii=False, indent=2)
         stream.write('\n')
     path.chmod(0o600)
+
+
+def _qcs_variant_host(root, origin, clock, variant):
+    """Prepare a real original policy, then supply only its synthetic upstream.
+
+    All fee/calibration/contract changes happen before original Core execution.
+    Its manifests, economic checkpoints and classifier receipts are untouched.
+    """
+    values = category_values(classify=True)
+    policy, evidence = values['policy'], values['evidence']
+    if variant == 'mid_high':
+        policy['stages']['mid_high:low'].update(
+            paths={'mid': {'cost_usd': {'lower': '.3', 'upper': '.3'}, 'flow_ms_upper': '100'},
+                   'high': {'cost_usd': {'lower': '.2', 'upper': '.2'}, 'flow_ms_upper': '100'}},
+            direct_tier='high', classifier_cost_usd={'lower': '.001', 'upper': '.001'},
+            lower_probability={'lower': '.9', 'upper': '.9'}, classify_flow_ms_upper='110',
+            classified_paths={'mid': {'cost_usd': {'lower': '.1', 'upper': '.1'}},
+                              'high': {'cost_usd': {'lower': '.2', 'upper': '.2'}}},
+            classified_calibration={**policy['calibration'], 'classifier_version': values['decision']['version'],
+                'stage': 'mid_high', 'previous_tier': 'low', 'context': 'public_failure_or_unknown',
+                'effective_probability_includes_fallback': True})
+    if variant in ('scaled', 'scaled_direct'):
+        def scale(value):
+            if isinstance(value, dict):
+                for key, child in value.items():
+                    if key.endswith('cost_usd'):
+                        value[key] = {bound: format(Decimal(amount) * Decimal('.000001'), 'f')
+                                      for bound, amount in child.items()}
+                    elif key == 'minimum_saving_usd':
+                        value[key] = format(Decimal(child) * Decimal('.000001'), 'f')
+                    else:
+                        scale(child)
+            elif isinstance(value, list):
+                for child in value:
+                    scale(child)
+        scale(evidence)
+        scale(policy)
+        if variant == 'scaled_direct':
+            policy['stages']['low_mid']['classify_flow_ms_upper'] = None
+    # Reapply the original producer's binding sequence. Cost-bearing cards are
+    # frozen before conditional classifier contracts, then whole-flow is bound.
+    conditional = {key: forecast.pop('classified_calibration')
+                   for key, forecast in policy['stages'].items() if 'classified_calibration' in forecast}
+    snapshot = values['matrix']['categories'][values['category']]['snapshot']
+    policy['complete_policy_flow']['contract_sha256'] = flow_contract_hash(
+        snapshot, values['requirements'], evidence, policy)
+    profiles = prepare_category_selection(values['matrix'], values['category'], values['requirements'],
+        evidence, policy, now=values['now'])['qcs_plan']['profiles']
+    for key, calibration in conditional.items():
+        stage, previous = ('low_mid', 'open_source') if key == 'low_mid' else key.split(':')
+        calibration['contract_sha256'] = classifier_contract_hash(profiles, values['decision']['version'], stage, previous)
+        policy['stages'][key]['classified_calibration'] = calibration
+    policy['complete_policy_flow']['contract_sha256'] = flow_contract_hash(
+        snapshot, values['requirements'], evidence, policy)
+    calls = []
+    app, service, budget, credentials = assemble_category_host(root, values, calls, clock=clock, fail_first=True)
+    app = assemble_monitor(app.store, service, app.gateway.registry, app.identity_store,
+        operator_token=OPERATOR, origin=origin, demo=True)
+    client = service.contracts['category-host-v1'].runner.core._template.client
+    tiers = {profile['model_version']: tier for tier, profile in profiles.items()}
+
+    def upstream(request):
+        assert request.method == 'POST'
+        payload = json.loads(request.content)
+        calls.append(payload)
+        if 'questions' in payload:
+            stage = next(iter(payload['questions']))
+            lower, upper = ('low', 'mid') if stage == 'low_mid' else ('mid', 'high')
+            answer = {'type': 'choice', 'choice': lower, 'probabilities': {lower: .9, upper: .1}}
+            if variant == 'parse_failure':
+                answer['choice'] = 'outside-the-original-pair'
+            elif variant == 'abstain':
+                # The original binary question declares no explicit abstain
+                # option; a missing distribution is its native abstention.
+                answer.pop('probabilities')
+            elif variant == 'tie':
+                answer['probabilities'] = {lower: .5, upper: .5}
+            return httpx.Response(200, json={'id': 'gen-saved-qcs-variant-' + str(len(calls)),
+                'model': payload['model'], 'provider': 'TypeSafe', 'usage': {
+                    'cost': .000000001 if variant in ('scaled', 'scaled_direct') else .001,
+                    'input_tokens': 1, 'output_tokens': 1}, 'answers': {stage: answer}})
+        failed = tiers[payload['model']] == 'open_source' or variant == 'mid_high' and tiers[payload['model']] == 'low'
+        return httpx.Response(200, json={'id': 'gen-saved-qcs-variant-' + str(len(calls)),
+            'model': payload['model'], 'provider': 'Example',
+            'usage': {'cost': '.00000001' if variant in ('scaled', 'scaled_direct') else '.01'},
+            'choices': [{'message': {'role': 'assistant', 'content': 'bad' if failed else '2'}}]})
+
+    original_http = client.http
+    client.http = httpx.Client(transport=httpx.MockTransport(upstream))
+    original_http.close()
+    return SimpleNamespace(app=app, service=service, budget=budget, credentials=credentials,
+        calls=calls, root=root, category=values['category'], operator_token=OPERATOR), client.http
 
 
 @dataclass
@@ -123,6 +219,11 @@ def saved_qcs_http(tmp_path, loopback_network, request):
                 operator_token=bundle.operator_token)
             original_http = core.client.http
             evidence['scope'] = 'Real loopback HTTP/Core/BudgetedCore/TaskService/Store/Identity; upstreams MockTransport'
+        elif isinstance(options, dict) and options.get('family') == 'qcs_controlled':
+            clock = Clock(datetime.fromisoformat('2026-10-21T00:00:00+00:00').timestamp())
+            host, original_http = _qcs_variant_host(artifacts / 'service', origin, clock, options['variant'])
+            evidence['original_policy_variant'] = options['variant']
+            evidence['variant_prepared_before_original_execution'] = True
         else:
             clock = Clock(datetime.fromisoformat('2026-10-21T00:00:00+00:00').timestamp())
             host = assemble_candidate_host(artifacts / 'service', origin, clock=clock,

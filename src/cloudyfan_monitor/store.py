@@ -429,6 +429,10 @@ class Store:
                         feature_policy, feature_contracts, feature_recommendations, feature_capture_absent = None, None, None, False
                 self._adopt_features(db, row, payload, feature_policy, feature_contracts, feature_recommendations,
                                      capture_absent=feature_capture_absent)
+                # SQLite REAL affinity can change an integer clock to float.
+                # Return the original persisted representation for later seals.
+                row = dict(db.execute('SELECT * FROM bindings WHERE client=? AND run=?',
+                                      (client, payload['run_id'])).fetchone())
                 created = True
         # No producer qualification escapes a failed original binding commit.
         return (row, created, selection) if with_selection else (row, created) if with_creation else row

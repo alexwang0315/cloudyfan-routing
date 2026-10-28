@@ -215,7 +215,9 @@ HTTP acceptance for that path.
 
 Current handoff: the standalone source is written in the isolated policy-values
 candidate. Main loopback acceptance and affected full gates remain required.
-This worker starts no product tests, collection or services; the normal commit
-uses the unchanged shared secret/quick hooks after the UI worker has quit.
-Hook receipts record their own limited checks. The interface example and a
+The initial source preparation ran no tests or collection. The later calibration
+guard has focused public-interface RED/GREEN evidence; those pure checks start
+no services and do not replace main HTTP or full acceptance. Normal commits use
+the unchanged shared secret/quick hooks, whose receipts record their limited
+checks. The interface example and a
 candidate commit are not a completed Issue42 acceptance or qualification.

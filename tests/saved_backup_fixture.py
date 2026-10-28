@@ -95,16 +95,47 @@ class SavedBackupHTTP:
         assert str(self.host.root) not in response.text
         return response
 
+    def verify_saved_availability_proof(self, report, *, expected_links):
+        saved = self.host.root / '.saved-comparisons' / (report['comparison_id'] + '.inputs.json')
+        body = saved.read_bytes()
+        values = json.loads(body)[0]['values']['decisions']
+        decisions, links = report['items'][0]['reproduction']['decisions'], []
+        for index, value in enumerate(values):
+            proof = value['source'].get('availability_exhaustion_input_sha256')
+            if proof is None:
+                continue
+            assert index > 0
+            previous = values[index-1]
+            canonical = json.dumps(previous, sort_keys=True, ensure_ascii=False,
+                allow_nan=False, separators=(',', ':')).encode('utf-8')
+            assert hashlib.sha256(canonical).hexdigest() == proof
+            assert previous['context']['stage'] == 'same_pool'
+            assert decisions[index-1]['action'] == 'advance_quality_stage' and decisions[index-1]['match'] is True
+            assert value['context']['stage'] in ('low_mid', 'mid_high', 'after_validation')
+            assert value['context']['previous_stop'] in ('provider_unavailable', 'provider_rate_limited')
+            for key in ('previous_stop', 'previous_public_passed', 'generation_calls', 'quality_phase',
+                        'previous_configuration_sha256', 'receipt_sha256', 'validation_sha256'):
+                assert previous['context'][key] == value['context'][key]
+            links.append({'index': index, 'prior_index': index-1, 'prior_input_sha256': proof,
+                'actual_previous_stop': value['context']['previous_stop']})
+        assert len(links) == expected_links
+        assert all('availability_exhaustion_input_sha256' not in value['source'] for value in values
+            if value['context']['previous_public_passed'] is True)
+        result = {'inputs_sha256': hashlib.sha256(body).hexdigest(), 'links': links,
+            'scope': 'Read actual saved DTOs; verify canonical predecessor digest without rerunning policy'}
+        _save(self.artifacts / 'availability-proof-readback.json', result)
+        self.evidence['availability_proof_readback'] = result
+
     def remove_or_corrupt_original_evidence(self, fault):
         internal = self.host.service.internal_id('studio', 'saved-backup-original')
         root = self.host.root / 'receipts'
-        if fault in ('missing_classifier', 'request_hash'):
-            name = 'response.json' if fault == 'missing_classifier' else 'intent.json'
+        if fault in ('missing_classifier', 'request_hash', 'classifier_choice_mismatch'):
+            name = 'intent.json' if fault == 'request_hash' else 'response.json'
             target = root / 'calls' / ('run-' + internal + '-decision-low_mid') / name
         else:
-            assert fault in ('missing_gate', 'missing_initial_gate')
-            target = root / 'runs' / internal / ('backup-selection-0.json'
-                if fault == 'missing_initial_gate' else 'backup-selection-2.json')
+            assert fault in ('missing_gate', 'missing_initial_gate', 'missing_exhaustion_gate')
+            index = 0 if fault == 'missing_initial_gate' else 1 if fault == 'missing_exhaustion_gate' else 2
+            target = root / 'runs' / internal / f'backup-selection-{index}.json'
         original = target.read_bytes()
         archive = self.artifacts / ('original-before-' + fault + '.bin')
         if fault == 'missing_classifier':
@@ -119,8 +150,13 @@ class SavedBackupHTTP:
             value = json.loads(original)
             if fault == 'request_hash':
                 value['request_sha256'] = '0' * 64
+            elif fault == 'classifier_choice_mismatch':
+                raw = json.loads(value['raw'])
+                answer = raw['answers']['low_mid']
+                answer['choice'], answer['probabilities'] = 'mid', {'low': .1, 'mid': .9}
+                value['raw'] = json.dumps(raw)
             else:
-                tier = 'open_source' if fault == 'missing_initial_gate' else 'mid'
+                tier = 'open_source' if fault in ('missing_initial_gate', 'missing_exhaustion_gate') else 'mid'
                 value['health'][tier][0]['assessment'].pop('snapshot_id')
             target.write_text(json.dumps(value))
         info = {'fault': fault, 'target_relative': str(target.relative_to(self.host.root)),
@@ -143,6 +179,7 @@ def saved_backup_http(tmp_path, loopback_network, request):
     recorder, wire = ArtifactRecorder(artifacts), ArtifactRecorder(artifacts, 'upstream')
     options = dict(getattr(request, 'param', {}))
     scenario = options.pop('scenario', 'direct')
+    exhaustion = options.pop('availability_exhaustion', False)
     evidence = {'schema_version': 'saved-backup-http-fixture-v1', 'test': request.node.name,
         'scope': 'Real Backup/Core/BudgetedCore/TaskService admission/Store/Identity/Health; MockTransport upstreams',
         'scheduler': 'Original immediate TaskService admission; no QueueScheduler configured',
@@ -166,6 +203,14 @@ def saved_backup_http(tmp_path, loopback_network, request):
         origin = f'http://127.0.0.1:{server.server_port}'
         host = assemble_backup_host(artifacts / 'service', origin, **options)
         host.scenario = scenario
+        if exhaustion:
+            blocked = host.values['plan']['pools']['open_source'][1]
+            observation = host.values['module'].observation(now=host.values['now'],
+                provider=blocked['entry']['profile']['provider'], configuration=blocked['configuration_sha256'])
+            observation['health']['status'] = 1
+            snapshot = host.health.publish([observation])
+            evidence['original_health_control'] = {'blocked_configuration_sha256': blocked['configuration_sha256'],
+                'snapshot_id': snapshot, 'status': 1, 'scope': 'Original HealthStore publish before original task'}
 
         def record_wire(wire_request):
             wire.capture({'method': wire_request.method, 'path': wire_request.url.path},

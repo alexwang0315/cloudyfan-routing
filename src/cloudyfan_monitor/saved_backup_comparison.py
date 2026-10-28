@@ -275,10 +275,29 @@ def _classifier(source, registered, manifest, result, saved, stage, previous, te
         'cost_known': cost_known, **parsed}
 
 
+def _probabilities_agree(saved, parsed, stage):
+    if saved is None or parsed is None:
+        return saved is None and parsed is None
+    _require(type(saved) is dict and type(parsed) is dict
+        and set(saved) == set(parsed) == set(PAIRS[stage]), 'original_saved_decision_mismatch')
+    values = []
+    for probabilities in (saved, parsed):
+        numbers = {}
+        for key, value in probabilities.items():
+            _require(type(value) is str and len(value) <= 128 and re.fullmatch(
+                r'(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?', value, re.ASCII),
+                'original_saved_decision_mismatch')
+            number = _number(value, probability=True, allow_string=True)
+            _probability_text(number)
+            numbers[key] = number
+        values.append(numbers)
+    return values[0] == values[1]
+
+
 def _classifier_saved_agrees(saved, classifier, reproduced, stage):
     _require(saved.get('stage') == stage and saved.get('selected_tier') == reproduced['selected_tier']
         and saved.get('reported_choice') == classifier['reported_choice']
-        and saved.get('probabilities') == classifier['probabilities']
+        and _probabilities_agree(saved.get('probabilities'), classifier['probabilities'], stage)
         and type(saved.get('fallback')) is bool
         and saved['fallback'] == (reproduced['reason'] != 'reported_choice_applied')
         and saved.get('fallback_reason') == (None if reproduced['reason'] == 'reported_choice_applied'

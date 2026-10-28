@@ -127,6 +127,63 @@ def test_saved_backup_numeric_confidence_and_probabilities_preserve_a_legal_choi
 
 
 @pytest.mark.parametrize('saved_backup_http', [{'classifiers': ('low_mid',),
+    'classifier_reply': 'minimum_exponent_probability'}], indirect=True)
+def test_saved_backup_minimum_exponent_probability_preserves_the_original_valid_choice(saved_backup_http):
+    tracer = saved_backup_http
+    tracer.create_original()
+    original = tracer.client().get('/monitor/snapshot')
+    assert original.status_code == 200
+    task = original.json()['tasks'][0]
+    decision = [row for row in task['trace']['decisions'] if row.get('model')][0]
+    assert decision['fallback'] is False and decision['fallback_reason'] is None
+    assert decision['reported_choice'] == decision['selected_tier'] == 'mid'
+    assert decision['probabilities'] == {'low': '1E-64', 'mid': '1'}
+    assert task['operator_observation']['task_decision']['costs']['complete_api_usd'] == '0.021'
+    assert len(tracer.host.calls) == 3 and len(tracer.validations) == 2
+    before = tracer.snapshot('before-comparison')
+    response = tracer.compare()
+    report = response.json()
+    item = report['items'][0]
+    assert item['original']['task_status'] == 'passed'
+    assert item['reproduction']['status'] == 'reproduced', 'Equivalent scientific and fixed probabilities changed the original choice'
+    decisions = item['reproduction']['decisions']
+    assert decisions[1]['reason'] == 'reported_choice_applied' and decisions[1]['selected_tier'] == 'mid'
+    assert all(row['match'] is True for row in decisions)
+    for _ in range(2):
+        read = tracer.client().get('/monitor/comparisons/' + report['comparison_id'])
+        assert read.status_code == 200 and read.content == response.content
+    assert tracer.snapshot('after-comparison-and-gets') == before
+
+
+@pytest.mark.parametrize('saved_backup_http', [{'classifiers': ('low_mid',),
+    'classifier_reply': 'minimum_exponent_probability'}], indirect=True)
+def test_saved_backup_changed_numeric_probability_cannot_match_the_same_selected_tier(saved_backup_http):
+    tracer = saved_backup_http
+    tracer.create_original()
+    original = tracer.client().get('/monitor/snapshot')
+    assert original.status_code == 200
+    task = original.json()['tasks'][0]
+    decision = [row for row in task['trace']['decisions'] if row.get('model')][0]
+    assert decision['fallback'] is False and decision['reported_choice'] == 'mid'
+    assert decision['probabilities'] == {'low': '1E-64', 'mid': '1'}
+    assert task['operator_observation']['task_decision']['costs']['complete_api_usd'] == '0.021'
+    tracer.remove_or_corrupt_original_evidence('classifier_probability_mismatch')
+    before = tracer.snapshot('before-comparison')
+    response = tracer.compare()
+    report = response.json()
+    item = report['items'][0]
+    assert item['original']['task_status'] == 'passed' and item['reproduction']['status'] == 'partial'
+    decisions = item['reproduction']['decisions']
+    assert decisions[0]['match'] is True and decisions[1]['match'] is None
+    assert decisions[1]['reason'] == 'original_saved_decision_mismatch'
+    assert all(row['match'] is not True for row in decisions[1:])
+    for _ in range(2):
+        read = tracer.client().get('/monitor/comparisons/' + report['comparison_id'])
+        assert read.status_code == 200 and read.content == response.content
+    assert tracer.snapshot('after-comparison-and-gets') == before
+
+
+@pytest.mark.parametrize('saved_backup_http', [{'classifiers': ('low_mid',),
     'classifier_reply': 'bounded_tiny_probability'}], indirect=True)
 def test_saved_backup_unrepresentable_numeric_probability_stops_at_the_affected_point(saved_backup_http):
     tracer = saved_backup_http

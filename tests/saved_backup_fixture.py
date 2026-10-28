@@ -133,7 +133,8 @@ class SavedBackupHTTP:
         internal = self.host.service.internal_id('studio', 'saved-backup-original')
         root = self.host.root / 'receipts'
         if fault in ('missing_classifier', 'request_hash', 'classifier_choice_mismatch',
-                     'classifier_duplicate_key', 'classifier_model', 'classifier_usage'):
+                     'classifier_duplicate_key', 'classifier_model', 'classifier_usage',
+                     'classifier_probability_mismatch'):
             name = 'intent.json' if fault == 'request_hash' else 'response.json'
             target = root / 'calls' / ('run-' + internal + '-decision-low_mid') / name
         else:
@@ -158,6 +159,12 @@ class SavedBackupHTTP:
                 raw = json.loads(value['raw'])
                 answer = raw['answers']['low_mid']
                 answer['choice'], answer['probabilities'] = 'mid', {'low': .1, 'mid': .9}
+                value['raw'] = json.dumps(raw)
+            elif fault == 'classifier_probability_mismatch':
+                raw = json.loads(value['raw'])
+                answer = raw['answers']['low_mid']
+                assert answer['choice'] == 'mid' and answer['probabilities'] == {'low': 1e-64, 'mid': 1}
+                answer['probabilities']['low'] = 1e-63
                 value['raw'] = json.dumps(raw)
             elif fault in ('classifier_duplicate_key', 'classifier_model', 'classifier_usage'):
                 raw = json.loads(value['raw'])
@@ -266,6 +273,9 @@ def saved_backup_http(tmp_path, loopback_network, request):
                 elif classifier_reply == 'bounded_tiny_probability':
                     assert stage == 'low_mid'
                     answer['probabilities'] = {'low': 1e-65, 'mid': 1}
+                elif classifier_reply == 'minimum_exponent_probability':
+                    assert stage == 'low_mid'
+                    answer['choice'], answer['probabilities'] = 'mid', {'low': 1e-64, 'mid': 1}
                 else:
                     assert classifier_reply == 'numeric_confidence'
                     answer['confidence'] = .9

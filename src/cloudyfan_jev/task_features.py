@@ -1,6 +1,8 @@
 """Bounded creation observations; no runner, dispatch, health or model capability."""
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from contextvars import ContextVar
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 import hashlib
 import json
 import math
@@ -11,6 +13,7 @@ import stat
 import time
 from types import MappingProxyType
 
+from . import task_recommendations as advice
 
 SCHEMA = 'creation-task-features-v1'
 POLICY = {
@@ -128,7 +131,11 @@ def fixed_policy(value):
 def validate_adoption(value):
     keys = {'schema_version', 'binding', 'policy', 'policy_sha256',
             'request_sha256', 'registered_sha256'}
-    if not isinstance(value, dict) or set(value) != keys or value['schema_version'] != 'creation-feature-adoption-v1':
+    if isinstance(value, dict) and value.get('schema_version') == 'creation-feature-adoption-v2':
+        keys = keys | {'recommendation'}
+        advice.adoption(value.get('recommendation'))
+    if (not isinstance(value, dict) or set(value) != keys
+            or value['schema_version'] not in ('creation-feature-adoption-v1', 'creation-feature-adoption-v2')):
         raise ValueError('Invalid creation feature adoption')
     binding = value['binding']
     if (not isinstance(binding, dict) or set(binding) != set(BINDING_FIELDS)
@@ -140,6 +147,37 @@ def validate_adoption(value):
             or len(encoded(value)) > POLICY['max_record_bytes']):
         raise ValueError('Unconfirmed creation feature adoption')
     return value
+
+
+def _creation_projection(record, adoption):
+    if adoption['schema_version'] == 'creation-feature-adoption-v1':
+        return {'task_features': public_features(record), 'routing_recommendation': advice.not_provided()}
+    keys = {'schema_version', 'task_features', 'recommendation_input', 'routing_recommendation'}
+    if (not isinstance(record, dict) or set(record) != keys or record['schema_version'] != advice.ENVELOPE
+            or len(encoded(record)) > advice.BOUNDS['new_envelope_bytes']):
+        raise ValueError('Invalid creation observation envelope')
+    features = public_features(record['task_features'])
+    source = advice.frozen_input(record['recommendation_input'])
+    recommendation = advice.public_recommendation(record['routing_recommendation'])
+    expected = adoption['recommendation']
+    binding = features['binding']
+    scope = {'category': binding['category'], 'mode': binding['mode'],
+             'contract_id': binding['contract'], 'registered_sha256': binding['registered_sha256']}
+    if (source['binding'] != scope or source['feature_sha256'] != feature_digest(features)
+            or source['captured_at'] != features['captured_at']
+            or source['rule_version'] != expected['rule_version']
+            or source['data_policy_version'] != expected['data_policy_version']
+            or advice.digest(source['context']) != expected['context_sha256']):
+        raise ValueError('Saved recommendation input differs from original adoption')
+    if source['schema_version'] == 'creation-routing-input-v2' and source['feature_summary'] != features['features']:
+        raise ValueError('Saved recommendation differs from original feature values')
+    if recommendation != advice.unavailable() and (
+            recommendation['feature_sha256'] != source['feature_sha256']
+            or recommendation['context_sha256'] != expected['context_sha256']
+            or recommendation['input_sha256'] != advice.digest(source)
+            or recommendation['captured_at'] != features['captured_at']):
+        raise ValueError('Saved recommendation differs from original features')
+    return {'task_features': features, 'routing_recommendation': recommendation}
 
 
 def public_features(value):
@@ -279,17 +317,17 @@ def _items(prompt, adoption, registered):
     return result
 
 
-def _read_json(path):
+def _read_json(path, *, max_bytes=16384):
     path = Path(path).absolute()
     if path != path.resolve():
         raise ValueError('Unsafe feature path')
-    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     with os.fdopen(fd, 'rb') as stream:
         info = os.fstat(stream.fileno())
-        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size > POLICY['max_record_bytes']:
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size > max_bytes:
             raise ValueError('Unsafe or oversized feature record')
-        body = stream.read(POLICY['max_record_bytes'] + 1)
-    if len(body) > POLICY['max_record_bytes']:
+        body = stream.read(max_bytes + 1)
+    if len(body) > max_bytes:
         raise ValueError('Oversized feature record')
     def unique(pairs):
         result = {}
@@ -298,12 +336,14 @@ def _read_json(path):
                 raise ValueError('Duplicate feature field')
             result[key] = item
         return result
-    return body, json.loads(body, object_pairs_hook=unique)
+    with feature_computation() if max_bytes > POLICY['max_record_bytes'] else nullcontext():
+        value = json.loads(body, object_pairs_hook=unique)
+    return body, value
 
 
-def _write_new(path, body):
+def _write_new(path, body, *, max_bytes=16384):
     path = Path(path).absolute()
-    if len(body) > POLICY['max_record_bytes'] or path != path.resolve():
+    if len(body) > max_bytes or path != path.resolve():
         raise ValueError('Unsafe feature output')
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, 'wb') as stream:
@@ -320,12 +360,240 @@ def _write_new(path, body):
         os.close(descriptor)
 
 
+def _recommendation_plan_bounds(plan):
+    pools = plan.get('pools')
+    if not isinstance(pools, dict) or set(pools) != {'open_source', 'low', 'mid', 'high'}:
+        raise ValueError('Unsupported original candidate structure')
+    if any(not isinstance(rows, list) or not rows for rows in pools.values()):
+        raise ValueError('Unsupported original candidate pool')
+    sizes = {name: len(rows) for name, rows in pools.items()}
+    combinations = (sizes['open_source'] * sizes['low'] * sizes['mid']
+                    + (sizes['low'] + sizes['mid']) * sizes['mid'] * sizes['high'])
+    if sum(sizes.values()) > 12 or combinations > 128:
+        raise ValueError('Exact calibration work exceeds bounds')
+    stages = plan.get('qcs_policy', {}).get('stages', {})
+    if (not isinstance(stages, dict) or any(not isinstance(stage, dict) or not isinstance(stage.get('variants'), dict)
+            for stage in stages.values()) or sum(len(stage['variants']) for stage in stages.values()) > 128):
+        raise ValueError('Exact calibration variant work exceeds bounds')
+
+
+def _calibration_names(plan):
+    _recommendation_plan_bounds(plan)  # Before any cartesian-product helper.
+    from .scores.selector_research import required_contracts
+    required = required_contracts(plan, {'version': plan['qcs_policy']['classifier_version']})
+    provided = {(stage, key) for stage, value in plan['qcs_policy']['stages'].items() for key in value['variants']}
+    if provided != {(needed['stage'], key) for key, needed in required.items()}:
+        raise ValueError('Required exact calibration scope is incomplete or extra')
+    names = {}
+    for stage in plan['qcs_policy']['stages'].values():
+        for variant in stage['variants'].values():
+            files = variant.get('calibration', {}).get('source_files', {})
+            if not isinstance(files, dict) or not 1 <= len(files) <= 16:
+                raise ValueError('Exact source names missing')
+            raw = variant.get('calibration', {}).get('raw_sha256')
+            if not _hash(raw) or raw not in files.values():
+                raise ValueError('Raw calibration SHA is not declared in source_files')
+            for name, expected in files.items():
+                if not isinstance(name, str) or not _hash(expected) or name in names and names[name] != expected:
+                    raise ValueError('Exact source binding differs')
+                names[name] = expected
+                if len(names) > 16:
+                    raise ValueError('Exact source union exceeds bounds')
+    return names
+
+
+def _bounded_calibration_sources(names, root):
+    """Host-only immutable bytes, one bounded union; no product GET calls here."""
+    root = Path(root)
+    forbidden = {'private', 'authoring', 'evaluation', 'credentials', 'credential', 'secrets', 'secret', 'tokens'}
+    def public(path):
+        return not any(part.casefold() in forbidden or Path(part).stem.casefold() in forbidden or part.casefold().startswith('.env')
+                       for part in path.parts)
+    if (not names or len(names) > 16 or not root.is_absolute() or root != root.resolve()
+            or not public(root) or not stat.S_ISDIR(root.lstat().st_mode)):
+        raise ValueError('Controlled public calibration root required')
+    root_info = root.lstat()
+    checked, total = [], 0
+    # Complete union size/type checks precede the first source open.
+    for name, expected in names.items():
+        path = Path(name)
+        if not path.is_absolute() or str(path) != name or path != path.resolve() or not public(path):
+            raise ValueError('Unsafe declared calibration source')
+        path.relative_to(root)
+        info = path.lstat()
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or not 1 <= info.st_size <= 262144:
+            raise ValueError('Unsafe or oversized calibration source')
+        total += info.st_size
+        if total > 1048576:
+            raise ValueError('Calibration source union too large')
+        checked.append((path, info, expected))
+    result, actual_total = {}, 0
+    for path, before, expected in checked:
+        # Bind every ancestor through a directory descriptor. A parent swapped
+        # for a symlink cannot redirect even the open to an unrelated source.
+        directory = os.open('/', os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        try:
+            for part in root.parts[1:]:
+                child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                                dir_fd=directory)
+                os.close(directory)
+                directory = child
+            bound_root = os.fstat(directory)
+            if (bound_root.st_dev, bound_root.st_ino) != (root_info.st_dev, root_info.st_ino):
+                raise ValueError('Calibration root changed before descriptor binding')
+            relative = path.relative_to(root)
+            for part in relative.parts[:-1]:
+                child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                                dir_fd=directory)
+                os.close(directory)
+                directory = child
+            fd = os.open(relative.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+        finally:
+            os.close(directory)
+        try:
+            opened = os.fstat(fd)
+            if (not stat.S_ISREG(opened.st_mode) or opened.st_nlink != 1
+                    or (opened.st_dev, opened.st_ino, opened.st_size, opened.st_mtime_ns, opened.st_ctime_ns)
+                    != (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns, before.st_ctime_ns)):
+                raise ValueError('Calibration source changed before read')
+            chunks, count = [], 0
+            while count <= 262144:
+                allowance = min(262145-count, 1048577-actual_total)
+                if allowance <= 0:
+                    break
+                chunk = os.read(fd, min(65536, allowance))
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                count += len(chunk)
+                actual_total += len(chunk)
+            after = os.fstat(fd)
+            current = path.lstat()
+            if (count != before.st_size or count > 262144 or actual_total > 1048576 or path != path.resolve()
+                    or (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns, after.st_nlink)
+                    != (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns, before.st_ctime_ns, 1)
+                    or (current.st_dev, current.st_ino) != (before.st_dev, before.st_ino)):
+                raise ValueError('Calibration source changed during bounded read')
+            data = b''.join(chunks)
+            if hashlib.sha256(data).hexdigest() != expected:
+                raise ValueError('Exact actual source SHA differs')
+            result[str(path)] = data
+        finally:
+            os.close(fd)
+    current_root = root.lstat()
+    if (current_root.st_dev, current_root.st_ino) != (root_info.st_dev, root_info.st_ino) or root != root.resolve():
+        raise ValueError('Controlled source root changed')
+    return MappingProxyType(result)
+
+
+def _recommendation_calibration(registered, contract, source_config, source_bytes, now, bounds_error=False,
+                                source_unsupported=False):
+    from .scores.catalog import timestamp
+    from .scores.backup_pools import verify_backup_pools
+    from .scores.backup_runtime import BackupCategoryCore
+    from .scores.selector_research import required_contracts, require_mock_transport, validate_selector_calibration
+    plan = registered.get('backup_plan', {})
+    policy = plan.get('qcs_policy', {})
+    stages = policy.get('stages')
+    summary = {'reason': 'exact_classifier_calibration_missing', 'valid_from': None, 'valid_until': None,
+        'sources': [], 'variants': [], 'minimum_saving_usd': '0', 'minimum_saving_fraction': '0', 'max_flow_ms': '0',
+        'candidate_validity': None}
+    if registered['mode'] != 'cloudyfan':
+        return 'missing', 'not_provided', summary
+    if source_unsupported:
+        summary['reason'] = 'exact_calibration_source_schema_unsupported'
+        return 'unsupported', 'not_provided', summary
+    if isinstance(stages, dict) and not stages:
+        return 'missing', 'not_provided', summary
+    if bounds_error:
+        summary['reason'] = 'exact_calibration_bounds_unsupported'
+        return 'unsupported', 'not_provided', summary
+    summary['reason'] = 'exact_classifier_calibration_unverified'
+    if source_config is None:
+        return 'unverified', 'not_provided', summary
+    kind = source_config['data_kind']
+    if source_bytes is None:
+        summary['reason'] = 'exact_calibration_source_unavailable'
+        return 'unverified', kind, summary
+    try:
+        names = _calibration_names(plan)
+        selected = MappingProxyType({name: source_bytes[name] for name in names})
+        if kind == 'offline_fixture':
+            require_mock_transport(contract.runner.core.client)
+            if contract.runner.core.local_backend is not None:
+                raise ValueError('Every offline route must have a verified MockTransport')
+        if not _finite(now):
+            raise ValueError('Trusted bootstrap time unavailable')
+        core = contract.runner.core
+        template_port = getattr(core, 'queue_template', None)
+        template = template_port() if callable(template_port) else core
+        if type(template) is not BackupCategoryCore or template.configuration_descriptor() != core.configuration_descriptor():
+            summary['reason'] = 'exact_calibration_execution_adapter_unsupported'
+            return 'unverified', kind, summary
+        if policy.get('execution_contract') != template.execution_contract_descriptor(registered['version']):
+            summary['reason'] = 'exact_calibration_execution_contract_mismatch'
+            return 'unverified', kind, summary
+        validate_selector_calibration(plan, registered['decision'], data_kind=kind,
+            now=datetime.fromtimestamp(now, timezone.utc).isoformat(), source_bytes=selected)
+        verify_backup_pools(plan, now=datetime.fromtimestamp(now, timezone.utc).isoformat())
+        required = required_contracts(plan, registered['decision'])
+        windows, variants = [], []
+        for key, needed in required.items():
+            row = policy['stages'][needed['stage']]['variants'][key]
+            cal = row['calibration']
+            windows.append((timestamp(cal['retrieved_at']).timestamp(), timestamp(cal['valid_until']).timestamp()))
+            variants.append({**{field: row[field] for field in ('paths', 'classified_paths', 'classifier_cost_usd',
+                'lower_probability', 'classify_flow_ms_upper')}, 'contract_sha256': key,
+                'stage': needed['stage'], 'previous_tier': needed['previous_tier']})
+        provenance = policy['complete_policy_flow']['provenance']
+        windows.append((timestamp(provenance['retrieved_at']).timestamp(), timestamp(provenance['valid_until']).timestamp()))
+        snapshot = plan['snapshot']
+        candidate_windows = [(timestamp(snapshot['created_at']).timestamp(), timestamp(snapshot['valid_until']).timestamp())]
+        source_ends = []
+        catalog_age = timedelta(hours=snapshot['policy']['max_catalog_age_hours'])
+        source_age = float(Decimal(policy.get('max_source_age_hours', '24')) * 3600)
+        for rows in plan['pools'].values():
+            for row in rows:
+                entry = row['entry']
+                provenance = row['evidence']['provenance']
+                candidate_windows.append((timestamp(provenance['retrieved_at']).timestamp(), timestamp(provenance['valid_until']).timestamp()))
+                checked = timestamp(entry['catalog_checked_at'])
+                candidate_windows.append((checked.timestamp(), (checked + catalog_age).timestamp()))
+                role = snapshot['policy'].get('score_role')
+                qualifications = ['category_qualification'] if role == 'category_family_prior' else []
+                if role == 'family_effort_prior' or any(cap.startswith('sql') for cap in plan['requirements']['capabilities']):
+                    qualifications.append('sql_qualification')
+                for field in qualifications:
+                    candidate_windows.append((0, timestamp(entry[field]['valid_until']).timestamp()))
+                for metric in row['evidence']['source_metrics']:
+                    for field in ('retrieved_at', 'as_of'):
+                        if metric.get(field) is not None:
+                            lower = timestamp(metric[field]).timestamp()
+                            candidate_windows.append((lower, float('inf')))
+                            source_ends.append(lower + source_age)
+        summary.update(reason='exact_classifier_calibration_verified',
+            valid_from=max(row[0] for row in windows), valid_until=min(row[1] for row in windows), variants=variants,
+            candidate_validity={'valid_from': max(row[0] for row in candidate_windows),
+                'valid_until': min(row[1] for row in candidate_windows),
+                'valid_through': min(source_ends) if source_ends else None},
+            sources=[{'sha256': hashlib.sha256(data).hexdigest(), 'bytes': len(data)} for data in selected.values()],
+            minimum_saving_usd=policy['minimum_saving_usd'], minimum_saving_fraction=policy['minimum_saving_fraction'],
+            max_flow_ms=policy['max_flow_ms'])
+        advice.calibration_summary(summary, candidate_time=True)
+        return 'verified', kind, summary
+    except Exception:
+        summary['reason'] = 'exact_calibration_scope_or_cost_invalid'
+        return 'unverified', kind, summary
+
+
 class FeatureRecorder:
     """One first-owner capture, independent host seal, then read-only evidence."""
     def __init__(self, root, configuration, contracts):
         self.root = Path(root).absolute()
         self.records = self.root / '.task-features'
         self.policy, self.port, self.registered = None, None, {}
+        self.recommendation_adoptions = MappingProxyType({})
+        self._recommendation_contexts = MappingProxyType({})
         self.compute_clock = time.monotonic
         try:
             if (not {'policy_bundle', 'binding_port'} <= set(configuration)
@@ -347,6 +615,69 @@ class FeatureRecorder:
             # Invalid auxiliary configuration does not reject an original task.
             pass
 
+    def configure_recommendations(self, configuration, contracts, *, now=None):
+        """Explicit producer bootstrap only; readers never build a context."""
+        self.recommendation_adoptions = MappingProxyType({})
+        self._recommendation_contexts = MappingProxyType({})
+        self.recommendation_policy = None
+        if configuration is None:
+            return False
+        if not isinstance(configuration, dict) or set(configuration) - (set(advice.enabled_policy()) | {'calibration_sources'}):
+            raise ValueError('Unsupported host recommendation configuration')
+        policy = advice.policy({key: value for key, value in configuration.items() if key != 'calibration_sources'})
+        source_config = configuration.get('calibration_sources')
+        if source_config is not None and (not isinstance(source_config, dict)
+                or set(source_config) != {'data_kind', 'public_root'}
+                or not isinstance(source_config['data_kind'], str) or not 1 <= len(source_config['data_kind']) <= 160
+                or not isinstance(source_config['public_root'], str)):
+            raise ValueError('Explicit controlled calibration source configuration required')
+        source_unsupported = source_config is not None and source_config['data_kind'] not in ('observed_calibration', 'offline_fixture')
+        if not policy['enabled'] or self.policy is None or self.port is None:
+            return False
+        contexts, adoptions, prepared, source_names = {}, {}, [], {}
+        source_error = False
+        for name, contract in contracts.items():
+            registered = contract.descriptor()
+            original_sha = original_digest(registered)
+            if original_sha != self.registered[name]:
+                raise ValueError('Original feature contract changed during bootstrap')
+            plan = registered.get('backup_plan')
+            plan = plan if isinstance(plan, dict) else {}
+            bounded = True
+            if source_config is not None and not source_unsupported and registered['mode'] == 'cloudyfan' and plan:
+                try:
+                    names = _calibration_names(plan)
+                    for filename, expected in names.items():
+                        if filename in source_names and source_names[filename] != expected:
+                            raise ValueError('Conflicting source digests')
+                        source_names[filename] = expected
+                except Exception:
+                    bounded = False
+            prepared.append((name, contract, registered, original_sha, plan, bounded))
+        actual_sources = None
+        if source_config is not None and not source_unsupported:
+            try:
+                actual_sources = _bounded_calibration_sources(source_names, source_config['public_root'])
+            except Exception:
+                source_error = True
+        for name, contract, registered, original_sha, plan, bounded in prepared:
+            status, kind, summary = _recommendation_calibration(registered, contract, source_config,
+                None if source_error else actual_sources, now, bounds_error=not bounded,
+                source_unsupported=source_unsupported)
+            context = advice.context({
+                'schema_version': 'creation-routing-context-v3', 'contract_id': name,
+                'registered_sha256': original_sha, 'category': plan.get('category_id'), 'mode': registered['mode'],
+                'calibration_status': status, 'source_kind': kind, 'calibration_summary': summary})
+            body = encoded(context)
+            contexts[name] = body
+            adoptions[name] = MappingProxyType({
+                'rule_version': policy['rule_version'], 'data_policy_version': policy['data_policy_version'],
+                'policy_sha256': advice.digest(policy), 'context_sha256': hashlib.sha256(body).hexdigest()})
+        self._recommendation_contexts = MappingProxyType(contexts)
+        self.recommendation_adoptions = MappingProxyType(adoptions)
+        self.recommendation_policy = encoded(policy)
+        return True
+
     @contextmanager
     def operation(self):
         token = _COMPUTE.set(_ComputeBudget(self.compute_clock))
@@ -366,8 +697,14 @@ class FeatureRecorder:
                     if (adoption['binding'] != {key: binding[key] for key in BINDING_FIELDS}
                             or snapshot['adoption_sha256'] != feature_digest(adoption) or snapshot['seal'] is not None):
                         raise ValueError('First binding is not confirmed')
+                    context = None
+                    if adoption['schema_version'] == 'creation-feature-adoption-v2':
+                        if dict(self.recommendation_adoptions.get(binding['contract'], {})) != adoption['recommendation']:
+                            raise ValueError('Original recommendation bootstrap is unavailable')
+                        context = advice.context(json.loads(self._recommendation_contexts[binding['contract']]))
                 owner = {'recorder': self, 'adoption': adoption, 'adoption_sha256': snapshot['adoption_sha256'],
-                         'queue_new': None, 'accepted_at': None, 'attempted': False, 'seal_attempted': False}
+                         'queue_new': None, 'accepted_at': None, 'attempted': False, 'seal_attempted': False,
+                         'recommendation_context': context}
             except Exception:
                 pass
         token = _OWNER.set(owner)
@@ -416,6 +753,25 @@ class FeatureRecorder:
                         'request_sha256': adoption['request_sha256'], 'registered_sha256': adoption['registered_sha256']},
                     'features': items}
                 body = encoded(public_features(record))
+                limit = POLICY['max_record_bytes']
+                if adoption['schema_version'] == 'creation-feature-adoption-v2':
+                    source = advice.frozen_input({
+                        'schema_version': 'creation-routing-input-v2',
+                        'rule_version': adoption['recommendation']['rule_version'],
+                        'data_policy_version': adoption['recommendation']['data_policy_version'],
+                        'captured_at': captured, 'feature_sha256': feature_digest(record),
+                        'binding': {'category': adoption['binding']['category'], 'mode': adoption['binding']['mode'],
+                            'contract_id': adoption['binding']['contract'], 'registered_sha256': adoption['registered_sha256']},
+                        'context': owner['recommendation_context'], 'feature_summary': items})
+                    try:
+                        recommendation = advice.recommend(source)
+                    except Exception:
+                        recommendation = advice.unavailable()
+                    record = {'schema_version': advice.ENVELOPE, 'task_features': record,
+                              'recommendation_input': source, 'routing_recommendation': recommendation}
+                    _creation_projection(record, adoption)
+                    body = encoded(record)
+                    limit = advice.BOUNDS['new_envelope_bytes']
                 record_sha = hashlib.sha256(body).hexdigest()
                 anchor_body = encoded({'schema_version': 'creation-feature-anchor-v1', 'internal_id': directory.name,
                     'adoption_sha256': owner['adoption_sha256'], 'request_sha256': adoption['request_sha256'],
@@ -428,7 +784,7 @@ class FeatureRecorder:
             if self.records != self.records.resolve() or not self.records.is_dir():
                 raise ValueError('Unsafe feature metadata root')
             _write_new(directory / 'creation-feature-anchor.json', anchor_body)
-            _write_new(self.records / (directory.name + '.json'), body)
+            _write_new(self.records / (directory.name + '.json'), body, max_bytes=limit)
             if _OWNER.get() is not owner or owner['seal_attempted']:
                 raise ValueError('Original capture owner no longer available')
             owner['seal_attempted'] = True
@@ -438,37 +794,53 @@ class FeatureRecorder:
             # Preserve partial evidence. Neither recovery nor GET repairs it.
             pass
 
-    def observe(self, principal, run_id, internal_id, job=None, *, require_anchor=True):
+    def observe(self, principal, run_id, internal_id, job=None, *, require_anchor=True, include_recommendation=False):
+        adoption = None
         try:
             if self.port is None or not re.fullmatch(r'http-[a-f0-9]{48}', internal_id):
                 raise ValueError('Feature protocol unavailable')
             snapshot = self.port.snapshot(principal, run_id)
-            adoption = validate_adoption(snapshot['adoption'])
-            if (adoption['binding']['client'] != principal or adoption['binding']['run'] != run_id
-                    or snapshot['adoption_sha256'] != feature_digest(adoption)):
-                raise ValueError('Feature adoption mismatch')
-            seal = snapshot['seal']
-            if (not isinstance(seal, dict) or set(seal) != {'request_sha256', 'registered_sha256', 'record_sha256'}
-                    or seal['request_sha256'] != adoption['request_sha256']
-                    or seal['registered_sha256'] != adoption['registered_sha256'] or not _hash(seal['record_sha256'])):
-                raise ValueError('Independent feature seal missing')
-            body, record = _read_json(self.records / (internal_id + '.json'))
-            if hashlib.sha256(body).hexdigest() != seal['record_sha256']:
-                raise ValueError('Saved feature record differs from original seal')
-            public_features(record)
-            expected = {**adoption['binding'], 'internal_id': internal_id,
-                'request_sha256': adoption['request_sha256'], 'registered_sha256': adoption['registered_sha256']}
-            if record['binding'] != expected or record['adoption_sha256'] != snapshot['adoption_sha256']:
-                raise ValueError('Saved feature binding mismatch')
+            new = snapshot['adoption'].get('schema_version') == 'creation-feature-adoption-v2'
+            with feature_computation() if new else nullcontext():
+                adoption = validate_adoption(snapshot['adoption'])
+                if (adoption['binding']['client'] != principal or adoption['binding']['run'] != run_id
+                        or snapshot['adoption_sha256'] != feature_digest(adoption)):
+                    raise ValueError('Feature adoption mismatch')
+                seal = snapshot['seal']
+                if (not isinstance(seal, dict) or set(seal) != {'request_sha256', 'registered_sha256', 'record_sha256'}
+                        or seal['request_sha256'] != adoption['request_sha256']
+                        or seal['registered_sha256'] != adoption['registered_sha256'] or not _hash(seal['record_sha256'])):
+                    raise ValueError('Independent feature seal missing')
+            limit = (advice.BOUNDS['new_envelope_bytes'] if adoption['schema_version'] == 'creation-feature-adoption-v2'
+                     else POLICY['max_record_bytes'])
+            body, record = _read_json(self.records / (internal_id + '.json'), max_bytes=limit)
+            with feature_computation() if new else nullcontext():
+                if hashlib.sha256(body).hexdigest() != seal['record_sha256']:
+                    raise ValueError('Saved feature record differs from original seal')
+                projected = _creation_projection(record, adoption)
+                features = projected['task_features']
+                expected = {**adoption['binding'], 'internal_id': internal_id,
+                    'request_sha256': adoption['request_sha256'], 'registered_sha256': adoption['registered_sha256']}
+                if features['binding'] != expected or features['adoption_sha256'] != snapshot['adoption_sha256']:
+                    raise ValueError('Saved feature binding mismatch')
             if require_anchor or job is not None:
                 _, anchor = _read_json(self.root / internal_id / 'creation-feature-anchor.json')
-                if (anchor != {'schema_version': 'creation-feature-anchor-v1', 'internal_id': internal_id,
-                        'adoption_sha256': snapshot['adoption_sha256'], 'request_sha256': adoption['request_sha256'],
-                        'registered_sha256': adoption['registered_sha256'], 'record_sha256': seal['record_sha256']}):
-                    raise ValueError('Original acceptance anchor mismatch')
-            if job is not None and (original_digest(job['request']) != adoption['request_sha256']
-                                     or original_digest(job['registered']) != adoption['registered_sha256']):
-                raise ValueError('Original accepted task mismatch')
-            return record
+                with feature_computation() if new else nullcontext():
+                    if (anchor != {'schema_version': 'creation-feature-anchor-v1', 'internal_id': internal_id,
+                            'adoption_sha256': snapshot['adoption_sha256'], 'request_sha256': adoption['request_sha256'],
+                            'registered_sha256': adoption['registered_sha256'], 'record_sha256': seal['record_sha256']}):
+                        raise ValueError('Original acceptance anchor mismatch')
+            with feature_computation() if new else nullcontext():
+                if job is not None and (original_digest(job['request']) != adoption['request_sha256']
+                                         or original_digest(job['registered']) != adoption['registered_sha256']):
+                    raise ValueError('Original accepted task mismatch')
+            if new and not feature_budget_available():
+                raise ValueError('Creation observation compute budget exhausted')
+            return projected if include_recommendation else features
         except Exception:
+            if include_recommendation:
+                result = {'task_features': unavailable()}
+                if adoption is not None and adoption['schema_version'] == 'creation-feature-adoption-v2':
+                    result['routing_recommendation'] = advice.unavailable()
+                return result
             return unavailable()

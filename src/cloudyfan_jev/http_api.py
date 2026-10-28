@@ -23,7 +23,8 @@ from .diagnostics import DiagnosticContract
 from .privacy import ExecutionPolicy, PolicyDenied
 from .retention import (RetentionError, RetentionPolicy, RetentionStore, digest,
                         inventory, open_file_paths, maintenance_lock, purge_exact)
-from .task_features import FeatureRecorder, not_provided, unavailable
+from .task_features import FeatureRecorder, feature_computation, not_provided, unavailable
+from . import task_recommendations as advice
 
 
 class ServiceError(Exception):
@@ -218,6 +219,9 @@ class TaskService:
     @creation_features.setter
     def creation_features(self, configuration):
         """Trusted host-only observation policy and independent binding port."""
+        self._creation_recommendations = None
+        if self._creation_features is not None:
+            self._creation_features.configure_recommendations(None, self.contracts)
         if configuration is None:
             self._creation_features = None
             return  # Disabling new capture must not erase the independent reader.
@@ -235,10 +239,28 @@ class TaskService:
         if recorder.records not in self.retention_protected_paths:
             self.retention_protected_paths += (recorder.records,)
 
+    @property
+    def creation_recommendations(self):
+        return json.loads(self._creation_recommendations) if self._creation_recommendations is not None else None
+
+    @creation_recommendations.setter
+    def creation_recommendations(self, configuration):
+        """Explicit host configuration never enables feature capture implicitly."""
+        self._creation_recommendations = None
+        recorder = self._creation_features
+        if recorder is None:
+            return
+        try:
+            if recorder.configure_recommendations(configuration, self.contracts, now=self.clock()):
+                self._creation_recommendations = recorder.recommendation_policy
+        except Exception:
+            recorder.configure_recommendations(None, self.contracts)
+
     def __init__(self, root, *, contracts, allowed_principal=None, allowed_principals=None, retention_policy=None,
                  principal_active=None, clock=time.time, retention_protected_paths=(), capacity_controller=None):
         self.capacity_controller = capacity_controller
         self._creation_features = None
+        self._creation_recommendations = None
         self._feature_reader = None
         self.clock = clock
         self.queue_scheduler = None
@@ -351,10 +373,17 @@ class TaskService:
         return self.status(principal, payload['run_id'])
 
     def feature_observation(self, principal, run_id, job=None):
+        return self.creation_observation(principal, run_id, job)['task_features']
+
+    def recommendation_observation(self, principal, run_id, job=None, *, client_summary=False):
+        """Trusted host reader only; legacy absence is not inferred disabled."""
+        return self.creation_observation(principal, run_id, job, client_summary=client_summary).get('routing_recommendation')
+
+    def creation_observation(self, principal, run_id, job=None, *, client_summary=False):
         """Trusted host metadata projection; caller retains the original access guard."""
         reader = self._feature_reader or self.creation_features
         if reader is None:
-            return not_provided()
+            return {'task_features': not_provided(), 'routing_recommendation': advice.not_provided()}
         try:
             internal = self.internal_id(principal, run_id)
             require_anchor = True
@@ -366,9 +395,15 @@ class TaskService:
                     # Long-lived operator metadata relies on the independent
                     # seal; expired raw evidence is never reopened to fill it.
                     require_anchor = False
-            return reader.observe(principal, run_id, internal, job, require_anchor=require_anchor)
+            result = reader.observe(principal, run_id, internal, job, require_anchor=require_anchor,
+                                    include_recommendation=True)
+            recommendation = result.get('routing_recommendation', advice.unavailable())
+            if client_summary:
+                with feature_computation():
+                    recommendation = advice.client_summary(recommendation)
+            return {**result, 'routing_recommendation': recommendation}
         except Exception:
-            return unavailable()
+            return {'task_features': unavailable(), 'routing_recommendation': advice.unavailable()}
 
     def _costs(self, principal, run_id, job, *, refresh=False):
         contract = self.contracts.get(job['request']['contract_id'])
@@ -390,7 +425,9 @@ class TaskService:
     @_retained
     def status(self, principal, run_id):
         if self.queue_scheduler is not None and self.queue_scheduler.contains(principal, run_id):
-            return self.queue_scheduler.status(principal, run_id)
+            result = self.queue_scheduler.status(principal, run_id)
+            recommendation = self.recommendation_observation(principal, run_id, client_summary=True)
+            return {**result, 'routing_recommendation': recommendation} if recommendation is not None else result
         return self.queue_task_status(principal, run_id)
 
     @_retained
@@ -429,7 +466,7 @@ class TaskService:
     def _task_status(self, principal, run_id):
         directory, job = self._job(principal, run_id)
         result = {**_read(directory / 'state.json'), 'costs': self._costs(principal, run_id, job),
-                  'task_features': self.feature_observation(principal, run_id, job)}
+                  **self.creation_observation(principal, run_id, job, client_summary=True)}
         if self.capacity_controller is not None:
             try:
                 result['capacity'] = self.capacity_controller.own(self.internal_id(principal, run_id))
@@ -467,7 +504,7 @@ class TaskService:
         else:
             self._registered_contract(job)
         return {'state': {**state, 'costs': self._costs(principal, run_id, job),
-                          'task_features': self.feature_observation(principal, run_id, job)},
+                          **self.creation_observation(principal, run_id, job, client_summary=True)},
                 'completed_result': completed}
 
     @_retained
@@ -478,7 +515,7 @@ class TaskService:
         result = self._verified_completed(principal, run_id, directory, job)
         return {**_read(directory / 'outcome.json'),
                 'provenance': _provenance(result, job['registered']),
-                'task_features': self.feature_observation(principal, run_id, job),
+                **self.creation_observation(principal, run_id, job, client_summary=True),
                 'costs': self._costs(principal, run_id, job, refresh=refresh)}
 
     @_retained

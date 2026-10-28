@@ -406,7 +406,7 @@ def test_rollback_journal_is_not_silently_ignored_by_a_private_sqlite_copy(task_
         assert before[key] == after[key]
 
 
-@pytest.mark.parametrize('code_kind', ['helper', 'parser'])
+@pytest.mark.parametrize('code_kind', ['helper', 'parser', 'window_parser'])
 def test_code_fingerprint_inputs_change_new_report_but_never_refresh_old_report(
         task_features_http, monkeypatch, code_kind):
     from cloudyfan_monitor import saved_comparisons
@@ -416,8 +416,12 @@ def test_code_fingerprint_inputs_change_new_report_but_never_refresh_old_report(
     original = operator.post('/monitor/comparisons', json=body)
     assert original.status_code == 200
     frozen = original.json()
-    target = (Path(saved_comparisons.__file__).with_name('saved_backup_comparison.py') if code_kind == 'helper'
-              else Path(pure.__file__).with_name('routing.py')).absolute()
+    section, filename, module = {
+        'helper': ('host_family_sha256', 'saved_backup_comparison.py', saved_comparisons),
+        'parser': ('core_parser_sha256', 'routing.py', pure),
+        'window_parser': ('core_parser_sha256', 'capacity_windows.py', pure),
+    }[code_kind]
+    target = Path(module.__file__).with_name(filename).absolute()
     variant = tracer.artifacts / ('code-fingerprint-' + code_kind + '.py')
     variant.write_bytes(target.read_bytes() + b'\n# Synthetic comment-only code identity control.\n')
     variant.chmod(0o600)
@@ -443,8 +447,7 @@ def test_code_fingerprint_inputs_change_new_report_but_never_refresh_old_report(
     request_file = Path(tracer.controlled.app.store.path).parent / '.saved-comparisons' / (changed['comparison_id'] + '.request.json')
     implementation = json.loads(request_file.read_bytes())['implementation']
     expected = hashlib.sha256(variant.read_bytes()).hexdigest()
-    assert (implementation['host_family_sha256']['saved_backup_comparison.py'] if code_kind == 'helper'
-            else implementation['core_parser_sha256']['routing.py']) == expected
+    assert implementation[section][filename] == expected
     assert operator.get('/monitor/comparisons/' + frozen['comparison_id']).json() == frozen
     assert code_reads == [code_kind], 'Saved GET reread current code inputs'
     after = tracer.snapshot('after-code-input-' + code_kind)

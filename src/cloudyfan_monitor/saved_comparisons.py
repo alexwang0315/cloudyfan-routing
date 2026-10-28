@@ -580,7 +580,8 @@ def create_report(app, body):
                 'host_validation_sha256': {name: hashlib.sha256(_read(Path(__file__).with_name(name).absolute(), 1048576)).hexdigest()
                     for name in ('store.py', 'observation_fields.py')},
                 'core_parser_sha256': {name: hashlib.sha256(_read(core_source / name, 1048576)).hexdigest()
-                    for name in ('routing.py', 'decisions.py', 'client.py', 'generation_request.py', 'errors.py', 'receipt_store.py')},
+                    for name in ('routing.py', 'decisions.py', 'client.py', 'generation_request.py',
+                        'errors.py', 'receipt_store.py', 'capacity.py', 'capacity_dispatch.py', 'capacity_windows.py')},
                 'runtime': {'python': platform.python_version(), 'sqlite': sqlite3.sqlite_version}}
             request = {'comparison_id': comparison_id, 'created_at': now, 'frozen_at': now,
                        'tasks': tasks, 'policy_version': POLICY, 'implementation': implementation,

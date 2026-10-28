@@ -56,14 +56,15 @@ def test_operator_reproduces_a_saved_original_policy_without_dispatching_another
     assert client.get('/monitor/comparisons/' + report['comparison_id']).status_code == 401
 
 
-def _completed(tracer, run='saved-original-controls'):
+def _completed(tracer, run='saved-original-controls', *, dispatches=1):
     operator, client = tracer.client('operator'), tracer.client('agent')
     capacity = operator.get('/monitor/capacity')
     assert operator.post('/monitor/capacity/activate', json={
         'revision': capacity.json()['dispatch']['revision'], 'version': tracer.controlled.policy_version}).status_code == 200
     assert client.post('/v1/tasks', json={'run_id': run, 'category': tracer.controlled.category,
         'prompt': 'PRIVATE_SAVED_POLICY_CANARY original synthetic task'}).status_code == 202
-    assert tracer.dispatch() is not None
+    for _ in range(dispatches):
+        assert tracer.dispatch() is not None
     assert client.get('/v1/tasks/' + run).json()['status'] == 'passed'
     return operator, {'policy_version': 'original-policy-reproduction-v1',
                       'tasks': [{'client': 'agent', 'run_id': run}]}
@@ -150,6 +151,168 @@ def test_saved_report_reads_do_not_refresh_after_sources_change(task_features_ht
     after = tracer.snapshot('after-source-change-polls')
     for key in ('model_requests', 'source_requests', 'accounting_requests', 'health_sha256',
                 'budget_sqlite_sha256', 'capacity_sha256', 'queue_sha256', 'raw_files_sha256'):
+        assert before[key] == after[key]
+
+
+@pytest.mark.parametrize('limit', ['max_output_bytes', 'max_source_bytes', 'max_source_file_bytes'])
+def test_frozen_report_and_catalog_survive_later_creation_byte_caps(task_features_http, monkeypatch, limit):
+    from cloudyfan_monitor import saved_comparisons
+    tracer = task_features_http
+    operator, body = _completed(tracer)
+    created = operator.post('/monitor/comparisons', json=body)
+    assert created.status_code == 200
+    original = created.json()
+    assert original['items'][0]['reproduction']['status'] == 'reproduced'
+    original_body = created.content
+    before = tracer.snapshot('before-later-creation-byte-limit')
+    # Tighten only future creation admission; the sealed old record retains
+    # its original limits and stays within the stable historical read ceiling.
+    monkeypatch.setitem(saved_comparisons.LIMITS, limit, 1)
+    for _ in range(2):
+        read = operator.get('/monitor/comparisons/' + original['comparison_id'])
+        assert read.status_code == 200, 'A later creation byte cap invalidated a sealed old report'
+        assert read.content == original_body
+    catalog = operator.get('/monitor/comparisons')
+    assert catalog.status_code == 200
+    assert any(row['comparison_id'] == original['comparison_id'] for row in catalog.json()['reports'])
+    rejected = operator.post('/monitor/comparisons', json=body)
+    assert rejected.status_code == 503, 'New creation ignored the tighter byte admission bound'
+    assert operator.get('/monitor/comparisons/' + original['comparison_id']).content == original_body
+    after = tracer.snapshot('after-later-creation-byte-limit')
+    for key in ('model_requests', 'source_requests', 'accounting_requests', 'health_sha256',
+                'budget_sqlite_sha256', 'capacity_sha256', 'queue_sha256'):
+        assert before[key] == after[key]
+
+
+@pytest.mark.parametrize('loss', ['all', 'one'])
+def test_missing_original_budget_events_remain_unknown_without_changing_saved_policy(task_features_http, loss):
+    tracer = task_features_http
+    tracer.controlled.flags['scenario'] = 'availability'
+    operator, body = _completed(tracer, run='original-budget-coverage', dispatches=2)
+    pristine = operator.post('/monitor/comparisons', json=body)
+    assert pristine.status_code == 200
+    original = pristine.json()['items'][0]
+    assert len(original['original']['path']) == 2 and original['reproduction']['status'] == 'reproduced'
+    assert original['original']['costs']['complete_api_usd'] == '0.02'
+    budget = tracer.controlled.budgets['primary'].path
+    internal = tracer.controlled.host.service.internal_id('agent', body['tasks'][0]['run_id'])
+    with sqlite3.connect(budget.as_uri() + '?mode=ro', uri=True, timeout=0) as db:
+        db.row_factory = sqlite3.Row
+        rows = [dict(row) for row in db.execute('SELECT * FROM events WHERE run=? ORDER BY id', (internal,))]
+    assert len(rows) == 2
+    archive = tracer.artifacts / 'original-budget-before-event-loss.sqlite'
+    archive.write_bytes(budget.read_bytes())
+    archive.chmod(0o600)
+    originals = tracer.artifacts / 'original-events-before-loss.json'
+    originals.write_text(json.dumps(rows, sort_keys=True))
+    originals.chmod(0o600)
+    removed = rows if loss == 'all' else rows[:1]
+    with sqlite3.connect(budget) as db:
+        db.executemany('DELETE FROM events WHERE id=?', [(row['id'],) for row in removed])
+    before = tracer.snapshot('before-missing-original-events-comparison')
+    compared = operator.post('/monitor/comparisons', json=body)
+    assert compared.status_code == 200
+    item = compared.json()['items'][0]
+    assert item['original']['path'] == original['original']['path']
+    assert item['reproduction']['status'] == 'reproduced'
+    costs = item['original']['costs']
+    assert costs['complete_api_usd'] is None, 'Missing original events were reported as a complete zero/lower fee'
+    assert costs['unknown_events'] == len(removed)
+    assert costs['known_api_usd'] == ('0' if loss == 'all' else '0.01')
+    for _ in range(2):
+        assert operator.get('/monitor/comparisons/' + compared.json()['comparison_id']).content == compared.content
+    after = tracer.snapshot('after-missing-original-events-comparison')
+    for key in ('model_requests', 'source_requests', 'accounting_requests', 'health_sha256',
+                'budget_sqlite_sha256', 'capacity_sha256', 'queue_sha256'):
+        assert before[key] == after[key]
+
+
+def test_original_queued_task_with_verified_no_events_keeps_legitimate_zero_fee(task_features_http):
+    tracer = task_features_http
+    operator, client = tracer.client('operator'), tracer.client('agent')
+    capacity = operator.get('/monitor/capacity')
+    assert operator.post('/monitor/capacity/activate', json={
+        'revision': capacity.json()['dispatch']['revision'], 'version': tracer.controlled.policy_version}).status_code == 200
+    run = 'original-no-dispatch-zero-fee'
+    assert client.post('/v1/tasks', json={'run_id': run, 'category': tracer.controlled.category,
+        'prompt': 'PRIVATE_NO_DISPATCH_CANARY synthetic queued task'}).status_code == 202
+    assert client.get('/v1/tasks/' + run).json()['status'] == 'queued'
+    before = tracer.snapshot('before-original-no-dispatch-comparison')
+    assert before['model_requests'] == []
+    response = operator.post('/monitor/comparisons', json={
+        'policy_version': 'original-policy-reproduction-v1', 'tasks': [{'client': 'agent', 'run_id': run}]})
+    assert response.status_code == 200
+    item = response.json()['items'][0]
+    assert item['original']['task_status'] == 'queued'
+    assert item['reproduction']['status'] == 'not_evaluable'
+    assert item['original']['costs']['known_api_usd'] == '0'
+    assert item['original']['costs']['complete_api_usd'] == '0'
+    assert item['original']['costs']['unknown_events'] == 0
+    for _ in range(2):
+        assert operator.get('/monitor/comparisons/' + response.json()['comparison_id']).content == response.content
+    after = tracer.snapshot('after-original-no-dispatch-comparison')
+    for key in ('model_requests', 'source_requests', 'accounting_requests', 'health_sha256',
+                'budget_sqlite_sha256', 'capacity_sha256', 'queue_sha256'):
+        assert before[key] == after[key]
+
+
+@pytest.mark.parametrize('prefix', [0, 1])
+def test_auxiliary_capture_prefix_cannot_prove_complete_original_fees(task_features_http, monkeypatch, prefix):
+    tracer = task_features_http
+    tracer.controlled.flags['scenario'] = 'availability'
+    store = tracer.controlled.app.store
+    original_retain = store.retain_metadata
+    refused = []
+
+    def busy_after_prefix(binding, value):
+        if len(value['events']) <= prefix:
+            return original_retain(binding, value)
+        # Hold only the auxiliary writer's real SQLite transaction. The
+        # original public task summary has already committed at this seam.
+        with sqlite3.connect(store.path, timeout=0) as writer:
+            writer.execute('BEGIN IMMEDIATE')
+            result = original_retain(binding, value)
+            refused.append(result)
+            writer.rollback()
+        return result
+
+    monkeypatch.setattr(store, 'retain_metadata', busy_after_prefix)
+    operator, body = _completed(tracer, run='original-auxiliary-prefix', dispatches=2)
+    assert refused and all(result is False for result in refused)
+    with sqlite3.connect(store.path.as_uri() + '?mode=ro', uri=True, timeout=0) as db:
+        cached = json.loads(db.execute('SELECT data FROM tasks WHERE client=? AND run=?',
+            ('agent', body['tasks'][0]['run_id'])).fetchone()[0])
+    retained = cached['_retained_public_metadata']['events']
+    assert len(retained) == prefix and cached['generation_attempts'] == 2
+    budget = tracer.controlled.budgets['primary'].path
+    internal = tracer.controlled.host.service.internal_id('agent', body['tasks'][0]['run_id'])
+    with sqlite3.connect(budget.as_uri() + '?mode=ro', uri=True, timeout=0) as db:
+        db.row_factory = sqlite3.Row
+        originals = [dict(row) for row in db.execute('SELECT * FROM events WHERE run=? ORDER BY id', (internal,))]
+    assert len(originals) == 2
+    archive = tracer.artifacts / 'original-budget-before-prefix-event-loss.sqlite'
+    archive.write_bytes(budget.read_bytes())
+    archive.chmod(0o600)
+    (tracer.artifacts / 'original-auxiliary-prefix.json').write_text(json.dumps({
+        'original_events': originals, 'retained_events': retained, 'refused_writes': refused}, sort_keys=True))
+    retained_ids = {event['id'] for event in retained}
+    with sqlite3.connect(budget) as db:
+        db.executemany('DELETE FROM events WHERE id=?',
+            [(event['id'],) for event in originals if event['id'] not in retained_ids])
+    before = tracer.snapshot('before-auxiliary-prefix-comparison')
+    response = operator.post('/monitor/comparisons', json=body)
+    assert response.status_code == 200
+    item = response.json()['items'][0]
+    assert item['reproduction']['status'] == 'reproduced' and len(item['original']['path']) == 2
+    costs = item['original']['costs']
+    assert costs['known_api_usd'] == ('0' if prefix == 0 else '0.01')
+    assert costs['complete_api_usd'] is None, 'A prior auxiliary prefix was mistaken for final event coverage'
+    assert costs['unknown_events'] is None or costs['unknown_events'] > 0
+    for _ in range(2):
+        assert operator.get('/monitor/comparisons/' + response.json()['comparison_id']).content == response.content
+    after = tracer.snapshot('after-auxiliary-prefix-comparison')
+    for key in ('model_requests', 'source_requests', 'accounting_requests', 'health_sha256',
+                'budget_sqlite_sha256', 'capacity_sha256', 'queue_sha256'):
         assert before[key] == after[key]
 
 

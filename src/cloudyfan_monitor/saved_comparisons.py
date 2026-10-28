@@ -30,6 +30,12 @@ LIMITS = {'max_tasks': 20, 'max_source_files': 256, 'max_source_bytes': 4194304,
           'max_decision_points': 9, 'max_output_bytes': 262144,
           'max_policy_compute_milliseconds': 250, 'worker_cpu_seconds': 2,
           'worker_wall_seconds': 5}
+# Stable ceilings for this stored schema, independent of later creation tuning.
+STORED_READ_MAXIMA = {'max_tasks': 20, 'max_source_files': 256, 'max_source_bytes': 4194304,
+                     'max_source_file_bytes': 1048576, 'max_candidate_configurations': 12,
+                     'max_decision_points': 9, 'max_output_bytes': 262144,
+                     'max_policy_compute_milliseconds': 250, 'worker_cpu_seconds': 2,
+                     'worker_wall_seconds': 5}
 TIERS = ('open_source', 'low', 'mid', 'high')
 MODES = ('cloudyfan', 'fixed_high', 'low_first', 'open_source_first')
 HASH = re.compile(r'[a-f0-9]{64}')
@@ -154,7 +160,7 @@ def _shared(path):
 
 
 @contextmanager
-def _database(path, maximum=1048576, *, capture=None, source_limit=None):
+def _database(path, maximum=1048576, *, capture=None, source_limit=None, file_limit=None):
     # SQLite must never open a live pathname after a separate symlink check.
     # Capture main DB + WAL through the same NOFOLLOW parent/leaf descriptors,
     # checking both generations before/after. SQLite reads only private copies;
@@ -184,7 +190,7 @@ def _database(path, maximum=1048576, *, capture=None, source_limit=None):
                 opened[suffix] = descriptor
                 info = os.fstat(descriptor)
                 if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
-                        or info.st_size > min(limit, LIMITS['max_source_file_bytes'])):
+                        or info.st_size > min(limit, LIMITS['max_source_file_bytes'] if file_limit is None else file_limit)):
                     raise SourceUnavailable('source_database_unsafe_or_oversized')
                 states[suffix] = _identity(info)
             total = sum(state[4] for state in states.values() if state is not None)
@@ -406,11 +412,23 @@ class _Reports:
         except FileNotFoundError:
             fail('comparison_not_found', 404)
         try:
-            seal = strict_json(_read(self.root / (comparison_id + '.seal.json'), 16384))
-            body = _read(self.root / (comparison_id + '.report.json'), LIMITS['max_output_bytes'])
-            inputs = _read(self.root / (comparison_id + '.inputs.json'), LIMITS['max_source_bytes'])
-            report = strict_json(body)
             request = strict_json(request_body)
+            if not isinstance(request, dict):
+                raise SourceUnavailable('comparison_evidence_invalid')
+            saved_limits = request.get('limits')
+            if saved_limits is not None:
+                self.validate_limits(saved_limits)
+            seal = strict_json(_read(self.root / (comparison_id + '.seal.json'), 16384))
+            ceilings = saved_limits if saved_limits is not None else STORED_READ_MAXIMA
+            body = _read(self.root / (comparison_id + '.report.json'), ceilings['max_output_bytes'])
+            inputs = _read(self.root / (comparison_id + '.inputs.json'), ceilings['max_source_bytes'])
+            report = strict_json(body)
+            if not isinstance(report, dict):
+                raise SourceUnavailable('comparison_evidence_invalid')
+            self.validate_limits(report.get('limits'))
+            if (len(body) > report['limits']['max_output_bytes']
+                    or len(inputs) > report['limits']['max_source_bytes']):
+                raise SourceUnavailable('comparison_evidence_invalid')
             if (set(seal) != {'request_sha256', 'report_sha256', 'inputs_sha256', 'comparison_id'}
                     or seal['comparison_id'] != comparison_id or seal['request_sha256'] != hashlib.sha256(request_body).hexdigest()
                     or seal['report_sha256'] != hashlib.sha256(body).hexdigest()
@@ -433,10 +451,18 @@ class _Reports:
         except (OSError, ValueError, SourceUnavailable, TypeError, KeyError):
             fail('comparison_evidence_unavailable', 503)
 
+    @staticmethod
+    def validate_limits(limits):
+        if (not isinstance(limits, dict) or set(limits) != set(STORED_READ_MAXIMA)
+                or any(type(limits[key]) is not int or not 1 <= limits[key] <= ceiling
+                       for key, ceiling in STORED_READ_MAXIMA.items())):
+            raise SourceUnavailable('comparison_evidence_invalid')
+
 
 def catalog(app):
     try:
-        with _database(app.store.path, 32768) as db:
+        with _database(app.store.path, 32768, source_limit=STORED_READ_MAXIMA['max_source_bytes'],
+                       file_limit=STORED_READ_MAXIMA['max_source_file_bytes']) as db:
             rows = [dict(row) for row in db.execute('SELECT client,run,mode,category,created FROM bindings '
                 'ORDER BY created DESC,client,run LIMIT 101')]
         tasks = [{'client': row['client'], 'run_id': row['run'], 'mode': row['mode'],
@@ -735,13 +761,10 @@ def _load_task(context, source, task):
     if expired and trusted is not None:
         # The retained safe envelope, not an expired job/receipt, identifies
         # the original financial authority. A reused contract ID is insufficient.
-        from cloudyfan_monitor.store import retained_metadata
         try:
-            retained = retained_metadata(cached.get('_retained_public_metadata'), binding)
-            account = digest(str(Path(trusted['registered']['budget_store']).absolute()))[:12]
-            if all(row['account'] == account for row in retained['events']):
-                original['costs'] = _original_costs(context, source, trusted['registered'], task, internal,
-                    retained_ids={row['id'] for row in retained['events']})
+            event_ids = _retained_cost_ids(cached, binding, trusted['registered'], internal)
+            original['costs'] = _original_costs(context, source, trusted['registered'], task, internal,
+                                                retained_ids=event_ids)
         except (OSError, ValueError, TypeError, KeyError, sqlite3.Error, SourceUnavailable):
             pass
     if expired:
@@ -766,7 +789,17 @@ def _load_task(context, source, task):
             # different empty account and turn the original fee into zero.
             original['contract_version'] = identifier(registered.get('version'))
             original['routing_version'] = identifier(registered.get('routing_version'))
-            original['costs'] = _original_costs(context, source, registered, task, internal)
+            event_ids = _retained_cost_ids(cached, binding, registered, internal)
+            never_dispatched = False
+            if cached.get('status') in ('bound', 'ready', 'queued'):
+                state = source.read(directory / 'state.json', 'original_task_state')
+                reservations = source.rows(registered['budget_store'], 'SELECT run FROM reservations WHERE run=?',
+                    (internal,), kind='original_task_reservation', maximum=4096, max_rows=1)
+                never_dispatched = (state == {'run_id': task['run_id'], 'status': 'ready'} and not reservations
+                                     and _original_execution_absent(registered['receipt_root'], internal))
+                source.record('original_never_dispatched_check', encoded({'never_dispatched': never_dispatched}))
+            original['costs'] = _original_costs(context, source, registered, task, internal,
+                                                 retained_ids=event_ids, never_dispatched=never_dispatched)
             run = Path(registered['receipt_root']) / 'runs' / internal
             with _shared(run / '.lock'):
                 manifest = source.read(run / 'manifest.json', 'original_manifest')
@@ -851,15 +884,90 @@ def _money(value):
     return number
 
 
-def _original_costs(context, source, registered, task, internal, *, retained_ids=None):
+def _retained_cost_ids(cached, binding, registered, internal):
+    """A prior auxiliary prefix is not a complete terminal event inventory."""
+    from cloudyfan_monitor.store import retained_metadata
+    try:
+        retained = retained_metadata(cached.get('_retained_public_metadata'), binding)
+        account = digest(str(Path(registered['budget_store']).absolute()))[:12]
+        if (registered.get('tool_names') != [] or cached.get('completed_status') not in ('passed', 'failed', 'unverifiable')
+                or any(row['account'] != account or row['run'] != internal for row in retained['events'])):
+            return None
+        trace = cached['trace']
+        attempts = trace['attempts']
+        if (trace.get('complete') is not True or trace.get('basis') != 'verified_core_result'
+                or not isinstance(attempts, list) or not 1 <= len(attempts) <= 9
+                or type(cached.get('generation_attempts')) is not int
+                or cached['generation_attempts'] != len(attempts)
+                or type(cached.get('classifier_calls')) is not int or not 0 <= cached['classifier_calls'] <= 2
+                or any(not isinstance(row.get('calls'), list) for row in attempts)):
+            return None
+        calls = [call for attempt in attempts for call in attempt['calls']]
+        if len(calls) + cached['classifier_calls'] > 64:
+            return None
+        events = retained['events']
+        generation = [row for row in events if row['metadata']['request_kind'] == 'generation']
+        classification = [row for row in events if row['metadata']['request_kind'] == 'classification']
+        def identity(call):
+            return digest({key: call.get(key) for key in ('model', 'provider', 'generation_id')})
+        if (len(events) != len(calls) + cached['classifier_calls']
+                or len(classification) != cached['classifier_calls']
+                or sorted(identity(call) for call in calls) != sorted(identity(row['metadata']) for row in generation)
+                or any(not row['id'].startswith('model:') or len(row['id'].split(':')) != 3
+                    or not row['id'].split(':')[2].startswith('run-' + internal + '-') for row in events)):
+            return None
+        return {row['id'] for row in events}
+    except (ValueError, TypeError, KeyError, AttributeError):
+        return None
+
+
+def _original_execution_absent(receipt_root, internal):
+    # Under the original task's shared lock, Core cannot begin a run. Check
+    # the controlled runs namespace without opening unrelated call payloads.
+    with _parent(Path(receipt_root) / 'runs') as (parent, name):
+        try:
+            runs = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
+        except FileNotFoundError:
+            return True
+        try:
+            try:
+                run = os.open(internal, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=runs)
+            except FileNotFoundError:
+                return True
+            try:
+                # Queue admission may create this deadline before execution.
+                # Any lock/manifest/result or unfamiliar artifact defeats the
+                # no-dispatch proof; do not open or scan call payloads.
+                with os.scandir(run) as entries:
+                    for number, entry in enumerate(entries):
+                        info = entry.stat(follow_symlinks=False)
+                        if (number >= 1 or entry.name != 'backup-deadline.json'
+                                or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size > 16384):
+                            return False
+                return True
+            finally:
+                os.close(run)
+        finally:
+            os.close(runs)
+
+
+def _original_costs(context, source, registered, task, internal, *, retained_ids=None, never_dispatched=False):
     rows = source.rows(registered['budget_store'], 'SELECT id,run,kind,cost FROM events WHERE run=? ORDER BY id LIMIT 65',
                        (internal,), kind='original_budget_events', maximum=4096, max_rows=64)
-    if retained_ids is not None and {row['id'] for row in rows} != retained_ids:
-        raise SourceUnavailable('original_financial_authority_unavailable')
+    observed_ids = {row['id'] for row in rows}
+    missing = len(retained_ids - observed_ids) if retained_ids is not None else None
+    coverage = retained_ids is not None and observed_ids == retained_ids
+    if never_dispatched and not rows:
+        missing, coverage = 0, True
     with localcontext() as arithmetic:
         arithmetic.prec = 512
         known = sum((_money(row['cost']) for row in rows if row['cost'] is not None), Decimal(0))
-    unknown = sum(row['cost'] is None for row in rows)
+    observed_unknown = sum(row['cost'] is None for row in rows)
+    unknown = observed_unknown or None
+    if never_dispatched and not rows:
+        unknown = 0
+    elif retained_ids is not None and not observed_ids - retained_ids:
+        unknown = observed_unknown + missing
     customer = _customer_unprovided()
     charges = source.rows(context['monitor_path'], 'SELECT amount_usd FROM billing_entries '
         "WHERE client=? AND run_id=? AND kind='debit' ORDER BY id LIMIT 65",
@@ -874,7 +982,7 @@ def _original_costs(context, source, registered, task, internal, *, retained_ids
         customer = {'status': 'unknown' if pending else 'available', 'known_usd': format(charged, 'f'),
                     'complete_usd': None if pending else format(charged, 'f'),
                     'unknown_events': len(pending), 'basis': 'original_customer_ledger'}
-    return {'known_api_usd': format(known, 'f'), 'complete_api_usd': None if unknown else format(known, 'f'),
+    return {'known_api_usd': format(known, 'f'), 'complete_api_usd': format(known, 'f') if coverage and unknown == 0 else None,
             'unknown_events': unknown, 'customer_usage_charge': customer}
 
 

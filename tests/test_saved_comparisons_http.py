@@ -4,6 +4,8 @@ from pathlib import Path
 import sqlite3
 import threading
 from dataclasses import replace
+import os
+import signal
 
 from task_features_fixture import task_features_http as task_features_http
 from test_local_http_integration import loopback_network as loopback_network
@@ -324,6 +326,70 @@ def test_reused_contract_cannot_replace_original_fee_authority_with_an_empty_acc
     assert item['original']['costs']['known_api_usd'] is None
     assert not any(row['kind'] == 'original_budget_events' for row in item['evidence'])
     after = tracer.snapshot('after-reused-contract-comparison')
+    for key in ('model_requests', 'source_requests', 'accounting_requests', 'health_sha256',
+                'budget_sqlite_sha256', 'capacity_sha256', 'queue_sha256'):
+        assert before[key] == after[key]
+
+
+def test_original_worker_wall_guard_kills_and_reaps_its_actual_paused_child(task_features_http, monkeypatch):
+    from cloudyfan_monitor import saved_comparisons
+    tracer = task_features_http
+    operator, body = _completed(tracer)
+    original_popen = saved_comparisons.subprocess.Popen
+    owned = []
+
+    def paused_worker(argv, *args, **kwargs):
+        process = original_popen(argv, *args, **kwargs)
+        if (isinstance(argv, list) and len(argv) > 4 and argv[1:4] == ['-I', '-S', '-c']
+                and 'from cloudyfan_monitor.saved_comparisons import _worker' in argv[4]):
+            os.kill(process.pid, signal.SIGSTOP)
+            owned.append(process)
+        return process
+
+    monkeypatch.setattr(saved_comparisons.subprocess, 'Popen', paused_worker)
+    before = tracer.snapshot('before-real-worker-wall-control')
+    # This new control waits for the existing five-second product guard. It
+    # changes neither that guard nor any original test/client timeout.
+    response = operator.post('/monitor/comparisons', json=body, timeout=7)
+    assert response.status_code == 200
+    report = response.json()
+    assert report['status'] == 'incomplete'
+    assert report['items'][0]['reproduction']['reasons'] == ['comparison_worker_timeout']
+    assert len(owned) == 1 and owned[0].returncode is not None
+    receipt_path = Path(tracer.controlled.app.store.path).parent / '.saved-comparisons' / (report['comparison_id'] + '.worker.json')
+    receipt = json.loads(receipt_path.read_bytes())
+    assert receipt['pid'] == owned[0].pid and receipt['timed_out'] is True and receipt['reaped'] is True
+    try:
+        os.kill(owned[0].pid, 0)
+    except ProcessLookupError:
+        pass
+    else:
+        raise AssertionError('Actual comparison child was not gone after the original wall guard')
+    assert operator.get('/monitor/comparisons/' + report['comparison_id']).json() == report
+    after = tracer.snapshot('after-real-worker-wall-control')
+    for key in ('model_requests', 'source_requests', 'accounting_requests', 'health_sha256',
+                'budget_sqlite_sha256', 'capacity_sha256', 'queue_sha256'):
+        assert before[key] == after[key]
+
+
+def test_rollback_journal_is_not_silently_ignored_by_a_private_sqlite_copy(task_features_http):
+    tracer = task_features_http
+    operator, body = _completed(tracer)
+    budget = tracer.controlled.budgets['primary'].path
+    journal = Path(str(budget) + '-journal')
+    before = tracer.snapshot('before-rollback-journal-control')
+    original = budget.read_bytes()
+    marker = b'PRIVATE_ROLLBACK_JOURNAL_CANARY'
+    journal.write_bytes(marker)
+    response = operator.post('/monitor/comparisons', json=body)
+    assert response.status_code == 200
+    item = response.json()['items'][0]
+    assert item['reproduction']['status'] == 'not_evaluable'
+    assert item['original']['costs']['complete_api_usd'] is None
+    assert journal.read_bytes() == marker and budget.read_bytes() == original
+    assert 'PRIVATE_ROLLBACK_JOURNAL_CANARY' not in response.text
+    journal.rename(journal.with_name('rejected-original-rollback-journal'))
+    after = tracer.snapshot('after-rollback-journal-control')
     for key in ('model_requests', 'source_requests', 'accounting_requests', 'health_sha256',
                 'budget_sqlite_sha256', 'capacity_sha256', 'queue_sha256'):
         assert before[key] == after[key]

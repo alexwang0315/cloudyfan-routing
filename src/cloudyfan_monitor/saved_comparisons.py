@@ -3,7 +3,7 @@
 Only a bounded value DTO crosses into the Core policy comparator. The short-lived
 loader process receives paths/values, never a service, model client or callback.
 """
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from decimal import Decimal, localcontext
 import fcntl
 import hashlib
@@ -164,6 +164,15 @@ def _database(path, maximum=1048576, *, capture=None, source_limit=None):
     with _parent(Path(path).absolute()) as (parent, name), tempfile.TemporaryDirectory(prefix='cloudyfan-comparison-') as temporary:
         opened, states, captured = {}, {}, {}
         try:
+            def no_rollback_journal():
+                try:
+                    os.stat(name + '-journal', dir_fd=parent, follow_symlinks=False)
+                except FileNotFoundError:
+                    return
+                # A captured main file alone must not make an uncommitted or
+                # recovery-required rollback transaction look committed.
+                raise SourceUnavailable('source_database_recovery_or_writer_present')
+            no_rollback_journal()
             for suffix in ('', '-wal'):
                 try:
                     descriptor = os.open(name + suffix, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
@@ -198,6 +207,7 @@ def _database(path, maximum=1048576, *, capture=None, source_limit=None):
                     current = None
                 if current != states[suffix] or (suffix in opened and _identity(os.fstat(opened[suffix])) != current):
                     raise SourceUnavailable('source_database_changed')
+            no_rollback_journal()
             snapshot = Path(temporary) / 'snapshot.sqlite'
             for suffix, body in captured.items():
                 target = Path(str(snapshot) + suffix)
@@ -219,6 +229,7 @@ def _database(path, maximum=1048576, *, capture=None, source_limit=None):
                 connection.set_progress_handler(bounded, 1000)
                 connection.execute('BEGIN')
                 yield connection
+                connection.set_progress_handler(None, 0)
                 connection.rollback()
             finally:
                 connection.close()
@@ -275,6 +286,32 @@ class _Sources:
         self.bytes = self.files = 0
         self.evidence = []
         self.limited = False
+        self.compute_milliseconds = 0.0
+        self.databases = {}
+        self.current_database_refs = set()
+        self.snapshots = ExitStack()
+
+    def begin_task(self):
+        self.current_database_refs = set()
+
+    def close(self):
+        self.snapshots.close()
+
+    def reproduce(self, values):
+        """Budget all pure decisions in this report; pass values only to Core."""
+        from cloudyfan_jev.saved_policy_comparison import reproduce_original_policy
+        if self.compute_milliseconds >= LIMITS['max_policy_compute_milliseconds']:
+            self.limited = True
+            raise SourceUnavailable('comparison_compute_limit')
+        started = time.monotonic()
+        try:
+            result = reproduce_original_policy(values)
+        finally:
+            self.compute_milliseconds += (time.monotonic() - started) * 1000
+        if self.compute_milliseconds > LIMITS['max_policy_compute_milliseconds']:
+            self.limited = True
+            raise SourceUnavailable('comparison_compute_limit')
+        return result
 
     def record(self, kind, body):
         if self.bytes + len(body) > LIMITS['max_source_bytes'] or self.files + 1 > LIMITS['max_source_files']:
@@ -293,14 +330,33 @@ class _Sources:
 
     def rows(self, path, query, params=(), *, kind, maximum=1048576, max_rows=66):
         remaining = LIMITS['max_source_bytes'] - self.bytes
-        if remaining < maximum or self.files >= LIMITS['max_source_files']:
+        if remaining <= 0 or self.files >= LIMITS['max_source_files']:
             self.limited = True
             raise SourceUnavailable('source_work_limit')
-        with _database(path, min(maximum, remaining), capture=self.record, source_limit=remaining) as db:
+        key = str(Path(path).absolute())
+        if key not in self.databases:
+            # One captured generation per DB inside this fresh report. This
+            # avoids repeatedly reading the same historical Health/Budget DB
+            # and keeps all subsequent queries on the same frozen source.
+            start = len(self.evidence)
+            db = self.snapshots.enter_context(_database(path, capture=self.record, source_limit=remaining))
+            self.databases[key] = db, list(self.evidence[start:])
+            self.current_database_refs.add(key)
+        db, references = self.databases[key]
+        if key not in self.current_database_refs:
+            # Cite the same captured generation in every item which uses it;
+            # a reference is not another source read or byte-budget debit.
+            self.evidence.extend(dict(row) for row in references)
+            self.current_database_refs.add(key)
+        previous = db.setlimit(sqlite3.SQLITE_LIMIT_LENGTH,
+                               min(maximum, LIMITS['max_source_bytes'] - self.bytes))
+        try:
             cursor = db.execute(query, params)
             result = [dict(row) for row in cursor.fetchmany(max_rows + 1)]
             if len(result) > max_rows:
                 raise SourceUnavailable('source_work_limit')
+        finally:
+            db.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, previous)
         self.record(kind, encoded(result))
         return result
 
@@ -535,6 +591,8 @@ def create_report(app, body):
                           'reaped': process.returncode is not None,
                           'loaded_source_bytes': outcome.get('loaded_source_bytes'),
                           'loaded_source_files': outcome.get('loaded_source_files'),
+                          'policy_compute_milliseconds': outcome.get('policy_compute_milliseconds'),
+                          'worker_limits': outcome.get('worker_limits'),
                           'network_attempts': outcome.get('network_attempts'),
                           'stdout_sha256': hashlib.sha256(_read(stdout_path, LIMITS['max_source_bytes'])).hexdigest(),
                           'stderr_sha256': hashlib.sha256(_read(stderr_path, LIMITS['max_source_bytes'])).hexdigest()}, 16384)
@@ -561,6 +619,8 @@ def _worker():
         setattr(socket, name, no_network)
     context = strict_json(sys.stdin.buffer.read(LIMITS['max_source_bytes'] + 1))
     outcome = _load_scope(context)
+    outcome['worker_limits'] = {'cpu_seconds': list(resource.getrlimit(resource.RLIMIT_CPU)),
+                                'file_bytes': list(resource.getrlimit(resource.RLIMIT_FSIZE))}
     outcome['network_attempts'] = len(attempts)
     if attempts:
         raise SourceUnavailable('comparison_network_forbidden')
@@ -573,15 +633,23 @@ def _worker():
 def _load_scope(context):
     source = _Sources()
     items, frozen = [], []
-    for task in context['tasks']:
-        try:
-            item, values = _load_task(context, source, task)
-        except (OSError, ValueError, TypeError, KeyError, sqlite3.Error, SourceUnavailable):
-            item, values = _unknown(task, 'original_evidence_unavailable'), None
-        items.append(item)
-        frozen.append({'task': task, 'values': values, 'evidence': item['evidence']})
+    try:
+        for task in context['tasks']:
+            source.begin_task()
+            try:
+                if source.limited:
+                    item, values = _unknown(task, 'comparison_work_limit'), None
+                else:
+                    item, values = _load_task(context, source, task)
+            except (OSError, ValueError, TypeError, KeyError, sqlite3.Error, SourceUnavailable):
+                item, values = _unknown(task, 'original_evidence_unavailable'), None
+            items.append(item)
+            frozen.append({'task': task, 'values': values, 'evidence': item['evidence']})
+    finally:
+        source.close()
     return {'items': items, 'data_sha256': digest(frozen), 'frozen_inputs': frozen, 'incomplete': source.limited,
-            'loaded_source_bytes': source.bytes, 'loaded_source_files': source.files}
+            'loaded_source_bytes': source.bytes, 'loaded_source_files': source.files,
+            'policy_compute_milliseconds': source.compute_milliseconds}
 
 
 def _load_task(context, source, task):
@@ -686,9 +754,8 @@ def _load_task(context, source, task):
                 receipts = _original_receipts(source, registered, manifest, result, internal, run)
                 values, decisions = _reproduce_saved(source, binding, job, manifest, result, run, trusted,
                     original_path=original['path'], receipts=receipts)
-                status = 'reproduced' if decisions and all(row['match'] is True for row in decisions) else 'partial'
-                if not decisions:
-                    status = 'unknown'
+                status = ('reproduced' if decisions and all(row['match'] is True for row in decisions)
+                          else 'partial' if any(row['match'] is True for row in decisions) else 'unknown')
                 reasons = list(dict.fromkeys(row['reason'] for row in decisions)) or ['original_decision_inputs_unavailable']
                 return {'task': dict(task), 'original': original, 'reproduction': {
                     'status': status, 'scope': 'decision_from_saved_inputs', 'adopted': False,
@@ -898,7 +965,7 @@ def _reproduce_saved(source, binding, job, manifest, result, run, trusted, *, or
 
 
 def _reproduce_backup_initial(source, binding, job, manifest, result, run, trusted, *, original_path, receipts):
-    from cloudyfan_jev.saved_policy_comparison import candidate_set_digest, reproduce_original_policy
+    from cloudyfan_jev.saved_policy_comparison import candidate_set_digest
     policy = manifest['routing_version']
     if policy != 'qcs-backup-policy-v1':
         return [], []  # Other families remain explicit unknown until original inputs are supported.
@@ -915,7 +982,7 @@ def _reproduce_backup_initial(source, binding, job, manifest, result, run, trust
                     'generation_calls': 0, 'receipt_sha256': None, 'validation_sha256': None},
         'candidates': candidates, 'economics': None, 'classifier': None}
     started = time.monotonic()
-    reproduced = reproduce_original_policy(values)
+    reproduced = source.reproduce(values)
     if (time.monotonic() - started) * 1000 > LIMITS['max_policy_compute_milliseconds']:
         raise SourceUnavailable('comparison_compute_limit')
     path = original_path
@@ -939,7 +1006,7 @@ def _reproduce_backup_initial(source, binding, job, manifest, result, run, trust
             'previous_public_passed': True, 'previous_stop': 'validation_passed', 'quality_phase': 0,
             'generation_calls': len(result['attempts'][0]['calls']), 'receipt_sha256': receipts[0]['receipts_sha256'],
             'validation_sha256': receipts[0]['validation_sha256']}
-        stop = reproduce_original_policy(stopped)
+        stop = source.reproduce(stopped)
         decisions.append({'index': 1, 'stage': 'after_validation', 'action': stop['action'],
             'selected_tier': stop['selected_tier'], 'config_id': None, 'reason': stop['reason'],
             'match': stop['status'] == 'reproduced' and stop['action'] == 'stop'})

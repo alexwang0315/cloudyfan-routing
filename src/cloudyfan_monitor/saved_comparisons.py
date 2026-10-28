@@ -160,6 +160,21 @@ def _shared(path):
 
 
 @contextmanager
+def _unchanged(*paths):
+    # Core takes each task's directory and retention locks exclusive and
+    # non-blocking for polls, creation and scheduler execution. Holding them
+    # shared, even briefly, turns a concurrent dispatch into task_busy. Read
+    # without them and require the task's mutable files to be byte-identical
+    # after every dependent read; any change leaves this task unknown.
+    def fingerprint():
+        return [hashlib.sha256(_read(path, LIMITS['max_source_file_bytes'])).digest() for path in paths]
+    before = fingerprint()
+    yield
+    if fingerprint() != before:
+        raise SourceUnavailable('source_changed_during_read')
+
+
+@contextmanager
 def _database(path, maximum=1048576, *, capture=None, source_limit=None, file_limit=None):
     # SQLite must never open a live pathname after a separate symlink check.
     # Capture main DB + WAL through the same NOFOLLOW parent/leaf descriptors,
@@ -625,12 +640,15 @@ def create_report(app, body):
             stdout_path, stderr_path = (reports.root / (comparison_id + ending) for ending in ('.worker.stdout', '.worker.stderr'))
             timed_out = False
             started = time.time()
-            with stdout_path.open('xb') as stdout, stderr_path.open('xb') as stderr:
+            # The worker copies original stores into its TMPDIR. A wall or CPU
+            # kill skips its own cleanup, so this parent owns that directory.
+            with (stdout_path.open('xb') as stdout, stderr_path.open('xb') as stderr,
+                  tempfile.TemporaryDirectory(prefix='cloudyfan-comparison-', dir=os.environ.get('TMPDIR')) as scratch):
                 os.fchmod(stdout.fileno(), 0o600)
                 os.fchmod(stderr.fileno(), 0o600)
                 process = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=stdout, stderr=stderr,
                     close_fds=True, env={'PATH': os.environ.get('PATH', ''), 'PYTHONDONTWRITEBYTECODE': '1',
-                                       **({'TMPDIR': os.environ['TMPDIR']} if 'TMPDIR' in os.environ else {})})
+                                       'TMPDIR': scratch})
                 try:
                     process.communicate(input=control, timeout=LIMITS['worker_wall_seconds'])
                     code = process.returncode
@@ -775,8 +793,8 @@ def _load_task(context, source, task):
     registered = trusted['registered']
     directory = Path(context['tasks_root']) / internal
     try:
-        with (_shared(Path(context['retention_path']).parent / (internal + '.lock')),
-              _shared(directory / '.lock')):
+        with _unchanged(directory / 'job.json', *([directory / 'state.json']
+                        if cached.get('status') in ('bound', 'ready', 'queued') else [])):
             job = source.read(directory / 'job.json', 'original_task_job')
             request = job['request']
             if (job['registered'] != registered or request['run_id'] != task['run_id']

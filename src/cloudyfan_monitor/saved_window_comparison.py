@@ -5,7 +5,7 @@ All reads/SQLite projections and locks use the comparison loader's existing
 bounded source protocol. No window backend, controller or execution callback is
 constructed. The only result is open or one original allowlisted exclusion code.
 """
-from contextlib import ExitStack
+from contextlib import nullcontext
 from email.utils import format_datetime, parsedate_to_datetime
 import errno
 import hashlib
@@ -78,16 +78,13 @@ def _one(source, path, query, params, kind):
 
 
 def _locks(access, internal, registered=None):
-    stack = ExitStack()
-    try:
-        stack.enter_context(_shared(Path(access['retention_path']).parent / (internal + '.lock')))
-        stack.enter_context(_shared(Path(access['tasks_root']) / internal / '.lock'))
-        if registered is not None:
-            stack.enter_context(_shared(Path(registered['receipt_root']) / 'runs' / internal / '.lock'))
-        return stack
-    except BaseException:
-        stack.close()
-        raise
+    # Never hold Core's exclusive non-blocking task/retention locks; see
+    # saved_comparisons._unchanged. The legal check reads only job.json, once
+    # and after expiry, so _read's own change check suffices. Run receipts keep
+    # the run lock, which Core waits for instead of failing.
+    if registered is None:
+        return nullcontext()
+    return _shared(Path(registered['receipt_root']) / 'runs' / internal / '.lock')
 
 
 def _legal_task(source, access, task):

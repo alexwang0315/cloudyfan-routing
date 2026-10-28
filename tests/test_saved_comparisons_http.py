@@ -619,3 +619,56 @@ def test_code_fingerprint_inputs_change_new_report_but_never_refresh_old_report(
     for key in ('model_requests', 'source_requests', 'accounting_requests', 'health_sha256',
                 'budget_sqlite_sha256', 'capacity_sha256', 'queue_sha256'):
         assert before[key] == after[key]
+
+
+def test_comparison_takes_no_core_task_or_retention_lock(task_features_http):
+    # Core takes these two locks exclusive and non-blocking for customer polls,
+    # creation and scheduler execution. A comparison holding them shared, even
+    # briefly, turns a concurrent dispatch into task_busy/interrupted_pending.
+    from cloudyfan_jev.http_api import _lock
+    from cloudyfan_monitor.saved_comparisons import _task_id
+    tracer = task_features_http
+    operator, body = _completed(tracer, run='core-held-task-locks')
+    service = tracer.controlled.host.service
+    internal = _task_id('agent', 'core-held-task-locks')
+    before = tracer.snapshot('before-comparison-under-core-task-locks')
+    with service.retention.guard(internal), _lock(service.root / internal):
+        created = operator.post('/monitor/comparisons', json=body)
+    assert created.status_code == 200
+    item = created.json()['items'][0]
+    assert item['reproduction']['status'] == 'reproduced', item['reproduction']
+    assert 'source_busy' not in json.dumps(item)
+    after = tracer.snapshot('after-comparison-under-core-task-locks')
+    for key in ('model_requests', 'source_requests', 'accounting_requests', 'health_sha256',
+                'budget_sqlite_sha256', 'capacity_sha256', 'queue_sha256'):
+        assert before[key] == after[key]
+
+
+def test_killed_worker_leaves_no_private_source_copies(task_features_http, monkeypatch, tmp_path):
+    # The worker copies original stores into its TMPDIR. A wall/CPU kill skips
+    # its own cleanup, so the parent must own and remove that directory.
+    from cloudyfan_monitor import saved_comparisons
+    tracer = task_features_http
+    operator, body = _completed(tracer, run='killed-worker-copies')
+    inherited = tmp_path / 'inherited-tmp'
+    inherited.mkdir(mode=0o700)
+    monkeypatch.setenv('TMPDIR', str(inherited))
+    original_popen = saved_comparisons.subprocess.Popen
+    scratch = []
+
+    def paused_worker(argv, *args, **kwargs):
+        process = original_popen(argv, *args, **kwargs)
+        if (isinstance(argv, list) and len(argv) > 4 and argv[1:4] == ['-I', '-S', '-c']
+                and 'from cloudyfan_monitor.saved_comparisons import _worker' in argv[4]):
+            os.kill(process.pid, signal.SIGSTOP)
+            directory = Path(kwargs['env']['TMPDIR'])
+            scratch.append(directory)
+            (directory / 'monitor-copy.sqlite').write_bytes(b'PRIVATE_SAVED_POLICY_CANARY leftover copy')
+        return process
+
+    monkeypatch.setattr(saved_comparisons.subprocess, 'Popen', paused_worker)
+    response = operator.post('/monitor/comparisons', json=body, timeout=7)
+    assert response.status_code == 200
+    assert response.json()['items'][0]['reproduction']['reasons'] == ['comparison_worker_timeout']
+    assert len(scratch) == 1 and scratch[0].parent == inherited
+    assert not scratch[0].exists() and list(inherited.iterdir()) == []

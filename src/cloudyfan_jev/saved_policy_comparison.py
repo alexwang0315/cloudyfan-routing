@@ -320,6 +320,8 @@ def _economic_choice(value, stage, pair):
     if economic is None or economic['calibration'] == 'unknown':
         raise _Unavailable('original_economics_unavailable')
     backup = value['policy_version'] == 'qcs-backup-policy-v1'
+    if not backup and economic['calibration'] != 'present':
+        raise _Unavailable('original_economics_unavailable')
     missing = backup and (economic['calibration'] == 'missing' or len(pair) == 1)
     if missing:
         paths = {tier: {'cost_usd': row['complete_cost_usd'], 'flow_ms_upper': row['flow_ms_upper']}

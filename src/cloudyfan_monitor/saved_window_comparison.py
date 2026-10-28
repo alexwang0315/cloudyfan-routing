@@ -7,6 +7,7 @@ constructed. The only result is open or one original allowlisted exclusion code.
 """
 from contextlib import ExitStack
 from email.utils import format_datetime, parsedate_to_datetime
+import errno
 import hashlib
 import json
 from pathlib import Path
@@ -150,13 +151,16 @@ def _bundle(source, access, legal):
         _require(policy['version'] == adoption['policy_version']
             and policy['configuration_version'] == adoption['configuration_version']
             and policy['protocol'] == adoption['protocol'] and type(policy['routes']) is list
-            and 1 <= len(policy['routes']) <= 512 and identifier(policy.get('windows_version')) is not None)
+            and 1 <= len(policy['routes']) <= 512
+            and (policy.get('windows_version') is None or identifier(policy['windows_version']) is not None))
         saved = _one(source, path, 'SELECT version,digest,payload FROM capacity_configurations WHERE version=?',
                      (adoption['configuration_version'],), 'original_window_capacity_configuration')
         config = strict_json(saved['payload'])
         _require(saved['version'] == config['version'] == adoption['configuration_version']
             and saved['digest'] == policy['configuration_sha256'] == _hash(config)
             and config['schema_version'] == 1 and type(config['bindings']) is list and type(config['groups']) is list)
+        if policy.get('windows_version') is None:
+            return adoption, policy, config, None
         definition = strict_json(_one(source, path, 'SELECT payload FROM capacity_window_policies WHERE version=?',
             (policy['windows_version'],), 'original_window_definition')['payload'])
         _require(definition['protocol'] == 'capacity-windows-v1' and definition['version'] == policy['windows_version']
@@ -171,10 +175,13 @@ def _bundle(source, access, legal):
     return _memo(source, key, load)
 
 
-def _scope(bundle, profile):
+def _scope(bundle, profile, registered):
     _, policy, config, definition = bundle
+    # Model transports use the original registered receipt root and no tool
+    # configuration. A policy may include other lanes for the same provider.
+    transport = _hash({'root': str(Path(registered['receipt_root']).absolute()), 'configuration': None})
     routes = [r for r in policy['routes'] if r['model'] == profile['model_version']
-              and r['provider_name'] == profile['provider_name']]
+              and r['provider_name'] == profile['provider_name'] and r['transport_sha256'] == transport]
     _require(len(routes) == 1)
     route = routes[0]
     bindings = [b for b in config['bindings'] if b['id'] == route['binding']]
@@ -184,7 +191,7 @@ def _scope(bundle, profile):
     _require(len(groups) == len(set(binding['groups'])) and groups)
     physical = {_hash(g['scope']): g for g in groups}
     _require(len(physical) == len(groups))
-    rules = [r for r in definition['rules'] if r['binding'] == binding['id']]
+    rules = [] if definition is None else [r for r in definition['rules'] if r['binding'] == binding['id']]
     for rule in rules:
         _require(set(rule) == {'binding', 'group', 'header', 'format', 'constraint'}
             and rule['group'] in binding['groups'] and rule['header'] in HEADERS - {'date'}
@@ -225,7 +232,8 @@ def _prefix(source, access, bundle, physical, revision):
                 and raw_policy['windows_version'] == bundle[3]['version'])
             _require(value['observed_at'] is None or _capacity_time(value['observed_at']))
             if value['status'] == 'wait':
-                _require(_capacity_time(value['not_before']) and value['reported_not_before'] == value['not_before']
+                _require(_capacity_time(value['not_before']) and _capacity_time(value['reported_not_before'])
+                    and value['reported_not_before'] == value['not_before']
                     and _capacity_time(value['observed_at']) and value['observed_at'] <= value['not_before']
                     <= value['observed_at'] + bundle[3]['max_delay_seconds']
                     and value['reason_code'] == 'capacity_window_wait')
@@ -357,9 +365,21 @@ def _references(source, access, current, rows):
             legal = _legal_task(source, access, task)
             calls = _calls(source, access, legal)
         except SourceUnavailable as error:
-            if source.limited:
+            if source.limited or error.args[0] in ('source_work_limit', 'comparison_compute_limit'):
                 raise
             blocked = error.args[0]
+            continue
+        except (OSError, ValueError, TypeError, KeyError, AttributeError, sqlite3.Error) as error:
+            # A broken unrelated selected task is not an authority for, or a
+            # prerequisite of, another task's reference. Global limits remain fatal.
+            if (source.limited
+                    or isinstance(error, OSError) and error.errno in (
+                        errno.ENOMEM, errno.EMFILE, errno.ENFILE, errno.ENOSPC, errno.EDQUOT,
+                        errno.EFBIG, errno.EINTR)
+                    or isinstance(error, sqlite3.Error) and getattr(error, 'sqlite_errorcode', 0) & 255 in (
+                        sqlite3.SQLITE_NOMEM, sqlite3.SQLITE_FULL, sqlite3.SQLITE_INTERRUPT, sqlite3.SQLITE_TOOBIG)):
+                raise
+            blocked = INVALID
             continue
         for call in calls:
             for identity, row in list(remaining.items()):
@@ -379,7 +399,7 @@ def verify_recorded_window(source, trusted, window, profile):
         _require(type(window) is dict and set(window) == FIELDS
             and window['status'] in ('open', 'wait', 'unknown')
             and (window['not_before'] is None or _capacity_time(window['not_before']))
-            and type(window['revision']) is int and window['revision'] >= 0
+            and type(window['revision']) is int and 0 <= window['revision'] <= 2**63 - 1
             and type(window['evidence_refs']) is list and len(window['evidence_refs']) <= 32
             and len(window['evidence_refs']) == len(set(window['evidence_refs']))
             and all(type(ref) is str and HASH.fullmatch(ref) is not None for ref in window['evidence_refs']))
@@ -391,7 +411,11 @@ def verify_recorded_window(source, trusted, window, profile):
         legal = _legal_task(source, access, selected[0])
         _require(legal['registered'] == trusted['registered'])
         bundle = _bundle(source, access, legal)
-        route, physical, rules = _scope(bundle, profile)
+        route, physical, rules = _scope(bundle, profile, legal['registered'])
+        if bundle[3] is None:
+            _require(window == {'status': 'open', 'not_before': None, 'evidence_refs': [],
+                                'revision': 0, 'reason_code': 'capacity_window_not_applicable'})
+            return None
         prefix = _prefix(source, access, bundle, physical, window['revision'])
         unknown = sorted((r for r in prefix if r['status'] == 'unknown'), key=lambda r: -r['sequence'])
         if window['status'] == 'open':

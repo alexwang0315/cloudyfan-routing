@@ -34,7 +34,8 @@ async function sourceManifest(){
  return {repositories,files};
 }
 async function frozenManifest(){
- check(process.env.CLOUDYFAN_QA_FROZEN_RELEASE==='issue42-desktop-v1'&&process.env.CLOUDYFAN_QA_SOURCE_MANIFEST,'qa_explicit_frozen_release_required');
+ const release=phase==='desktop-stored-limits'?'issue42-stored-limits-v1':'issue42-desktop-v1';
+ check(process.env.CLOUDYFAN_QA_FROZEN_RELEASE===release&&process.env.CLOUDYFAN_QA_SOURCE_MANIFEST,'qa_explicit_frozen_release_required');
  const body=await fs.readFile(process.env.CLOUDYFAN_QA_SOURCE_MANIFEST),value=JSON.parse(body);
  check(value.schema_version==='qa42-reviewed-source-manifest-v1'
   &&JSON.stringify(value.repositories)===JSON.stringify(report.source_before.repositories)
@@ -229,9 +230,64 @@ async function desktop(ready){
   check(!privatePattern.test(JSON.stringify([report.console,report.page_errors])),'qa_private_browser_diagnostic_exposed');
  });
 }
+async function storedLimitsDesktop(ready){
+ let legacy,baseline=false,failure;
+ const posts=()=>report.requests.filter(row=>row.method==='POST'&&row.path==='/monitor/comparisons').length;
+ try{
+  await step('legal frozen two-task report remains readable with its own limits',async()=>{
+   check(ready.original_completed&&ready.long_task_held&&ready.state.mock_hold_started,'qa_real_original_and_held_task_required');
+   await page.getByRole('heading',{name:'保存證據比較',exact:true}).waitFor();await taskBox('qa42-original-task').waitFor();
+   await command('await-history-hold');await command('release-history');await command('read-baseline');baseline=true;
+   legacy=await command('seed-old-comparison-limits');
+   check(legacy.frozen_limits.max_tasks===2&&legacy.requested_tasks===2&&legacy.original_state_unchanged,'qa_legacy_limits_source_missing');
+   report.legacy_report={comparison_id:legacy.comparison_id,sha256:legacy.response_sha256,bytes:legacy.response_bytes,limits:legacy.frozen_limits};
+   await page.locator('#comparison-report-select option[value="'+legacy.comparison_id+'"]').waitFor({state:'attached',timeout:15000});
+   const response=await selectReport(legacy.comparison_id),body=await response.body(),value=JSON.parse(body);
+   check(sha(body)===legacy.response_sha256&&body.length===legacy.response_bytes&&value.limits.max_tasks===2
+    &&value.scope.tasks.length===2,'qa_legacy_limits_report_bytes_changed');
+   await snap('stored-limits-legacy-report');
+  });
+  await step('current admission shrink preserves old selection and rejects an outdated confirmation',async()=>{
+   await page.locator('#comparison-policy').selectOption('original-policy-reproduction-v1');
+   await taskBox('qa42-original-task').check();await taskBox('qa42-unstarted-task').check();
+   const before=posts();await page.locator('#comparison-start').click();await page.locator('#confirm[open]').waitFor();
+   const next=page.waitForResponse(async row=>row.request().method()==='GET'&&new URL(row.url()).pathname==='/monitor/comparisons'
+    &&row.status()===200&&(await row.json()).limits.max_tasks===1,{timeout:15000});
+   const tightened=await command('tighten-comparison-creation-limit');check(tightened.creation_limits.max_tasks===1,'qa_creation_limit_not_tightened');
+   await next;
+   await page.waitForFunction(()=>document.querySelector('#comparison-start')?.disabled===true
+    &&document.querySelector('#comparison-policy')?.disabled===false,{},{timeout:6000});
+   check(await page.locator('input[data-comparison-select]:checked').count()===2,'qa_limit_change_silently_changed_selection');
+   await page.locator('#apply-confirm').click();await page.locator('#confirm').waitFor({state:'hidden'});
+   check(posts()===before,'qa_outdated_confirmation_sent_comparison');
+   const response=await selectReport(legacy.comparison_id);
+   check(sha(await response.body())===legacy.response_sha256,'qa_old_report_changed_after_current_limit_shrank');
+   await privacy();await snap('stored-limits-current-cap-one');
+  });
+  await step('new single-task comparison follows current admission without changing original authority',async()=>{
+   await taskBox('qa42-unstarted-task').uncheck();const created=await createReport();
+   check(created.value.scope.tasks.length===1&&created.value.counts.requested===1&&created.value.limits.max_tasks===1
+    &&created.value.comparison_id!==legacy.comparison_id,'qa_new_report_ignored_current_creation_limit');
+   const response=await selectReport(legacy.comparison_id);
+   check(sha(await response.body())===legacy.response_sha256,'qa_new_report_overwrote_old_limits_report');
+   await privacy();await snap('stored-limits-new-report-and-old-read');
+  });
+  await step('directed limits flow has no unexpected browser diagnostics or rejection',async()=>{
+   check(report.blocked.length===0&&report.page_errors.length===0&&!report.network.some(row=>row.status>=400),'qa_unexpected_browser_request_or_error');
+   check(!report.console.some(row=>['warning','error'].includes(row.level)),'qa_browser_console_warning_or_error');
+   check(!privatePattern.test(JSON.stringify([report.console,report.page_errors])),'qa_private_browser_diagnostic_exposed');
+  });
+ }catch(error){failure=error;}
+ finally{
+  for(const name of [...(baseline?['verify-readonly']:[]),'release-model']){
+   try{await command(name);}catch(error){report.directed_cleanup_failures||=[];report.directed_cleanup_failures.push(name);failure||=error;}
+  }
+ }
+ if(failure)throw failure;
+}
 async function main(){
  process.umask(0o077);check(process.argv[2]&&CORE&&process.env.CLOUDYFAN_QA_PYTHON,'qa_explicit_paths_required');
- check(phase==='desktop-frozen','qa_phase_not_released');await fs.mkdir(OUT,{recursive:false,mode:0o700});await save();
+ check(['desktop-frozen','desktop-stored-limits'].includes(phase),'qa_phase_not_released');await fs.mkdir(OUT,{recursive:false,mode:0o700});await save();
  report.source_before=await sourceManifest();report.frozen_manifest=await frozenManifest();await save();
  fixture=await startRecordedFixture(process.env.CLOUDYFAN_QA_PYTHON,[path.join(ROOT,'scripts/qa_saved_comparisons_http.py'),
   '--output',path.join(OUT,'host'),'--phase',phase],{cwd:ROOT,env:{...process.env,PYTHONDONTWRITEBYTECODE:'1',PYTHONNOUSERSITE:'1',UV_OFFLINE:'1',
@@ -252,7 +308,9 @@ async function main(){
  page.on('response',response=>report.network.push({request_id:ids.get(response.request()),method:response.request().method(),path:new URL(response.url()).pathname,status:response.status(),at_ms:performance.now()}));
  page.on('console',message=>report.console.push({level:message.type(),text:message.text(),location:safeLocation(message.location(),ready.origin),at_ms:performance.now()}));
  page.on('pageerror',error=>report.page_errors.push({name:error.name,message:error.message}));
- await page.goto(ready.origin+'/#comparisons',{waitUntil:'domcontentloaded'});await desktop(ready);report.passed=true;
+ await page.goto(ready.origin+'/#comparisons',{waitUntil:'domcontentloaded'});
+ if(phase==='desktop-stored-limits')await storedLimitsDesktop(ready);else await desktop(ready);
+ report.passed=true;
 }
 function runCli(){return main().catch(async error=>{
  report.passed=false;report.failure={step:currentStep,code:error.qaCode||'qa_desktop_failed'};process.exitCode=1;

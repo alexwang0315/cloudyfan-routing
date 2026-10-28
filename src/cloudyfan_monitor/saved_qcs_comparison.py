@@ -330,6 +330,27 @@ def _unknown(index, stage, reason):
         'config_id': None, 'reason': reason, 'policy_reason': None, 'net_saving_lower_usd': None, 'match': None}
 
 
+def _same_economic_outcome(saved, expected):
+    if (type(saved) is not dict or set(saved) != set(expected)
+            or any(saved[key] != value for key, value in expected.items() if key != 'net_saving_lower_usd')):
+        return False
+    left, right = saved['net_saving_lower_usd'], expected['net_saving_lower_usd']
+    if left is None or right is None:
+        return left is None and right is None
+    numbers = []
+    for value in (left, right):
+        if (type(value) is not str or len(value) > 256
+                or re.fullmatch(r'-?(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)(?:[eE][+-]?[0-9]{1,3})?', value) is None):
+            return False
+        number = Decimal(value)
+        # Original cost/probability inputs have at most 64 decimal places;
+        # their product can have 128. The finite difference can reach 2e65.
+        if not number.is_finite() or number.adjusted() > 65 or number.as_tuple().exponent < -128:
+            return False
+        numbers.append(number)
+    return numbers[0] == numbers[1]
+
+
 def reproduce_saved_policy(source, binding, job, manifest, result, run, trusted, *, original_path, receipts):
     inputs, decisions = [], []
     policy = manifest['routing_version']
@@ -392,7 +413,7 @@ def reproduce_saved_policy(source, binding, job, manifest, result, run, trusted,
                     'selected_tier': reproduced['selected_tier'] if reproduced['action'] == 'direct' else None,
                     'reason': reproduced['policy_reason'], 'net_saving_lower_usd': reproduced['net_saving_lower_usd'],
                     'plan_id': plan['plan_id']}
-                if checkpoint.get('outcome') != expected:
+                if not _same_economic_outcome(checkpoint.get('outcome'), expected):
                     raise SourceUnavailable('original_economic_checkpoint_invalid')
             if reproduced['action'] == 'classify':
                 try:
@@ -404,7 +425,7 @@ def reproduce_saved_policy(source, binding, job, manifest, result, run, trusted,
                         raise
                     reproduced['reason'] = ('classifier_binding_mismatch' if isinstance(error, SourceUnavailable)
                         and error.args == ('classifier_binding_mismatch',) else 'classifier_evidence_unavailable')
-            elif plan is not None and result['selection']['decisions'][index] != expected:
+            elif plan is not None and not _same_economic_outcome(result['selection']['decisions'][index], expected):
                 raise SourceUnavailable('original_economic_checkpoint_invalid')
             inputs.append(values)
             decisions.append(_public(len(decisions), stage, reproduced, candidates, original_path[index + 1]))

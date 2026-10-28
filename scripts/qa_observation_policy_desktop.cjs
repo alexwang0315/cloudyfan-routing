@@ -71,6 +71,20 @@ async function verifyReferences(receipt){
   }
   sequences.sort((a,b)=>a-b);check(sequences.every((value,index)=>value===index+1),'qa_evidence_sequence_gap');
  }
+ if(phase==='desktop-frozen'){
+  const fault=receipt.capture_failure;
+  check(fault?.original_accepted_status===202&&fault.replay_status===202
+   &&JSON.stringify(fault.repeated_get_statuses)==='[202,202]'&&fault.seal_attempts===1
+   &&fault.independent_seal_still_missing&&fault.record_and_anchor_unchanged
+   &&fault.readonly_business_state_unchanged,'qa_capture_failure_oracle_missing');
+  for(const field of ['record','anchor','fault_receipt']){
+   const row=fault.preserved?.[field],filename=row?.reference;
+   check(typeof filename==='string'&&path.basename(filename)===filename&&!names.has(filename),'qa_capture_failure_reference_invalid');names.add(filename);
+   const file=path.join(OUT,'host',filename),info=await fs.lstat(file),bytes=await fs.readFile(file);
+   check(info.isFile()&&!info.isSymbolicLink()&&info.nlink===1&&(info.mode&0o077)===0
+    &&bytes.length===row.bytes&&sha(bytes)===row.sha256,'qa_capture_failure_reference_changed');count++;
+  }
+ }
  return {status:'verified',checked_references:count,unique_names:names.size,ordering:'recorder_reservation_only_not_native_http_order'};
 }
 async function step(name,action){currentStep=name;console.log('START '+name);await action();report.steps.push({name,passed:true});await save();console.log('PASS '+name);}
@@ -132,7 +146,7 @@ async function desktop(ready){
   check(report.network.filter(row=>row.method==='POST').length===before,'qa_cancel_applied_policy');
   await selectPolicy('features-v2-advice-v1');await confirmPolicy('features-v2-advice-v1');
   check((await policyActive().innerText()).includes('觀察性建議 v1'),'qa_advice_policy_not_visible');
-  await command('new-task',{case:'advice'});await command('new-task',{case:'bounded-failure'});
+  await command('new-task',{case:'advice'});await command('new-task',{case:'capture-failure'});
   await privacy();await snap('policy-advice-enabled');
  });
  await step('operator_disables_only_new_capture_and_rolls_back',async()=>{
@@ -146,11 +160,12 @@ async function desktop(ready){
   await command('release-history');await page.locator('nav a[href="#tasks"]').click();
   for(const [run,version,state] of [
    ['qa41-v1-complete','local-deterministic-v1','available'],['qa41-v1-running','local-deterministic-v1','running'],
-   ['qa41-legacy',null,'missing'],['qa41-advice-new','local-deterministic-v2','advice'],
-   ['qa41-bounded-failure',null,'unavailable'],['qa41-disabled',null,'missing'],['qa41-v1-rollback','local-deterministic-v1','available']]){
+   ['qa41-host-capture-gap',null,'unavailable'],['qa41-advice-new','local-deterministic-v2','advice'],
+   ['qa41-capture-failure',null,'unavailable'],['qa41-disabled',null,'missing'],['qa41-v1-rollback','local-deterministic-v1','available']]){
    const detail=await trace(run),features=detail.locator('[data-task-features]'),advice=detail.locator('[data-routing-recommendation]');
    const text=await features.innerText();
    if(version)check(text.includes(version),'qa_saved_feature_version_missing');
+   if(version==='local-deterministic-v1')check(text.includes('其他欄位未提供'),'qa_v1_missing_new_fields_not_explicit');
    if(state==='running')check((await page.locator('tr[data-task-run="'+run+'"]').innerText()).includes('執行中'),'qa_original_task_no_longer_held');
    if(state==='missing')check(text.includes('未提供')&&!text.includes('當時特徵證據無法確認'),'qa_missing_features_mislabelled');
    if(state==='unavailable')check(text.includes('無法確認')&&(await advice.innerText()).includes('無法取得'),'qa_failed_evidence_not_visible');
@@ -274,7 +289,8 @@ main().catch(async error=>{
   const receipt=JSON.parse(await fs.readFile(path.join(OUT,'host','fixture-receipt.json')));
   report.host_verification={artifacts:receipt.artifact_verification,upstream:receipt.upstream_artifact_verification,
    business_state_unchanged:receipt.business_state_unchanged,readonly_oracle_verified:receipt.readonly_oracle_verified,
-   held_model_completed:receipt.held_model_completed,blocked_socket_attempt_count:receipt.blocked_socket_attempt_count,cleanup:receipt.cleanup};
+   held_model_completed:receipt.held_model_completed,capture_failure:receipt.capture_failure,
+   blocked_socket_attempt_count:receipt.blocked_socket_attempt_count,cleanup:receipt.cleanup};
   report.independent_reference_verification=await verifyReferences(receipt);
   check(receipt.artifact_verification.status==='verified'&&receipt.upstream_artifact_verification.status==='verified'
    &&(phase==='old-ui-red'?receipt.business_state_unchanged:receipt.readonly_oracle_verified&&receipt.held_model_completed)

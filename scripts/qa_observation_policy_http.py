@@ -38,6 +38,64 @@ def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, default=str).encode()).hexdigest()
 
 
+class CaptureFailurePort:
+    """Real Store reads; one explicitly owned auxiliary seal-write failure."""
+    run = 'qa41-capture-failure'
+
+    def __init__(self, controlled, output):
+        self.controlled, self.output = controlled, output
+        self.real = StoreFeatureBindingPort(controlled.app.store)
+        self.attempts, self.references = [], {}
+
+    def snapshot(self, principal, run_id):
+        return self.real.snapshot(principal, run_id)
+
+    def seal(self, principal, run_id, adoption_sha, registered_sha, record_sha):
+        if (principal, run_id) != ('agent', self.run):
+            return self.real.seal(principal, run_id, adoption_sha, registered_sha, record_sha)
+        actual = self.real.snapshot(principal, run_id)
+        self.attempts.append({'adoption_sha256': adoption_sha, 'registered_sha256': registered_sha,
+            'record_sha256': record_sha, 'fault': 'qa_synthetic_observation_seal_unavailable'})
+        check(len(self.attempts) == 1, 'qa_capture_failure_seal_retried')
+        check(actual['seal'] is None and actual['adoption_sha256'] == adoption_sha
+            and actual['adoption']['registered_sha256'] == registered_sha,
+            'qa_capture_failure_original_store_binding_changed')
+        service = self.controlled.host.service
+        internal = service.internal_id(principal, run_id)
+        self.record = service.root / '.task-features' / (internal + '.json')
+        self.anchor = service.root / internal / 'creation-feature-anchor.json'
+        for kind, source in (('record', self.record), ('anchor', self.anchor)):
+            body = source.read_bytes()
+            if kind == 'record':
+                check(hashlib.sha256(body).hexdigest() == record_sha, 'qa_capture_failure_record_sha_differs')
+            name = 'capture-failure-original-' + kind + '.bin'
+            with (self.output / name).open('xb') as stream:
+                stream.write(body)
+            self.references[kind] = {'reference': name, 'sha256': hashlib.sha256(body).hexdigest(), 'bytes': len(body)}
+        fault = {'schema_version': 'qa41-capture-seal-fault-v1', 'attempt': self.attempts[0],
+            'real_store_binding_verified': True, 'independent_seal_missing_before_fault': True,
+            'seam': 'Synthetic OSError at the owned Store port seal-write boundary; no response replacement',
+            'preserved': dict(self.references)}
+        save(self.output / 'capture-failure-seal-attempt.json', fault)
+        fault_body = (self.output / 'capture-failure-seal-attempt.json').read_bytes()
+        self.references['fault_receipt'] = {'reference': 'capture-failure-seal-attempt.json',
+            'sha256': hashlib.sha256(fault_body).hexdigest(), 'bytes': len(fault_body)}
+        # Core's existing auxiliary failure handling keeps the legal task.
+        # Leave the actual saved record/anchor and real missing Store seal intact.
+        raise OSError('qa_synthetic_observation_seal_unavailable')
+
+    def verify_unsealed(self):
+        check(len(self.attempts) == 1, 'qa_capture_failure_seal_attempt_count_changed')
+        actual = self.real.snapshot('agent', self.run)
+        check(actual['seal'] is None and actual['adoption_sha256'] == self.attempts[0]['adoption_sha256'],
+              'qa_capture_failure_was_resealed_or_rebound')
+        for kind, source in (('record', self.record), ('anchor', self.anchor)):
+            check(hashlib.sha256(source.read_bytes()).hexdigest() == self.references[kind]['sha256'],
+                  'qa_capture_failure_original_evidence_changed')
+        return {'seal_attempts': len(self.attempts), 'independent_seal_still_missing': True,
+            'record_and_anchor_unchanged': True, 'preserved': dict(self.references)}
+
+
 def main():
     os.umask(0o077)
     parser = argparse.ArgumentParser(description=__doc__)
@@ -177,10 +235,13 @@ def main():
 
             originals = {}
 
-            def submit(run, *, principal='agent', oversized=False):
+            def payload(run):
+                return {'run_id': run, 'category': controlled.category,
+                        'prompt': '中文1+1 PRIVATE_OBSERVATION_POLICY_CANARY'}
+
+            def submit(run, *, principal='agent'):
                 response = client.post('/v1/tasks', headers=agent_headers(principal),
-                    json={'run_id': run, 'category': controlled.category,
-                          'prompt': ('x' * 32769 if oversized else '中文1+1 ') + 'PRIVATE_OBSERVATION_POLICY_CANARY'})
+                    json=payload(run))
                 check(response.status_code == 202, 'qa_original_task_not_accepted')
                 value = response.json()
                 public_safe(value)
@@ -204,9 +265,20 @@ def main():
                 'revision': capacity.json()['dispatch']['revision'], 'version': controlled.policy_version})
             check(activated.status_code == 200, 'qa_capacity_activation_failed')
             if args.phase == 'desktop-frozen':
-                submit('qa41-legacy')
-                check(controlled.queue.dispatch_next() is not None, 'qa_legacy_dispatch_missing')
+                # Host capture absence has no independent adoption evidence;
+                # it cannot be reinterpreted as an operator's explicit disable.
+                gap = submit('qa41-host-capture-gap')
+                check(gap['task_features']['status'] == 'unavailable'
+                    and gap['routing_recommendation']['status'] == 'unavailable',
+                    'qa_host_capture_gap_mislabelled_disabled')
+                check(controlled.queue.dispatch_next() is not None, 'qa_host_capture_gap_dispatch_missing')
                 features('local-deterministic-v1')
+                from cloudyfan_monitor.observation_policy import ObservationPolicy
+                capture_failure = CaptureFailurePort(controlled, output)
+                # Install at host assembly before any operator adoption, so
+                # every registered prepared recorder uses this actual Store port.
+                controlled.app.observation_policy = ObservationPolicy(controlled.app.gateway,
+                    binding_port=capture_failure)
                 complete = submit('qa41-v1-complete')
                 check(complete['task_features']['feature_version'] == 'local-deterministic-v1', 'qa_original_v1_missing')
                 check(controlled.queue.dispatch_next() is not None, 'qa_v1_dispatch_missing')
@@ -236,7 +308,7 @@ def main():
             cases = {'advice': ('qa41-advice-new', 'features-v2-advice-v1', 'available', 'local-deterministic-v2', 'unknown'),
                 'disabled': ('qa41-disabled', None, 'not_provided', None, 'not_provided'),
                 'rollback': ('qa41-v1-rollback', 'features-v1', 'available', 'local-deterministic-v1', 'not_provided'),
-                'bounded-failure': ('qa41-bounded-failure', 'features-v2-advice-v1', 'unavailable', None, 'unavailable')}
+                'capture-failure': (CaptureFailurePort.run, 'features-v2-advice-v1', 'unavailable', None, 'unavailable')}
             for line in sys.stdin:
                 message = json.loads(line)
                 command = message.get('command')
@@ -257,10 +329,29 @@ def main():
                     check(key in cases, 'qa_unknown_case')
                     run, version, feature_state, feature_version, advice_state = cases[key]
                     check(policy()['active_version'] == version, 'qa_case_policy_not_active')
-                    value = submit(run, oversized=key == 'bounded-failure')
+                    value = submit(run)
                     check(value['task_features']['status'] == feature_state, 'qa_case_feature_state_wrong')
                     check(value['task_features'].get('feature_version') == feature_version, 'qa_case_feature_version_wrong')
                     check(value['routing_recommendation']['status'] == advice_state, 'qa_case_advice_state_wrong')
+                    if key == 'capture-failure':
+                        before_reads = state()
+                        statuses = []
+                        for unused in range(2):
+                            observed = client.get('/v1/tasks/' + run, headers=agent_headers())
+                            statuses.append(observed.status_code)
+                            check(observed.status_code == 202 and observed.json()['status'] == 'queued'
+                                and observed.json()['task_features'] == value['task_features']
+                                and observed.json()['routing_recommendation'] == value['routing_recommendation'],
+                                'qa_capture_failure_read_changed_original_task')
+                        replay = client.post('/v1/tasks', headers=agent_headers(), json=payload(run))
+                        check(replay.status_code == 202 and replay.json()['status'] == 'queued'
+                            and replay.json()['task_features'] == value['task_features']
+                            and replay.json()['routing_recommendation'] == value['routing_recommendation'],
+                            'qa_capture_failure_replay_changed_original_task')
+                        check(state() == before_reads, 'qa_capture_failure_reads_changed_business_state')
+                        receipt['capture_failure'] = {**capture_failure.verify_unsealed(),
+                            'original_accepted_status': 202, 'repeated_get_statuses': statuses,
+                            'replay_status': replay.status_code, 'readonly_business_state_unchanged': True}
                     result.update(run=run, original_observations_preserved=check_originals())
                 elif args.phase == 'desktop-frozen' and command == 'external-change':
                     version = message.get('version')
@@ -274,6 +365,7 @@ def main():
                     result['state'] = state()
                     result['verified'] = True
                     receipt['readonly_oracle_verified'] = True
+                    receipt['capture_failure'].update(capture_failure.verify_unsealed())
                 elif args.phase == 'desktop-frozen' and command == 'corrupt-evidence':
                     run = 'qa41-advice-new'
                     saved = originals[('agent', run)]['task_features']
@@ -316,6 +408,7 @@ def main():
                     check(value.status_code == 200 and value.json()['status'] == 'passed', 'qa_original_held_task_not_passed')
                     result['original_observations_preserved'] = check_originals()
                     receipt['held_model_completed'] = True
+                    receipt['capture_failure'].update(capture_failure.verify_unsealed())
                 else:
                     check(False, 'qa_unknown_private_command')
                 receipt['commands'].append({key: value for key, value in result.items() if key != 'state'})

@@ -294,10 +294,13 @@ def _point(index, stage, reproduced, candidates, match):
         'reason': reproduced['reason'], 'policy_reason': reproduced['policy_reason'], 'match': match}
 
 
-def _unknown_tail(decisions, path, stage, reason):
+def _unknown_tail(decisions, path, stage, reason, extra_points=0):
+    total = min(len(path)+1+extra_points, LIMITS['max_decision_points'])
+    if len(decisions) >= total:
+        return
     decisions.append({'index': len(decisions), 'stage': stage, 'action': None,
         'selected_tier': None, 'config_id': None, 'reason': reason, 'match': None})
-    while len(decisions) < min(len(path)+1, LIMITS['max_decision_points']):
+    while len(decisions) < total:
         decisions.append({'index': len(decisions), 'stage': None, 'action': None,
             'selected_tier': None, 'config_id': None, 'reason': 'original_context_unavailable', 'match': None})
 
@@ -306,26 +309,41 @@ def reproduce_saved_policy(source, binding, job, manifest, result, run, trusted,
     _require(manifest['routing_version'] == POLICY, 'unsupported_policy_version')
     attempts, path, values, decisions = result['attempts'], original_path, [], []
     used, failed, phase, selected_count = set(), set(), 0, 0
-    for index, actual in enumerate(path):
-        stage = 'initial' if not index else ('same_pool' if attempts[index-1]['stop'] in AVAILABILITY else
+    attempt_index, checkpoint_index, extra_points, exhaustion_proof = 0, 0, 0, None
+    # The original producer advances its checkpoint cursor even when an empty
+    # same-pool choice dispatches nothing. Its result selection list omits that
+    # choice, so neither cursor can be derived from the generation attempt.
+    while attempt_index < len(path) or result['termination_reason'] == 'no_eligible_candidate':
+        actual = path[attempt_index] if attempt_index < len(path) else None
+        stage = 'initial' if not attempt_index else ('same_pool' if not exhaustion_proof
+            and attempts[attempt_index-1]['stop'] in AVAILABILITY else
             ('low_mid' if phase == 0 else 'mid_high') if binding['mode'] == 'cloudyfan' else 'after_validation')
         try:
-            checkpoint = source.read(run / f'backup-selection-{index}.json', 'original_backup_selection')
+            _require(len(decisions) < LIMITS['max_decision_points'], 'comparison_decision_limit')
+            checkpoint = source.read(run / f'backup-selection-{checkpoint_index}.json', 'original_backup_selection')
+            checkpoint_index += 1
             checkpoint_sha = source.evidence[-1]['sha256']
-            previous = attempts[index-1] if index else None
+            empty_same_pool = stage == 'same_pool' and checkpoint['pair'] == {}
+            if empty_same_pool and (actual is not None or phase < (2 if binding['mode'] == 'cloudyfan' else 1)):
+                extra_points += 1
+            previous = attempts[attempt_index-1] if attempt_index else None
             expected_previous = {key: previous[key] for key in ('tier', 'profile', 'final', 'public')} if previous else None
             _require(checkpoint['previous'] == expected_previous
                 and checkpoint['actions'] == result['actions'][:len(checkpoint['actions'])], 'original_context_unavailable')
-            tiers = (INITIAL[binding['mode']],) if not index else (
-                (path[index-1]['tier'],) if stage == 'same_pool' else PAIRS.get(stage, ('high',)))
+            tiers = (INITIAL[binding['mode']],) if not attempt_index else (
+                (path[attempt_index-1]['tier'],) if stage == 'same_pool' else PAIRS.get(stage, ('high',)))
             candidates, pair = _candidates(source, trusted, manifest, checkpoint, tiers, used, failed)
             economics, template = _economics(manifest, stage, previous, pair, checkpoint) if stage in PAIRS else (None, None)
-            context = _context(path, attempts, receipts, index, stage, phase)
+            context = _context(path, attempts, receipts, attempt_index, stage, phase)
             value = {'schema_version': 'saved-policy-values-v1', 'policy_version': POLICY, 'mode': binding['mode'],
                 'source': {'binding_sha256': digest(binding), 'request_sha256': original_digest(job['request']),
                     'registered_sha256': original_digest(job['registered']), 'policy_sha256': original_digest(manifest),
                     'checkpoint_sha256': checkpoint_sha, 'candidate_set_sha256': candidate_set_digest(candidates)},
                 'context': context, 'candidates': candidates, 'economics': economics, 'classifier': None}
+            if exhaustion_proof is not None:
+                _require(stage in PAIRS or binding['mode'] != 'cloudyfan' and stage == 'after_validation',
+                         'original_context_unavailable')
+                value['source']['availability_exhaustion_input_sha256'] = exhaustion_proof
             classifier_failure = None
             if checkpoint['economic']['action'] == 'classify':
                 try:
@@ -343,6 +361,41 @@ def reproduce_saved_policy(source, binding, job, manifest, result, run, trusted,
             reproduced = source.reproduce(value)
             if classifier_failure and reproduced['status'] != 'reproduced':
                 reproduced = {**reproduced, 'reason': classifier_failure}
+            if empty_same_pool:
+                _require(checkpoint['economic'] == {'action': 'stop', 'reason': 'no_eligible_candidate'},
+                         'original_saved_decision_mismatch')
+                if reproduced['status'] == 'reproduced' and reproduced['action'] == 'advance_quality_stage':
+                    # This is the original non-generating continue branch, not
+                    # a selected candidate or an entry in selection.decisions.
+                    next_tiers = PAIRS['low_mid' if phase == 0 else 'mid_high'] if binding['mode'] == 'cloudyfan' else ('high',)
+                    match = actual is None or actual['tier'] in next_tiers
+                    decisions.append(_point(len(decisions), stage, reproduced, candidates, match))
+                    if match:
+                        _require(_hash(reproduced['input_sha256']), 'original_context_unavailable')
+                        exhaustion_proof = reproduced['input_sha256']
+                        continue
+                elif actual is None and result['termination_reason'] == 'no_eligible_candidate':
+                    _require(selected_count == len(result['selection']['decisions']), 'original_saved_decision_mismatch')
+                    match = reproduced['status'] == 'reproduced' and reproduced['action'] == 'stop' and (
+                        reproduced['reason'] == 'no_eligible_candidate')
+                    decisions.append(_point(len(decisions), stage, reproduced, candidates,
+                        match if reproduced['status'] == 'reproduced' else None))
+                    if match:
+                        return values, decisions
+                else:
+                    decisions.append(_point(len(decisions), stage, reproduced, candidates, None))
+                _unknown_tail(decisions, path, None, 'original_context_unavailable', extra_points)
+                return values, decisions
+            if actual is None:
+                # An original terminal empty quality checkpoint is also absent
+                # from selection.decisions; its gates still need verification.
+                _require(checkpoint['economic'] == {'action': 'stop', 'reason': 'no_eligible_candidate'}
+                    and selected_count == len(result['selection']['decisions']), 'original_saved_decision_mismatch')
+                match = reproduced['status'] == 'reproduced' and reproduced['action'] == 'stop' and (
+                    reproduced['reason'] == result['termination_reason'])
+                decisions.append(_point(len(decisions), stage, reproduced, candidates,
+                    match if reproduced['status'] == 'reproduced' else None))
+                return values, decisions
             _require(result['selection']['decisions'][selected_count] == checkpoint['economic'],
                      'original_saved_decision_mismatch')
             selected_count += 1
@@ -355,23 +408,24 @@ def reproduce_saved_policy(source, binding, job, manifest, result, run, trusted,
                     value['classifier'], reproduced, stage)
                 selected_count += 1
             match = None
-            if reproduced['status'] == 'reproduced' and _generation_verified(receipts[index]):
+            if reproduced['status'] == 'reproduced' and _generation_verified(receipts[attempt_index]):
                 match = reproduced['selected_tier'] == actual['tier'] and (
                     reproduced['selected_configuration_sha256'] == actual['configuration_sha256'])
             decisions.append(_point(len(decisions), stage, reproduced, candidates, match))
             if match is not True:
-                while len(decisions) < min(len(path)+1, LIMITS['max_decision_points']):
-                    _unknown_tail(decisions, path, None, 'original_context_unavailable')
+                _unknown_tail(decisions, path, None, 'original_context_unavailable', extra_points)
                 return values, decisions
             used.add(actual['configuration_sha256'])
-            if attempts[index]['stop'] in AVAILABILITY:
-                failed.add(attempts[index]['profile']['provider'])
+            if attempts[attempt_index]['stop'] in AVAILABILITY:
+                failed.add(attempts[attempt_index]['profile']['provider'])
             if stage in PAIRS:
                 phase += 1
+            attempt_index += 1
+            exhaustion_proof = None
         except ERRORS as error:
             reason = error.args[0] if isinstance(error, SourceUnavailable) and error.args else ''
             reason = reason if isinstance(reason, str) and re.fullmatch(r'[a-z0-9_]{1,80}', reason) else 'original_decision_inputs_unavailable'
-            _unknown_tail(decisions, path, stage, reason)
+            _unknown_tail(decisions, path, stage, reason, extra_points)
             return values, decisions
     # This block is reachable only after every earlier choice matched. No later
     # actual answer is used to bridge a missing receipt, gate, or policy choice.
@@ -381,6 +435,7 @@ def reproduce_saved_policy(source, binding, job, manifest, result, run, trusted,
         stopped = deepcopy(values[-1])
         stopped.update(context=context, candidates=[], economics=None, classifier=None)
         stopped['source']['candidate_set_sha256'] = None
+        stopped['source'].pop('availability_exhaustion_input_sha256', None)
         values.append(stopped)
         reproduced = source.reproduce(stopped)
         expected = 'public_validation_passed' if result['termination_reason'] == 'public_passed' else result['termination_reason']
@@ -389,5 +444,5 @@ def reproduce_saved_policy(source, binding, job, manifest, result, run, trusted,
     except ERRORS as error:
         reason = error.args[0] if isinstance(error, SourceUnavailable) and error.args else ''
         reason = reason if isinstance(reason, str) and re.fullmatch(r'[a-z0-9_]{1,80}', reason) else 'original_context_receipts_unavailable'
-        _unknown_tail(decisions, path, 'after_validation', reason)
+        _unknown_tail(decisions, path, 'after_validation', reason, extra_points)
     return values, decisions

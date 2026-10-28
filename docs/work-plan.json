@@ -50,6 +50,14 @@
         "src/cloudyfan_jev/scores/selector_research.py"
       ],
       "provided_by": "ISSUE40"
+    },
+    {
+      "id": "SAVED-ORIGINAL-POLICY-REPRODUCTION",
+      "owner": "policy-comparison-worker",
+      "owned_files": [
+        "src/cloudyfan_jev/saved_policy_comparison.py"
+      ],
+      "provided_by": "ISSUE42"
     }
   ],
   "tasks": [
@@ -211,7 +219,7 @@
     {
       "id": "ISSUE41",
       "owner": "route-advice-worker",
-      "status": "in_progress",
+      "status": "completed",
       "owned_files": [
         "src/cloudyfan_jev/http_api.py",
         "src/cloudyfan_jev/task_features.py",
@@ -225,7 +233,24 @@
         "CONTROLLED-QUEUE-WINDOW-HOOKS",
         "EXACT-CALIBRATION-BOUNDED-SOURCE-BYTES"
       ],
-      "outcome": "Candidate-only41 implementation from exact integrated40 bases, using pre-agreed actual loopback HTTP and desktop seams with real Core/Store/identity/scheduler and upstream MockTransport. Own immutable new-task policy selection and bounded safe observation compatibility; preserve legacy/version/retention/seals/original routing/accounting and every first failure. Monitor counterpart ownership is documented in external41 context; whole29-33 remains in_progress/current_verificationnull, all qualification gates pending. Original full gates, desktop and independent review remain pending for41."
+      "outcome": "Root released Issue42 from integrated Core a631c7746f51bf36bc0a964eab5936ea99350a14 / Monitor911ddeb70b92a4a44b18e52cc5ea2ba475738b89 after41 local acceptance and the integer-clock retained-metadata fix. Original41 headed10/10, Core2069/8 and Monitor588/29 retain their exact frozen scope; the later clock candidate original Monitor590/29 and independent readback are preserved in external issue30-retained-clock-fix-20261028/final-index-02.json. All initial failures, unknown causes and original scope boundaries remain; no production qualification or external-action authority follows."
+    },
+    {
+      "id": "ISSUE42",
+      "owner": "policy-comparison-worker",
+      "status": "in_progress",
+      "owned_files": [
+        "src/cloudyfan_jev/saved_policy_comparison.py",
+        "docs/saved-evidence-comparison.md"
+      ],
+      "depends_on": [
+        "ISSUE41"
+      ],
+      "consumed_interfaces": [
+        "CREATION-TIME-TASK-OBSERVATION",
+        "CONTROLLED-QUEUE-WINDOW-HOOKS"
+      ],
+      "outcome": "Isolated42 implementation of original-policy reproduction only, using the pre-agreed real main-service loopback HTTP and desktop seams with original Core/BudgetedCore/Store/identity/scheduler and MockTransport. A bounded pure comparator accepts allowlisted immutable values only, never runner/service/client/path/execute callbacks; trusted host loading, independent report IDs and read-only reports cannot dispatch or change original accounting/retention. Alternative strategies/results and all43/44 scope remain pending. All29-33 phase stays in_progress/current_verificationnull; no production qualification, real upstream, push/deploy or deletion."
     }
   ]
 }

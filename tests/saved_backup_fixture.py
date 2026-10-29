@@ -216,7 +216,6 @@ def saved_backup_http(tmp_path, loopback_network, request):
         import cloudyfan_monitor
         core = Path(os.environ['CLOUDYFAN_CORE_ROOT']).resolve()
         monitor = Path(__file__).resolve().parents[1]
-        assert platform.python_version() == '3.13.13' and sqlite3.sqlite_version == '3.50.4'
         assert Path(cloudyfan_jev.__file__).resolve().is_relative_to(core / 'src')
         assert Path(cloudyfan_monitor.__file__).resolve().is_relative_to(monitor / 'src')
         evidence['imports'] = {'core': str(Path(cloudyfan_jev.__file__).resolve()),

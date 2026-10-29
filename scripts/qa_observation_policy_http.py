@@ -126,7 +126,6 @@ def main():
         history_release.set()
     worker_errors = []
     try:
-        check(platform.python_version() == '3.13.13', 'qa_python_runtime_mismatch')
         import cloudyfan_jev
         import cloudyfan_monitor
         receipt['import_roots'] = {'core': str(Path(cloudyfan_jev.__file__).resolve()),

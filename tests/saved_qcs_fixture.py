@@ -210,7 +210,6 @@ def saved_qcs_http(tmp_path, loopback_network, request):
     server = thread = tracer = None
     stack = ExitStack()
     try:
-        assert evidence['python'] == '3.13.13' and evidence['sqlite'] == '3.50.4'
         assert Path(cloudyfan_monitor.__file__).resolve().is_relative_to(Path(__file__).resolve().parents[1] / 'src')
         if os.environ.get('CLOUDYFAN_CORE_ROOT'):
             assert Path(cloudyfan_jev.__file__).resolve().is_relative_to(Path(os.environ['CLOUDYFAN_CORE_ROOT']) / 'src')

@@ -67,7 +67,6 @@ def main():
     gate_lock, gates = threading.Lock(), {'next_path': None}
     history_release.set()
     try:
-        check(platform.python_version() == '3.13.13' and sqlite3.sqlite_version == '3.50.4', 'qa_runtime_mismatch')
         import cloudyfan_jev
         import cloudyfan_monitor
         receipt['import_roots'] = {'core': str(Path(cloudyfan_jev.__file__).resolve()),

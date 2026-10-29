@@ -60,3 +60,9 @@ Validation is offline: Core unit tests, real loopback main-service HTTP with Moc
   - `context_policy` 是 TaskService 接收層的註冊欄位，不在 Core 執行 manifest 的比對範圍。這一項原本會讓所有含參考區塊的任務載入失敗，已在本張修正。
 - `same-input-v1` 的配對鍵在有參考區塊時也納入整份區塊；沒有區塊的舊任務，鍵值不變。
 - 驗證範圍為離線：真實 loopback 主服務 HTTP 搭配 MockTransport，涵蓋整塊選取與完整原文配對並報差、品質不同不報差、區塊不同不配對，以及既有六組比較回歸 116 項；另有 headed 桌機驗收。
+
+## 測試執行環境不綁定特定 Python／SQLite 版本（2026-10-29 決定）
+
+- 報告的實作身分照舊記錄實際的 Python 與 SQLite 版本（`saved_comparisons.py` 即時讀取）。這是「記錄」，不是「限定只能在某個版本執行」。
+- 已保存比較的三個 HTTP 測試輔助檔（`saved_qcs_fixture.py`、`saved_backup_fixture.py`、`saved_window_fixture.py`）與兩支手動 QA 腳本，原本寫死只接受 Python 3.13.13／SQLite 3.50.4。沒有任何 ADR 或文件要求這個限制。雲端 CI 安裝的是 3.13.17，本機主 core 環境也已更新為 3.13.17／SQLite 3.53.1，結果雲端 run 40839892598 出現 87 個錯誤。
+- 使用者選擇的做法：移除版本必須相等的檢查。證據檔仍記錄實際版本，core／Monitor 載入路徑的檢查也保留。`tests/test_http_fixture_runtime.py` 會把版本改成別的值，確認三個輔助檔仍能執行，而且記錄的是實際版本。

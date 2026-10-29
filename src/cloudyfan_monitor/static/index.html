@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CloudyFan · Router Monitor</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/billing.css"><link rel="stylesheet" href="/trace.css"><link rel="stylesheet" href="/candidates.css"><link rel="stylesheet" href="/capacity.css"><link rel="stylesheet" href="/queue.css"><link rel="stylesheet" href="/observation-policy.css"><link rel="stylesheet" href="/comparisons.css">
+  <title>CloudyFan · Router Monitor</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/billing.css"><link rel="stylesheet" href="/trace.css"><link rel="stylesheet" href="/candidates.css"><link rel="stylesheet" href="/capacity.css"><link rel="stylesheet" href="/queue.css"><link rel="stylesheet" href="/observation-policy.css"><link rel="stylesheet" href="/comparisons.css"><link rel="stylesheet" href="/cache.css">
 </head>
 <body>
 <div class="shell">
@@ -19,6 +19,7 @@
       <a href="#queue" data-page="queue"><span class="icon">⌛</span>排隊與等待</a>
       <a href="#observations" data-page="observations"><span class="icon">◷</span>建立時觀測規則</a>
       <a href="#comparisons" data-page="comparisons"><span class="icon">⇄</span>保存證據比較</a>
+      <a href="#cache" data-page="cache"><span class="icon">⧉</span>前綴與快取觀測</a>
       <a href="#clients" data-page="clients"><span class="icon">⌘</span>連線客戶端</a>
     </nav>
     <div class="sidebar-footer"><span class="live-dot"></span><b>v0.1 / Local console</b><p>答對，再比較完整成本。</p><button class="text-button" id="logout">清除操作員登入</button></div>
@@ -33,5 +34,5 @@
 <dialog id="login"><form id="login-form"><div class="eyebrow">OPERATOR ACCESS</div><h2>登入管理介面</h2><p>使用伺服器配置的操作員 token。憑證只保留在此頁面記憶體。</p><label for="token">操作員 token</label><input id="token" type="password" autocomplete="off" required><button class="button primary" type="submit">登入</button><p id="login-error" role="alert"></p></form></dialog>
 <dialog id="confirm"><div class="eyebrow">CONFIGURATION</div><h2 id="confirm-title"></h2><div id="confirm-description"></div><div class="dialog-actions"><button class="button" id="cancel-confirm">取消</button><button class="button primary" id="apply-confirm">確認套用</button></div></dialog>
 <div id="toast" role="status" hidden></div>
-<script src="/billing.js" defer></script><script src="/trace.js" defer></script><script src="/candidates.js" defer></script><script src="/capacity.js" defer></script><script src="/queue.js" defer></script><script src="/observation-policy.js" defer></script><script src="/comparisons.js" defer></script><script src="/app.js" defer></script>
+<script src="/billing.js" defer></script><script src="/trace.js" defer></script><script src="/candidates.js" defer></script><script src="/capacity.js" defer></script><script src="/queue.js" defer></script><script src="/observation-policy.js" defer></script><script src="/comparisons.js" defer></script><script src="/cache.js" defer></script><script src="/app.js" defer></script>
 </body></html>

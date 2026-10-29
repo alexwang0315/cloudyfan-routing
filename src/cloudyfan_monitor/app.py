@@ -6,6 +6,7 @@ import ipaddress
 import json
 from pathlib import Path
 import re
+import sqlite3
 from urllib.parse import parse_qs
 
 from cloudyfan_jev.http_api import ServiceError
@@ -162,6 +163,8 @@ class App:
                       "/observation-policy.css": ("observation-policy.css", "text/css; charset=utf-8"),
                       "/comparisons.js": ("comparisons.js", "text/javascript; charset=utf-8"),
                       "/comparisons.css": ("comparisons.css", "text/css; charset=utf-8"),
+                      "/cache.js": ("cache.js", "text/javascript; charset=utf-8"),
+                      "/cache.css": ("cache.css", "text/css; charset=utf-8"),
                       "/style.css": ("style.css", "text/css; charset=utf-8")}
             if method == "GET" and path in static:
                 filename, content_type = static[path]
@@ -219,7 +222,32 @@ class App:
         start_response(f"{status} {HTTPStatus(status).phrase}", headers)
         return [body]
 
+    def _cache_observation(self, client, run):
+        from .cache_observations import observe
+        from .saved_comparisons import SourceUnavailable
+        try:
+            value = observe(self, client, run)
+        except (OSError, ValueError, KeyError, TypeError, sqlite3.Error, SourceUnavailable):
+            raise MonitorError('cache_observation_unavailable', 503) from None
+        if value is None:
+            raise MonitorError('cache_observation_task_not_found', 404)
+        return value
+
     def _admin(self, method, path, environ):
+        if path == '/monitor/cache-observations':
+            if method != 'GET' or environ.get('QUERY_STRING'):
+                raise MonitorError('endpoint_not_supported', 404)
+            from .cache_observations import catalog
+            from .saved_comparisons import SourceUnavailable
+            try:
+                return catalog(self)
+            except (OSError, ValueError, sqlite3.Error, SourceUnavailable):
+                raise MonitorError('cache_observation_unavailable', 503) from None
+        match = re.fullmatch(r'/monitor/cache-observations/([A-Za-z0-9][A-Za-z0-9._-]{0,127})/([A-Za-z0-9][A-Za-z0-9_-]{0,63})', path)
+        if match:
+            if method != 'GET' or environ.get('QUERY_STRING'):
+                raise MonitorError('endpoint_not_supported', 404)
+            return self._cache_observation(match[1], match[2])
         if path == '/monitor/comparisons' or path.startswith('/monitor/comparisons/'):
             from .saved_comparisons import catalog, create_report, get_report
             if environ.get('QUERY_STRING'):
@@ -379,6 +407,12 @@ class App:
             return self.gateway.snapshot(principal)
         if method == "POST" and path == "/v1/tasks":
             return self.gateway.create(principal, self._body(environ))
+        cache = re.fullmatch(r"/v1/tasks/([A-Za-z0-9][A-Za-z0-9_-]{0,63})/cache-observations", path)
+        if cache:
+            # 客戶端只能看自己的任務；比對對象也只限同一客戶端。
+            if method != 'GET' or environ.get('QUERY_STRING'):
+                raise MonitorError('endpoint_not_supported', 404)
+            return self._cache_observation(principal, cache[1])
         match = re.fullmatch(r"/v1/tasks/([A-Za-z0-9][A-Za-z0-9_-]{0,63})(/result|/resume|/cancel)?", path)
         if match:
             self.store.binding(principal, match[1])

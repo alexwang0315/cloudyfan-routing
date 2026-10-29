@@ -33,3 +33,19 @@
 - `TaskService.create` 在寫入任何紀錄、付費之前完成準備，並把結果存進私有 `job.json` 的 `prepared`。內容包括版本、原 prompt 與送出內容的雜湊、各區塊的長度、決定與原因、政策雜湊、資格，以及實際送出內容。
 - 實際派送與排隊準備都透過 `task_prompt(job)` 取用凍結內容。
 - 原樣重送只比對原請求與註冊契約，不重新準備或派送。內容、區塊、優先序或格式有任何改變，都回 `frozen_task_changed`。
+
+
+## 逾時、無縮減與超限：付費前回退或拒絕（Issue51）
+
+- 準備結果多了 `outcome`：
+  - `prepared`：已整塊選取。
+  - `no_reduction`：每個區塊都放得下，送出完整原文。
+  - `fallback_original`：準備逾時，付費前回退完整原文。
+- 準備逾時時，只有政策 `fallback` 明示為 `original_if_fits`、且完整原文放得下，才在付費前回退原文。回退只送一次，不增加 attempt 或分類。否則依情況拒絕：
+  - `context_preparation_timeout`：政策不允許回退。
+  - `preparation_unavailable_original_over_limit`：完整原文也放不下。
+- 框架與輸出預留已超過上下文時，回 `output_reserve_exceeds_context`，與必要內容超限的 `required_context_over_limit` 分開。
+- 長度分開記錄：原始、準備後、實際送出。第一版沒有綁定精確 tokenizer 的本機計數，所以 `token_estimate` 為未知（`token_method: unavailable`），不用字元平均估值；供應商回報的輸入 token 另列。
+- 費用預留沿用 BudgetedCore 依每次呼叫可強制上界的保守預留，不因內容變短而降低。預算授權不足時，在任何 POST 前停止。
+- 準備在 Core 寫任務紀錄之前完成，所以付費前的拒絕不會留下任務紀錄（零 POST）。Monitor 另存安全的拒絕紀錄 `context-decisions.sqlite`（客戶端、run_id、原因碼、請求雜湊、時間；不存原文），觀測顯示 `rejected_before_dispatch` 與原因。
+- 準備耗時用的時鐘是模組層級的 `context_preparation._now`，主機測試可替換，用來驗證逾時與回退。

@@ -18,6 +18,7 @@ POLICY_FIELDS = {'version', 'max_input_bytes', 'max_blocks', 'max_block_bytes', 
                  'max_prepare_ms', 'qualification'}
 QUALIFICATION_FIELDS = {'content_preparation_version', 'scope', 'synthetic', 'evidence_sha256'}
 BLOCK_ID = re.compile(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,63}')
+_now = time.perf_counter  # 準備耗時用的時鐘；主機測試可替換以驗證逾時與回退
 
 
 class ContextError(ValueError):
@@ -40,7 +41,8 @@ def _positive(value):
 
 def validate_policy(policy):
     """伺服器端政策；欄位、上限與資格範圍都必須明確。"""
-    if (not isinstance(policy, dict) or set(policy) != POLICY_FIELDS or policy['version'] not in VERSIONS
+    if (not isinstance(policy, dict) or set(policy) - {'fallback'} != POLICY_FIELDS or policy['version'] not in VERSIONS
+            or policy.get('fallback', 'reject') not in ('reject', 'original_if_fits')
             or not all(_positive(policy[key]) for key in ('max_input_bytes', 'max_blocks', 'max_block_bytes',
                                                           'max_prepared_bytes', 'max_prepare_ms'))
             or not all(type(policy[key]) is int and policy[key] >= 0
@@ -92,9 +94,10 @@ def _validate_context(prompt, context, policy):
     return blocks
 
 
-def prepare(prompt, context, policy, *, clock=time.perf_counter):
+def prepare(prompt, context, policy, *, clock=None):
     """回傳凍結用的準備結果；任何必要條件不成立就在付費前拒絕。"""
     validate_policy(policy)
+    clock = clock or _now
     started = clock()
     if not isinstance(prompt, str) or not prompt.strip():
         raise ContextError('invalid_text_prompt')
@@ -106,6 +109,9 @@ def prepare(prompt, context, policy, *, clock=time.perf_counter):
         raise ContextError('token_method_untrusted', 409)
     blocks = _validate_context(prompt, context, policy)
     budget = policy['max_prepared_bytes'] - policy['framing_reserve_bytes'] - policy['output_reserve_bytes']
+    if budget <= 0:
+        # 框架與輸出預留已經吃掉整個上下文；與「必要內容超限」分開。
+        raise ContextError('output_reserve_exceeds_context', 413)
     rows = []
     for index, block in enumerate(blocks):
         omittable = block['omittable'] and policy['allow_omit']
@@ -114,7 +120,7 @@ def prepare(prompt, context, policy, *, clock=time.perf_counter):
                      'requested_omittable': block['omittable'], 'omittable': omittable,
                      'decision': None, 'reason': None})
     required = _bytes(prompt) + sum(row['bytes'] for row in rows if not row['omittable'])
-    if budget < 0 or required > budget:
+    if required > budget:
         raise ContextError('required_context_over_limit', 413)
     for row in rows:
         if not row['omittable']:
@@ -129,13 +135,28 @@ def prepare(prompt, context, policy, *, clock=time.perf_counter):
         else:
             row.update(decision='omitted', reason='remaining_budget_insufficient')
     content = prompt + ''.join(_render(block) for block, row in zip(blocks, rows) if row['decision'] == 'kept')
+    original_content = prompt + ''.join(_render(block) for block in blocks)
+    original = _bytes(original_content)
+    outcome, outcome_reason = 'prepared', 'whole_blocks_selected'
+    if all(row['decision'] == 'kept' for row in rows):
+        outcome, outcome_reason = 'no_reduction', 'all_blocks_fit'
     elapsed = (clock() - started) * 1000
     if elapsed > policy['max_prepare_ms']:
-        raise ContextError('context_preparation_timeout', 503)
-    original = _bytes(prompt) + sum(row['bytes'] for row in rows)
+        # 準備逾時：只有政策明示允許、原完整輸入也放得下時，才在付費前回退原文。
+        if policy.get('fallback', 'reject') != 'original_if_fits':
+            raise ContextError('context_preparation_timeout', 503)
+        if original > budget:
+            raise ContextError('preparation_unavailable_original_over_limit', 413)
+        content, outcome, outcome_reason = original_content, 'fallback_original', 'preparation_timeout'
+        for row in rows:
+            row.update(decision='kept', reason='fallback_original')
     return {'schema_version': 'context-preparation-v1', 'version': policy['version'], 'format': FORMAT,
             'measure': MEASURE, 'budget_bytes': budget, 'original_bytes': original,
             'prepared_bytes': _bytes(content), 'prompt_sha256': _sha(prompt), 'content_sha256': _sha(content),
+            'outcome': outcome, 'outcome_reason': outcome_reason, 'sent_bytes': _bytes(content),
+            # 第一版沒有綁定精確 tokenizer 的本機計數；保持未知，不用字元平均估值。
+            'token_estimate': None, 'token_method': 'unavailable',
+            'fallback_policy': policy.get('fallback', 'reject'),
             'blocks': rows, 'qualification': dict(policy['qualification']),
             'policy_sha256': hashlib.sha256(json.dumps(policy, sort_keys=True).encode()).hexdigest(),
             'content': content}

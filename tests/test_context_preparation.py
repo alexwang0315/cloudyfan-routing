@@ -83,3 +83,45 @@ def test_task_prompt_uses_frozen_preparation_and_old_jobs_keep_their_prompt():
     assert task_prompt({'request': {'prompt': 'old'}}) == 'old'
     prepared = prepare('new', _context(('a', 'x', False, 0)), _policy())
     assert task_prompt({'request': {'prompt': 'new'}, 'prepared': prepared}) == prepared['content']
+
+
+class _Clock:
+    """可控時鐘：第一次呼叫為 0，之後跳到指定毫秒，模擬準備逾時。"""
+    def __init__(self, elapsed_ms):
+        self.values = [0.0, elapsed_ms / 1000]
+
+    def __call__(self):
+        return self.values.pop(0) if self.values else 0.0
+
+
+def test_no_reduction_is_recorded_when_every_block_fits():
+    prepared = prepare('Q', _context(('a', 'x' * 10, True, 0)), _policy())
+    assert (prepared['outcome'], prepared['outcome_reason']) == ('no_reduction', 'all_blocks_fit')
+    assert prepared['sent_bytes'] == prepared['original_bytes'] == prepared['prepared_bytes']
+    assert prepared['token_estimate'] is None and prepared['token_method'] == 'unavailable'
+
+
+def test_timeout_falls_back_to_the_original_only_when_allowed_and_it_fits():
+    context = _context(('a', 'a' * 40, True, 0), ('b', 'b' * 40, True, 1))
+    prepared = prepare('Q', context, _policy(fallback='original_if_fits', max_prepare_ms=5), clock=_Clock(10))
+    assert (prepared['outcome'], prepared['outcome_reason']) == ('fallback_original', 'preparation_timeout')
+    assert prepared['content'] == 'Q' + ''.join(_render(b) for b in context['blocks'])
+    assert {row['reason'] for row in prepared['blocks']} == {'fallback_original'}
+
+
+@pytest.mark.parametrize('policy,code', [
+    ({'max_prepare_ms': 5}, 'context_preparation_timeout'),
+    ({'max_prepare_ms': 5, 'fallback': 'original_if_fits', 'max_prepared_bytes': 260},
+     'preparation_unavailable_original_over_limit'),
+    ({'framing_reserve_bytes': 300, 'output_reserve_bytes': 100}, 'output_reserve_exceeds_context'),
+    ({'fallback': 'always'}, None),
+], ids=['timeout-no-fallback', 'timeout-original-too-big', 'reserve-exceeds-context', 'unknown-fallback'])
+def test_timeout_and_reserve_failures_stop_before_dispatch_with_distinct_reasons(policy, code):
+    context = _context(('a', 'a' * 100, True, 0), ('b', 'b' * 100, True, 1))
+    if code is None:
+        with pytest.raises(ValueError, match='policy'):
+            prepare('Q', context, _policy(**policy), clock=_Clock(10))
+        return
+    with pytest.raises(ContextError) as error:
+        prepare('Q', context, _policy(**policy), clock=_Clock(10))
+    assert error.value.code == code

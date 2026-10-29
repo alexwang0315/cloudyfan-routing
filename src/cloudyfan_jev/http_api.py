@@ -18,7 +18,8 @@ from http import HTTPStatus
 from functools import wraps
 import time
 
-from .context_preparation import ContextError, prepare as prepare_context, task_prompt, validate_policy as validate_context_policy
+from .context_preparation import (ContextError, prepare as prepare_context, task_prompt,
+                                  validate_policy as validate_context_policy, verify_frozen as verify_frozen_preparation)
 from .budget import BudgetedCore, BudgetError
 from .client import _strict_json
 from .diagnostics import DiagnosticContract
@@ -393,14 +394,18 @@ class TaskService:
         directory = self._directory(principal, payload['run_id'])
         frozen = json.loads(_encode({'request': payload, 'registered': contract.descriptor()}))
         prepared = None
-        if 'context' in payload:
-            if contract.context_policy is None:
-                raise ServiceError('context_preparation_not_registered', 409)
+        if 'context' in payload and contract.context_policy is None:
+            raise ServiceError('context_preparation_not_registered', 409)
+
+        def prepare_new():
+            # 只為新任務準備：付費前、寫入任何紀錄前完成；失敗就拒絕，不靜默截斷。
             try:
-                # 付費前、寫入任何紀錄前完成；失敗就拒絕，不靜默截斷。
-                prepared = prepare_context(payload['prompt'], payload['context'], frozen['registered']['context_policy'])
+                return prepare_context(payload['prompt'], payload['context'], frozen['registered']['context_policy'])
             except ContextError as error:
                 raise ServiceError(error.code, error.status) from None
+
+        if 'context' in payload and not (directory / 'job.json').exists():
+            prepared = prepare_new()
         if self.retention is not None:
             self.retention.access(self.internal_id(principal, payload['run_id']), create=True,
                                   legacy_exists=(directory / 'job.json').exists())
@@ -411,11 +416,11 @@ class TaskService:
                 saved = _read(path)
                 # 原樣重送只比對原請求與註冊契約，不重新準備或派送。
                 if {key: saved.get(key) for key in ('request', 'registered')} != frozen or (
-                        'prepared' in saved) != (prepared is not None):
+                        'prepared' in saved) != ('context' in payload):
                     raise ServiceError('frozen_task_changed', 409)
             else:
-                if prepared is not None:
-                    frozen = {**frozen, 'prepared': prepared}
+                if 'context' in payload:
+                    frozen = {**frozen, 'prepared': prepared if prepared is not None else prepare_new()}
                 if self.capacity_controller is not None:
                     try:
                         self.capacity_controller.adopt(self.internal_id(principal, payload['run_id']), principal, frozen['registered'])
@@ -597,6 +602,10 @@ class TaskService:
             contract = self.contracts.get(job['request']['contract_id'])
             if contract is None or _encode(contract.descriptor()) != _encode(job['registered']):
                 raise ServiceError('frozen_configuration_changed', 409)
+            try:
+                verify_frozen_preparation(job)
+            except ContextError as error:
+                raise ServiceError(error.code, error.status) from None
             if ((directory / 'outcome.json').exists()
                     or _read(directory / 'state.json').get('status') == 'capacity_denied'):
                 return self.status(principal, run_id)

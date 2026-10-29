@@ -162,7 +162,28 @@ def prepare(prompt, context, policy, *, clock=None):
             'content': content}
 
 
+def verify_frozen(job):
+    """派送或接續前核對凍結準備；損壞或錯配明示不可驗證，不自動修復或重新準備。"""
+    prepared, request = job.get('prepared'), job['request']
+    if ('context' in request) != ('prepared' in job):
+        raise ContextError('frozen_preparation_unverifiable', 409)
+    if prepared is None:
+        return None
+    policy = job['registered'].get('context_policy')
+    try:
+        valid = (isinstance(prepared, dict) and isinstance(prepared.get('content'), str)
+                 and _sha(prepared['content']) == prepared['content_sha256']
+                 and _sha(request['prompt']) == prepared['prompt_sha256']
+                 and isinstance(policy, dict) and policy.get('version') == prepared['version']
+                 and hashlib.sha256(json.dumps(policy, sort_keys=True).encode()).hexdigest() == prepared['policy_sha256'])
+    except (KeyError, TypeError):
+        valid = False
+    if not valid:
+        raise ContextError('frozen_preparation_unverifiable', 409)
+    return prepared
+
+
 def task_prompt(job):
-    """實際派送的使用者內容：有凍結準備結果就用它，否則是原 prompt。"""
-    prepared = job.get('prepared')
-    return prepared['content'] if isinstance(prepared, dict) else job['request']['prompt']
+    """實際派送的使用者內容：有凍結準備結果就用它（先核對），否則是原 prompt。"""
+    prepared = verify_frozen(job)
+    return prepared['content'] if prepared is not None else job['request']['prompt']

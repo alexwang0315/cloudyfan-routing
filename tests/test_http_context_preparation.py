@@ -1,5 +1,6 @@
 """#50：參考區塊經真實 TaskService／BudgetedCore／Core 準備、凍結並派送；上游為離線假 API。"""
 import json
+from dataclasses import replace
 
 import httpx
 import pytest
@@ -96,3 +97,106 @@ def test_unsafe_preparation_is_rejected_before_any_post_or_task_record(tmp_path,
                                               'context': context})
     assert response.json()['error']['code'] == code
     assert api.requests == [] and not list((tmp_path / 'service').glob('*/job.json'))
+
+
+def test_resume_after_interruption_reuses_the_frozen_preparation_without_resending(tmp_path, monkeypatch):
+    class InterruptOnce(ArithmeticEnvironment):
+        attempts = 0
+
+        def validate(self, answer):
+            type(self).attempts += 1
+            if self.attempts == 1:
+                raise RuntimeError('PRIVATE interruption')
+            return super().validate(answer)
+
+    client, service, api = _service(tmp_path)
+    service.contracts['blocks'] = replace(service.contracts['blocks'], environment_factory=lambda w: InterruptOnce())
+    body = {'run_id': 'ctx-resume', 'contract_id': 'blocks', 'prompt': 'Q', 'context': CONTEXT}
+    first = client.post('/v1/tasks', json=body)
+    assert first.json()['status'] == 'engineering_interrupted'
+    job = next((tmp_path / 'service').glob('*/job.json'))
+    frozen = job.read_bytes()
+    from cloudyfan_jev import context_preparation
+    monkeypatch.setattr(context_preparation, 'prepare', lambda *a, **k: pytest.fail('Resume must not prepare again'))
+    resumed = client.post('/v1/tasks/ctx-resume/resume', json={})
+    assert resumed.status_code == 200 and resumed.json()['status'] == 'passed'
+    assert len(api.requests) == 1 and job.read_bytes() == frozen
+
+
+def test_tool_round_trip_keeps_the_prepared_user_content_and_paired_tool_messages(tmp_path):
+    from cloudyfan_jev.budget import EnforcedBound, ToolBound
+    api = API(messages=[{'role': 'assistant', 'content': None, 'tool_calls': [{'id': 't1', 'type': 'function',
+        'function': {'name': 'write', 'arguments': '{"value":"2"}'}}]}, {'role': 'assistant', 'content': '2'}])
+
+    class Env:
+        replayable_tools = ('write',)
+
+        def __init__(self, workspace):
+            self.workspace = workspace
+
+        def tools_schema(self):
+            return [{'type': 'function', 'function': {'name': 'write', 'parameters': {'type': 'object'}}}]
+
+        def call(self, name, arguments):
+            (self.workspace / 'answer.txt').write_text(arguments['value'])
+            return {'ok': True}
+
+        def validate(self, answer):
+            return {'passed': (self.workspace / 'answer.txt').read_text() == '2'}
+
+    runner = controlled(tmp_path / 'runner', api, total='2')
+    runner.core.execution_policy = ExecutionPolicy(mode='unrestricted', origin='home:fixture', classifier='cloud:typesafe')
+    runner.core.execution_policy.tools['write'] = 'home:fixture'
+    runner.tool_bounds['write'] = ToolBound(EnforcedBound('0', 'fixture local zero fee'))
+    for profile in runner.core.profiles.values():
+        profile['execution_location'] = 'cloud:fixture'
+    contract = RegisteredContract('public-v1', runner, Env, tool_names=('write',), context_policy=POLICY)
+    service = TaskService(tmp_path / 'service', contracts={'blocks': contract}, allowed_principal='admin')
+    client = httpx.Client(transport=httpx.WSGITransport(HTTPApp(service, authenticate=lambda e: 'admin')),
+                          base_url='http://fixture')
+    response = client.post('/v1/tasks', json={'run_id': 'ctx-tool', 'contract_id': 'blocks', 'prompt': 'Q',
+                                              'context': CONTEXT})
+    assert response.status_code == 200 and response.json()['status'] == 'passed', response.text
+    prepared = json.loads(next((tmp_path / 'service').glob('*/job.json')).read_text())['prepared']['content']
+    assert len(api.requests) == 2
+    for request in api.requests:
+        assert _user_content(request) == prepared, 'Every turn must carry the same frozen prepared content'
+    second = api.requests[1]['messages']
+    calls = [m for m in second if m.get('tool_calls')]
+    results = [m for m in second if m['role'] == 'tool']
+    assert len(calls) == len(results) == 1 and results[0]['tool_call_id'] == 't1'
+
+
+def test_corrupted_frozen_preparation_is_unverifiable_and_never_resent(tmp_path):
+    class InterruptOnce(ArithmeticEnvironment):
+        attempts = 0
+
+        def validate(self, answer):
+            type(self).attempts += 1
+            if self.attempts == 1:
+                raise RuntimeError('PRIVATE interruption')
+            return super().validate(answer)
+
+    client, service, api = _service(tmp_path)
+    service.contracts['blocks'] = replace(service.contracts['blocks'], environment_factory=lambda w: InterruptOnce())
+    body = {'run_id': 'ctx-corrupt', 'contract_id': 'blocks', 'prompt': 'Q', 'context': CONTEXT}
+    assert client.post('/v1/tasks', json=body).json()['status'] == 'engineering_interrupted'
+    path = next((tmp_path / 'service').glob('*/job.json'))
+    job = json.loads(path.read_text())
+    job['prepared']['content'] += ' tampered'
+    path.chmod(0o600)
+    path.write_text(json.dumps(job))
+    response = client.post('/v1/tasks/ctx-corrupt/resume', json={})
+    assert response.json()['error']['code'] == 'frozen_preparation_unverifiable'
+    assert len(api.requests) == 1
+
+
+def test_a_policy_update_never_rewrites_an_existing_frozen_task(tmp_path):
+    client, service, api = _service(tmp_path)
+    body = {'run_id': 'ctx-policy', 'contract_id': 'blocks', 'prompt': 'Q', 'context': CONTEXT}
+    assert client.post('/v1/tasks', json=body).status_code == 200
+    path = next((tmp_path / 'service').glob('*/job.json'))
+    frozen = path.read_bytes()
+    service.contracts['blocks'] = replace(service.contracts['blocks'], context_policy={**POLICY, 'allow_omit': False})
+    assert client.post('/v1/tasks', json=body).json()['error']['code'] == 'frozen_task_changed'
+    assert path.read_bytes() == frozen and len(api.requests) == 1

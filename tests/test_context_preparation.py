@@ -80,9 +80,31 @@ def test_invalid_or_unsafe_input_is_rejected_before_any_dispatch(context, policy
 
 
 def test_task_prompt_uses_frozen_preparation_and_old_jobs_keep_their_prompt():
-    assert task_prompt({'request': {'prompt': 'old'}}) == 'old'
-    prepared = prepare('new', _context(('a', 'x', False, 0)), _policy())
-    assert task_prompt({'request': {'prompt': 'new'}, 'prepared': prepared}) == prepared['content']
+    assert task_prompt({'request': {'prompt': 'old'}, 'registered': {}}) == 'old'
+    context, policy = _context(('a', 'x', False, 0)), _policy()
+    prepared = prepare('new', context, policy)
+    job = {'request': {'prompt': 'new', 'context': context}, 'registered': {'context_policy': policy}, 'prepared': prepared}
+    assert task_prompt(job) == prepared['content']
+
+
+@pytest.mark.parametrize('tamper', ['content', 'prompt', 'policy', 'missing-prepared', 'missing-context'])
+def test_corrupted_or_mismatched_frozen_preparation_is_unverifiable_and_never_repaired(tamper):
+    context, policy = _context(('a', 'x', False, 0)), _policy()
+    job = {'request': {'prompt': 'new', 'context': context}, 'registered': {'context_policy': policy},
+           'prepared': prepare('new', context, policy)}
+    if tamper == 'content':
+        job['prepared'] = {**job['prepared'], 'content': job['prepared']['content'] + ' extra'}
+    elif tamper == 'prompt':
+        job['request'] = {**job['request'], 'prompt': 'changed'}
+    elif tamper == 'policy':
+        job['registered'] = {'context_policy': {**policy, 'allow_omit': False}}
+    elif tamper == 'missing-prepared':
+        del job['prepared']
+    else:
+        job['request'] = {'prompt': 'new'}
+    with pytest.raises(ContextError) as error:
+        task_prompt(job)
+    assert error.value.code == 'frozen_preparation_unverifiable'
 
 
 class _Clock:

@@ -167,6 +167,7 @@ def successful_small_run(tmp_path, request):
                 "    os.symlink(evidence / 'real/target.json', evidence / 'file-link')\n"
                 "    os.symlink('real', evidence / 'directory-link')\n"
                 "    os.symlink(evidence / 'removed.sqlite', evidence / 'dangling-link')\n"
+                "    os.mkfifo(evidence / 'planted-fifo')\n"
                 + ("    os.symlink(evidence.parents[3] / 'outside.json', evidence / 'escape')\n"
                    if escape else ""))
         if outside_tests:
@@ -236,18 +237,22 @@ def test_reviewed_evidence_symlinks_are_sealed_without_being_followed(successful
     ]
     sealed = {item["path"] for item in run["output_files"]}
     assert f"{evidence}/real/target.json" in sealed
-    assert not any("-link" in path for path in sealed)
+    assert not any("-link" in path or "fifo" in path for path in sealed)
+    assert run["output_special_files"] == [{"path": f"{evidence}/planted-fifo", "type": "fifo"}]
     destination = tmp_path / "delivery"
-    shutil.copytree(frozen / "monitor", destination, symlinks=True)
+    shutil.copytree(frozen / "monitor", destination, ignore=shutil.ignore_patterns("runtime"))
     finalized = command("finalize", "--snapshot", frozen, "--destination", destination)
     assert finalized.returncode == 0, finalized.stderr
     receipt = json.loads((destination / json.loads(finalized.stdout)["receipt"]).read_text())
     assert receipt["preserved_symlinks"] == run["output_symlinks"]
+    assert receipt["preserved_special_files"] == run["output_special_files"]
     preserved = destination / "runtime/deliveries/mini-frozen/snapshot"
-    assert not [p for p in preserved.rglob("*") if p.is_symlink()]
+    assert not [p for p in preserved.rglob("*") if p.is_symlink() or not (p.is_file() or p.is_dir())]
     status = command("status", "--root", destination)
     assert status.returncode == 0, status.stderr
-    assert json.loads(status.stdout)["sealed_output_symlinks_verified"] == 3
+    current = json.loads(status.stdout)
+    assert current["sealed_output_symlinks_verified"] == 3
+    assert current["sealed_output_special_files_verified"] == 1
 
 
 @pytest.mark.parametrize("successful_small_run", ["escaping_symlink"], indirect=True)
@@ -259,7 +264,7 @@ def test_evidence_symlink_outside_the_snapshot_is_refused(successful_small_run):
 
 
 @pytest.mark.parametrize("successful_small_run", ["evidence_symlinks"], indirect=True)
-@pytest.mark.parametrize("damage", ["retargeted", "added", "removed"])
+@pytest.mark.parametrize("damage", ["retargeted", "added", "removed", "fifo_replaced", "fifo_removed"])
 def test_finalize_rejects_changed_evidence_symlinks(successful_small_run, tmp_path, damage):
     frozen = successful_small_run
     evidence = frozen / "monitor/runtime/evidence"
@@ -268,13 +273,18 @@ def test_finalize_rejects_changed_evidence_symlinks(successful_small_run, tmp_pa
         (evidence / "file-link").symlink_to(evidence / "real")
     elif damage == "added":
         (evidence / "late-link").symlink_to(evidence / "real/target.json")
-    else:
+    elif damage == "removed":
         (evidence / "dangling-link").unlink()
+    else:
+        (evidence / "planted-fifo").unlink()
+        if damage == "fifo_replaced":
+            (evidence / "planted-fifo").write_text("not the planted fifo\n")
     destination = tmp_path / "delivery"
-    shutil.copytree(frozen / "monitor", destination, symlinks=True)
+    shutil.copytree(frozen / "monitor", destination, ignore=shutil.ignore_patterns("runtime"))
     result = command("finalize", "--snapshot", frozen, "--destination", destination)
     assert result.returncode != 0
-    assert "verification evidence symlink" in result.stderr
+    expected = "special files" if damage.startswith("fifo") else "symlink"
+    assert f"verification evidence {expected}" in result.stderr
     assert not (destination / "runtime/tooling/current.json").exists()
 
 

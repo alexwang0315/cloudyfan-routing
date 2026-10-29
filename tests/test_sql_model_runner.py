@@ -3,7 +3,6 @@ from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import json
-from pathlib import Path
 
 import httpx
 
@@ -11,12 +10,11 @@ from cloudyfan_jev.budget import Authorization, BudgetStore, EnforcedBound
 from cloudyfan_jev.client import Client
 from cloudyfan_jev.scores.sql_exam import cases
 from cloudyfan_jev.scores.sql_runner import QualificationRunner
+from sql_frozen_runtime import local_version_table
 
-ROOT = Path(__file__).resolve().parents[1]
 
-
-def setup_runner(tmp_path, handler=None, *, balance='10'):
-    table = json.loads((ROOT / 'examples/sql-model-versions-v1.json').read_text())
+def setup_runner(tmp_path, handler=None, *, balance='10', table=None):
+    table = local_version_table() if table is None else table
     calls = []
     answers = {c.contract().task()['prompt']: c.answer() for c in cases()}
 

@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from sql_frozen_runtime import local_version_table
 from test_first_pool import profile, NOW
 from cloudyfan_jev.scores.catalog import digest
 from cloudyfan_jev.scores.configuration import configuration_digest
@@ -283,8 +284,9 @@ def test_exam_preparation_is_offline_private_and_refuses_existing_output(tmp_pat
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     (tmp_path / 'examples').mkdir()
-    for name in ['sql-model-versions-v1.json', 'first-pool-profile-sql-v2.json']:
-        (tmp_path / 'examples' / name).write_bytes((root / 'examples' / name).read_bytes())
+    (tmp_path / 'examples' / 'first-pool-profile-sql-v2.json').write_bytes(
+        (root / 'examples' / 'first-pool-profile-sql-v2.json').read_bytes())
+    (tmp_path / 'examples' / 'sql-model-versions-v1.json').write_text(json.dumps(local_version_table()))
     out = tmp_path / 'runtime' / 'exam'
     report = module.prepare(tmp_path, out, now=NOW)
     assert report['tasks'] == 50 and report['real_api_calls'] == 0 and report['execution_authorized'] is False

@@ -222,7 +222,7 @@ class App:
         start_response(f"{status} {HTTPStatus(status).phrase}", headers)
         return [body]
 
-    def _cache_observation(self, client, run):
+    def _cache_observation(self, client, run, *, operator=True):
         from .cache_observations import observe
         from .saved_comparisons import SourceUnavailable
         try:
@@ -231,6 +231,14 @@ class App:
             raise MonitorError('cache_observation_unavailable', 503) from None
         if value is None:
             raise MonitorError('cache_observation_task_not_found', 404)
+        if not operator:
+            # 客戶端只看自己的客戶用量費；API 實付、上界與預留屬操作員資料。
+            costs = value.get('costs')
+            value['costs'] = ({'customer_usage_charge': costs['customer_usage_charge']}
+                              if isinstance(costs, dict) and 'customer_usage_charge' in costs else None)
+            for row in value['calls']:
+                row.pop('api_cost', None)
+                row.pop('conservative_bound_usd', None)
         return value
 
     def _admin(self, method, path, environ):
@@ -431,7 +439,7 @@ class App:
             # 客戶端只能看自己的任務；比對對象也只限同一客戶端。
             if method != 'GET' or environ.get('QUERY_STRING'):
                 raise MonitorError('endpoint_not_supported', 404)
-            return self._cache_observation(principal, cache[1])
+            return self._cache_observation(principal, cache[1], operator=False)
         match = re.fullmatch(r"/v1/tasks/([A-Za-z0-9][A-Za-z0-9_-]{0,63})(/result|/resume|/cancel)?", path)
         if match:
             self.store.binding(principal, match[1])

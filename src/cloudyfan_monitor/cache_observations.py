@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import re
 import secrets
+import sqlite3
 
 from .saved_comparisons import RUN, SourceUnavailable, _database, _read, _task_id, identifier, strict_json
 
@@ -104,7 +105,8 @@ def _contracts(app):
         for rows in ((descriptor.get('backup_plan') or {}).get('pools') or {}).values():
             for row in rows:
                 profiles['backup:' + row['entry']['config_id']] = row['entry']['profile']
-        result[key] = {'receipt_root': Path(client.root).absolute(), 'profiles': profiles}
+        result[key] = {'receipt_root': Path(client.root).absolute(), 'profiles': profiles,
+                       'budget_store': Path(contract.runner.store.path).absolute()}
     return result
 
 
@@ -189,13 +191,75 @@ def _load(app, client, run, now, contracts, client_key):
         static = _static(messages, prompt) if isinstance(messages, list) else []
         calls.append({'index': index, 'scope': scope, 'static': static,
                       'chain': _chain(client_key, scope, static) if scope is not None else [],
+                      'call_id': intent['call_id'],
                       'started_at': intent.get('started_at'), 'moment': _seconds(intent.get('started_at')),
                       'response': response,
                       'sent': type(response.get('http_status')) is int and not response.get('interrupted')
                               and not response.get('not_dispatched'),
                       'model': intent['payload'].get('model'),
                       'provider': (scope or {}).get('profile', {}).get('provider')})
-    return {**task, 'status': 'available', 'calls': calls, 'calls_truncated': truncated}
+    return {**task, 'status': 'available', 'calls': calls, 'calls_truncated': truncated,
+            'internal': internal, 'contract': contract}
+
+
+def _tokens(response):
+    try:
+        usage = json.loads(response['raw']).get('usage')
+    except (TypeError, ValueError, AttributeError, KeyError):
+        return {'prompt_tokens': None, 'completion_tokens': None}
+    usage = usage if isinstance(usage, dict) else {}
+    return {key: usage.get(key) if type(usage.get(key)) is int and usage.get(key) >= 0 else None
+            for key in ('prompt_tokens', 'completion_tokens')}
+
+
+def _cache_result(usage):
+    """hit／miss 只依實際回報的讀取量；寫入另列。沒有回報就是未知，不是 miss。"""
+    if usage['status'] != 'observed':
+        return 'unknown'
+    if usage['cache_read_tokens'] is None:
+        return 'unknown'
+    return 'hit' if usage['cache_read_tokens'] > 0 else 'miss'
+
+
+def _costs(contract, internal, calls, client, run, monitor_path):
+    """權威帳本值只取一次；上界、預留與客戶用量費分開，缺值不填零。"""
+    from cloudyfan_jev.budget import _fingerprint
+    root_id = 'model:' + _fingerprint(str(contract['receipt_root'].resolve())) + ':'
+    with _database(contract['budget_store'], 1048576) as db:
+        events = {row['id']: dict(row) for row in db.execute(
+            'SELECT id,cost,bound,verified FROM events WHERE run=? ORDER BY id LIMIT 257', (internal,))}
+        reservation = db.execute('SELECT amount,status FROM reservations WHERE run=?', (internal,)).fetchone()
+    per_call = {}
+    for call in calls:
+        event = events.get(root_id + call['call_id'])
+        per_call[call['call_id']] = {
+            'api_cost': ({'status': 'not_recorded', 'amount_usd': None, 'verified': None, 'source': 'budget_ledger'}
+                         if event is None else
+                         {'status': 'unknown' if event['cost'] is None else 'authoritative',
+                          'amount_usd': event['cost'], 'verified': bool(event['verified']), 'source': 'budget_ledger'}),
+            'conservative_bound_usd': None if event is None else event['bound']}
+    with _database(monitor_path, 1048576) as db:
+        charges = [row['amount_usd'] for row in db.execute(
+            "SELECT amount_usd FROM billing_entries WHERE client=? AND run_id=? AND kind='debit' ORDER BY id LIMIT 65",
+            (client, run))]
+        pending = db.execute("SELECT COUNT(*) FROM billing_waiting WHERE json_extract(data,'$.client')=? "
+                             "AND json_extract(data,'$.run_id')=?", (client, run)).fetchone()[0]
+    from decimal import Decimal
+    customer = ({'status': 'not_provided', 'known_usd': None, 'complete_usd': None, 'pending_entries': 0}
+                if not charges and not pending else
+                {'status': 'unknown' if pending else 'available',
+                 'known_usd': format(sum((Decimal(value) for value in charges), Decimal(0)), 'f'),
+                 'complete_usd': None if pending else format(sum((Decimal(value) for value in charges), Decimal(0)), 'f'),
+                 'pending_entries': pending})
+    known = [Decimal(row['cost']) for row in events.values() if row['cost'] is not None]
+    unknown = sum(row['cost'] is None for row in events.values())
+    return per_call, {'reservation': None if reservation is None else {'amount_usd': reservation['amount'],
+                                                                        'status': reservation['status']},
+                      'api_known_usd': format(sum(known, Decimal(0)), 'f'), 'api_unknown_events': unknown,
+                      'api_complete_usd': format(sum(known, Decimal(0)), 'f') if unknown == 0 and events else None,
+                      'customer_usage_charge': customer,
+                      'meanings': 'api_cost_is_ledger_authority; bounds_and_reservation_are_limits_not_spend; '
+                                  'customer_charge_uses_frozen_task_rate'}
 
 
 def observe(app, client, run):
@@ -264,8 +328,21 @@ def observe(app, client, run):
                             matched_messages=best, previous_started_at=when[1])
         projected.append({'index': call['index'], 'sent': call['sent'], 'started_at': call['started_at'],
                           'model': call['model'], 'provider': provider, 'prefix': prefix, 'hint': hint,
-                          'cache_usage': usage})
+                          'cache_usage': usage, 'cache_result': _cache_result(usage),
+                          'tokens': _tokens(call['response']), 'call_id': call['call_id']})
+    costs = None
+    if target['status'] == 'available':
+        try:
+            per_call, costs = _costs(target['contract'], target['internal'], target['calls'], client, run,
+                                     app.store.path)
+        except (OSError, ValueError, KeyError, TypeError, ArithmeticError, sqlite3.Error, SourceUnavailable):
+            per_call, costs = {}, {'status': 'unavailable'}
+        for row in projected:
+            row.update(per_call.get(row['call_id'], {'api_cost': None, 'conservative_bound_usd': None}))
+    for row in projected:
+        row.pop('call_id', None)
     return {'schema_version': SCHEMA, 'task': {key: target[key] for key in ('client', 'run_id', 'created_at')},
+            'costs': costs,
             'status': target['status'], 'calls': projected, 'calls_truncated': target.get('calls_truncated', False),
             'serialization': SERIALIZATION, 'local_hint_window_seconds': HINT_WINDOW_SECONDS,
             'note': 'hint_only_no_reordering_no_guarantee', 'adopted': False}

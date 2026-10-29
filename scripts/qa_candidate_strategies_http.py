@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import sqlite3
 import sys
 import threading
 
@@ -17,6 +18,16 @@ from candidate_observation_fixture import assemble_candidate_host  # noqa: E402
 from test_local_http_integration import (  # noqa: E402
     Clock, LoopbackEvidence, QuietHandler, ThreadedServer, configure_loopback_network,
 )
+
+
+def fingerprint(path):
+    """SQLite by table contents (page polling may rewrite unchanged rows), other files by bytes."""
+    if path.suffix in ('.sqlite', '.sqlite3'):
+        with sqlite3.connect(path.as_uri() + '?mode=ro', uri=True, timeout=5) as db:
+            tables = [row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")]
+            rows = {name: sorted(map(repr, db.execute('SELECT * FROM "' + name + '"').fetchall())) for name in tables}
+        return hashlib.sha256(json.dumps(rows, sort_keys=True).encode()).hexdigest()
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def check(value, code):
@@ -47,9 +58,9 @@ def main():
 
         def state():
             return {'model_calls': len(host.calls), 'original_files_sha256': hashlib.sha256(json.dumps({
-                str(path.relative_to(host.root)): hashlib.sha256(path.read_bytes()).hexdigest()
+                str(path.relative_to(host.root)): fingerprint(path)
                 for path in sorted(host.root.rglob('*')) if path.is_file()
-                and not str(path.relative_to(host.root)).startswith('.saved-comparisons/')},
+                and not str(path.relative_to(host.root)).startswith('.saved-comparisons/') and not path.name.endswith(('-wal', '-shm'))},
                 sort_keys=True).encode()).hexdigest(), 'budget': {key: host.budget.report().get(key)
                 for key in ('known_usd', 'reserved_usd', 'unknown_events')}}
 

@@ -10,7 +10,6 @@ import os
 from pathlib import Path
 import sqlite3
 import threading
-import time
 
 from cloudyfan_jev.client import CHAT
 
@@ -120,11 +119,14 @@ class CacheAffinity:
 
     def _decide(self, client, run, version, request):
         """回傳等價集合內最長的可信相同前綴；沒有就不偏好任何候選。"""
-        # 提示窗口與收據的 started_at 用同一個真實時鐘；原文存取到期仍依服務時鐘。
-        app, now = self.app, time.time()
+        # 提示窗口與收據的 started_at 用同一個（可注入的）真實時鐘；原文存取到期仍依服務時鐘。
+        app = self.app
+        now = observe.cache_clock(app)
         service_now = app.store.clock()
         answer = {'policy_version': version, 'preferred': None, 'reason': 'no_earlier_sent_request_with_identical_prefix',
-                  'observed_at': now, 'matched_messages': 0, 'previous_started_at': None}
+                  'observed_at': now, 'matched_messages': 0, 'previous_started_at': None, 'unreadable_sources': 0}
+        if not isinstance(now, (int, float)) or now != now or now in (float('inf'), float('-inf')):
+            return {**answer, 'observed_at': None, 'reason': 'clock_unavailable'}
         support = getattr(app, 'cache_support', None) or {}
         secret = observe._secret(app.store.path)
         client_key = observe._client_key(secret, client)
@@ -139,15 +141,17 @@ class CacheAffinity:
             return {**answer, 'reason': 'contract_unsupported'}
         job = observe.strict_json(observe._read(Path(app.gateway.service.root) / _task_id(client, run) / 'job.json',
                                                 observe.LIMITS['file_bytes']))
-        earlier = []
+        earlier, unreadable = [], 0
         for other in others:
             try:
                 loaded = observe._load(app, client, other, service_now, contracts, client_key)
             except (OSError, ValueError, KeyError, TypeError, observe.SourceUnavailable):
+                unreadable += 1  # 局部來源損壞只略過該來源，其他可信來源照用
                 continue
             if loaded and loaded['status'] == 'available':
                 earlier.extend(call for call in loaded['calls'] if call['sent'] and call['moment'] is not None)
-        best = None
+        answer['unreadable_sources'] = unreadable
+        best, seen = None, set()
         for candidate in request['candidates']:
             intent = {'url': CHAT, 'payload': candidate['payload']}
             scope = observe._scope(intent, contract['profiles'], contract['receipt_root'], client_key)
@@ -157,17 +161,30 @@ class CacheAffinity:
                 continue
             static = observe._static(candidate['payload'].get('messages') or [], job['request']['prompt'])
             chain = observe._chain(client_key, scope, static)
+            ttl = registered.get('source_ttl_seconds')
             for previous in earlier:
-                if now - previous['moment'] > observe.HINT_WINDOW_SECONDS or previous['moment'] > now:
-                    continue
                 length = 0
                 for mine, theirs in zip(chain, previous['chain']):
                     if mine != theirs:
                         break
                     length += 1
-                if length and (best is None or length > best[1]):
+                if not length:
+                    continue
+                # 相同前綴存在，但依序檢查是否仍可作為提示；每種失效都有自己的安全原因。
+                if previous['moment'] > now:
+                    seen.add('clock_anomaly')
+                elif previous.get('response_model_mismatch'):
+                    seen.add('response_model_mismatch')
+                elif now - previous['moment'] > observe.HINT_WINDOW_SECONDS:
+                    seen.add('outside_local_hint_window')
+                elif type(ttl) is int and now - previous['moment'] > ttl:
+                    seen.add('outside_source_ttl')
+                elif best is None or length > best[1]:
                     best = (candidate['config_id'], length, previous['started_at'])
         if best is None:
+            for reason in ('clock_anomaly', 'response_model_mismatch', 'outside_source_ttl', 'outside_local_hint_window'):
+                if reason in seen:
+                    return {**answer, 'reason': reason}
             return answer
         return {**answer, 'preferred': best[0], 'reason': 'identical_leading_messages_in_same_scope',
                 'matched_messages': best[1], 'previous_started_at': best[2]}

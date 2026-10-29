@@ -19,7 +19,12 @@ window.CloudyFanCache = (() => {
   const affinityReasons = {identical_leading_messages_in_same_scope:'等價候選中有一個與先前已送出請求的固定前綴相同。',
     no_earlier_sent_request_with_identical_prefix:'等價候選都沒有可信的相同前綴；沿原排序。',no_equivalent_set:'沒有完全等價的候選；不比較快取。',
     affinity_preference_outside_equivalent_set:'提示指向等價集合之外的候選；不採用，沿原排序。',affinity_port_failed:'提示無法取得；沿原排序。',
-    contract_unsupported:'此契約不支援親和性；沿原排序。'};
+    contract_unsupported:'此契約不支援親和性；沿原排序。',
+    outside_local_hint_window:'相同前綴已超出本機提示窗口；不宣稱快取仍在，沿原排序。',
+    outside_source_ttl:'相同前綴已超出供應商來源 TTL；沿原排序。',
+    clock_anomaly:'時鐘異常（先前請求時間晚於現在）；略過親和性，沿原排序。',
+    clock_unavailable:'時鐘無法使用；略過親和性，沿原排序。',
+    response_model_mismatch:'先前回應的模型與請求不符，不當作熱快取來源；沿原排序。'};
   const validPolicy = value => !!value && value.schema_version === 'cache-affinity-v1' && Number.isSafeInteger(value.revision)
     && (value.active_version === null || typeof value.active_version === 'string') && Array.isArray(value.available_versions)
     && value.available_versions.every(row => typeof row?.version === 'string');
@@ -59,7 +64,7 @@ window.CloudyFanCache = (() => {
     if (!value) return '';
     if (value.status === 'unavailable') return '<p class="comparison-warning">親和性紀錄目前無法確認。</p>';
     const rows = Array.isArray(value.decisions) ? value.decisions : [];
-    return `<section class="panel cache-affinity-task"><div class="panel-header"><h2>快取親和性決策</h2><span class="badge ${value.frozen_version ? 'blue' : 'amber'}" data-affinity-frozen="${h(value.frozen_version ?? 'none')}">${value.frozen_version ? '任務凍結版本 ' + h(value.frozen_version) : '此任務未採用親和性'}</span></div><div class="panel-body">${rows.length ? `<ol>${rows.map(row => `<li data-affinity-decision="${h(row.decision_key)}"><strong>${h(row.applied?.tier ?? row.decision_key)}</strong> · ${row.applied ? (row.applied.adopted ? '<span data-affinity-adopted="true">已採用次要排序</span>' : '<span data-affinity-adopted="false">未改變原排序</span>') : '尚無 Core 決策'}<br><span class="metadata">${h(affinityReasons[row.applied?.reason ?? row.hint?.reason] || '沒有可用原因。')}</span>${row.applied ? `<br><span class="metadata">等價候選 ${h((row.applied.equivalent_config_ids || []).join('、'))} · 原排序 <code>${h(row.applied.original_config_id)}</code> · 實際 <code>${h(row.applied.selected_config_id)}</code></span>` : ''}</li>`).join('')}</ol>` : '<p class="metadata">沒有親和性決策；原排序未被改變。</p>'}${Array.isArray(value.sent_models) && value.sent_models.length ? `<p class="metadata">實際送出模型：${value.sent_models.map(row => `<code>${h(row.model)}</code>`).join(' → ')}</p>` : ''}<p class="metadata">只在全部閘門之後、完整成本與速度區間完全相同的候選之間打破平手；不預熱、不探測，也不宣稱實際命中或降本。</p></div></section>`;
+    return `<section class="panel cache-affinity-task"><div class="panel-header"><h2>快取親和性決策</h2><span class="badge ${value.frozen_version ? 'blue' : 'amber'}" data-affinity-frozen="${h(value.frozen_version ?? 'none')}">${value.frozen_version ? '任務凍結版本 ' + h(value.frozen_version) : '此任務未採用親和性'}</span></div><div class="panel-body">${rows.length ? `<ol>${rows.map(row => `<li data-affinity-decision="${h(row.decision_key)}"><strong>${h(row.applied?.tier ?? row.decision_key)}</strong> · ${row.applied ? (row.applied.adopted ? '<span data-affinity-adopted="true">已採用次要排序</span>' : '<span data-affinity-adopted="false">未改變原排序</span>') : '尚無 Core 決策'}<br><span class="metadata" data-affinity-reason="${h(row.applied?.reason ?? row.hint?.reason ?? '')}">${h(affinityReasons[row.applied?.reason ?? row.hint?.reason] || '沒有可用原因。')}</span>${row.hint?.unreadable_sources ? `<br><span class="metadata">略過 ${h(row.hint.unreadable_sources)} 個無法核對的先前來源；其他可信來源照用。</span>` : ''}${row.applied ? `<br><span class="metadata">等價候選 ${h((row.applied.equivalent_config_ids || []).join('、'))} · 原排序 <code>${h(row.applied.original_config_id)}</code> · 實際 <code>${h(row.applied.selected_config_id)}</code></span>` : ''}</li>`).join('')}</ol>` : '<p class="metadata">沒有親和性決策；原排序未被改變。</p>'}${Array.isArray(value.sent_models) && value.sent_models.length ? `<p class="metadata">實際送出模型：${value.sent_models.map(row => `<code>${h(row.model)}</code>`).join(' → ')}</p>` : ''}<p class="metadata">只在全部閘門之後、完整成本與速度區間完全相同的候選之間打破平手；不預熱、不探測，也不宣稱實際命中或降本。</p></div></section>`;
   }
   function policyView() {
     if (!policy) return '<p class="comparison-warning" role="status">親和性政策狀態尚未確認。</p>';

@@ -27,6 +27,21 @@ PROFILE_FIELDS = ('model_version', 'provider', 'effort', 'execution_location', '
 HINTS = ('matchable_hint', 'expired', 'no_prior_match', 'not_applicable', 'unsupported')
 
 
+def cache_clock(app):
+    """提示窗口與來源 TTL 用的時鐘；預設真實時間（與收據 started_at 同源），測試可注入。"""
+    import time
+    clock = getattr(app, 'cache_clock', None)
+    return clock() if callable(clock) else time.time()
+
+
+def _response_model(response):
+    try:
+        model = json.loads(response['raw']).get('model')
+    except (TypeError, ValueError, AttributeError, KeyError):
+        return None
+    return model if isinstance(model, str) else None
+
+
 def _seconds(value):
     """intent 的 started_at 是 ISO 8601（UTC）；無法解析就不參與時間比較。"""
     from datetime import datetime
@@ -197,6 +212,8 @@ def _load(app, client, run, now, contracts, client_key):
                       'sent': type(response.get('http_status')) is int and not response.get('interrupted')
                               and not response.get('not_dispatched'),
                       'model': intent['payload'].get('model'),
+                      # 回應的模型與請求不同：不能當作這個設定的熱快取來源。
+                      'response_model_mismatch': _response_model(response) not in (None, intent['payload'].get('model')),
                       'provider': (scope or {}).get('profile', {}).get('provider')})
     return {**task, 'status': 'available', 'calls': calls, 'calls_truncated': truncated,
             'internal': internal, 'contract': contract}
@@ -309,7 +326,7 @@ def observe(app, client, run):
             best, when = 0, None
             for previous in earlier:
                 if (previous is call or previous['moment'] is None or call['moment'] is None
-                        or previous['moment'] >= call['moment']):
+                        or previous['moment'] >= call['moment'] or previous.get('response_model_mismatch')):
                     continue
                 length = 0
                 for mine, theirs in zip(call['chain'], previous['chain']):

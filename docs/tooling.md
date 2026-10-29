@@ -84,6 +84,11 @@ Build isolation follows declared build constraints, not a byte-identical build
 claim. Before recording success, run seals the generated output paths, sizes
 and hashes, including required raw step logs and collection logs/manifests.
 Collection logs can contain private parameter data; keep runtime local.
+Security tests deliberately leave symlinks in their evidence. By human decision
+(2026-10-29), run records each link's path and target relative to the snapshot
+without following it; a target outside the snapshot fails the run. Finalize
+requires the same links, copies only regular files and keeps the link records
+in the delivery receipt; status compares them with the sealed run.
 
 Finalize verifies the successful run and matching destination verification inputs
 (with separate checks for changed Markdown), then

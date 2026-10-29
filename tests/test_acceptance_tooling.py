@@ -153,6 +153,22 @@ def successful_small_run(tmp_path, request):
         paths = '["tests", "scripts/qa"]' if outside_tests else '["tests"]'
         (root / "pyproject.toml").write_text(f'[tool.pytest.ini_options]\ntestpaths = {paths}\n')
         (root / "tests/test_smoke.py").write_text("def test_smoke(): assert True\n")
+        links = getattr(request, "param", None) in {"evidence_symlinks", "escaping_symlink"}
+        if links and root == monitor:
+            # Security tests leave planted links in their evidence; never followed.
+            escape = getattr(request, "param", None) == "escaping_symlink"
+            (root / "tests/conftest.py").write_text(
+                "import os\nfrom pathlib import Path\n"
+                "def pytest_sessionfinish(session):\n"
+                "    if session.config.option.collectonly:\n        return\n"
+                "    evidence = Path('runtime/evidence').absolute()\n"
+                "    (evidence / 'real').mkdir(parents=True)\n"
+                "    (evidence / 'real/target.json').write_text('{}')\n"
+                "    os.symlink(evidence / 'real/target.json', evidence / 'file-link')\n"
+                "    os.symlink('real', evidence / 'directory-link')\n"
+                "    os.symlink(evidence / 'removed.sqlite', evidence / 'dangling-link')\n"
+                + ("    os.symlink(evidence.parents[3] / 'outside.json', evidence / 'escape')\n"
+                   if escape else ""))
         if outside_tests:
             (root / "scripts/qa").mkdir()
             (root / "scripts/qa/test_additional.py").write_text(
@@ -184,6 +200,8 @@ def successful_small_run(tmp_path, request):
     assert prepared.returncode == 0, prepared.stderr
     checked = subprocess.run([sys.executable, str(script), "run", "--snapshot", str(frozen)],
                              env=env, capture_output=True, text=True)
+    if getattr(request, "param", None) == "escaping_symlink":
+        return frozen, checked
     assert checked.returncode == 0, checked.stderr + checked.stdout
     return frozen
 
@@ -203,6 +221,61 @@ def test_collection_includes_every_configured_testpath(successful_small_run):
         ]
         assert run["collections"][name]["tests_collected"] == 3
         assert "3 passed" in (frozen / f"{name}.log").read_text()
+
+
+@pytest.mark.parametrize("successful_small_run", ["evidence_symlinks"], indirect=True)
+def test_reviewed_evidence_symlinks_are_sealed_without_being_followed(successful_small_run, tmp_path):
+    frozen = successful_small_run
+    run = json.loads((frozen / "run.json").read_text())
+    assert run["passed"] is True
+    evidence = "monitor/runtime/evidence"
+    assert run["output_symlinks"] == [
+        {"path": f"{evidence}/dangling-link", "target": f"{evidence}/removed.sqlite"},
+        {"path": f"{evidence}/directory-link", "target": f"{evidence}/real"},
+        {"path": f"{evidence}/file-link", "target": f"{evidence}/real/target.json"},
+    ]
+    sealed = {item["path"] for item in run["output_files"]}
+    assert f"{evidence}/real/target.json" in sealed
+    assert not any("-link" in path for path in sealed)
+    destination = tmp_path / "delivery"
+    shutil.copytree(frozen / "monitor", destination, symlinks=True)
+    finalized = command("finalize", "--snapshot", frozen, "--destination", destination)
+    assert finalized.returncode == 0, finalized.stderr
+    receipt = json.loads((destination / json.loads(finalized.stdout)["receipt"]).read_text())
+    assert receipt["preserved_symlinks"] == run["output_symlinks"]
+    preserved = destination / "runtime/deliveries/mini-frozen/snapshot"
+    assert not [p for p in preserved.rglob("*") if p.is_symlink()]
+    status = command("status", "--root", destination)
+    assert status.returncode == 0, status.stderr
+    assert json.loads(status.stdout)["sealed_output_symlinks_verified"] == 3
+
+
+@pytest.mark.parametrize("successful_small_run", ["escaping_symlink"], indirect=True)
+def test_evidence_symlink_outside_the_snapshot_is_refused(successful_small_run):
+    frozen, checked = successful_small_run
+    assert checked.returncode != 0
+    assert "evidence symlink must stay within the snapshot" in checked.stderr
+    assert json.loads((frozen / "run.json").read_text())["passed"] is False
+
+
+@pytest.mark.parametrize("successful_small_run", ["evidence_symlinks"], indirect=True)
+@pytest.mark.parametrize("damage", ["retargeted", "added", "removed"])
+def test_finalize_rejects_changed_evidence_symlinks(successful_small_run, tmp_path, damage):
+    frozen = successful_small_run
+    evidence = frozen / "monitor/runtime/evidence"
+    if damage == "retargeted":
+        (evidence / "file-link").unlink()
+        (evidence / "file-link").symlink_to(evidence / "real")
+    elif damage == "added":
+        (evidence / "late-link").symlink_to(evidence / "real/target.json")
+    else:
+        (evidence / "dangling-link").unlink()
+    destination = tmp_path / "delivery"
+    shutil.copytree(frozen / "monitor", destination, symlinks=True)
+    result = command("finalize", "--snapshot", frozen, "--destination", destination)
+    assert result.returncode != 0
+    assert "verification evidence symlink" in result.stderr
+    assert not (destination / "runtime/tooling/current.json").exists()
 
 
 @pytest.mark.parametrize("damage", ["missing_log", "changed_log", "missing_collection"])

@@ -22,5 +22,8 @@
 .comparison-item details,.comparison-report details {padding-top:16px;border-top:1px solid var(--border);line-height:1.8}
 .comparison-item summary,.comparison-report summary {cursor:pointer}
 .comparison-hashes {padding-left:20px;font-size:12px;overflow-wrap:anywhere}
+.comparison-candidate {margin-top:24px;padding-top:16px;border-top:1px solid var(--border)}
+.comparison-candidate h4 {display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:0 0 12px;font-size:15px}
+.comparison-candidate ol {padding-left:22px;line-height:1.9;overflow-wrap:anywhere}
 @media(max-width:900px) {.comparison-counts {grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:700px) {.comparison-columns,.comparison-costs,.comparison-facts {grid-template-columns:1fr}}

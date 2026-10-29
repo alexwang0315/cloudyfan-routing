@@ -264,9 +264,23 @@ def _task_id(client, run):
         ensure_ascii=False, allow_nan=False).encode()).hexdigest()[:48]
 
 
+def _candidate_strategies():
+    from cloudyfan_jev.saved_candidate_strategy import STRATEGIES
+    return STRATEGIES
+
+
+def _strategy(body):
+    """Only a Core-registered strategy name; never code or a browser-built policy."""
+    strategy = body.get('candidate_strategy')
+    if 'candidate_strategy' in body and (type(strategy) is not str or strategy not in _candidate_strategies()):
+        fail('comparison_strategy_not_registered', 409)
+    return strategy
+
+
 def _scope(body, *, maximum=None):
-    if not isinstance(body, dict) or set(body) != {'policy_version', 'tasks'}:
+    if not isinstance(body, dict) or set(body) - {'candidate_strategy'} != {'policy_version', 'tasks'}:
         fail('unsupported_comparison_fields')
+    _strategy(body)
     if body['policy_version'] != POLICY:
         fail('comparison_policy_not_registered', 409)
     tasks = body['tasks']
@@ -324,12 +338,15 @@ class _Sources:
     def reproduce(self, values):
         """Budget all pure decisions in this report; pass values only to Core."""
         from cloudyfan_jev.saved_policy_comparison import reproduce_original_policy
+        return self.compute(reproduce_original_policy, values)
+
+    def compute(self, function, *arguments):
         if self.compute_milliseconds >= LIMITS['max_policy_compute_milliseconds']:
             self.limited = True
             raise SourceUnavailable('comparison_compute_limit')
         started = time.monotonic()
         try:
-            result = reproduce_original_policy(values)
+            result = function(*arguments)
         finally:
             self.compute_milliseconds += (time.monotonic() - started) * 1000
         if self.compute_milliseconds > LIMITS['max_policy_compute_milliseconds']:
@@ -454,7 +471,7 @@ class _Reports:
                     or report.get('computation_version') != COMPUTATION
                     or request.get('policy_sha256') != digest(request['implementation'])
                     or report.get('policy_sha256') != request['policy_sha256']
-                    or report.get('scope') != {'tasks': request['tasks']}
+                    or report.get('scope') != _report_scope(request)
                     or report.get('created_at') != request['created_at'] or report.get('frozen_at') != request['frozen_at']
                     or request.get('limits', report.get('limits')) != report.get('limits')
                     or report.get('result_sha256') != _result_digest(request, report['items'], report['data_sha256'], report['limits'])
@@ -501,7 +518,9 @@ def catalog(app):
                             or COMPARISON.fullmatch(request['comparison_id']) is None
                             or entry.name != request['comparison_id'] + '.request.json'):
                         raise SourceUnavailable('comparison_evidence_invalid')
-                    _scope({'policy_version': request.get('policy_version'), 'tasks': request.get('tasks')},
+                    _scope({'policy_version': request.get('policy_version'), 'tasks': request.get('tasks'),
+                            **({'candidate_strategy': request['candidate_strategy']}
+                               if 'candidate_strategy' in request else {})},
                            maximum=request.get('limits', {}).get('max_tasks', 20))
                     status = 'incomplete'
                     if (reports.root / (request['comparison_id'] + '.seal.json')).exists():
@@ -510,6 +529,8 @@ def catalog(app):
                         'status': status, 'policy_version': POLICY, 'requested_tasks': len(request['tasks'])})
         return {'schema_version': 'saved-policy-comparison-catalog-v1',
                 'registered_policies': [{'version': POLICY, 'label': '重現原保存政策'}],
+                'candidate_strategies': [{'version': name, 'label': label}
+                                         for name, label in sorted(_candidate_strategies().items())],
                 'limits': dict(LIMITS), 'task_scopes': tasks, 'task_catalog_incomplete': len(rows) > 100,
                 'reports': sorted(saved, key=lambda row: (row['created_at'], row['comparison_id']), reverse=True)}
     except (OSError, sqlite3.Error, ValueError, TypeError, KeyError, SourceUnavailable):
@@ -564,11 +585,18 @@ def _source_context(app, tasks, now):
             'tasks': tasks, 'now': now}
 
 
+def _report_scope(request):
+    # Reports created before candidate strategies keep their original scope and digest.
+    return {'tasks': request['tasks'], **({'candidate_strategy': request['candidate_strategy']}
+                                          if 'candidate_strategy' in request else {})}
+
+
 def _result_digest(request, items, data_sha256, limits):
     return digest({'items': items, 'tasks': request['tasks'], 'frozen_at': request['frozen_at'],
         'data_sha256': data_sha256, 'policy_sha256': request['policy_sha256'],
         'limits': limits, 'policy_version': request['policy_version'],
-        'computation_version': request['implementation']['computation']})
+        'computation_version': request['implementation']['computation'],
+        **({'candidate_strategy': request['candidate_strategy']} if 'candidate_strategy' in request else {})})
 
 
 def _report(request, outcome):
@@ -583,18 +611,22 @@ def _report(request, outcome):
         counts['original_interrupted'] += int(item['original']['task_status'] in ('engineering_interrupted', 'accounting_interrupted'))
         costs = item['original']['costs']
         counts['unknown_fee_tasks'] += int(costs['unknown_events'] is None or costs['unknown_events'] > 0)
+        if 'candidate' in item:
+            key = 'candidate_' + item['candidate']['status']
+            counts[key] = counts.get(key, 0) + 1
     result_sha = _result_digest(request, items, outcome['data_sha256'], request['limits'])
     return {'schema_version': SCHEMA, 'comparison_id': request['comparison_id'],
         'status': 'incomplete' if outcome.get('incomplete') else 'completed',
         'policy_version': POLICY, 'computation_version': COMPUTATION,
         'created_at': request['created_at'], 'frozen_at': request['frozen_at'],
         'data_sha256': outcome['data_sha256'], 'policy_sha256': request['policy_sha256'],
-        'result_sha256': result_sha, 'scope': {'tasks': request['tasks']}, 'limits': request['limits'],
+        'result_sha256': result_sha, 'scope': _report_scope(request), 'limits': request['limits'],
         'counts': counts, 'items': items}
 
 
 def create_report(app, body):
     tasks = _scope(body)
+    strategy = _strategy(body)
     now = app.store.clock()
     if not finite(now):
         fail('comparison_clock_unavailable', 503)
@@ -624,11 +656,15 @@ def create_report(app, body):
                     for name in ('routing.py', 'decisions.py', 'client.py', 'generation_request.py',
                         'errors.py', 'receipt_store.py', 'capacity.py', 'capacity_dispatch.py', 'capacity_windows.py')},
                 'runtime': {'python': platform.python_version(), 'sqlite': sqlite3.sqlite_version}}
+            if strategy is not None:
+                implementation['core_candidate_sha256'] = hashlib.sha256(
+                    _read(core_source / 'saved_candidate_strategy.py', 1048576)).hexdigest()
             request = {'comparison_id': comparison_id, 'created_at': now, 'frozen_at': now,
                        'tasks': tasks, 'policy_version': POLICY, 'implementation': implementation,
-                       'policy_sha256': digest(implementation), 'limits': dict(LIMITS)}
+                       'policy_sha256': digest(implementation), 'limits': dict(LIMITS),
+                       **({'candidate_strategy': strategy} if strategy is not None else {})}
             request_sha = reports.write(comparison_id + '.request.json', request, 16384)
-            context = _source_context(app, tasks, now)
+            context = {**_source_context(app, tasks, now), 'candidate_strategy': strategy}
             control = encoded(context)
             if len(control) > LIMITS['max_source_bytes']:
                 raise SourceUnavailable('comparison_control_oversized')
@@ -724,6 +760,11 @@ def _load_scope(context):
                     item, values = _load_task(context, source, task)
             except (OSError, ValueError, TypeError, KeyError, sqlite3.Error, SourceUnavailable):
                 item, values = _unknown(task, 'original_evidence_unavailable'), None
+            if context.get('candidate_strategy') and 'candidate' not in item:
+                item = {**item, 'candidate': {'strategy': context['candidate_strategy'], 'status': 'not_evaluable',
+                    'adopted': False, 'scope': CANDIDATE_SCOPE, 'reasons': item['reproduction']['reasons'],
+                    'decisions': []}}
+                item = {key: item[key] for key in ('task', 'original', 'reproduction', 'candidate', 'evidence')}
             items.append(item)
             frozen.append({'task': task, 'values': values, 'evidence': item['evidence']})
     finally:
@@ -846,6 +887,8 @@ def _load_task(context, source, task):
                 family_trusted = dict(trusted, comparison_access=context, internal_run=internal)
                 values, decisions = _reproduce_saved(source, binding, job, manifest, result, run, family_trusted,
                     original_path=original['path'], receipts=receipts)
+                candidate = (_candidate(source, context['candidate_strategy'], values, decisions)
+                             if context.get('candidate_strategy') else None)
                 status = ('reproduced' if decisions and all(row['match'] is True for row in decisions)
                           else 'partial' if any(row['match'] is True for row in decisions) else 'unknown')
                 reasons = list(dict.fromkeys(code for row in decisions for code in (row['reason'], row.get('policy_reason'))
@@ -858,6 +901,7 @@ def _load_task(context, source, task):
                 return {'task': dict(task), 'original': original, 'reproduction': {
                     'status': status, 'scope': 'decision_from_saved_inputs', 'adopted': False,
                     'reasons': reasons, 'decisions': decisions, 'financial_admissibility': 'not_replayed'},
+                    **({'candidate': candidate} if candidate is not None else {}),
                     'evidence': evidence()}, {'decisions': values, 'binding': binding,
                         'data_use': {'principal_active': True, 'frozen_at': context['now'],
                             'access_expires_at': lifecycle[0]['expires'], 'policy': context['retention_policy']}}
@@ -1087,6 +1131,35 @@ def _original_receipts(source, registered, manifest, result, internal, run):
             pass
         receipts.append(bundle)
     return receipts
+
+
+CANDIDATE_SCOPE = 'first_divergence_from_saved_inputs'
+CANDIDATE_FIELDS = ('status', 'reason', 'action', 'selected_tier', 'diverged', 'stop', 'forecast')
+
+
+def _candidate(source, strategy, inputs, decisions):
+    """Evaluate one registered strategy on the same saved inputs, up to its first divergence."""
+    from cloudyfan_jev.saved_candidate_strategy import evaluate_candidate_strategy
+    rows, stopped = [], False
+    for index, public in enumerate(decisions):
+        row = {'index': index, 'stage': public.get('stage')}
+        if stopped:
+            rows.append({**row, 'status': 'not_observed', 'reason': 'after_first_divergence'})
+            continue
+        if index >= len(inputs):
+            rows.append({**row, 'status': 'not_evaluable', 'reason': 'original_decision_inputs_unavailable'})
+            continue
+        result = source.compute(evaluate_candidate_strategy, inputs[index], strategy)
+        original = result['original']
+        rows.append({**row, **{key: result[key] for key in CANDIDATE_FIELDS},
+            'original': None if original is None else {key: original[key] for key in ('action', 'selected_tier')}})
+        stopped = result['stop'] is not None
+    statuses = {row['status'] for row in rows}
+    status = ('diverged' if any(row.get('diverged') for row in rows)
+              else 'not_adoptable' if 'not_adoptable' in statuses
+              else 'same_as_original' if rows and statuses == {'evaluated'} else 'not_evaluable')
+    return {'strategy': strategy, 'status': status, 'adopted': False, 'scope': CANDIDATE_SCOPE,
+            'reasons': sorted({row['reason'] for row in rows if row['status'] != 'evaluated'}), 'decisions': rows}
 
 
 def _reproduce_saved(source, binding, job, manifest, result, run, trusted, *, original_path, receipts):

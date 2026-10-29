@@ -13,6 +13,21 @@ window.CloudyFanComparisons = (() => {
     running:'執行中',ready:'已準備',bound:'已凍結',expired:'已到期',engineering_interrupted:'工程中斷',
     accounting_interrupted:'費用待核',policy_denied:'執行條件不符',capacity_denied:'容量條件不符',retired:'已停止原存取',task_busy:'執行中'};
   const actions = {direct:'直接選擇',classify:'重套原分類規則',stop:'停止',advance_quality_stage:'轉至下一品質階段'};
+  // Only server-registered strategy names; the browser never assembles a policy.
+  const strategies = {'qcs-direct-v1':'QCS 一律直接選模','qcs-classify-v1':'QCS 有校準時一律付費分類'};
+  const candidateStates = {diverged:['與原決定分歧','amber'],same_as_original:['與原決定相同','blue'],
+    not_evaluable:['不可評估','amber'],not_adoptable:['不可採用','amber']};
+  const candidateRows = {evaluated:'已推演',not_evaluable:'不可評估',not_adoptable:'不可採用',not_observed:'未觀測'};
+  const candidateReasons = {same_as_original_outside_decision_point:'此步不是直接／分類判斷點，與原決定相同。',
+    registered_direct_choice:'依註冊策略直接選模。',registered_classification:'依註冊策略付費分類。',
+    exact_classifier_calibration_missing:'缺少精確分類校準；不等於分類沒有效益。',
+    classification_estimate_unknown:'分類費或完整流程估計未保存，無法推演。',
+    classification_exceeds_speed_limit:'分類流程超出原速度上限；不放寬原限制。',
+    single_eligible_candidate:'只有一個合格候選，沒有分類可選。',original_decision_not_reproduced:'原決定無法由保存輸入重現，不能作為比較基準。',
+    after_first_divergence:'已在第一個分歧點停止；之後的流程沒有替代結果。',
+    original_decision_inputs_unavailable:'原後續決定所需的保存輸入不足。'};
+  const stops = {requires_unsaved_alternative_answer:'需要未保存的替代模型答案，推演在此停止。',
+    requires_unsaved_classifier_reply:'需要從未取得的 Jev 分類回覆，推演在此停止。'};
   const stages = {initial:'首個決定',same_pool:'同池備援',low_mid:'低／中候選比較',mid_high:'中／高候選比較',after_validation:'原公開驗收之後'};
   const reasons = {saved_inputs_missing:'缺少當時的保存輸入。',historical_evidence_unavailable:'原歷史依據無法核對。',
     saved_selection_unverifiable:'保存的選擇與依據無法核對。',source_expired:'原文已到期，只使用合法保留的中繼資料。',
@@ -48,12 +63,13 @@ window.CloudyFanComparisons = (() => {
     comparison_busy:'另一個比較仍在處理，請稍後明示重試。',comparison_store_unavailable:'比較儲存目前無法使用。',
     comparison_scope_invalid:'選取範圍已無法核對，請重新選擇1至20件不同任務。',
     comparison_policy_not_registered:'原政策版本尚未註冊，請重新讀取可用版本。',
+    comparison_strategy_not_registered:'候選策略尚未註冊，請重新讀取可用策略。',
     unsupported_comparison_fields:'比較請求欄位不符合註冊介面，本次未確認完成。'};
   const countNames = {requested:'選定件數',evaluated:'已評估',reproduced:'已重現決定',partial:'部分可重現',unknown:'未知',
     not_evaluable:'不可評估',not_provided:'未提供',original_failed:'原任務未通過',original_interrupted:'原任務中斷',unknown_fee_tasks:'費用未明任務'};
   let root, context, generation = 0, catalogVersion = 0, reportVersion = 0;
   let catalog = null, catalogState = 'idle', catalogFlight = null, reportFlight = null;
-  let selectedPolicy = '', selectedReport = '', selectedTasks = new Map(), reports = new Map(), reportState = 'idle';
+  let selectedPolicy = '', selectedStrategy = '', selectedReport = '', selectedTasks = new Map(), reports = new Map(), reportState = 'idle';
   let applying = false, notice = '', filter = '';
   const key = task => JSON.stringify([task.client,task.run_id]);
   const id = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,159}$/.test(value);
@@ -65,6 +81,22 @@ window.CloudyFanComparisons = (() => {
   const identity = value => !!value && typeof value.client === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value.client)
     && typeof value.run_id === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(value.run_id);
   const amount = value => value === null || typeof value === 'string' && value.length <= 80 && /^\d+(?:\.\d+)?$/.test(value);
+  const signed = value => value === null || typeof value === 'string' && value.length <= 80 && /^-?\d+(?:\.\d+)?$/.test(value);
+  const span = value => value === null || !!value && Object.keys(value).length === 2 && amount(value.lower) && amount(value.upper)
+    && value.lower !== null && value.upper !== null;
+  function candidateProjection(value, strategy) {
+    if (!value || value.strategy !== strategy || !Object.hasOwn(candidateStates,value.status) || value.adopted !== false
+        || value.scope !== 'first_divergence_from_saved_inputs' || !Array.isArray(value.reasons) || value.reasons.length > 32
+        || value.reasons.some(code => !id(code)) || !Array.isArray(value.decisions) || value.decisions.length > readCeilings.max_decision_points) return false;
+    return value.decisions.every(row => integer(row.index) && optionalId(row.stage) && Object.hasOwn(candidateRows,row.status) && id(row.reason)
+      && (row.status === 'not_observed' || row.reason === 'original_decision_inputs_unavailable' && row.status === 'not_evaluable'
+        && Object.keys(row).length === 4
+        || optionalId(row.action) && optionalId(row.selected_tier) && [true,false,null].includes(row.diverged) && optionalId(row.stop)
+          && (row.original === null || !!row.original && optionalId(row.original.action) && optionalId(row.original.selected_tier))
+          && !!row.forecast && span(row.forecast.complete_flow_usd) && span(row.forecast.classifier_fee_usd)
+          && signed(row.forecast.net_saving_lower_usd) && optionalId(row.forecast.calibration)
+          && (row.forecast.calibration_contract_sha256 === null || digest(row.forecast.calibration_contract_sha256))));
+  }
   const knownLimits = value => value && typeof value === 'object' && !Array.isArray(value)
     && Object.keys(value).length === Object.keys(readCeilings).length
     && Object.entries(readCeilings).every(([name,bound]) => Object.hasOwn(value,name)
@@ -79,6 +111,7 @@ window.CloudyFanComparisons = (() => {
     if (!value || value.schema_version !== 'saved-policy-comparison-catalog-v1' || !knownLimits(value.limits)
         || !Array.isArray(value.registered_policies) || value.registered_policies.length > 1
         || value.registered_policies.some(row => row?.version !== policy)
+        || !Array.isArray(value.candidate_strategies) || value.candidate_strategies.some(row => !Object.hasOwn(strategies,row?.version))
         || !Array.isArray(value.task_scopes) || value.task_scopes.length > 2000
         || typeof value.task_catalog_incomplete !== 'boolean' || !Array.isArray(value.reports) || value.reports.length > 2000) return null;
     if (value.task_scopes.some(row => !identity(row) || !optionalId(row.mode) || !optionalId(row.category) || !finite(row.created_at))
@@ -96,7 +129,10 @@ window.CloudyFanComparisons = (() => {
         || !Array.isArray(value.scope?.tasks) || value.scope.tasks.length < 1 || value.scope.tasks.length > value.limits.max_tasks
         || value.scope.tasks.some(task => !identity(task)) || new Set(value.scope.tasks.map(key)).size !== value.scope.tasks.length
         || !value.counts || Object.keys(countNames).some(name => !integer(value.counts[name]) || value.counts[name] > value.limits.max_tasks)
-        || value.counts.requested !== value.scope.tasks.length || !Array.isArray(value.items) || value.items.length > value.scope.tasks.length) return null;
+        || value.counts.requested !== value.scope.tasks.length || !Array.isArray(value.items) || value.items.length > value.scope.tasks.length
+        || Object.hasOwn(value.scope,'candidate_strategy') && !Object.hasOwn(strategies,value.scope.candidate_strategy)) return null;
+    const strategy = value.scope.candidate_strategy;
+    if (value.items.some(item => strategy ? !candidateProjection(item.candidate,strategy) : Object.hasOwn(item,'candidate'))) return null;
     const scope = new Set(value.scope.tasks.map(key)), seen = new Set();
     for (const item of value.items) {
       const original = item.original, reproduced = item.reproduction, costs = original?.costs, charge = costs?.customer_usage_charge;
@@ -138,10 +174,15 @@ window.CloudyFanComparisons = (() => {
     fallback.focus({preventScroll:!!target});
     if (typeof view.focus.start === 'number' && target?.setSelectionRange) target.setSelectionRange(view.focus.start,view.focus.end);
   }
+  function candidateView(candidate) {
+    const state = candidateStates[candidate.status];
+    const range = value => value ? `$${h(value.lower)}–$${h(value.upper)}` : '未知';
+    return `<section class="comparison-candidate" data-candidate-strategy="${h(candidate.strategy)}"><h4>候選策略推演 · ${h(strategies[candidate.strategy])} <span class="badge ${state[1]}" data-candidate-status="${h(candidate.status)}">${state[0]}</span></h4><ol>${candidate.decisions.map(row => `<li data-candidate-row="${h(row.index)}"><strong>${h(candidateRows[row.status])}</strong> · ${h(stages[row.stage] || '階段未提供')}${row.action ? ` · ${h(actions[row.action] || '動作未提供')}` : ''}${row.selected_tier ? ` · ${h(tiers[row.selected_tier] || '層級未知')}` : ''}${row.original ? `<br><span class="metadata">原決定：${h(actions[row.original.action] || '未提供')}${row.original.selected_tier ? ` · ${h(tiers[row.original.selected_tier] || '層級未知')}` : ''} · ${row.diverged === true ? '與原決定不同' : row.diverged === false ? '與原決定相同' : '無法對應'}</span>` : ''}<br><span class="metadata">${h(candidateReasons[row.reason] || '保存依據不足或不適用，這一步無法推演。')}</span>${row.stop ? `<br><span class="metadata">${h(stops[row.stop] || '推演在此停止。')}</span>` : ''}${row.forecast && (row.forecast.complete_flow_usd || row.forecast.classifier_fee_usd) ? `<br><span class="metadata">原成本模型預測（非實付）：完整流程 ${range(row.forecast.complete_flow_usd)} · 分類費估計 ${range(row.forecast.classifier_fee_usd)} · 保守淨節省 ${row.forecast.net_saving_lower_usd === null ? '未知' : '$' + h(row.forecast.net_saving_lower_usd)} · 校準 ${h(row.forecast.calibration ?? '未知')}</span>` : ''}</li>`).join('') || '<li>沒有可推演的保存決定。</li>'}</ol><p class="metadata">只推演保存輸入能確定的步驟，到第一個需要未保存答案或回覆的分歧點停止；不報替代成功率、勝率或真實節省，也不自動採用。</p></section>`;
+  }
   function itemView(item) {
     const original = item.original, reproduced = item.reproduction, charge = original.costs.customer_usage_charge;
     const title = names[reproduced.status];
-    return `<article class="panel comparison-item" data-comparison-task="${h(key(item.task))}"><div class="panel-header"><div><h3 class="mono">${h(item.task.run_id)}</h3><p>客戶端 ${h(item.task.client)}</p></div><span class="badge ${title[1]}" data-reproduction-status="${h(reproduced.status)}">${title[0]}</span></div><div class="panel-body"><div class="comparison-columns"><section><h4>原實際路徑</h4><p>${h(statuses[original.task_status] || '原任務狀態未知')} · ${h(modes[original.mode] || '模式未提供')}</p>${original.path.length ? `<ol>${original.path.map(row => `<li>${h(tiers[row.tier] || '層級未提供')} · ${h(statuses[row.public_status] || '未知')}${row.config_id ? ` <code>${h(row.config_id)}</code>` : ''}</li>`).join('')}</ol>` : '<p class="metadata">原路徑未提供；不代表沒有執行或費用為零。</p>'}</section><section><h4>由保存輸入重現的決定</h4>${reproduced.decisions.length ? `<ol>${reproduced.decisions.map(row => `<li><strong>${h(actions[row.action] || '動作未提供')}</strong> · ${h(stages[row.stage] || '階段未提供')}${row.selected_tier ? ` · ${h(tiers[row.selected_tier] || '層級未知')}` : ''}${row.config_id ? ` <code>${h(row.config_id)}</code>` : ''}<br><span class="metadata">${h(reason(row.reason))}</span><br><span class="metadata">${row.match === true ? '與原選擇相符' : row.match === false ? '與原選擇不同' : '與原選擇尚無法對應'}</span></li>`).join('')}</ol>` : '<p class="metadata">沒有足夠資料重現決定。</p>'}<p class="metadata">只重套已保存的決策規則；未重做完整准入或費用檢查，未核准新派送。</p></section></div><dl class="comparison-costs"><div><dt>原已知 API 費用</dt><dd>${money(original.costs.known_api_usd)}</dd></div><div><dt>原完整 API 費用</dt><dd>${money(original.costs.complete_api_usd)}</dd></div><div><dt>費用未明事件</dt><dd>${h(original.costs.unknown_events ?? '未知')}</dd></div><div><dt>原客戶用量費</dt><dd>${charge.status === 'not_provided' ? '未提供' : money(charge.complete_usd)}</dd></div></dl><p class="metadata">客戶帳本已知 ${charge.status === 'not_provided' ? '未提供' : money(charge.known_usd)} · 待核 ${h(charge.unknown_events ?? (charge.status === 'not_provided' ? '未提供' : '未知'))}；以上僅列原權威紀錄，不用公開單價重算。</p><details data-comparison-detail="${h(key(item.task))}"><summary>查看缺漏、原版本與證據摘要</summary><ul>${reproduced.reasons.map(code => `<li>${h(reason(code))}</li>`).join('') || '<li>此項未列缺漏原因；重現決定不代表替代模型成果。</li>'}</ul><dl class="comparison-facts"><div><dt>原類別</dt><dd>${h(original.category ?? '未提供')}</dd></div><div><dt>原契約</dt><dd>${h(original.contract_id ?? '未提供')} · ${h(original.contract_version ?? '未提供')}</dd></div><div><dt>原模型池版本</dt><dd class="mono">${h(original.pool_version ?? '未提供')}</dd></div><div><dt>原路由版本</dt><dd class="mono">${h(original.routing_version ?? '未提供')}</dd></div><div><dt>原建立時間</dt><dd>${h(original.created_at === null ? '未提供' : stamp(original.created_at))}</dd></div></dl>${item.evidence.length ? `<ul class="comparison-hashes">${item.evidence.map(row => `<li><code>${h(row.kind)}</code> · ${h(row.bytes)} bytes<br><code>${h(row.sha256)}</code></li>`).join('')}</ul>` : '<p class="metadata">未提供可核對的證據摘要。</p>'}</details></div></article>`;
+    return `<article class="panel comparison-item" data-comparison-task="${h(key(item.task))}"><div class="panel-header"><div><h3 class="mono">${h(item.task.run_id)}</h3><p>客戶端 ${h(item.task.client)}</p></div><span class="badge ${title[1]}" data-reproduction-status="${h(reproduced.status)}">${title[0]}</span></div><div class="panel-body"><div class="comparison-columns"><section><h4>原實際路徑</h4><p>${h(statuses[original.task_status] || '原任務狀態未知')} · ${h(modes[original.mode] || '模式未提供')}</p>${original.path.length ? `<ol>${original.path.map(row => `<li>${h(tiers[row.tier] || '層級未提供')} · ${h(statuses[row.public_status] || '未知')}${row.config_id ? ` <code>${h(row.config_id)}</code>` : ''}</li>`).join('')}</ol>` : '<p class="metadata">原路徑未提供；不代表沒有執行或費用為零。</p>'}</section><section><h4>由保存輸入重現的決定</h4>${reproduced.decisions.length ? `<ol>${reproduced.decisions.map(row => `<li><strong>${h(actions[row.action] || '動作未提供')}</strong> · ${h(stages[row.stage] || '階段未提供')}${row.selected_tier ? ` · ${h(tiers[row.selected_tier] || '層級未知')}` : ''}${row.config_id ? ` <code>${h(row.config_id)}</code>` : ''}<br><span class="metadata">${h(reason(row.reason))}</span><br><span class="metadata">${row.match === true ? '與原選擇相符' : row.match === false ? '與原選擇不同' : '與原選擇尚無法對應'}</span></li>`).join('')}</ol>` : '<p class="metadata">沒有足夠資料重現決定。</p>'}<p class="metadata">只重套已保存的決策規則；未重做完整准入或費用檢查，未核准新派送。</p></section></div>${item.candidate ? candidateView(item.candidate) : ''}<dl class="comparison-costs"><div><dt>原已知 API 費用</dt><dd>${money(original.costs.known_api_usd)}</dd></div><div><dt>原完整 API 費用</dt><dd>${money(original.costs.complete_api_usd)}</dd></div><div><dt>費用未明事件</dt><dd>${h(original.costs.unknown_events ?? '未知')}</dd></div><div><dt>原客戶用量費</dt><dd>${charge.status === 'not_provided' ? '未提供' : money(charge.complete_usd)}</dd></div></dl><p class="metadata">客戶帳本已知 ${charge.status === 'not_provided' ? '未提供' : money(charge.known_usd)} · 待核 ${h(charge.unknown_events ?? (charge.status === 'not_provided' ? '未提供' : '未知'))}；以上僅列原權威紀錄，不用公開單價重算。</p><details data-comparison-detail="${h(key(item.task))}"><summary>查看缺漏、原版本與證據摘要</summary><ul>${reproduced.reasons.map(code => `<li>${h(reason(code))}</li>`).join('') || '<li>此項未列缺漏原因；重現決定不代表替代模型成果。</li>'}</ul><dl class="comparison-facts"><div><dt>原類別</dt><dd>${h(original.category ?? '未提供')}</dd></div><div><dt>原契約</dt><dd>${h(original.contract_id ?? '未提供')} · ${h(original.contract_version ?? '未提供')}</dd></div><div><dt>原模型池版本</dt><dd class="mono">${h(original.pool_version ?? '未提供')}</dd></div><div><dt>原路由版本</dt><dd class="mono">${h(original.routing_version ?? '未提供')}</dd></div><div><dt>原建立時間</dt><dd>${h(original.created_at === null ? '未提供' : stamp(original.created_at))}</dd></div></dl>${item.evidence.length ? `<ul class="comparison-hashes">${item.evidence.map(row => `<li><code>${h(row.kind)}</code> · ${h(row.bytes)} bytes<br><code>${h(row.sha256)}</code></li>`).join('')}</ul>` : '<p class="metadata">未提供可核對的證據摘要。</p>'}</details></div></article>`;
   }
   function reportView() {
     const saved = reports.get(selectedReport)?.value;
@@ -157,11 +198,13 @@ window.CloudyFanComparisons = (() => {
     const maximum = catalog?.limits.max_tasks ?? null;
     const maximumLabel = maximum === null ? '上限待確認' : `最多${maximum}件`;
     const canStart = catalogState === 'current' && !applying && selectedPolicy === policy
+      && (selectedStrategy === '' || catalog.candidate_strategies.some(row => row.version === selectedStrategy))
       && selectedTasks.size > 0 && selectedTasks.size <= maximum && [...selectedTasks.keys()].every(value => available.has(value));
     const reportRows = [...(catalog?.reports || [])];
     if (selectedReport && !reportRows.some(row => row.comparison_id === selectedReport)) reportRows.unshift({comparison_id:selectedReport});
-    root.innerHTML = `<div id="comparisons-page"><div class="page-heading"><div><div class="eyebrow">SAVED-EVIDENCE COMPARISON</div><h1>保存證據比較</h1><p>明示選取合法保存的範圍，只重現原政策可由當時輸入支持的決定。</p></div></div><p class="notice">比較不執行模型、工具或公開驗收，不改原任務、模式、費率或期限，也不啟用政策。沒有替代結果，不報勝率或真實節省。</p>${context.demo ? '<p class="metadata comparison-synthetic">合成驗收環境 · 接線結果不代表真實模型能力、省費或正式採用。</p>' : ''}${catalogState !== 'current' ? '<p class="comparison-warning" role="status">任務範圍與政策清單尚未確認；保留選取，開始比較暫停。</p>' : ''}<section class="panel comparison-create"><div class="panel-header"><h2>明示開始原政策重現</h2><span class="metadata">${maximumLabel} · 有界處理</span></div><div class="panel-body"><label for="comparison-policy">已註冊的原政策</label><select id="comparison-policy" ${catalogState === 'current' && !applying ? '' : 'disabled'}><option value="">請明示選擇原政策</option>${catalog?.registered_policies.length ? `<option value="${policy}" ${selectedPolicy === policy ? 'selected' : ''}>原政策重現 v1 · ${policy}</option>` : ''}</select><label for="comparison-task-filter">篩選保存的任務身分</label><input type="search" id="comparison-task-filter" value="${h(filter)}" autocomplete="off"><p class="metadata">清單${catalog?.task_catalog_incomplete ? '僅列部分合法保存範圍；不代表全部歷史' : '由伺服器解析合法保存範圍'}。選取不取得派送名額或新增扣款。</p><fieldset class="comparison-scope" ${applying ? 'disabled' : ''}><legend>選擇任務 · 已選 <span id="comparison-selected-count">${selectedTasks.size}</span> / ${maximum ?? '待確認'}</legend>${rows.map(task => `<label class="comparison-task"><input id="comparison-task-${h(encodeURIComponent(key(task)))}" type="checkbox" data-comparison-select="${h(key(task))}" ${selectedTasks.has(key(task)) ? 'checked' : ''}><span><b class="mono">${h(task.run_id)}</b><br>${h(task.client)} · ${h(modes[task.mode] || '模式未提供')}</span></label>`).join('') || '<p class="metadata">尚無可選取的任務身分。</p>'}${[...selectedTasks].filter(([value]) => !available.has(value)).map(([value,task]) => `<label class="comparison-task comparison-warning"><input type="checkbox" data-comparison-select="${h(value)}" checked><span>${h(task.client)} / ${h(task.run_id)} · 目前不在可選範圍，請明示取消或重新讀取。</span></label>`).join('')}</fieldset><div class="comparison-actions"><button id="comparison-start" class="button primary" type="button" ${canStart ? '' : 'disabled'}>${applying ? '正在保存比較…' : '開始原政策重現'}</button><button id="comparison-clear" class="button" type="button" ${applying || !selectedTasks.size ? 'disabled' : ''}>清除選取</button></div><p class="metadata">超出保存或處理上限時保留不完整原因；計算完成不代表原任務成功或新派送已獲准。傳輸未確認時不自動重送。</p></div></section><section class="panel comparison-saved"><div class="panel-body"><label for="comparison-report-select">讀取已保存的比較</label><select id="comparison-report-select"><option value="">選擇報告</option>${reportRows.map(row => `<option value="${h(row.comparison_id)}" ${selectedReport === row.comparison_id ? 'selected' : ''}>${h(row.comparison_id)}${row.status ? ` · ${row.status === 'completed' ? '計算完成' : '計算未完整'}` : ' · 先前開啟'}</option>`).join('')}</select></div></section>${reportView()}</div>`;
+    root.innerHTML = `<div id="comparisons-page"><div class="page-heading"><div><div class="eyebrow">SAVED-EVIDENCE COMPARISON</div><h1>保存證據比較</h1><p>明示選取合法保存的範圍，只重現原政策可由當時輸入支持的決定。</p></div></div><p class="notice">比較不執行模型、工具或公開驗收，不改原任務、模式、費率或期限，也不啟用政策。沒有替代結果，不報勝率或真實節省。</p>${context.demo ? '<p class="metadata comparison-synthetic">合成驗收環境 · 接線結果不代表真實模型能力、省費或正式採用。</p>' : ''}${catalogState !== 'current' ? '<p class="comparison-warning" role="status">任務範圍與政策清單尚未確認；保留選取，開始比較暫停。</p>' : ''}<section class="panel comparison-create"><div class="panel-header"><h2>明示開始原政策重現</h2><span class="metadata">${maximumLabel} · 有界處理</span></div><div class="panel-body"><label for="comparison-policy">已註冊的原政策</label><select id="comparison-policy" ${catalogState === 'current' && !applying ? '' : 'disabled'}><option value="">請明示選擇原政策</option>${catalog?.registered_policies.length ? `<option value="${policy}" ${selectedPolicy === policy ? 'selected' : ''}>原政策重現 v1 · ${policy}</option>` : ''}</select><label for="comparison-strategy">候選策略（選填）</label><select id="comparison-strategy" ${catalogState === 'current' && !applying ? '' : 'disabled'}><option value="">不加入候選策略</option>${(catalog?.candidate_strategies || []).map(row => `<option value="${h(row.version)}" ${selectedStrategy === row.version ? 'selected' : ''}>${h(strategies[row.version])} · ${h(row.version)}</option>`).join('')}</select><p class="metadata">候選策略只由伺服器註冊；推演到第一個分歧點即停止，不啟用策略。</p><label for="comparison-task-filter">篩選保存的任務身分</label><input type="search" id="comparison-task-filter" value="${h(filter)}" autocomplete="off"><p class="metadata">清單${catalog?.task_catalog_incomplete ? '僅列部分合法保存範圍；不代表全部歷史' : '由伺服器解析合法保存範圍'}。選取不取得派送名額或新增扣款。</p><fieldset class="comparison-scope" ${applying ? 'disabled' : ''}><legend>選擇任務 · 已選 <span id="comparison-selected-count">${selectedTasks.size}</span> / ${maximum ?? '待確認'}</legend>${rows.map(task => `<label class="comparison-task"><input id="comparison-task-${h(encodeURIComponent(key(task)))}" type="checkbox" data-comparison-select="${h(key(task))}" ${selectedTasks.has(key(task)) ? 'checked' : ''}><span><b class="mono">${h(task.run_id)}</b><br>${h(task.client)} · ${h(modes[task.mode] || '模式未提供')}</span></label>`).join('') || '<p class="metadata">尚無可選取的任務身分。</p>'}${[...selectedTasks].filter(([value]) => !available.has(value)).map(([value,task]) => `<label class="comparison-task comparison-warning"><input type="checkbox" data-comparison-select="${h(value)}" checked><span>${h(task.client)} / ${h(task.run_id)} · 目前不在可選範圍，請明示取消或重新讀取。</span></label>`).join('')}</fieldset><div class="comparison-actions"><button id="comparison-start" class="button primary" type="button" ${canStart ? '' : 'disabled'}>${applying ? '正在保存比較…' : '開始原政策重現'}</button><button id="comparison-clear" class="button" type="button" ${applying || !selectedTasks.size ? 'disabled' : ''}>清除選取</button></div><p class="metadata">超出保存或處理上限時保留不完整原因；計算完成不代表原任務成功或新派送已獲准。傳輸未確認時不自動重送。</p></div></section><section class="panel comparison-saved"><div class="panel-body"><label for="comparison-report-select">讀取已保存的比較</label><select id="comparison-report-select"><option value="">選擇報告</option>${reportRows.map(row => `<option value="${h(row.comparison_id)}" ${selectedReport === row.comparison_id ? 'selected' : ''}>${h(row.comparison_id)}${row.status ? ` · ${row.status === 'completed' ? '計算完成' : '計算未完整'}` : ' · 先前開啟'}</option>`).join('')}</select></div></section>${reportView()}</div>`;
     root.querySelector('#comparison-policy').onchange = event => {selectedPolicy = event.target.value;render();};
+    root.querySelector('#comparison-strategy').onchange = event => {selectedStrategy = event.target.value;render();};
     root.querySelector('#comparison-task-filter').oninput = event => {filter = event.target.value;render();};
     root.querySelectorAll('[data-comparison-select]').forEach(node => {node.onchange = () => {
       const value = node.dataset.comparisonSelect, task = catalog?.task_scopes.find(item => key(item) === value);
@@ -175,17 +218,20 @@ window.CloudyFanComparisons = (() => {
   }
   function propose() {
     const tasks = [...selectedTasks.values()].map(task => ({...task})), version = generation, actionContext = context;
-    if (applying || catalogState !== 'current' || selectedPolicy !== policy || !tasks.length || tasks.length > catalog.limits.max_tasks) return;
-    actionContext.confirmAction('開始原政策重現',`<p>原政策 <code>${policy}</code> · 選定 ${tasks.length} 件：</p><ul>${tasks.map(task => `<li>${h(task.client)} / ${h(task.run_id)}</li>`).join('')}</ul><p>伺服器將固定合法保存的證據與凍結時間，獨立保存一份比較；不派送、不核帳、不扣款或啟用政策。缺少原輸入維持未知，超出處理上限保留不完整結果。</p>`,async () => {
+    const strategy = selectedStrategy;
+    if (applying || catalogState !== 'current' || selectedPolicy !== policy || !tasks.length || tasks.length > catalog.limits.max_tasks
+        || strategy && !catalog.candidate_strategies.some(row => row.version === strategy)) return;
+    actionContext.confirmAction('開始原政策重現',`<p>原政策 <code>${policy}</code>${strategy ? ` · 候選策略 <code>${h(strategy)}</code>` : ''} · 選定 ${tasks.length} 件：</p><ul>${tasks.map(task => `<li>${h(task.client)} / ${h(task.run_id)}</li>`).join('')}</ul><p>伺服器將固定合法保存的證據與凍結時間，獨立保存一份比較；不派送、不核帳、不扣款或啟用政策。缺少原輸入維持未知，超出處理上限保留不完整結果。</p>`,async () => {
       if (!current(version,actionContext) || applying || catalogState !== 'current'
           || tasks.length > catalog.limits.max_tasks
           || tasks.some(task => !catalog.task_scopes.some(row => key(row) === key(task)))) throw Error('比較範圍或目前處理上限已變更，請調整選取後再確認。');
       applying = true;notice = '';catalogVersion += 1;const displayVersion = ++reportVersion;render();
       try {
-        const value = await actionContext.api('/monitor/comparisons',{policy_version:policy,tasks});
+        const value = await actionContext.api('/monitor/comparisons',{policy_version:policy,tasks,...(strategy ? {candidate_strategy:strategy} : {})});
         if (!current(version,actionContext)) return;
         const saved = reportProjection(value);
-        if (!saved || JSON.stringify(saved.scope.tasks.map(key).sort()) !== JSON.stringify(tasks.map(key).sort())) throw Error('comparison_projection_unconfirmed');
+        if (!saved || JSON.stringify(saved.scope.tasks.map(key).sort()) !== JSON.stringify(tasks.map(key).sort())
+            || (saved.scope.candidate_strategy ?? '') !== strategy) throw Error('comparison_projection_unconfirmed');
         const previous = reports.get(saved.comparison_id);
         if (previous && previous.bytes !== JSON.stringify(saved)) throw Error('comparison_projection_changed');
         reports.set(saved.comparison_id,{value:saved,bytes:JSON.stringify(saved)});
@@ -243,7 +289,7 @@ window.CloudyFanComparisons = (() => {
   function resetView() {
     generation += 1;catalogVersion += 1;reportVersion += 1;root = context = catalog = catalogFlight = reportFlight = null;
     catalogState = reportState = 'idle';selectedPolicy = selectedReport = notice = filter = '';applying = false;
-    selectedTasks = new Map();reports = new Map();
+    selectedStrategy = '';selectedTasks = new Map();reports = new Map();
   }
   setInterval(() => {void refresh();},5000);
   return {mount,refresh,resetView};

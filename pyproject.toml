@@ -18,6 +18,11 @@ cloudyfan-monitor = "cloudyfan_monitor.__main__:main"
 [tool.hatch.build.targets.wheel]
 packages = ["src/cloudyfan_monitor"]
 
+# Outside a Git checkout (frozen acceptance snapshots) hatchling does not apply
+# .gitignore, so private runtime receipts and caches must be excluded explicitly.
+[tool.hatch.build.targets.sdist]
+exclude = ["/runtime", "/output", "/dist", "/.venv", "__pycache__", ".pytest_cache", ".ruff_cache", "*.pyc"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 

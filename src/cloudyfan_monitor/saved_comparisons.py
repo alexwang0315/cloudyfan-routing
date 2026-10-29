@@ -269,7 +269,37 @@ def _candidate_strategies():
     return STRATEGIES
 
 
-PAIRING_RULES = ('same-input-v1',)
+PAIRING_RULES = ('same-input-v1', 'same-original-input-v1')
+
+
+def request_fingerprint(request, category):
+    """與 Monitor 接收時相同的綁定指紋；有參考區塊時一併納入。"""
+    return digest({'run_id': request['run_id'], 'category': category, 'prompt': request['prompt'],
+                   **({'context': request['context']} if 'context' in request else {})})
+
+
+def sent_prompt(job):
+    """原任務實際送出的使用者內容；有凍結準備時先核對，損壞即不可用。"""
+    from cloudyfan_jev.context_preparation import ContextError, task_prompt
+    try:
+        return task_prompt(job)
+    except ContextError:
+        raise SourceUnavailable('original_preparation_unverifiable') from None
+
+
+def _preparation_member(job, binding):
+    """same-original-input-v1 的成員策略與安全準備資訊（不含原文）。"""
+    prepared = job.get('prepared') if isinstance(job.get('prepared'), dict) else None
+    if prepared is None:
+        return {'strategy': binding['mode'] + '|none', 'preparation': None}
+    original = hashlib.sha256((job['request']['prompt'] + ''.join(
+        '\n\n[參考區塊 ' + block['id'] + ']\n' + block['text'] for block in job['request']['context']['blocks'])
+        ).encode()).hexdigest()
+    return {'strategy': '|'.join((binding['mode'], prepared['version'], prepared.get('outcome', 'prepared'))),
+            'preparation': {'version': prepared['version'], 'outcome': prepared.get('outcome', 'prepared'),
+                            'original_bytes': prepared['original_bytes'], 'sent_bytes': prepared['prepared_bytes'],
+                            'sent_input_differs': prepared['content_sha256'] != original,
+                            'synthetic_qualification': prepared['qualification'].get('synthetic') is True}}
 OPTIONAL_SCOPE = ('candidate_strategy', 'pairing', 'rerun_of')
 
 
@@ -556,7 +586,8 @@ def catalog(app):
                         'status': status, 'policy_version': POLICY, 'requested_tasks': len(request['tasks'])})
         return {'schema_version': 'saved-policy-comparison-catalog-v1',
                 'registered_policies': [{'version': POLICY, 'label': '重現原保存政策'}],
-                'pairing_rules': [{'version': 'same-input-v1', 'label': '相同輸入的已保存流程配對'}],
+                'pairing_rules': [{'version': 'same-input-v1', 'label': '相同輸入的已保存流程配對'},
+                                  {'version': 'same-original-input-v1', 'label': '相同原始結構輸入，依內容準備分層'}],
                 'candidate_strategies': [{'version': name, 'label': label}
                                          for name, label in sorted(_candidate_strategies().items())],
                 'limits': dict(LIMITS), 'task_scopes': tasks, 'task_catalog_incomplete': len(rows) > 100,
@@ -835,9 +866,10 @@ def _load_scope(context):
         # Keys come only from fully loaded originals; anything else is excluded with its reason.
         pairing = compare_pairs([{'task': row['task'], 'original': item['original'],
             'key': (row['values'] or {}).get('pairing_key'),
+            **((row['values'] or {}).get('pairing_member') or {}),
             'key_reason': ('pairing_input_unavailable' if row['values'] is not None
                            else (item['reproduction']['reasons'] or ['original_evidence_unavailable'])[0])}
-            for row, item in zip(frozen, items)])
+            for row, item in zip(frozen, items)], rule=context['pairing'])
     return {'items': items, 'data_sha256': digest(frozen), 'frozen_inputs': frozen, 'incomplete': source.limited,
             'loaded_source_bytes': source.bytes, 'loaded_source_files': source.files,
             'policy_compute_milliseconds': source.compute_milliseconds,
@@ -910,14 +942,19 @@ def _load_task(context, source, task):
             request = job['request']
             if (job['registered'] != registered or request['run_id'] != task['run_id']
                     or request['contract_id'] != binding['contract']
-                    or set(request) != {'run_id', 'contract_id', 'prompt'}
-                    or digest({'run_id': request['run_id'], 'category': binding['category'], 'prompt': request['prompt']}) != binding['fingerprint']):
+                    or set(request) - {'context'} != {'run_id', 'contract_id', 'prompt'}
+                    or request_fingerprint(request, binding['category']) != binding['fingerprint']):
                 raise SourceUnavailable('original_task_binding_invalid')
+            prompt_sent = sent_prompt(job)
             # Private same-input key: never in the public report, never after raw expiry.
             # The contract ID names the mode's runner, so it cannot be part of a cross-mode key.
             pairing_key = digest({'category': binding['category'],
                 'contract_version': identifier(registered.get('version')),
-                'prompt_sha256': hashlib.sha256(request['prompt'].encode()).hexdigest()}) if context.get('pairing') else None
+                'prompt_sha256': hashlib.sha256(request['prompt'].encode()).hexdigest(),
+                # 參考區塊也是輸入的一部分；舊任務沒有這個欄位，鍵值不變。
+                **({'context_sha256': digest(request['context'])} if 'context' in request else {})}) if context.get('pairing') else None
+            pairing_member = (_preparation_member(job, binding)
+                              if context.get('pairing') == 'same-original-input-v1' else None)
             # Only the task's original registered descriptor can identify the
             # fee authority. Reusing a host contract ID must not substitute a
             # different empty account and turn the original fee into zero.
@@ -938,9 +975,10 @@ def _load_task(context, source, task):
             with _shared(run / '.lock'):
                 manifest = source.read(run / 'manifest.json', 'original_manifest')
                 result = source.read(run / 'result.json', 'original_result')
-                if (manifest.get('mode') != binding['mode'] or manifest.get('task', {}).get('prompt') != request['prompt']
+                if (manifest.get('mode') != binding['mode'] or manifest.get('task', {}).get('prompt') != prompt_sent
                         or any(manifest.get(key) != value for key, value in registered.items()
-                               if key not in ('version', 'mode', 'tool_names', 'model_bounds', 'tool_bounds', 'receipt_root', 'budget_store', 'enforcement'))
+                               if key not in ('version', 'mode', 'tool_names', 'model_bounds', 'tool_bounds', 'receipt_root', 'budget_store', 'enforcement',
+                    'context_policy'))
                         or manifest.get('contract_version') != registered['version']
                         or result.get('config_sha256') != (digest(manifest) if manifest.get('routing_version') == 'qcs-backup-policy-v1'
                             else original_digest(manifest)) or result.get('run_id') != internal
@@ -979,6 +1017,7 @@ def _load_task(context, source, task):
                     **({'candidate': candidate} if candidate is not None else {}),
                     'evidence': evidence()}, {'decisions': values, 'binding': binding,
                         **({'pairing_key': pairing_key} if pairing_key is not None else {}),
+                        **({'pairing_member': pairing_member} if pairing_member is not None else {}),
                         'data_use': {'principal_active': True, 'frozen_at': context['now'],
                             'access_expires_at': lifecycle[0]['expires'], 'policy': context['retention_policy']}}
     except (OSError, ValueError, TypeError, KeyError, sqlite3.Error, SourceUnavailable) as error:

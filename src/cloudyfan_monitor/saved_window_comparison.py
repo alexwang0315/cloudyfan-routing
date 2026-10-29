@@ -15,7 +15,7 @@ import re
 import sqlite3
 
 from .saved_comparisons import (
-    HASH, LIMITS, SourceUnavailable, _original_receipts, _shared, _task_id,
+    HASH, LIMITS, SourceUnavailable, _original_receipts, _shared, _task_id, request_fingerprint, sent_prompt,
     digest, finite, identifier, original_digest, strict_json,
 )
 
@@ -124,10 +124,9 @@ def _legal_task(source, access, task):
             job = source.read(Path(access['tasks_root']) / internal / 'job.json', 'original_window_task_job')
             request = job['request']
             _require(job['registered'] == registered and type(request) is dict
-                and set(request) == {'run_id', 'contract_id', 'prompt'}
+                and set(request) - {'context'} == {'run_id', 'contract_id', 'prompt'}
                 and request['run_id'] == task['run_id'] and request['contract_id'] == binding['contract']
-                and digest({'run_id': request['run_id'], 'category': binding['category'],
-                            'prompt': request['prompt']}) == binding['fingerprint'])
+                and request_fingerprint(request, binding['category']) == binding['fingerprint'])
             return {'task': task, 'internal': internal, 'binding': binding, 'registered': registered, 'job': job}
     return _memo(source, key, load)
 
@@ -250,10 +249,11 @@ def _calls(source, access, legal):
         with _locks(access, legal['internal'], registered):
             manifest = source.read(run / 'manifest.json', 'original_window_source_manifest')
             result = source.read(run / 'result.json', 'original_window_source_result')
-            _require(manifest['mode'] == binding['mode'] and manifest['task']['prompt'] == job['request']['prompt']
+            _require(manifest['mode'] == binding['mode'] and manifest['task']['prompt'] == sent_prompt(job)
                 and manifest['contract_version'] == registered['version']
                 and all(manifest.get(k) == v for k, v in registered.items() if k not in (
-                    'version', 'mode', 'tool_names', 'model_bounds', 'tool_bounds', 'receipt_root', 'budget_store', 'enforcement'))
+                    'version', 'mode', 'tool_names', 'model_bounds', 'tool_bounds', 'receipt_root', 'budget_store', 'enforcement',
+                    'context_policy'))
                 and result['run_id'] == legal['internal'] and result['mode'] == binding['mode']
                 and result['config_sha256'] == (digest(manifest) if manifest['routing_version'] == 'qcs-backup-policy-v1'
                                                else original_digest(manifest)))

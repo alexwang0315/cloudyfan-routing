@@ -47,3 +47,16 @@ Validation is offline: Core unit tests, real loopback main-service HTTP with Moc
 - 請求已寫入、但封存前失敗（例如來源內容無法取得或輸出超限）時，另存 `.failed.json` 記錄失敗原因與時間。catalog 標 `failed`，讀取時回 409 `comparison_creation_failed`，與仍在處理中的 `pending` 分開；之後的比較不會覆寫這筆失敗。
 - 建立時可加 `rerun_of`，指向一份可核對的既有報告：新報告有新的識別，範圍（任務、候選策略、配對規則）必須與原報告完全相同，報告內記錄 `rerun_of`；原報告不變。原報告無法核對時回 409，範圍不同時回 422。
 - 驗證範圍為離線：真實本機 loopback 主服務 HTTP 搭配 MockTransport，涵蓋單件超限、損壞報告、建立失敗、重跑引用；另有 headed 桌機驗收。
+
+## 相同原始結構輸入，依內容準備分層 — Issue53
+
+- 新增配對規則 `same-original-input-v1`。它和 `same-input-v1` 一樣在讀取成果前寫入請求；配對鍵是原類別、契約版本、原 prompt 雜湊與整份參考區塊。
+- 每個成員的策略是「模式｜準備版本｜結果」，例如 `open_source_first|extractive-v1|prepared`、`fixed_high|extractive-v1|no_reduction`；沒有參考區塊時是 `模式|none`。所以同一份原始輸入的整塊選取、沒有省略與逾時回退，會分在不同策略。
+- 成員只附安全的準備資訊：版本、結果、原始與送出長度、送出內容是否與完整原文不同（`sent_input_differs`）、是否為合成接線資格。不含原文、區塊識別或內容。送出內容不同時，報告與桌機明示「不是相同派送輸入」。
+- 費用差與品質門檻沿用 #44：只有全員通過相同公開驗收、且完整費用已知的組才報差。本機擷取沒有額外模型費，但準備時間與主機營運成本沒有量測，不假設為零，也不按 token 差補扣或退款。不報勝率、一般語意等價或真實節省，也不自動採用壓縮政策。
+- 原任務載入器接受含參考區塊的新格式：
+  - 綁定指紋與 Monitor 接收時一致，包含 `context`。
+  - 執行 manifest 的 prompt 以 `task_prompt(job)` 核對；凍結準備損壞時視為不可驗證。
+  - `context_policy` 是 TaskService 接收層的註冊欄位，不在 Core 執行 manifest 的比對範圍。這一項原本會讓所有含參考區塊的任務載入失敗，已在本張修正。
+- `same-input-v1` 的配對鍵在有參考區塊時也納入整份區塊；沒有區塊的舊任務，鍵值不變。
+- 驗證範圍為離線：真實 loopback 主服務 HTTP 搭配 MockTransport，涵蓋整塊選取與完整原文配對並報差、品質不同不報差、區塊不同不配對，以及既有六組比較回歸 116 項；另有 headed 桌機驗收。

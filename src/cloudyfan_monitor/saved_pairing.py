@@ -9,6 +9,7 @@ from decimal import Decimal, InvalidOperation
 
 
 RULE = 'same-input-v1'
+ORIGINAL_RULE = 'same-original-input-v1'
 METRICS = 'paired-saved-outcomes-v1'
 TERMINAL = {'passed', 'failed'}
 
@@ -40,6 +41,8 @@ def _member(entry):
     status = original['task_status']
     first = path[0]['public_status'] if path else None
     return {'task': dict(entry['task']), 'mode': original['mode'], 'task_status': status,
+            # 策略預設是原模式；依內容準備分層時是「模式|準備版本|結果」。
+            'strategy': entry.get('strategy', original['mode']), 'preparation': entry.get('preparation'),
             'first_public_status': first, 'generation_flows': len(path),
             'known_api_usd': original['costs']['known_api_usd'],
             'complete_api_usd': _text(_fee(original['costs'])),
@@ -52,12 +55,12 @@ def _member(entry):
 
 def _group(members):
     reasons = []
-    modes = [row['mode'] for row in members]
+    modes = [row['strategy'] for row in members]
     if len(set(modes)) < 2:
         reasons.append('no_other_strategy')
     if len(set(modes)) != len(modes):
         reasons.append('duplicate_strategy_member')
-    if any(row['mode'] is None for row in members):
+    if any(row['mode'] is None or row['strategy'] is None for row in members):
         reasons.append('original_mode_unavailable')
     for name in ('pool_version', 'contract_version'):
         if len({row['conditions'][name] for row in members}) != 1 or members[0]['conditions'][name] is None:
@@ -75,7 +78,7 @@ def _group(members):
               else 'quality_differs' if quality == 'differs'
               else 'fee_unknown' if reasons else 'equal_quality')
     return {'status': status, 'reasons': reasons, 'quality': quality,
-            'members': sorted(members, key=lambda row: (str(row['mode']), row['task']['client'], row['task']['run_id']))}
+            'members': sorted(members, key=lambda row: (str(row['strategy']), row['task']['client'], row['task']['run_id']))}
 
 
 def _arm(rows):
@@ -94,7 +97,7 @@ def _arm(rows):
             'complete_api_usd_per_accepted': None if total is None or not accepted else _text(total / len(accepted))}
 
 
-def compare_pairs(entries):
+def compare_pairs(entries, rule=RULE):
     """entries: [{'task', 'key', 'key_reason', 'original'}] in fixed scope order."""
     excluded, groups = [], {}
     for entry in entries:
@@ -107,14 +110,14 @@ def compare_pairs(entries):
     for index, row in enumerate(rows):
         row['group'] = index
     paired = [row for row in rows if 'no_other_strategy' not in row['reasons']]
-    modes = sorted({member['mode'] for row in paired for member in row['members'] if member['mode'] is not None})
+    modes = sorted({member['strategy'] for row in paired for member in row['members'] if member['strategy'] is not None})
     differences = []
     for index, first in enumerate(modes):
         for second in modes[index + 1:]:
             usable = [row for row in rows if row['status'] == 'equal_quality'
-                      and {first, second} <= {member['mode'] for member in row['members']}]
+                      and {first, second} <= {member['strategy'] for member in row['members']}]
             costs = {mode: sum((_decimal(member['complete_api_usd']) for row in usable for member in row['members']
-                                if member['mode'] == mode), Decimal(0)) for mode in (first, second)}
+                                if member['strategy'] == mode), Decimal(0)) for mode in (first, second)}
             differences.append({'strategies': [first, second], 'equal_quality_groups': len(usable),
                 'complete_api_usd': {mode: _text(costs[mode]) if usable else None for mode in (first, second)},
                 'difference_usd': _text(costs[second] - costs[first]) if usable else None,
@@ -128,7 +131,7 @@ def compare_pairs(entries):
               'failed_flows': sum(member['task_status'] == 'failed' for member in members),
               'not_terminal_flows': sum(member['task_status'] not in TERMINAL for member in members),
               'unknown_fee_flows': sum(member['complete_api_usd'] is None for member in members)}
-    return {'rule': RULE, 'metrics_version': METRICS, 'cache_condition': 'not_recorded_in_saved_projection',
+    return {'rule': rule, 'metrics_version': METRICS, 'cache_condition': 'not_recorded_in_saved_projection',
             'counts': counts, 'excluded': excluded, 'groups': rows,
-            'arms': {mode: _arm([member for member in members if member['mode'] == mode]) for mode in modes},
+            'arms': {mode: _arm([member for member in members if member['strategy'] == mode]) for mode in modes},
             'differences': differences, 'alternative_outcomes': 'not_observed', 'adopted': False}

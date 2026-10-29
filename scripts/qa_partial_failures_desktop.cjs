@@ -50,7 +50,7 @@ async function main(){
  await step('explicit start combines original policy, candidate strategy and pairing',async()=>{
   await page.getByRole('heading',{name:'保存證據比較',exact:true}).waitFor();await box(...ready.tasks[0]).waitFor();
   await page.locator('#comparison-policy').selectOption('original-policy-reproduction-v1');
-  await page.locator('#comparison-strategy').selectOption('qcs-direct-v1');await page.locator('#comparison-pairing').check();
+  await page.locator('#comparison-strategy').selectOption('qcs-direct-v1');await page.locator('#comparison-pairing').selectOption('same-input-v1');
   for(const task of ready.tasks)await box(...task).check();
   await page.locator('#comparison-start').click();await page.locator('#confirm[open]').waitFor();
   const pending=post();await page.locator('#apply-confirm').click();const response=await pending;

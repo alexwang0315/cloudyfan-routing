@@ -48,13 +48,13 @@ async function main(){
  let paired;
  await step('pairing is opt-in and the catalogue lists only the registered rule',async()=>{
   await page.getByRole('heading',{name:'保存證據比較',exact:true}).waitFor();await box(...ready.tasks[0]).waitFor();
-  check(await page.locator('#comparison-pairing').isChecked()===false,'qa_pairing_preselected');
+  check(await page.locator('#comparison-pairing').inputValue()==='','qa_pairing_preselected');
   await snap('pairing-catalogue');
  });
  await step('identical inputs pair across modes and keep each flow\'s own saved outcome',async()=>{
   await page.locator('#comparison-policy').selectOption('original-policy-reproduction-v1');
   for(const task of ready.tasks)await box(...task).check();
-  await page.locator('#comparison-pairing').check();
+  await page.locator('#comparison-pairing').selectOption('same-input-v1');
   await page.locator('#comparison-start').click();await page.locator('#confirm[open]').waitFor();
   const pending=page.waitForResponse(row=>row.request().method()==='POST'&&new URL(row.url()).pathname==='/monitor/comparisons',{timeout:15000});
   await page.locator('#apply-confirm').click();const response=await pending;

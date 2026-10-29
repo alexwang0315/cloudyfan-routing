@@ -130,7 +130,7 @@ def test_unregistered_pairing_rule_is_rejected_and_plain_reports_have_no_pairing
     plain = paired_http.compare(tasks)
     assert 'pairing' not in plain and 'pairing' not in plain['scope']
     catalog = paired_http.client().get('/monitor/comparisons').json()
-    assert [row['version'] for row in catalog['pairing_rules']] == ['same-input-v1']
+    assert [row['version'] for row in catalog['pairing_rules']] == ['same-input-v1', 'same-original-input-v1']
     assert paired_http.client('studio').get('/monitor/comparisons').status_code == 401
 
 

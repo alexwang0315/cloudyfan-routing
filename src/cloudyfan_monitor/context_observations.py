@@ -88,15 +88,20 @@ def observe_preparation(app, client, run):
             or job['registered'].get('context_policy', {}).get('version') != prepared['version']):
         return {'schema_version': SCHEMA, 'task': task, 'status': 'unverifiable', 'preparation': None}
     key = observe._client_key(observe._secret(app.store.path), client)
-    sent, provider_prompt_tokens, generation_requests = None, None, 0
+    sent, provider_prompt_tokens, generation_requests, dispatches = None, None, 0, []
     contract = observe._contracts(app).get(binding['contract'])
     if contract is not None:
         calls, _ = observe._calls(contract['receipt_root'], internal)
         generations = [(intent, response) for intent, response in calls
                        if intent.get('url', '').endswith('/chat/completions')]
         generation_requests = len(generations)
+        # 每次實際派送（含升級後）都對照凍結內容與供應商回報用量。
+        dispatches = [{'call_index': number, 'matches_prepared': _user_content_sha(intent) == prepared['content_sha256'],
+                       'sent': type(response.get('http_status')) is int and not response.get('not_dispatched'),
+                       'provider_prompt_tokens': observe._tokens(response)['prompt_tokens']}
+                      for number, (intent, response) in enumerate(generations)]
         if generations:
-            sent = _user_content_sha(generations[0][0]) == prepared['content_sha256']
+            sent = all(row['matches_prepared'] for row in dispatches)
             # 供應商實際回報的輸入 token 與本機計數分開；沒有就是未知。
             provider_prompt_tokens = observe._tokens(generations[0][1])['prompt_tokens']
     return {'schema_version': SCHEMA, 'task': task, 'status': 'prepared', 'preparation': {
@@ -114,4 +119,5 @@ def observe_preparation(app, client, run):
         'fallback_policy': prepared.get('fallback_policy', 'reject'), 'sent_bytes': prepared.get('sent_bytes'),
         'token_estimate': prepared.get('token_estimate'), 'token_method': prepared.get('token_method', 'unavailable'),
         'provider_prompt_tokens': provider_prompt_tokens, 'generation_requests': generation_requests,
+        'dispatches': dispatches,
         'note': 'extractive_whole_blocks_no_summary_no_model_calls'}}

@@ -198,11 +198,18 @@ def _load(app, client, run, now, contracts, client_key):
         return {**task, 'status': 'contract_unsupported', 'calls': []}
     job = strict_json(_read(Path(service.root) / internal / 'job.json', LIMITS['file_bytes']))
     prompt = job['request']['prompt']
+    prepared = job.get('prepared') if isinstance(job.get('prepared'), dict) else None
+    # 壓縮版本與區塊選取納入匹配範圍；內容或選取不同，舊提示就不適用。
+    preparation_scope = None if prepared is None else {
+        'version': prepared.get('version'), 'outcome': prepared.get('outcome'),
+        'selection': [(row.get('index'), row.get('decision')) for row in prepared.get('blocks', [])]}
     rows, truncated = _calls(contract['receipt_root'], internal)
     calls = []
     for index, (intent, response) in enumerate(rows):
         messages = intent['payload'].get('messages')
         scope = _scope(intent, contract['profiles'], contract['receipt_root'], client_key)
+        if scope is not None and preparation_scope is not None:
+            scope = {**scope, 'context_preparation': preparation_scope}
         static = _static(messages, prompt) if isinstance(messages, list) else []
         calls.append({'index': index, 'scope': scope, 'static': static,
                       'chain': _chain(client_key, scope, static) if scope is not None else [],

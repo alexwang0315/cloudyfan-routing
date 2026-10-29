@@ -174,25 +174,53 @@ def collect(python, root, env, path):
             "manifest": str(path.with_suffix(".json"))}
 
 
+def evidence_entries(output):
+    # Walk without following links, so a planted link never redirects a read.
+    files, links = [], []
+    for directory, folders, names in os.walk(output):
+        folders[:] = [name for name in folders if name not in CACHES]
+        for name in folders + names:
+            path = Path(directory) / name
+            if path.is_symlink():
+                links.append(path)
+            elif name in names and path.is_file():
+                files.append(path)
+    return sorted(files), sorted(links)
+
+
+def symlink_record(output, path):
+    # Human decision (2026-10-29): security tests leave planted links as evidence.
+    # Seal the link itself and its in-snapshot target; never open what it names.
+    target = os.readlink(path)
+    location = Path(os.path.normpath(target if os.path.isabs(target) else path.parent / target))
+    if ".." in Path(target).parts or not location.is_relative_to(output):
+        raise ValueError("verification evidence symlink must stay within the snapshot")
+    return {"path": path.relative_to(output).as_posix(), "target": location.relative_to(output).as_posix()}
+
+
+def output_symlinks(output):
+    return [symlink_record(output, path) for path in evidence_entries(output)[1]]
+
+
 def output_inventory(output, manifest):
     source_files = {f"{name}/{item['path']}" for name in ("core", "monitor")
                     for item in manifest["inputs"][name]["files"]}
     records = []
-    for path in sorted(output.rglob("*")):
+    for path in evidence_entries(output)[0]:
         relative = path.relative_to(output)
-        if (not path.is_file() or CACHES.intersection(relative.parts)
-                or relative.as_posix() in source_files or relative.as_posix() in {"inputs.json", "run.json"}):
+        if relative.as_posix() in source_files or relative.as_posix() in {"inputs.json", "run.json"}:
             continue
-        if path.is_symlink():
-            raise ValueError("verification evidence cannot contain unreviewed symlinks")
         records.append({"path": relative.as_posix(), "sha256": digest(path), "size": path.stat().st_size})
     return records
 
 
-def validate_outputs(output, report):
+def validate_outputs(output, report, links_present=True):
     records = report.get("output_files")
     if report.get("evidence_manifest_version") != 1 or not isinstance(records, list) or not records:
         raise ValueError("verification evidence seal is missing; a fresh run is required")
+    links = report.get("output_symlinks", [])
+    if not isinstance(links, list) or (links_present and output_symlinks(output) != links):
+        raise ValueError("verification evidence symlinks changed since sealing")
     required = {f"{name}.log" for name in ("dependencies", "core", "monitor")}
     required |= {f"collection-{name}.{suffix}" for name in ("core", "monitor") for suffix in ("log", "json")}
     names = set()
@@ -261,7 +289,8 @@ def run(output):
             matches = re.findall(r"\b(\d+) passed\b", log)
             if not matches or int(matches[-1]) != report["collections"][name]["tests_collected"]:
                 raise ValueError(f"{name} test result does not match the collected scope")
-        report.update(evidence_manifest_version=1, output_files=output_inventory(output, manifest))
+        report.update(evidence_manifest_version=1, output_files=output_inventory(output, manifest),
+                      output_symlinks=output_symlinks(output))
         validate_outputs(output, report)
         report.update(status="passed", passed=True)
     except KeyboardInterrupt:
@@ -334,8 +363,13 @@ def delivery_status(root):
         if not path.is_file() or digest(path) != item["sha256"]:
             raise ValueError(f"preserved evidence changed: {item['path']}")
     evidence_sealed = receipt.get("evidence_manifest_version") == 1
-    sealed_count = validate_outputs(receipt_path.parent / "snapshot",
-                                    read(receipt_path.parent / "snapshot/run.json")) if evidence_sealed else 0
+    sealed_run = read(receipt_path.parent / "snapshot/run.json") if evidence_sealed else {}
+    # Links are preserved as receipt records, not recreated in the delivery copy.
+    sealed_count = validate_outputs(receipt_path.parent / "snapshot", sealed_run,
+                                    links_present=False) if evidence_sealed else 0
+    sealed_links = sealed_run.get("output_symlinks", [])
+    if receipt.get("preserved_symlinks", []) != sealed_links:
+        raise ValueError("preserved evidence symlink records changed")
     monitor_files = inventory(root)["files"]
     monitor_matches = monitor_files == receipt["monitor_inputs"]
     monitor_checks_match = verification_files(monitor_files) == verification_files(receipt["monitor_inputs"])
@@ -367,6 +401,7 @@ def delivery_status(root):
             "preserved_files_verified": len(receipt["preserved_files"]),
             "historical_evidence_hashes_verified": len(indexed_evidence),
             "verification_evidence_sealed": evidence_sealed, "sealed_output_files_verified": sealed_count,
+            "sealed_output_symlinks_verified": len(sealed_links),
             "collections": receipt["collections"], "receipt": pointer["receipt"],
             "tracker_observation": receipt.get("tracker_observation"),
             "remaining_actions": ["Remote CI execution has not been observed; no source push performed"]}
@@ -407,8 +442,7 @@ def finalize(output, destination, evidence_index=None, tracker_receipt=None):
         if evidence_index and receipt.get("artifact_sha256", []) != evidence:
             raise ValueError("existing immutable historical evidence index differs; refusing overwrite")
     else:
-        paths = [p for p in output.rglob("*") if p.is_file()
-                 and not CACHES.intersection(p.relative_to(output).parts)]
+        paths, _ = evidence_entries(output)
         target.mkdir(parents=True, mode=0o700)
         preserved = []
         for source in sorted(paths):
@@ -434,6 +468,8 @@ def finalize(output, destination, evidence_index=None, tracker_receipt=None):
             preserved.append({"path": str(copied_tracker.relative_to(destination)),
                               "sha256": digest(copied_tracker), "size": copied_tracker.stat().st_size})
         verify(output)
+        if output_symlinks(output) != result.get("output_symlinks", []):
+            raise ValueError("verification evidence symlinks changed while preserving delivery")
         receipt = {"schema_version": 2, "snapshot_id": manifest["id"], "verified_at": result.get("finished_at"),
                    "evidence_manifest_version": 1,
                    "inputs_sha256": digest(output / "inputs.json"), "run_sha256": digest(run_path),
@@ -442,6 +478,7 @@ def finalize(output, destination, evidence_index=None, tracker_receipt=None):
                    "original_core_inputs": manifest["inputs"]["core"],
                    "historical_policy": manifest["historical_scope_policy"],
                    "collections": result["collections"], "preserved_files": preserved,
+                   "preserved_symlinks": result.get("output_symlinks", []),
                    "artifact_sha256": evidence,
                    "historical_evidence_hashes_verified": len(evidence), "tracker_observation": tracker,
                    "source_files_overwritten": False, "data_deleted": False}

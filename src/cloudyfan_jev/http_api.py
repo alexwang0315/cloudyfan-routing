@@ -18,6 +18,7 @@ from http import HTTPStatus
 from functools import wraps
 import time
 
+from .context_preparation import ContextError, prepare as prepare_context, task_prompt, validate_policy as validate_context_policy
 from .budget import BudgetedCore, BudgetError
 from .client import _strict_json
 from .diagnostics import DiagnosticContract
@@ -94,6 +95,8 @@ class RegisteredContract:
     environment_factory: object
     tool_names: tuple[str, ...] = ()
     mode: str = 'cloudyfan'
+    # 明示選用的參考區塊準備政策（#50）；None 表示此契約不接受結構化參考區塊。
+    context_policy: dict | None = None
 
     def descriptor(self):
         if (not isinstance(self.version, str) or not self.version.strip()
@@ -110,7 +113,9 @@ class RegisteredContract:
                 'receipt_root': str(core.client.root.resolve()),
                 'budget_store': str(self.runner.store.path.resolve()),
                 **({'enforcement': self.runner.enforcement_descriptor()}
-                   if self.runner.enforcement_descriptor() is not None else {})}
+                   if self.runner.enforcement_descriptor() is not None else {}),
+                **({'context_policy': validate_context_policy(dict(self.context_policy))}
+                   if self.context_policy is not None else {})}
 
 
 def _provenance(result, frozen):
@@ -377,7 +382,7 @@ class TaskService:
             if not QueuePreparation.is_accepting(self.queue_scheduler):
                 return self.queue_scheduler.submit(principal, payload)
             controlled_queue_required = True
-        if not isinstance(payload, dict) or set(payload) != {'run_id', 'contract_id', 'prompt'}:
+        if not isinstance(payload, dict) or set(payload) - {'context'} != {'run_id', 'contract_id', 'prompt'}:
             raise ServiceError('unsupported_task_fields')
         if (not isinstance(payload['prompt'], str) or not payload['prompt'].strip()
                 or len(payload['prompt'].encode()) > 32768):
@@ -387,6 +392,15 @@ class TaskService:
             raise ServiceError('unregistered_contract')
         directory = self._directory(principal, payload['run_id'])
         frozen = json.loads(_encode({'request': payload, 'registered': contract.descriptor()}))
+        prepared = None
+        if 'context' in payload:
+            if contract.context_policy is None:
+                raise ServiceError('context_preparation_not_registered', 409)
+            try:
+                # 付費前、寫入任何紀錄前完成；失敗就拒絕，不靜默截斷。
+                prepared = prepare_context(payload['prompt'], payload['context'], frozen['registered']['context_policy'])
+            except ContextError as error:
+                raise ServiceError(error.code, error.status) from None
         if self.retention is not None:
             self.retention.access(self.internal_id(principal, payload['run_id']), create=True,
                                   legacy_exists=(directory / 'job.json').exists())
@@ -394,9 +408,14 @@ class TaskService:
         with _lock(directory):
             path = directory / 'job.json'
             if path.exists():
-                if _read(path) != frozen:
+                saved = _read(path)
+                # 原樣重送只比對原請求與註冊契約，不重新準備或派送。
+                if {key: saved.get(key) for key in ('request', 'registered')} != frozen or (
+                        'prepared' in saved) != (prepared is not None):
                     raise ServiceError('frozen_task_changed', 409)
             else:
+                if prepared is not None:
+                    frozen = {**frozen, 'prepared': prepared}
                 if self.capacity_controller is not None:
                     try:
                         self.capacity_controller.adopt(self.internal_id(principal, payload['run_id']), principal, frozen['registered'])
@@ -594,7 +613,7 @@ class TaskService:
                 context = (self.capacity_controller.context(internal, principal, job['registered'])
                            if self.capacity_controller is not None else None)
                 result = runner.run(internal,
-                    {'prompt': job['request']['prompt']}, environment,
+                    {'prompt': task_prompt(job)}, environment,
                     contract_version=contract.version, mode=contract.mode,
                     **({"capacity_context": context, "capacity_descriptor": job["registered"]}
                        if self.capacity_controller is not None else {}))

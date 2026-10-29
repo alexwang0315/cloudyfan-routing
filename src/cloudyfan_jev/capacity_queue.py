@@ -13,6 +13,7 @@ import re
 from pathlib import Path
 import tempfile
 
+from .context_preparation import task_prompt
 from .engine import Core
 
 _SUBMITTING = ContextVar('capacity_queue_submitting', default=None)
@@ -108,7 +109,7 @@ class QueuePreparation:
         contract_id = job['request']['contract_id']
         contract = service._registered_contract(job)
         self.verify_contract(contract_id, contract)
-        core, task = contract.runner.core.queue_binding(row['id'], {'prompt': job['request']['prompt']})
+        core, task = contract.runner.core.queue_binding(row['id'], {'prompt': task_prompt(job)})
         pointer = directory / 'queue-next.json'
         if pointer.exists():
             reference = _read(pointer)
@@ -157,7 +158,7 @@ class QueuePreparation:
         # before accepting work; registration is not proof of Python purity.
         workspace = Path(tempfile.mkdtemp(prefix='queue-preparation-', dir=directory))
         self.verify_environment(job['request']['contract_id'], contract.environment_factory(workspace))
-        core, task = contract.runner.core.queue_binding(row['id'], {'prompt': job['request']['prompt']})
+        core, task = contract.runner.core.queue_binding(row['id'], {'prompt': task_prompt(job)})
         core.queue_accept(row['id'], row['created'])
 
     def save_boundary(self, service, row, next_request):

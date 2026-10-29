@@ -140,8 +140,14 @@ class Gateway:
                         self.service.create(principal, {"run_id": binding["run"], "contract_id": binding["contract"],
                                                         "prompt": payload["prompt"],
                                                         **({"context": payload["context"]} if "context" in payload else {})})
-                except Exception:
+                except Exception as error:
                     self.capture(binding, unavailable=True)
+                    if "context" in payload and isinstance(error, ServiceError):
+                        try:
+                            from .context_observations import record_rejection
+                            record_rejection(self.store, principal, binding["run"], error.code, payload)
+                        except Exception:
+                            pass  # 安全紀錄失敗不改變原本的拒絕
                     raise
                 self.capture(binding, retain_metadata=True)
                 return self._execute(binding)

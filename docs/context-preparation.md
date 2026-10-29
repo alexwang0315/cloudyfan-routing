@@ -45,3 +45,20 @@
 - 區塊識別由呼叫端提供，可能帶語意，所以只給每客戶端隔離的 HMAC 摘要；原文、prompt 與區塊內容都不出現。原文存取到期回 `raw_access_expired`，不重新開啟。
 - 桌機在「前綴與快取觀測」頁的任務明細中顯示「參考區塊準備」。
 - 驗證範圍為離線：真實 loopback 主服務 HTTP、Core／BudgetedCore／TaskService 搭配 MockTransport，涵蓋新格式、中文與程式內容、省略大區塊、原順序、舊格式、重送與衝突、超限／偽造欄位／未註冊版本拒絕、沒有政策的契約、客戶端隔離與到期；另有 headed 桌機驗收。這是合成接線，不代表一般語意無損、品質不變或節費。
+
+
+## 逾時、無縮減與超限：付費前回退或拒絕（Issue51）
+
+- 準備結果多了 `outcome`：
+  - `prepared`：已整塊選取。
+  - `no_reduction`：每個區塊都放得下，送出完整原文。
+  - `fallback_original`：準備逾時，付費前回退完整原文。
+- 準備逾時時，只有政策 `fallback` 明示為 `original_if_fits`、且完整原文放得下，才在付費前回退原文。回退只送一次，不增加 attempt 或分類。否則依情況拒絕：
+  - `context_preparation_timeout`：政策不允許回退。
+  - `preparation_unavailable_original_over_limit`：完整原文也放不下。
+- 框架與輸出預留已超過上下文時，回 `output_reserve_exceeds_context`，與必要內容超限的 `required_context_over_limit` 分開。
+- 長度分開記錄：原始、準備後、實際送出。第一版沒有綁定精確 tokenizer 的本機計數，所以 `token_estimate` 為未知（`token_method: unavailable`），不用字元平均估值；供應商回報的輸入 token 另列。
+- 費用預留沿用 BudgetedCore 依每次呼叫可強制上界的保守預留，不因內容變短而降低。預算授權不足時，在任何 POST 前停止。
+- 準備在 Core 寫任務紀錄之前完成，所以付費前的拒絕不會留下任務紀錄（零 POST）。Monitor 另存安全的拒絕紀錄 `context-decisions.sqlite`（客戶端、run_id、原因碼、請求雜湊、時間；不存原文），觀測顯示 `rejected_before_dispatch` 與原因。
+- 準備耗時用的時鐘是模組層級的 `context_preparation._now`，主機測試可替換，用來驗證逾時與回退。
+- 驗證範圍（#51）為離線：Core 單元測試，以及真實 loopback HTTP 搭配 MockTransport，涵蓋逾時回退且只送一次、不允許回退、原文放不下、預留超過上下文、token 方法不可信、無縮減、預算保障不足時零 POST；另有 headed 桌機驗收。

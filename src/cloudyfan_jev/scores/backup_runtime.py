@@ -14,7 +14,7 @@ import re
 from time import perf_counter
 
 from .. import client as transport, routing
-from ..engine import Core, INITIAL, _encoded, _lock, _read, _save
+from ..engine import Core, INITIAL, _encoded, _lock, _read, _save, repair_history
 from ..generation_request import reasoning_matches
 from .backup_pools import TIERS, _admit, verify_backup_pools
 from .catalog import digest, timestamp
@@ -732,8 +732,7 @@ class BackupCategoryCore(Core):
                         or not self.local_backend.matches_profile(profile)):
                     raise ValueError('Backup local profile requires its exact registered backend')
                 if attempts:
-                    messages = [{k: v for k, v in m.items() if k not in ('reasoning', 'reasoning_details')}
-                                for m in messages]
+                    messages = repair_history(messages)
                     messages.append({'role': 'user', 'content': 'Public validation did not establish completion. '
                         'Repair the task using these public diagnostics: ' + _encoded(attempts[-1]['public']).decode()})
                 self._active_record = record

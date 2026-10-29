@@ -44,6 +44,17 @@ PROVIDER_DIAGNOSTICS = DiagnosticContract(
     version='core-provider-diagnostics-v1', source='core-provider-response')
 
 
+def repair_history(messages):
+    """Drop private reasoning and no-answer assistant turns before a bounded repair.
+
+    A token-exhausted attempt can return content=None with no tool calls; providers reject
+    such a message, and the repair diagnostics already state that no answer was established.
+    """
+    stripped = [{k: v for k, v in m.items() if k not in ('reasoning', 'reasoning_details')} for m in messages]
+    return [m for m in stripped
+            if not (m.get('role') == 'assistant' and m.get('content') is None and not m.get('tool_calls'))]
+
+
 class ToolExecutionError(RuntimeError):
     """Execution outcome is uncertain; no automatic external replay is permitted."""
 
@@ -534,7 +545,7 @@ class Core:
             for index in range(len(phases)):
                 tier = INITIAL[mode] if index == 0 else 'high'
                 if index:
-                    messages = [{k: v for k, v in m.items() if k not in ('reasoning', 'reasoning_details')} for m in messages]
+                    messages = repair_history(messages)
                     if mode == 'cloudyfan':
                         selected = self._select(prefix, task, attempts[-1], actions,
                                                 stage='low_mid' if index == 1 else 'mid_high')

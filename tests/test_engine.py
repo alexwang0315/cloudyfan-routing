@@ -92,6 +92,17 @@ def test_empty_output_receives_same_bounded_repair(tmp_path, first):
     assert result['status'] == 'passed' and len(result['attempts']) == 2
 
 
+def test_repair_never_sends_an_assistant_message_without_content(tmp_path):
+    # 真實供應商會以 messages[n].content cannot be null 拒收；首答 token 用盡無答案時不能帶進補答。
+    api = API(messages=[{'role': 'assistant', 'content': None, 'reasoning': 'only-thinking'},
+                        {'role': 'assistant', 'content': '2'}])
+    result = core(tmp_path, api).run('null', TASK, ArithmeticEnvironment, contract_version='v1')
+    assert result['status'] == 'passed' and len(result['attempts']) == 2
+    repair = [r for r in api.requests if 'messages' in r][1]['messages']
+    assert all(m.get('content') is not None or m.get('tool_calls') for m in repair)
+    assert [m['role'] for m in repair] == ['system', 'user', 'user']
+
+
 @pytest.mark.parametrize('status,expected', [(False, 'failed'), (None, 'unverifiable')])
 def test_final_failure_or_unknown_never_success_or_fourth_attempt(tmp_path, status, expected):
     class Environment(ArithmeticEnvironment):

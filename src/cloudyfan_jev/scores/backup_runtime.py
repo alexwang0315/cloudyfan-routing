@@ -129,6 +129,8 @@ class BackupCategoryCore(Core):
         super().__init__(client, profiles, decision_profile, **kwargs)
         self._frozen_profiles = deepcopy(self.profiles)
         self._base_limits = self.limits
+        # 主機可在每個 run 綁定快取親和性 port；預設不啟用，排序與原政策完全相同。
+        self.affinity, self._affinity_tools, self._affinity_decisions = None, None, {}
         self._deadline = None
         self._validate_policy(None)
 
@@ -278,7 +280,60 @@ class BackupCategoryCore(Core):
                 'classifier_calls': classifiers, 'classifier_profile': deepcopy(self.decision) if classifiers else None,
                 'max_tool_calls': self._base_limits.max_tool_calls}
 
-    def _health_choice(self, tier, failed_providers, excluded_configs, *, window_check=None):
+    @staticmethod
+    def _equivalent(record, base):
+        """同池、相同完整成本區間與整件速度統計量／區間；不採任何容差。"""
+        def exact(value):
+            return {key: (_d(item) if key in ('lower', 'upper') else item) for key, item in value.items()}
+        return (exact(record['evidence']['complete_cost_usd']) == exact(base['evidence']['complete_cost_usd'])
+                and exact(record['evidence']['speed']) == exact(base['evidence']['speed']))
+
+    def _affinity_choice(self, tier, decision_key, eligible, base):
+        """只在全部閘門之後、等價集合內，以主機的可信前綴提示作次要排序。"""
+        equal = sorted((r for r in eligible if self._equivalent(r, base)), key=self._rank_record)
+        decision = {'decision_key': decision_key, 'tier': tier, 'policy_version': None,
+                    'equivalent_config_ids': [r['entry']['config_id'] for r in equal],
+                    'original_config_id': base['entry']['config_id'], 'selected_config_id': base['entry']['config_id'],
+                    'adopted': False, 'reason': 'no_equivalent_set', 'observed_at': None,
+                    'matched_messages': 0, 'previous_started_at': None}
+        if len(equal) < 2:
+            return base, decision
+        messages = [{'role': 'system', 'content': self.system}, {'role': 'user', 'content': self._task['prompt']}]
+        try:
+            tools = self._affinity_tools() if callable(self._affinity_tools) else (self._affinity_tools or [])
+            answer = self.affinity({'decision_key': decision_key, 'tier': tier, 'candidates': [
+                {'config_id': r['entry']['config_id'], 'configuration_sha256': r['configuration_sha256'],
+                 'payload': self.generation_payload(messages, r['entry']['profile'],
+                                                    'run-' + self._bound_run_id, tools)}
+                for r in equal]})
+        except Exception:
+            return base, {**decision, 'reason': 'affinity_port_failed'}
+        if not isinstance(answer, dict):
+            return base, {**decision, 'reason': 'affinity_port_failed'}
+        decision.update({key: answer.get(key) for key in ('policy_version', 'observed_at', 'previous_started_at')},
+                        matched_messages=answer.get('matched_messages') or 0,
+                        reason=answer.get('reason') or 'affinity_hint_unavailable')
+        preferred = next((r for r in equal if r['entry']['config_id'] == answer.get('preferred')), None)
+        if answer.get('preferred') is not None and preferred is None:
+            return base, {**decision, 'reason': 'affinity_preference_outside_equivalent_set'}
+        if preferred is None:
+            return base, decision
+        return preferred, {**decision, 'selected_config_id': preferred['entry']['config_id'],
+                           'adopted': preferred is not base}
+
+    def _expected_choice(self, eligible, decision):
+        """重播：只接受保存的、仍在等價集合內的親和性選擇，否則就是原排序。"""
+        base = min(eligible, key=self._rank_record)
+        if not decision or not decision.get('adopted'):
+            return base
+        equal = [r for r in eligible if self._equivalent(r, base)]
+        preferred = [r for r in equal if r['entry']['config_id'] == decision.get('selected_config_id')]
+        if (len(preferred) != 1 or decision.get('equivalent_config_ids') != [r['entry']['config_id']
+                for r in sorted(equal, key=self._rank_record)]):
+            raise ValueError('Frozen backup affinity choice is outside the equivalent set')
+        return preferred[0]
+
+    def _health_choice(self, tier, failed_providers, excluded_configs, *, window_check=None, decision_key=None):
         eligible, observations = [], []
         for record in self._backup['pools'][tier]:
             profile = record['entry']['profile']
@@ -313,7 +368,10 @@ class BackupCategoryCore(Core):
                 **({'capacity_window': window} if window is not None else {})})
             if not reasons:
                 eligible.append(record)
-        return (deepcopy(min(eligible, key=self._rank_record)) if eligible else None), observations
+        choice = min(eligible, key=self._rank_record) if eligible else None
+        if choice is not None and decision_key is not None and self.affinity is not None:
+            choice, self._affinity_decisions[decision_key] = self._affinity_choice(tier, decision_key, eligible, choice)
+        return (deepcopy(choice) if choice is not None else None), observations
 
     def queue_accept(self, run_id, accepted_at):
         if run_id != self._bound_run_id:
@@ -340,7 +398,9 @@ class BackupCategoryCore(Core):
         self._queue_deadline()
         self._task = deepcopy(task)
         self._require_policy_fresh()
-        record, observations = self._health_choice(INITIAL[mode], set(), set(), window_check=candidate_window)
+        self._affinity_tools = tools
+        record, observations = self._health_choice(INITIAL[mode], set(), set(), window_check=candidate_window,
+                                                   decision_key='0:' + INITIAL[mode])
         if record is None:
             raise CapacityDenied('capacity_original_candidate_unavailable')
         profile = record['entry']['profile']
@@ -524,9 +584,12 @@ class BackupCategoryCore(Core):
             tiers = routing.STAGES[stage] if stage else (tier,)
             pair, health = {}, {}
             for candidate_tier in tiers:
-                record, health[candidate_tier] = self._health_choice(candidate_tier, failed, excluded)
+                record, health[candidate_tier] = self._health_choice(candidate_tier, failed, excluded,
+                    decision_key=f'{index}:{candidate_tier}')
                 if record is not None:
                     pair[candidate_tier] = record
+            affinity = {key: value for key, value in self._affinity_decisions.items()
+                        if key in {f'{index}:{t}' for t in tiers}}
             if not pair:
                 _save(checkpoint, {'pair': {}, 'health': health, 'economic': {
                     'action': 'stop', 'reason': 'no_eligible_candidate'},
@@ -535,7 +598,8 @@ class BackupCategoryCore(Core):
             economic = self._economic(stage, previous, pair) if stage else {
                 'action': 'direct', 'selected_tier': tier, 'reason': 'same_pool_availability_or_initial'}
             saved = {'pair': pair, 'health': health, 'economic': economic,
-                     'previous': deepcopy(previous), 'actions': deepcopy(actions)}
+                     'previous': deepcopy(previous), 'actions': deepcopy(actions),
+                     **({'affinity': affinity} if affinity else {})}
             _save(checkpoint, saved)
         tiers = routing.STAGES[stage] if stage else (tier,)
         if set(saved['pair']) - set(tiers) or set(saved['health']) != set(tiers):
@@ -549,7 +613,8 @@ class BackupCategoryCore(Core):
                 raise ValueError('Frozen backup selection health identity changed')
             eligible = [r for r in self._backup['pools'][candidate_tier]
                         if any(h['config_id'] == r['entry']['config_id'] and not h['reasons'] for h in observations)]
-            if not eligible or candidate != min(eligible, key=self._rank_record):
+            if not eligible or candidate != self._expected_choice(
+                    eligible, saved.get('affinity', {}).get(f'{index}:{candidate_tier}')):
                 raise ValueError('Frozen backup selection differs from recorded health choice')
         expected_economic = (self._economic(stage, previous, saved['pair']) if stage and saved['pair'] else
             {'action': 'direct', 'selected_tier': tier, 'reason': 'same_pool_availability_or_initial'}
@@ -632,6 +697,8 @@ class BackupCategoryCore(Core):
                     not isinstance(name, str) or not name for name in replayable):
                 raise ValueError('Explicit replayable tools required')
             _save(directory / 'tool-replay-policy.json', {'replayable_tools': sorted(set(replayable))})
+            # 只在親和性 port 真的需要時才取工具 schema，不改變原有呼叫時機。
+            self._affinity_tools = env.tools_schema
             began, prefix = perf_counter(), 'run-' + run_id
             resumed = any((Path(self.client.root) / 'calls').glob(prefix + '-*'))
             messages = [{'role': 'system', 'content': self.system}, {'role': 'user', 'content': task['prompt']}]

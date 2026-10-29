@@ -193,7 +193,9 @@ def main():
                     'creation_observation_control', 'creation_observation_absences', 'billing_control',
                     'billing_entries', 'billing_task_policies', 'billing_waiting', 'billing_attempts',
                     'billing_source_state', 'billing_supplier_evidence')
-                with sqlite3.connect(controlled.app.store.path.as_uri() + '?mode=ro', uri=True, timeout=0) as db:
+                # Read-only oracle: wait out the host's own short post-completion
+                # writes instead of failing on a transient lock (two desktop runs).
+                with sqlite3.connect(controlled.app.store.path.as_uri() + '?mode=ro', uri=True, timeout=5) as db:
                     db.execute('PRAGMA query_only=ON')
                     table_hashes = {name: digest(sorted(db.execute('SELECT * FROM ' + name).fetchall(), key=repr))
                         for name in tables}

@@ -31,3 +31,11 @@ For each saved decision the worker passes the same verified value DTO to Core tw
 Missing exact classifier calibration, an unsaved classifier estimate and an over-limit classification flow are reported as `not_evaluable` or `not_adoptable`, distinct from an uneconomic classifier. Forecasts come from the original saved cost model and are labelled as forecasts: complete-flow interval, classifier fee estimate, conservative net saving and calibration state. They are separate from actual fees, customer charges and enforceable bounds. There are no alternative success rates, win rates, real savings or adoption; `adopted` is always false.
 
 Validation is offline: Core unit tests, real loopback main-service HTTP with MockTransport for QCS direct/classified, second-stage quality rescue, Backup missing calibration and availability exhaustion, and a headed desktop run. The uneconomic-classifier case is covered by Core unit tests because no existing HTTP fixture produces it. No provider spend, push or deployment follows from this document.
+
+## 相同輸入的已保存成果配對 — Issue44
+
+建立比較時可加上 `pairing: "same-input-v1"`，這是目前唯一註冊的配對規則。規則與 `paired-saved-outcomes-v1` 指標在讀取任何原任務之前就寫入請求，所以不能在看到成果後再挑題或剔除。私有配對鍵由原類別、註冊契約版本，以及原請求 prompt 的雜湊組成；它只存在私有的凍結輸入中，不出現在公開報告。原文存取到期後也不會再計算，這類任務會連同原因列為「排除」。契約 ID 不納入配對鍵，因為它代表的是各模式自己的執行器。
+
+每個成員只提供自己保存的流程：最終任務狀態、首答公開驗收狀態、權威完整費用與條件。以下情況整組不可比：只有一種策略、同一策略有多筆流程、候選池或契約版本不同或未知、有流程尚未完成。保存資料沒有記錄快取條件，所以所有配對都放在同一個明示的「未記錄」分層。只有每個成員都通過相同公開驗收、且完整費用都已知的組，才報費用差；品質不同、沒有已驗收工作或費用未明的組照樣列出，但不報費用差。各策略的合計把已知金額與費用未明流程數分開；沒有已驗收工作或有費用未明時，「每件已驗收工作的完整費用」標為未定義，不填零。「觀察到救回」只用在同一流程首答公開驗收未通過、最終通過的情況，不推論 Jev 的因果效益。
+
+報告列出選定、可配對鍵、排除、已配對、未配對、品質相同、品質不同、無已驗收、費用未明、不可比等數量。不報勝率、替代成果或真實節省，不採用任何策略；計算配對不重新驗收，也不呼叫模型、工具、來源或核帳。驗證範圍為離線：純函式單元測試，以及真實本機 loopback 主服務 HTTP 搭配 MockTransport，涵蓋品質相同、品質較差且觀察到救回、輸入不同與同模式重複、到期排除、未註冊規則拒絕，另有 headed 桌機驗收。

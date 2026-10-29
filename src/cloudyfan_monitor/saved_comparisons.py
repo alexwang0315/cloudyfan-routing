@@ -269,6 +269,17 @@ def _candidate_strategies():
     return STRATEGIES
 
 
+PAIRING_RULES = ('same-input-v1',)
+
+
+def _pairing(body):
+    """Only a registered pairing rule, fixed in the request before any outcome is read."""
+    rule = body.get('pairing')
+    if 'pairing' in body and (type(rule) is not str or rule not in PAIRING_RULES):
+        fail('comparison_pairing_not_registered', 409)
+    return rule
+
+
 def _strategy(body):
     """Only a Core-registered strategy name; never code or a browser-built policy."""
     strategy = body.get('candidate_strategy')
@@ -278,9 +289,10 @@ def _strategy(body):
 
 
 def _scope(body, *, maximum=None):
-    if not isinstance(body, dict) or set(body) - {'candidate_strategy'} != {'policy_version', 'tasks'}:
+    if not isinstance(body, dict) or set(body) - {'candidate_strategy', 'pairing'} != {'policy_version', 'tasks'}:
         fail('unsupported_comparison_fields')
     _strategy(body)
+    _pairing(body)
     if body['policy_version'] != POLICY:
         fail('comparison_policy_not_registered', 409)
     tasks = body['tasks']
@@ -474,7 +486,9 @@ class _Reports:
                     or report.get('scope') != _report_scope(request)
                     or report.get('created_at') != request['created_at'] or report.get('frozen_at') != request['frozen_at']
                     or request.get('limits', report.get('limits')) != report.get('limits')
-                    or report.get('result_sha256') != _result_digest(request, report['items'], report['data_sha256'], report['limits'])
+                    or report.get('result_sha256') != _result_digest(request, report['items'], report['data_sha256'],
+                                                                     report['limits'], report.get('pairing'))
+                    or ('pairing' in request) != ('pairing' in report)
                     or report.get('comparison_id') != comparison_id or report.get('schema_version') != SCHEMA):
                 raise SourceUnavailable('comparison_evidence_invalid')
             return report
@@ -519,8 +533,7 @@ def catalog(app):
                             or entry.name != request['comparison_id'] + '.request.json'):
                         raise SourceUnavailable('comparison_evidence_invalid')
                     _scope({'policy_version': request.get('policy_version'), 'tasks': request.get('tasks'),
-                            **({'candidate_strategy': request['candidate_strategy']}
-                               if 'candidate_strategy' in request else {})},
+                            **{name: request[name] for name in ('candidate_strategy', 'pairing') if name in request}},
                            maximum=request.get('limits', {}).get('max_tasks', 20))
                     status = 'incomplete'
                     if (reports.root / (request['comparison_id'] + '.seal.json')).exists():
@@ -529,6 +542,7 @@ def catalog(app):
                         'status': status, 'policy_version': POLICY, 'requested_tasks': len(request['tasks'])})
         return {'schema_version': 'saved-policy-comparison-catalog-v1',
                 'registered_policies': [{'version': POLICY, 'label': '重現原保存政策'}],
+                'pairing_rules': [{'version': 'same-input-v1', 'label': '相同輸入的已保存流程配對'}],
                 'candidate_strategies': [{'version': name, 'label': label}
                                          for name, label in sorted(_candidate_strategies().items())],
                 'limits': dict(LIMITS), 'task_scopes': tasks, 'task_catalog_incomplete': len(rows) > 100,
@@ -587,16 +601,17 @@ def _source_context(app, tasks, now):
 
 def _report_scope(request):
     # Reports created before candidate strategies keep their original scope and digest.
-    return {'tasks': request['tasks'], **({'candidate_strategy': request['candidate_strategy']}
-                                          if 'candidate_strategy' in request else {})}
+    return {'tasks': request['tasks'], **{name: request[name] for name in ('candidate_strategy', 'pairing')
+                                          if name in request}}
 
 
-def _result_digest(request, items, data_sha256, limits):
+def _result_digest(request, items, data_sha256, limits, pairing=None):
     return digest({'items': items, 'tasks': request['tasks'], 'frozen_at': request['frozen_at'],
         'data_sha256': data_sha256, 'policy_sha256': request['policy_sha256'],
         'limits': limits, 'policy_version': request['policy_version'],
         'computation_version': request['implementation']['computation'],
-        **({'candidate_strategy': request['candidate_strategy']} if 'candidate_strategy' in request else {})})
+        **({'candidate_strategy': request['candidate_strategy']} if 'candidate_strategy' in request else {}),
+        **({'pairing': request['pairing'], 'pairing_result': pairing} if 'pairing' in request else {})})
 
 
 def _report(request, outcome):
@@ -614,19 +629,22 @@ def _report(request, outcome):
         if 'candidate' in item:
             key = 'candidate_' + item['candidate']['status']
             counts[key] = counts.get(key, 0) + 1
-    result_sha = _result_digest(request, items, outcome['data_sha256'], request['limits'])
+    pairing = outcome.get('pairing') if 'pairing' in request else None
+    if 'pairing' in request and pairing is None:
+        pairing = {'rule': request['pairing'], 'status': 'not_computed', 'reason': 'comparison_incomplete'}
+    result_sha = _result_digest(request, items, outcome['data_sha256'], request['limits'], pairing)
     return {'schema_version': SCHEMA, 'comparison_id': request['comparison_id'],
         'status': 'incomplete' if outcome.get('incomplete') else 'completed',
         'policy_version': POLICY, 'computation_version': COMPUTATION,
         'created_at': request['created_at'], 'frozen_at': request['frozen_at'],
         'data_sha256': outcome['data_sha256'], 'policy_sha256': request['policy_sha256'],
         'result_sha256': result_sha, 'scope': _report_scope(request), 'limits': request['limits'],
-        'counts': counts, 'items': items}
+        'counts': counts, 'items': items, **({'pairing': pairing} if 'pairing' in request else {})}
 
 
 def create_report(app, body):
     tasks = _scope(body)
-    strategy = _strategy(body)
+    strategy, pairing = _strategy(body), _pairing(body)
     now = app.store.clock()
     if not finite(now):
         fail('comparison_clock_unavailable', 503)
@@ -656,15 +674,19 @@ def create_report(app, body):
                     for name in ('routing.py', 'decisions.py', 'client.py', 'generation_request.py',
                         'errors.py', 'receipt_store.py', 'capacity.py', 'capacity_dispatch.py', 'capacity_windows.py')},
                 'runtime': {'python': platform.python_version(), 'sqlite': sqlite3.sqlite_version}}
+            if pairing is not None:
+                implementation['host_pairing_sha256'] = hashlib.sha256(
+                    _read(Path(__file__).with_name('saved_pairing.py').absolute(), 1048576)).hexdigest()
             if strategy is not None:
                 implementation['core_candidate_sha256'] = hashlib.sha256(
                     _read(core_source / 'saved_candidate_strategy.py', 1048576)).hexdigest()
             request = {'comparison_id': comparison_id, 'created_at': now, 'frozen_at': now,
                        'tasks': tasks, 'policy_version': POLICY, 'implementation': implementation,
                        'policy_sha256': digest(implementation), 'limits': dict(LIMITS),
-                       **({'candidate_strategy': strategy} if strategy is not None else {})}
+                       **({'candidate_strategy': strategy} if strategy is not None else {}),
+                       **({'pairing': pairing, 'pairing_metrics': 'paired-saved-outcomes-v1'} if pairing is not None else {})}
             request_sha = reports.write(comparison_id + '.request.json', request, 16384)
-            context = {**_source_context(app, tasks, now), 'candidate_strategy': strategy}
+            context = {**_source_context(app, tasks, now), 'candidate_strategy': strategy, 'pairing': pairing}
             control = encoded(context)
             if len(control) > LIMITS['max_source_bytes']:
                 raise SourceUnavailable('comparison_control_oversized')
@@ -769,9 +791,19 @@ def _load_scope(context):
             frozen.append({'task': task, 'values': values, 'evidence': item['evidence']})
     finally:
         source.close()
+    pairing = None
+    if context.get('pairing'):
+        from cloudyfan_monitor.saved_pairing import compare_pairs
+        # Keys come only from fully loaded originals; anything else is excluded with its reason.
+        pairing = compare_pairs([{'task': row['task'], 'original': item['original'],
+            'key': (row['values'] or {}).get('pairing_key'),
+            'key_reason': ('pairing_input_unavailable' if row['values'] is not None
+                           else (item['reproduction']['reasons'] or ['original_evidence_unavailable'])[0])}
+            for row, item in zip(frozen, items)])
     return {'items': items, 'data_sha256': digest(frozen), 'frozen_inputs': frozen, 'incomplete': source.limited,
             'loaded_source_bytes': source.bytes, 'loaded_source_files': source.files,
-            'policy_compute_milliseconds': source.compute_milliseconds}
+            'policy_compute_milliseconds': source.compute_milliseconds,
+            **({'pairing': pairing} if pairing is not None else {})}
 
 
 def _load_task(context, source, task):
@@ -843,6 +875,11 @@ def _load_task(context, source, task):
                     or set(request) != {'run_id', 'contract_id', 'prompt'}
                     or digest({'run_id': request['run_id'], 'category': binding['category'], 'prompt': request['prompt']}) != binding['fingerprint']):
                 raise SourceUnavailable('original_task_binding_invalid')
+            # Private same-input key: never in the public report, never after raw expiry.
+            # The contract ID names the mode's runner, so it cannot be part of a cross-mode key.
+            pairing_key = digest({'category': binding['category'],
+                'contract_version': identifier(registered.get('version')),
+                'prompt_sha256': hashlib.sha256(request['prompt'].encode()).hexdigest()}) if context.get('pairing') else None
             # Only the task's original registered descriptor can identify the
             # fee authority. Reusing a host contract ID must not substitute a
             # different empty account and turn the original fee into zero.
@@ -903,6 +940,7 @@ def _load_task(context, source, task):
                     'reasons': reasons, 'decisions': decisions, 'financial_admissibility': 'not_replayed'},
                     **({'candidate': candidate} if candidate is not None else {}),
                     'evidence': evidence()}, {'decisions': values, 'binding': binding,
+                        **({'pairing_key': pairing_key} if pairing_key is not None else {}),
                         'data_use': {'principal_active': True, 'frozen_at': context['now'],
                             'access_expires_at': lifecycle[0]['expires'], 'policy': context['retention_policy']}}
     except (OSError, ValueError, TypeError, KeyError, sqlite3.Error, SourceUnavailable):

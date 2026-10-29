@@ -78,7 +78,7 @@ async function main(){
   check(!report.blocked.length&&!report.page_errors.length&&!report.console.some(row=>row.level==='error'),'qa_browser_diagnostics');
   const text=await page.locator('#cache-page').innerText();
   check(!text.includes('PRIVATE_QA46_CANARY')&&!JSON.stringify(second).includes('PRIVATE_QA46_CANARY')
-   &&!JSON.stringify(second).includes('"messages"'),'qa_page_leaks_prompt_or_messages');
+   &&!/"(content|role)"/.test(JSON.stringify(second)),'qa_page_leaks_prompt_or_messages');
  });
  report.passed=true;
 }

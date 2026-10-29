@@ -270,6 +270,7 @@ def _candidate_strategies():
 
 
 PAIRING_RULES = ('same-input-v1',)
+OPTIONAL_SCOPE = ('candidate_strategy', 'pairing', 'rerun_of')
 
 
 def _pairing(body):
@@ -289,8 +290,10 @@ def _strategy(body):
 
 
 def _scope(body, *, maximum=None):
-    if not isinstance(body, dict) or set(body) - {'candidate_strategy', 'pairing'} != {'policy_version', 'tasks'}:
+    if not isinstance(body, dict) or set(body) - {'candidate_strategy', 'pairing', 'rerun_of'} != {'policy_version', 'tasks'}:
         fail('unsupported_comparison_fields')
+    if 'rerun_of' in body and (type(body['rerun_of']) is not str or COMPARISON.fullmatch(body['rerun_of']) is None):
+        fail('comparison_scope_invalid')
     _strategy(body)
     _pairing(body)
     if body['policy_version'] != POLICY:
@@ -408,8 +411,8 @@ class _Sources:
             result, projected = [], 2
             for number, row in enumerate(cursor):
                 if number >= max_rows:
-                    self.limited = True
-                    raise SourceUnavailable('source_work_limit')
+                    # A per-query row cap only makes this task unknown; it is not the report budget.
+                    raise SourceUnavailable('source_row_limit')
                 value = dict(row)
                 projected += len(encoded(value)) + 1
                 if projected > LIMITS['max_source_bytes'] - self.bytes:
@@ -455,6 +458,8 @@ class _Reports:
             request_body = _read(self.root / (comparison_id + '.request.json'), 16384)
         except FileNotFoundError:
             fail('comparison_not_found', 404)
+        if (self.root / (comparison_id + '.failed.json')).exists() and not (self.root / (comparison_id + '.seal.json')).exists():
+            fail('comparison_creation_failed', 409)
         try:
             request = strict_json(request_body)
             if not isinstance(request, dict):
@@ -506,6 +511,9 @@ class _Reports:
 
 
 def catalog(app):
+    from types import SimpleNamespace
+    from .store import MonitorError
+    truncated = False
     try:
         with _database(app.store.path, 32768, source_limit=STORED_READ_MAXIMA['max_source_bytes'],
                        file_limit=STORED_READ_MAXIMA['max_source_file_bytes']) as db:
@@ -521,23 +529,29 @@ def catalog(app):
             if reports.root != reports.root.resolve() or not reports.root.is_dir():
                 raise SourceUnavailable('comparison_store_unsafe')
             with os.scandir(reports.root) as entries:
-                for number, entry in enumerate(entries):
-                    if number >= 1000 or len(saved) >= 100:
-                        break
-                    if not re.fullmatch(r'cmp-[a-f0-9]{32}\.request\.json', entry.name):
-                        continue
-                    request = strict_json(_read(reports.root / entry.name, 16384))
+                names = sorted(entry.name for entry in entries
+                               if re.fullmatch(r'cmp-[a-f0-9]{32}\.request\.json', entry.name))
+            truncated = len(names) > 1000
+            for name in names[:1000]:
+                    request = strict_json(_read(reports.root / name, 16384))
+                    entry = SimpleNamespace(name=name)
                     if (not isinstance(request, dict) or not finite(request.get('created_at'))
                             or not isinstance(request.get('comparison_id'), str)
                             or COMPARISON.fullmatch(request['comparison_id']) is None
                             or entry.name != request['comparison_id'] + '.request.json'):
                         raise SourceUnavailable('comparison_evidence_invalid')
                     _scope({'policy_version': request.get('policy_version'), 'tasks': request.get('tasks'),
-                            **{name: request[name] for name in ('candidate_strategy', 'pairing') if name in request}},
+                            **{name: request[name] for name in OPTIONAL_SCOPE if name in request}},
                            maximum=request.get('limits', {}).get('max_tasks', 20))
-                    status = 'incomplete'
+                    status = 'pending'
                     if (reports.root / (request['comparison_id'] + '.seal.json')).exists():
-                        status = reports.result(request['comparison_id'])['status']
+                        try:
+                            status = reports.result(request['comparison_id'])['status']
+                        except MonitorError:
+                            # One damaged report is listed as unavailable; the others stay readable.
+                            status = 'unavailable'
+                    elif (reports.root / (request['comparison_id'] + '.failed.json')).exists():
+                        status = 'failed'
                     saved.append({'comparison_id': request['comparison_id'], 'created_at': request['created_at'],
                         'status': status, 'policy_version': POLICY, 'requested_tasks': len(request['tasks'])})
         return {'schema_version': 'saved-policy-comparison-catalog-v1',
@@ -546,7 +560,8 @@ def catalog(app):
                 'candidate_strategies': [{'version': name, 'label': label}
                                          for name, label in sorted(_candidate_strategies().items())],
                 'limits': dict(LIMITS), 'task_scopes': tasks, 'task_catalog_incomplete': len(rows) > 100,
-                'reports': sorted(saved, key=lambda row: (row['created_at'], row['comparison_id']), reverse=True)}
+                'reports': sorted(saved, key=lambda row: (row['created_at'], row['comparison_id']), reverse=True)[:100],
+                'reports_truncated': truncated or len(saved) > 100}
     except (OSError, sqlite3.Error, ValueError, TypeError, KeyError, SourceUnavailable):
         fail('comparison_store_unavailable', 503)
 
@@ -601,8 +616,7 @@ def _source_context(app, tasks, now):
 
 def _report_scope(request):
     # Reports created before candidate strategies keep their original scope and digest.
-    return {'tasks': request['tasks'], **{name: request[name] for name in ('candidate_strategy', 'pairing')
-                                          if name in request}}
+    return {'tasks': request['tasks'], **{name: request[name] for name in OPTIONAL_SCOPE if name in request}}
 
 
 def _result_digest(request, items, data_sha256, limits, pairing=None):
@@ -611,7 +625,8 @@ def _result_digest(request, items, data_sha256, limits, pairing=None):
         'limits': limits, 'policy_version': request['policy_version'],
         'computation_version': request['implementation']['computation'],
         **({'candidate_strategy': request['candidate_strategy']} if 'candidate_strategy' in request else {}),
-        **({'pairing': request['pairing'], 'pairing_result': pairing} if 'pairing' in request else {})})
+        **({'pairing': request['pairing'], 'pairing_result': pairing} if 'pairing' in request else {}),
+        **({'rerun_of': request['rerun_of']} if 'rerun_of' in request else {})})
 
 
 def _report(request, outcome):
@@ -649,6 +664,18 @@ def create_report(app, body):
     if not finite(now):
         fail('comparison_clock_unavailable', 503)
     reports = _Reports(app.store.path)
+    rerun_of = body.get('rerun_of')
+    if rerun_of is not None:
+        # A rerun is a new ID over the identical scope; the earlier report is only read.
+        from .store import MonitorError
+        try:
+            previous = reports.result(rerun_of)
+        except MonitorError:
+            fail('comparison_rerun_source_unavailable', 409)
+        expected = {'tasks': tasks, **({'candidate_strategy': strategy} if strategy is not None else {}),
+                    **({'pairing': pairing} if pairing is not None else {})}
+        if {key: value for key, value in previous['scope'].items() if key != 'rerun_of'} != expected:
+            fail('comparison_rerun_scope_mismatch')
     try:
         reports.prepare()
         lock = os.open(reports.root / '.create.lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
@@ -684,63 +711,74 @@ def create_report(app, body):
                        'tasks': tasks, 'policy_version': POLICY, 'implementation': implementation,
                        'policy_sha256': digest(implementation), 'limits': dict(LIMITS),
                        **({'candidate_strategy': strategy} if strategy is not None else {}),
-                       **({'pairing': pairing, 'pairing_metrics': 'paired-saved-outcomes-v1'} if pairing is not None else {})}
+                       **({'pairing': pairing, 'pairing_metrics': 'paired-saved-outcomes-v1'} if pairing is not None else {}),
+                       **({'rerun_of': rerun_of} if rerun_of is not None else {})}
             request_sha = reports.write(comparison_id + '.request.json', request, 16384)
-            context = {**_source_context(app, tasks, now), 'candidate_strategy': strategy, 'pairing': pairing}
-            control = encoded(context)
-            if len(control) > LIMITS['max_source_bytes']:
-                raise SourceUnavailable('comparison_control_oversized')
-            import cloudyfan_jev
-            bootstrap = ('import sys;sys.dont_write_bytecode=True;sys.path[:0]=sys.argv[1:3];'
-                         'from cloudyfan_monitor.saved_comparisons import _worker;_worker()')
-            argv = [sys.executable, '-I', '-S', '-c', bootstrap, str(Path(__file__).parents[1]),
-                    str(Path(cloudyfan_jev.__file__).parent.parent)]
-            stdout_path, stderr_path = (reports.root / (comparison_id + ending) for ending in ('.worker.stdout', '.worker.stderr'))
-            timed_out = False
-            started = time.time()
-            # The worker copies original stores into its TMPDIR. A wall or CPU
-            # kill skips its own cleanup, so this parent owns that directory.
-            with (stdout_path.open('xb') as stdout, stderr_path.open('xb') as stderr,
-                  tempfile.TemporaryDirectory(prefix='cloudyfan-comparison-', dir=os.environ.get('TMPDIR')) as scratch):
-                os.fchmod(stdout.fileno(), 0o600)
-                os.fchmod(stderr.fileno(), 0o600)
-                process = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=stdout, stderr=stderr,
-                    close_fds=True, env={'PATH': os.environ.get('PATH', ''), 'PYTHONDONTWRITEBYTECODE': '1',
-                                       'TMPDIR': scratch})
+            try:
+                context = {**_source_context(app, tasks, now), 'candidate_strategy': strategy, 'pairing': pairing}
+                control = encoded(context)
+                if len(control) > LIMITS['max_source_bytes']:
+                    raise SourceUnavailable('comparison_control_oversized')
+                import cloudyfan_jev
+                bootstrap = ('import sys;sys.dont_write_bytecode=True;sys.path[:0]=sys.argv[1:3];'
+                             'from cloudyfan_monitor.saved_comparisons import _worker;_worker()')
+                argv = [sys.executable, '-I', '-S', '-c', bootstrap, str(Path(__file__).parents[1]),
+                        str(Path(cloudyfan_jev.__file__).parent.parent)]
+                stdout_path, stderr_path = (reports.root / (comparison_id + ending) for ending in ('.worker.stdout', '.worker.stderr'))
+                timed_out = False
+                started = time.time()
+                # The worker copies original stores into its TMPDIR. A wall or CPU
+                # kill skips its own cleanup, so this parent owns that directory.
+                with (stdout_path.open('xb') as stdout, stderr_path.open('xb') as stderr,
+                      tempfile.TemporaryDirectory(prefix='cloudyfan-comparison-', dir=os.environ.get('TMPDIR')) as scratch):
+                    os.fchmod(stdout.fileno(), 0o600)
+                    os.fchmod(stderr.fileno(), 0o600)
+                    process = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=stdout, stderr=stderr,
+                        close_fds=True, env={'PATH': os.environ.get('PATH', ''), 'PYTHONDONTWRITEBYTECODE': '1',
+                                           'TMPDIR': scratch})
+                    try:
+                        process.communicate(input=control, timeout=LIMITS['worker_wall_seconds'])
+                        code = process.returncode
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.communicate()
+                        timed_out, code = True, process.returncode
+                    except BaseException:
+                        process.kill()
+                        process.communicate()
+                        raise
+                if not timed_out and code == 0:
+                    outcome = strict_json(_read(stdout_path, LIMITS['max_source_bytes']))
+                else:
+                    reason = 'comparison_worker_timeout' if timed_out else 'comparison_worker_interrupted'
+                    outcome = {'items': [_unknown(task, reason) for task in tasks],
+                               'frozen_inputs': {'tasks': tasks, 'source_freeze': 'incomplete'},
+                               'data_sha256': digest({'tasks': tasks, 'source_freeze': 'incomplete'}), 'incomplete': True}
+                reports.write(comparison_id + '.worker.json', {'returncode': code, 'timed_out': timed_out,
+                              'pid': process.pid, 'argv': argv, 'started_at': started, 'finished_at': time.time(),
+                              'reaped': process.returncode is not None,
+                              'loaded_source_bytes': outcome.get('loaded_source_bytes'),
+                              'loaded_source_files': outcome.get('loaded_source_files'),
+                              'policy_compute_milliseconds': outcome.get('policy_compute_milliseconds'),
+                              'worker_limits': outcome.get('worker_limits'),
+                              'network_attempts': outcome.get('network_attempts'),
+                              'stdout_sha256': hashlib.sha256(_read(stdout_path, LIMITS['max_source_bytes'])).hexdigest(),
+                              'stderr_sha256': hashlib.sha256(_read(stderr_path, LIMITS['max_source_bytes'])).hexdigest()}, 16384)
+                report = _report(request, outcome)
+                inputs_sha = reports.write(comparison_id + '.inputs.json', outcome['frozen_inputs'], LIMITS['max_source_bytes'])
+                report_sha = reports.write(comparison_id + '.report.json', report, LIMITS['max_output_bytes'])
+                reports.write(comparison_id + '.seal.json', {'comparison_id': comparison_id,
+                    'request_sha256': request_sha, 'report_sha256': report_sha, 'inputs_sha256': inputs_sha}, 16384)
+                return report
+            except Exception as error:
+                # A request without a seal must not look pending forever; keep why it failed.
+                reason = error.args[0] if isinstance(error, SourceUnavailable) and error.args else 'comparison_creation_failed'
                 try:
-                    process.communicate(input=control, timeout=LIMITS['worker_wall_seconds'])
-                    code = process.returncode
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.communicate()
-                    timed_out, code = True, process.returncode
-                except BaseException:
-                    process.kill()
-                    process.communicate()
-                    raise
-            if not timed_out and code == 0:
-                outcome = strict_json(_read(stdout_path, LIMITS['max_source_bytes']))
-            else:
-                reason = 'comparison_worker_timeout' if timed_out else 'comparison_worker_interrupted'
-                outcome = {'items': [_unknown(task, reason) for task in tasks],
-                           'frozen_inputs': {'tasks': tasks, 'source_freeze': 'incomplete'},
-                           'data_sha256': digest({'tasks': tasks, 'source_freeze': 'incomplete'}), 'incomplete': True}
-            reports.write(comparison_id + '.worker.json', {'returncode': code, 'timed_out': timed_out,
-                          'pid': process.pid, 'argv': argv, 'started_at': started, 'finished_at': time.time(),
-                          'reaped': process.returncode is not None,
-                          'loaded_source_bytes': outcome.get('loaded_source_bytes'),
-                          'loaded_source_files': outcome.get('loaded_source_files'),
-                          'policy_compute_milliseconds': outcome.get('policy_compute_milliseconds'),
-                          'worker_limits': outcome.get('worker_limits'),
-                          'network_attempts': outcome.get('network_attempts'),
-                          'stdout_sha256': hashlib.sha256(_read(stdout_path, LIMITS['max_source_bytes'])).hexdigest(),
-                          'stderr_sha256': hashlib.sha256(_read(stderr_path, LIMITS['max_source_bytes'])).hexdigest()}, 16384)
-            report = _report(request, outcome)
-            inputs_sha = reports.write(comparison_id + '.inputs.json', outcome['frozen_inputs'], LIMITS['max_source_bytes'])
-            report_sha = reports.write(comparison_id + '.report.json', report, LIMITS['max_output_bytes'])
-            reports.write(comparison_id + '.seal.json', {'comparison_id': comparison_id,
-                'request_sha256': request_sha, 'report_sha256': report_sha, 'inputs_sha256': inputs_sha}, 16384)
-            return report
+                    reports.write(comparison_id + '.failed.json', {'comparison_id': comparison_id, 'reason': identifier(reason)
+                                  or 'comparison_creation_failed', 'failed_at': app.store.clock()}, 4096)
+                except (OSError, SourceUnavailable):
+                    pass
+                raise
         finally:
             os.close(lock)
     except (OSError, sqlite3.Error, ValueError, TypeError, KeyError, SourceUnavailable):
@@ -943,8 +981,10 @@ def _load_task(context, source, task):
                         **({'pairing_key': pairing_key} if pairing_key is not None else {}),
                         'data_use': {'principal_active': True, 'frozen_at': context['now'],
                             'access_expires_at': lifecycle[0]['expires'], 'policy': context['retention_policy']}}
-    except (OSError, ValueError, TypeError, KeyError, sqlite3.Error, SourceUnavailable):
-        return _unknown(task, 'original_evidence_unavailable', original, evidence()), None
+    except (OSError, ValueError, TypeError, KeyError, sqlite3.Error, SourceUnavailable) as error:
+        reason = ('original_rows_over_limit' if isinstance(error, SourceUnavailable) and error.args == ('source_row_limit',)
+                  else 'original_evidence_unavailable')
+        return _unknown(task, reason, original, evidence()), None
 
 
 def _original_projection(binding, cached):

@@ -26,6 +26,7 @@ window.CloudyFanComparisons = (() => {
     single_eligible_candidate:'只有一個合格候選，沒有分類可選。',original_decision_not_reproduced:'原決定無法由保存輸入重現，不能作為比較基準。',
     after_first_divergence:'已在第一個分歧點停止；之後的流程沒有替代結果。',
     original_decision_inputs_unavailable:'原後續決定所需的保存輸入不足。'};
+  const listStates = {completed:'計算完成',incomplete:'計算未完整',pending:'處理中或尚未確認',failed:'建立失敗，已保留原因',unavailable:'保存報告無法核對'};
   const pairStates = {equal_quality:'品質相同，可比較完整費用',quality_differs:'品質不同，不比較費用',
     no_accepted_work:'沒有已驗收工作，不比較費用',fee_unknown:'有費用未明流程，不比較費用',not_comparable:'不可比'};
   const pairReasons = {no_other_strategy:'同一輸入沒有其他策略的保存流程。',duplicate_strategy_member:'同一策略有多筆流程，無法一對一配對。',
@@ -71,6 +72,9 @@ window.CloudyFanComparisons = (() => {
     comparison_scope_invalid:'選取範圍已無法核對，請重新選擇1至20件不同任務。',
     comparison_policy_not_registered:'原政策版本尚未註冊，請重新讀取可用版本。',
     comparison_pairing_not_registered:'配對規則尚未註冊，請重新讀取可用規則。',
+    comparison_creation_failed:'這份比較建立失敗；已保留失敗原因，未重新計算。',
+    comparison_rerun_source_unavailable:'原比較報告無法核對，未建立重跑。',
+    comparison_rerun_scope_mismatch:'重跑範圍與原報告不同，未建立重跑。',
     comparison_strategy_not_registered:'候選策略尚未註冊，請重新讀取可用策略。',
     unsupported_comparison_fields:'比較請求欄位不符合註冊介面，本次未確認完成。'};
   const countNames = {requested:'選定件數',evaluated:'已評估',reproduced:'已重現決定',partial:'部分可重現',unknown:'未知',
@@ -141,7 +145,7 @@ window.CloudyFanComparisons = (() => {
         || typeof value.task_catalog_incomplete !== 'boolean' || !Array.isArray(value.reports) || value.reports.length > 2000) return null;
     if (value.task_scopes.some(row => !identity(row) || !optionalId(row.mode) || !optionalId(row.category) || !finite(row.created_at))
         || new Set(value.task_scopes.map(key)).size !== value.task_scopes.length
-        || value.reports.some(row => !comparisonId(row.comparison_id) || !['completed','incomplete'].includes(row.status)
+        || value.reports.some(row => !comparisonId(row.comparison_id) || !Object.hasOwn(listStates,row.status)
           || !finite(row.created_at) || row.policy_version !== policy || !integer(row.requested_tasks) || row.requested_tasks > readCeilings.max_tasks)
         || new Set(value.reports.map(row => row.comparison_id)).size !== value.reports.length) return null;
     return value;
@@ -155,7 +159,8 @@ window.CloudyFanComparisons = (() => {
         || value.scope.tasks.some(task => !identity(task)) || new Set(value.scope.tasks.map(key)).size !== value.scope.tasks.length
         || !value.counts || Object.keys(countNames).some(name => !integer(value.counts[name]) || value.counts[name] > value.limits.max_tasks)
         || value.counts.requested !== value.scope.tasks.length || !Array.isArray(value.items) || value.items.length > value.scope.tasks.length
-        || Object.hasOwn(value.scope,'candidate_strategy') && !Object.hasOwn(strategies,value.scope.candidate_strategy)) return null;
+        || Object.hasOwn(value.scope,'candidate_strategy') && !Object.hasOwn(strategies,value.scope.candidate_strategy)
+        || Object.hasOwn(value.scope,'rerun_of') && (!comparisonId(value.scope.rerun_of) || value.scope.rerun_of === value.comparison_id)) return null;
     if (Object.hasOwn(value.scope,'pairing') ? value.scope.pairing !== 'same-input-v1' || !pairingProjection(value.pairing)
         : Object.hasOwn(value,'pairing')) return null;
     const strategy = value.scope.candidate_strategy;
@@ -221,7 +226,7 @@ window.CloudyFanComparisons = (() => {
     if (!selectedReport) return '<div class="panel empty">選擇已保存的比較報告，或明示開始一次原政策重現。</div>';
     const issue = reportState === 'current' ? '' : `<p class="comparison-warning" role="status">${h(notice || '本次報告尚未確認；若有前次內容，僅保留作為先前觀測。')}</p>`;
     if (!saved) return issue + '<div class="panel empty">尚未取得這份報告；未使用其他報告代替。</div>';
-    return `${issue}<section class="panel comparison-report" data-comparison-id="${h(saved.comparison_id)}"><div class="panel-header"><h2>已保存的比較報告</h2><span class="badge ${saved.status === 'incomplete' ? 'amber' : 'blue'}">${saved.status === 'incomplete' ? '計算未完整' : '計算完成'}</span></div><div class="panel-body"><p class="mono">${h(saved.comparison_id)}</p><p>原政策重現 · ${h(saved.policy_version)}</p><p class="metadata">凍結 ${h(stamp(saved.frozen_at))} · 保存 ${h(stamp(saved.created_at))} · 計算版 ${h(saved.computation_version)}</p><div class="comparison-counts">${Object.entries(countNames).map(([name,label]) => `<div><span>${label}</span><b data-comparison-count="${name}">${h(saved.counts[name])}</b></div>`).join('')}</div>${saved.status === 'incomplete' ? '<p class="comparison-warning">部分範圍未完成；已列項目不代表全部選定任務。</p>' : ''}<details data-comparison-detail="report-hashes"><summary>查看不可變報告摘要</summary><dl class="comparison-facts">${[['資料',saved.data_sha256],['政策',saved.policy_sha256],['結果',saved.result_sha256]].map(([label,value]) => `<div><dt>${label} SHA256</dt><dd class="mono">${h(value)}</dd></div>`).join('')}</dl></details></div></section>${saved.pairing ? pairingView(saved.pairing) : ''}${saved.items.map(itemView).join('')}`;
+    return `${issue}<section class="panel comparison-report" data-comparison-id="${h(saved.comparison_id)}"><div class="panel-header"><h2>已保存的比較報告</h2><span class="badge ${saved.status === 'incomplete' ? 'amber' : 'blue'}">${saved.status === 'incomplete' ? '計算未完整' : '計算完成'}</span></div><div class="panel-body"><p class="mono">${h(saved.comparison_id)}</p>${saved.scope.rerun_of ? `<p class="metadata" data-rerun-of="${h(saved.scope.rerun_of)}">重跑自 <code>${h(saved.scope.rerun_of)}</code>；原報告不變。</p>` : ''}<p>原政策重現 · ${h(saved.policy_version)}</p><p class="metadata">凍結 ${h(stamp(saved.frozen_at))} · 保存 ${h(stamp(saved.created_at))} · 計算版 ${h(saved.computation_version)}</p><div class="comparison-counts">${Object.entries(countNames).map(([name,label]) => `<div><span>${label}</span><b data-comparison-count="${name}">${h(saved.counts[name])}</b></div>`).join('')}</div>${saved.status === 'incomplete' ? '<p class="comparison-warning">部分範圍未完成；已列項目不代表全部選定任務。</p>' : ''}<button id="comparison-rerun" class="button" type="button" ${catalogState === 'current' && !applying ? '' : 'disabled'}>以相同範圍重跑，產生新報告</button><details data-comparison-detail="report-hashes"><summary>查看不可變報告摘要</summary><dl class="comparison-facts">${[['資料',saved.data_sha256],['政策',saved.policy_sha256],['結果',saved.result_sha256]].map(([label,value]) => `<div><dt>${label} SHA256</dt><dd class="mono">${h(value)}</dd></div>`).join('')}</dl></details></div></section>${saved.pairing ? pairingView(saved.pairing) : ''}${saved.items.map(itemView).join('')}`;
   }
   function render() {
     if (!mounted()) return;
@@ -234,7 +239,7 @@ window.CloudyFanComparisons = (() => {
       && selectedTasks.size > 0 && selectedTasks.size <= maximum && [...selectedTasks.keys()].every(value => available.has(value));
     const reportRows = [...(catalog?.reports || [])];
     if (selectedReport && !reportRows.some(row => row.comparison_id === selectedReport)) reportRows.unshift({comparison_id:selectedReport});
-    root.innerHTML = `<div id="comparisons-page"><div class="page-heading"><div><div class="eyebrow">SAVED-EVIDENCE COMPARISON</div><h1>保存證據比較</h1><p>明示選取合法保存的範圍，只重現原政策可由當時輸入支持的決定。</p></div></div><p class="notice">比較不執行模型、工具或公開驗收，不改原任務、模式、費率或期限，也不啟用政策。沒有替代結果，不報勝率或真實節省。</p>${context.demo ? '<p class="metadata comparison-synthetic">合成驗收環境 · 接線結果不代表真實模型能力、省費或正式採用。</p>' : ''}${catalogState !== 'current' ? '<p class="comparison-warning" role="status">任務範圍與政策清單尚未確認；保留選取，開始比較暫停。</p>' : ''}<section class="panel comparison-create"><div class="panel-header"><h2>明示開始原政策重現</h2><span class="metadata">${maximumLabel} · 有界處理</span></div><div class="panel-body"><label for="comparison-policy">已註冊的原政策</label><select id="comparison-policy" ${catalogState === 'current' && !applying ? '' : 'disabled'}><option value="">請明示選擇原政策</option>${catalog?.registered_policies.length ? `<option value="${policy}" ${selectedPolicy === policy ? 'selected' : ''}>原政策重現 v1 · ${policy}</option>` : ''}</select><label for="comparison-strategy">候選策略（選填）</label><select id="comparison-strategy" ${catalogState === 'current' && !applying ? '' : 'disabled'}><option value="">不加入候選策略</option>${(catalog?.candidate_strategies || []).map(row => `<option value="${h(row.version)}" ${selectedStrategy === row.version ? 'selected' : ''}>${h(strategies[row.version])} · ${h(row.version)}</option>`).join('')}</select><p class="metadata">候選策略只由伺服器註冊；推演到第一個分歧點即停止，不啟用策略。</p><label class="comparison-task"><input type="checkbox" id="comparison-pairing" ${selectedPairing ? 'checked' : ''} ${catalogState === 'current' && !applying && catalog?.pairing_rules.length ? '' : 'disabled'}><span>同時以「相同輸入」配對已保存流程 · same-input-v1<br><span class="metadata">配對規則在讀取成果前固定；只比較各策略自己保存的成果，不補跑、不生成替代答案。</span></span></label><label for="comparison-task-filter">篩選保存的任務身分</label><input type="search" id="comparison-task-filter" value="${h(filter)}" autocomplete="off"><p class="metadata">清單${catalog?.task_catalog_incomplete ? '僅列部分合法保存範圍；不代表全部歷史' : '由伺服器解析合法保存範圍'}。選取不取得派送名額或新增扣款。</p><fieldset class="comparison-scope" ${applying ? 'disabled' : ''}><legend>選擇任務 · 已選 <span id="comparison-selected-count">${selectedTasks.size}</span> / ${maximum ?? '待確認'}</legend>${rows.map(task => `<label class="comparison-task"><input id="comparison-task-${h(encodeURIComponent(key(task)))}" type="checkbox" data-comparison-select="${h(key(task))}" ${selectedTasks.has(key(task)) ? 'checked' : ''}><span><b class="mono">${h(task.run_id)}</b><br>${h(task.client)} · ${h(modes[task.mode] || '模式未提供')}</span></label>`).join('') || '<p class="metadata">尚無可選取的任務身分。</p>'}${[...selectedTasks].filter(([value]) => !available.has(value)).map(([value,task]) => `<label class="comparison-task comparison-warning"><input type="checkbox" data-comparison-select="${h(value)}" checked><span>${h(task.client)} / ${h(task.run_id)} · 目前不在可選範圍，請明示取消或重新讀取。</span></label>`).join('')}</fieldset><div class="comparison-actions"><button id="comparison-start" class="button primary" type="button" ${canStart ? '' : 'disabled'}>${applying ? '正在保存比較…' : '開始原政策重現'}</button><button id="comparison-clear" class="button" type="button" ${applying || !selectedTasks.size ? 'disabled' : ''}>清除選取</button></div><p class="metadata">超出保存或處理上限時保留不完整原因；計算完成不代表原任務成功或新派送已獲准。傳輸未確認時不自動重送。</p></div></section><section class="panel comparison-saved"><div class="panel-body"><label for="comparison-report-select">讀取已保存的比較</label><select id="comparison-report-select"><option value="">選擇報告</option>${reportRows.map(row => `<option value="${h(row.comparison_id)}" ${selectedReport === row.comparison_id ? 'selected' : ''}>${h(row.comparison_id)}${row.status ? ` · ${row.status === 'completed' ? '計算完成' : '計算未完整'}` : ' · 先前開啟'}</option>`).join('')}</select></div></section>${reportView()}</div>`;
+    root.innerHTML = `<div id="comparisons-page"><div class="page-heading"><div><div class="eyebrow">SAVED-EVIDENCE COMPARISON</div><h1>保存證據比較</h1><p>明示選取合法保存的範圍，只重現原政策可由當時輸入支持的決定。</p></div></div><p class="notice">比較不執行模型、工具或公開驗收，不改原任務、模式、費率或期限，也不啟用政策。沒有替代結果，不報勝率或真實節省。</p>${context.demo ? '<p class="metadata comparison-synthetic">合成驗收環境 · 接線結果不代表真實模型能力、省費或正式採用。</p>' : ''}${catalogState !== 'current' ? '<p class="comparison-warning" role="status">任務範圍與政策清單尚未確認；保留選取，開始比較暫停。</p>' : ''}<section class="panel comparison-create"><div class="panel-header"><h2>明示開始原政策重現</h2><span class="metadata">${maximumLabel} · 有界處理</span></div><div class="panel-body"><label for="comparison-policy">已註冊的原政策</label><select id="comparison-policy" ${catalogState === 'current' && !applying ? '' : 'disabled'}><option value="">請明示選擇原政策</option>${catalog?.registered_policies.length ? `<option value="${policy}" ${selectedPolicy === policy ? 'selected' : ''}>原政策重現 v1 · ${policy}</option>` : ''}</select><label for="comparison-strategy">候選策略（選填）</label><select id="comparison-strategy" ${catalogState === 'current' && !applying ? '' : 'disabled'}><option value="">不加入候選策略</option>${(catalog?.candidate_strategies || []).map(row => `<option value="${h(row.version)}" ${selectedStrategy === row.version ? 'selected' : ''}>${h(strategies[row.version])} · ${h(row.version)}</option>`).join('')}</select><p class="metadata">候選策略只由伺服器註冊；推演到第一個分歧點即停止，不啟用策略。</p><label class="comparison-task"><input type="checkbox" id="comparison-pairing" ${selectedPairing ? 'checked' : ''} ${catalogState === 'current' && !applying && catalog?.pairing_rules.length ? '' : 'disabled'}><span>同時以「相同輸入」配對已保存流程 · same-input-v1<br><span class="metadata">配對規則在讀取成果前固定；只比較各策略自己保存的成果，不補跑、不生成替代答案。</span></span></label><label for="comparison-task-filter">篩選保存的任務身分</label><input type="search" id="comparison-task-filter" value="${h(filter)}" autocomplete="off"><p class="metadata">清單${catalog?.task_catalog_incomplete ? '僅列部分合法保存範圍；不代表全部歷史' : '由伺服器解析合法保存範圍'}。選取不取得派送名額或新增扣款。</p><fieldset class="comparison-scope" ${applying ? 'disabled' : ''}><legend>選擇任務 · 已選 <span id="comparison-selected-count">${selectedTasks.size}</span> / ${maximum ?? '待確認'}</legend>${rows.map(task => `<label class="comparison-task"><input id="comparison-task-${h(encodeURIComponent(key(task)))}" type="checkbox" data-comparison-select="${h(key(task))}" ${selectedTasks.has(key(task)) ? 'checked' : ''}><span><b class="mono">${h(task.run_id)}</b><br>${h(task.client)} · ${h(modes[task.mode] || '模式未提供')}</span></label>`).join('') || '<p class="metadata">尚無可選取的任務身分。</p>'}${[...selectedTasks].filter(([value]) => !available.has(value)).map(([value,task]) => `<label class="comparison-task comparison-warning"><input type="checkbox" data-comparison-select="${h(value)}" checked><span>${h(task.client)} / ${h(task.run_id)} · 目前不在可選範圍，請明示取消或重新讀取。</span></label>`).join('')}</fieldset><div class="comparison-actions"><button id="comparison-start" class="button primary" type="button" ${canStart ? '' : 'disabled'}>${applying ? '正在保存比較…' : '開始原政策重現'}</button><button id="comparison-clear" class="button" type="button" ${applying || !selectedTasks.size ? 'disabled' : ''}>清除選取</button></div><p class="metadata">超出保存或處理上限時保留不完整原因；計算完成不代表原任務成功或新派送已獲准。傳輸未確認時不自動重送。</p></div></section><section class="panel comparison-saved"><div class="panel-body"><label for="comparison-report-select">讀取已保存的比較</label><select id="comparison-report-select"><option value="">選擇報告</option>${reportRows.map(row => `<option value="${h(row.comparison_id)}" ${selectedReport === row.comparison_id ? 'selected' : ''}>${h(row.comparison_id)}${row.status ? ` · ${listStates[row.status]}` : ' · 先前開啟'}</option>`).join('')}</select></div></section>${reportView()}</div>`;
     root.querySelector('#comparison-policy').onchange = event => {selectedPolicy = event.target.value;render();};
     root.querySelector('#comparison-strategy').onchange = event => {selectedStrategy = event.target.value;render();};
     root.querySelector('#comparison-pairing').onchange = event => {selectedPairing = event.target.checked;render();};
@@ -245,26 +250,35 @@ window.CloudyFanComparisons = (() => {
       render();
     };});
     root.querySelector('#comparison-clear').onclick = () => {selectedTasks.clear();render();};
-    root.querySelector('#comparison-start').onclick = propose;
+    root.querySelector('#comparison-start').onclick = () => propose();
+    const rerun = root.querySelector('#comparison-rerun');
+    if (rerun) rerun.onclick = () => {
+      const saved = reports.get(selectedReport)?.value;
+      if (!saved) return;
+      selectedPolicy = policy;selectedStrategy = saved.scope.candidate_strategy || '';selectedPairing = !!saved.scope.pairing;
+      selectedTasks = new Map(saved.scope.tasks.map(task => [key(task),{client:task.client,run_id:task.run_id}]));
+      render();propose(saved.comparison_id);
+    };
     root.querySelector('#comparison-report-select').onchange = event => {selectedReport = event.target.value;reportState = 'loading';notice = '';reportVersion += 1;render();void readReport(true);};
     restore(view);
   }
-  function propose() {
+  function propose(rerunOf = '') {
     const tasks = [...selectedTasks.values()].map(task => ({...task})), version = generation, actionContext = context;
     const strategy = selectedStrategy, pairing = selectedPairing;
     if (applying || catalogState !== 'current' || selectedPolicy !== policy || !tasks.length || tasks.length > catalog.limits.max_tasks
         || strategy && !catalog.candidate_strategies.some(row => row.version === strategy)) return;
-    actionContext.confirmAction('開始原政策重現',`<p>原政策 <code>${policy}</code>${strategy ? ` · 候選策略 <code>${h(strategy)}</code>` : ''} · 選定 ${tasks.length} 件：</p><ul>${tasks.map(task => `<li>${h(task.client)} / ${h(task.run_id)}</li>`).join('')}</ul><p>伺服器將固定合法保存的證據與凍結時間，獨立保存一份比較；不派送、不核帳、不扣款或啟用政策。缺少原輸入維持未知，超出處理上限保留不完整結果。</p>`,async () => {
+    actionContext.confirmAction(rerunOf ? '以相同範圍重跑' : '開始原政策重現',`${rerunOf ? `<p>重跑 <code>${h(rerunOf)}</code>：產生新的報告識別，原報告不變。</p>` : ''}<p>原政策 <code>${policy}</code>${strategy ? ` · 候選策略 <code>${h(strategy)}</code>` : ''} · 選定 ${tasks.length} 件：</p><ul>${tasks.map(task => `<li>${h(task.client)} / ${h(task.run_id)}</li>`).join('')}</ul><p>伺服器將固定合法保存的證據與凍結時間，獨立保存一份比較；不派送、不核帳、不扣款或啟用政策。缺少原輸入維持未知，超出處理上限保留不完整結果。</p>`,async () => {
       if (!current(version,actionContext) || applying || catalogState !== 'current'
           || tasks.length > catalog.limits.max_tasks
           || tasks.some(task => !catalog.task_scopes.some(row => key(row) === key(task)))) throw Error('比較範圍或目前處理上限已變更，請調整選取後再確認。');
       applying = true;notice = '';catalogVersion += 1;const displayVersion = ++reportVersion;render();
       try {
-        const value = await actionContext.api('/monitor/comparisons',{policy_version:policy,tasks,...(strategy ? {candidate_strategy:strategy} : {}),...(pairing ? {pairing:'same-input-v1'} : {})});
+        const value = await actionContext.api('/monitor/comparisons',{policy_version:policy,tasks,...(strategy ? {candidate_strategy:strategy} : {}),...(pairing ? {pairing:'same-input-v1'} : {}),...(rerunOf ? {rerun_of:rerunOf} : {})});
         if (!current(version,actionContext)) return;
         const saved = reportProjection(value);
         if (!saved || JSON.stringify(saved.scope.tasks.map(key).sort()) !== JSON.stringify(tasks.map(key).sort())
-            || (saved.scope.candidate_strategy ?? '') !== strategy || Object.hasOwn(saved.scope,'pairing') !== pairing) throw Error('comparison_projection_unconfirmed');
+            || (saved.scope.candidate_strategy ?? '') !== strategy || Object.hasOwn(saved.scope,'pairing') !== pairing
+            || (saved.scope.rerun_of ?? '') !== rerunOf) throw Error('comparison_projection_unconfirmed');
         const previous = reports.get(saved.comparison_id);
         if (previous && previous.bytes !== JSON.stringify(saved)) throw Error('comparison_projection_changed');
         reports.set(saved.comparison_id,{value:saved,bytes:JSON.stringify(saved)});

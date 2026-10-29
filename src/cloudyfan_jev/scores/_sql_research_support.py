@@ -168,7 +168,8 @@ class _ProvisionalSQLSupport(SequentialResearchCore):
             return []
         return list(assessment["reasons"])
 
-    def _health_choice(self, tier, failed_providers, excluded_configs):
+    def _health_choice(self, tier, failed_providers, excluded_configs, *, decision_key=None):
+        # 研究用 SQL 支援不接快取親和性；接受鍵值但沿原排序（#47）。
         eligible, observations = [], []
         for record in self._backup["pools"][tier]:
             profile = record["entry"]["profile"]

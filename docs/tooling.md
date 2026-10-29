@@ -86,9 +86,10 @@ and hashes, including required raw step logs and collection logs/manifests.
 Collection logs can contain private parameter data; keep runtime local.
 Security tests deliberately leave symlinks in their evidence. By human decision
 (2026-10-29), run records each link's path and target relative to the snapshot
-without following it; a target outside the snapshot fails the run. Finalize
-requires the same links, copies only regular files and keeps the link records
-in the delivery receipt; status compares them with the sealed run.
+without following it; a target outside the snapshot fails the run. FIFOs are
+recorded by type and path only and are never opened. Finalize requires the same
+links and FIFOs, copies only regular files and keeps their records in the
+delivery receipt; status compares them with the sealed run.
 
 Finalize verifies the successful run and matching destination verification inputs
 (with separate checks for changed Markdown), then

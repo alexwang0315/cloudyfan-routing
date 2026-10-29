@@ -234,6 +234,16 @@ class App:
         return value
 
     def _admin(self, method, path, environ):
+        if path == '/monitor/cache-affinity' or path == '/monitor/cache-affinity/activate':
+            if environ.get('QUERY_STRING') or getattr(self, 'cache_affinity', None) is None:
+                raise MonitorError('endpoint_not_supported', 404)
+            if method == 'GET' and path == '/monitor/cache-affinity':
+                return self.cache_affinity.snapshot()
+            if method == 'POST' and path == '/monitor/cache-affinity/activate':
+                body = self._body(environ)
+                self._fields(body, {'revision', 'version'})
+                return self.cache_affinity.activate(body['revision'], body['version'])
+            raise MonitorError('endpoint_not_supported', 404)
         if path == '/monitor/cache-observations':
             if method != 'GET' or environ.get('QUERY_STRING'):
                 raise MonitorError('endpoint_not_supported', 404)
@@ -247,7 +257,13 @@ class App:
         if match:
             if method != 'GET' or environ.get('QUERY_STRING'):
                 raise MonitorError('endpoint_not_supported', 404)
-            return self._cache_observation(match[1], match[2])
+            value = self._cache_observation(match[1], match[2])
+            if getattr(self, 'cache_affinity', None) is not None:
+                try:
+                    value['affinity'] = self.cache_affinity.decisions(match[1], match[2])
+                except (OSError, ValueError, KeyError, TypeError, sqlite3.Error):
+                    value['affinity'] = {'status': 'unavailable'}
+            return value
         if path == '/monitor/comparisons' or path.startswith('/monitor/comparisons/'):
             from .saved_comparisons import catalog, create_report, get_report
             if environ.get('QUERY_STRING'):
@@ -406,7 +422,10 @@ class App:
         if method == "GET" and path == "/v1/monitor":
             return self.gateway.snapshot(principal)
         if method == "POST" and path == "/v1/tasks":
-            return self.gateway.create(principal, self._body(environ))
+            body = self._body(environ)
+            if getattr(self, 'cache_affinity', None) is not None:
+                self.cache_affinity.bind(principal, body)  # 接受前凍結當時的親和性版本
+            return self.gateway.create(principal, body)
         cache = re.fullmatch(r"/v1/tasks/([A-Za-z0-9][A-Za-z0-9_-]{0,63})/cache-observations", path)
         if cache:
             # 客戶端只能看自己的任務；比對對象也只限同一客戶端。

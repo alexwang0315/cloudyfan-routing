@@ -63,6 +63,10 @@ class RunBoundCore(Core):
                 or core.local_backend is not self.local_backend
                 or core.configuration_descriptor() != self.configuration_descriptor()):
             raise ValueError("Run factory changed the registered contract or budgeted transports")
+        provider = self.__dict__.get("affinity_provider")
+        if provider is not None and hasattr(core, "affinity"):
+            # 只有任務建立時已凍結採用版本，才會拿到 port；否則維持原排序。
+            core.affinity = provider(run_id)
         return core
 
     def queue_template(self):
@@ -157,10 +161,13 @@ def assemble_monitor(store, service, registry, identities, *, operator_token, so
         from cloudyfan_jev.scheduler import QueueScheduler
         if type(queue) is not QueueScheduler or queue.service is not service or service.queue_scheduler is not queue:
             raise ValueError('Controlled queue must share the exact service')
-    return App(Gateway(store, service, registry, demo=demo, queue=queue), admin_token=operator_token,
-               source=source, origin=origin, identity_store=identities, billing_source=billing_source,
-               ollama_models=ollama_models, simulation=simulation, candidate_observer=candidate_observer,
-               task_observer=task_observer, capacity_observer=capacity_observer, capacity_controller=capacity_controller)
+    app = App(Gateway(store, service, registry, demo=demo, queue=queue), admin_token=operator_token,
+              source=source, origin=origin, identity_store=identities, billing_source=billing_source,
+              ollama_models=ollama_models, simulation=simulation, candidate_observer=candidate_observer,
+              task_observer=task_observer, capacity_observer=capacity_observer, capacity_controller=capacity_controller)
+    from .cache_affinity import CacheAffinity
+    CacheAffinity(app)  # 預設不啟用；只有操作員明示採用後的新任務才會用到
+    return app
 
 
 @dataclass

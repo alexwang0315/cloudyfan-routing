@@ -98,7 +98,13 @@ def _contracts(app):
         client = getattr(template, 'client', None)
         if client is None:
             continue
-        result[key] = {'receipt_root': Path(client.root).absolute(), 'profiles': contract.descriptor().get('profiles') or {}}
+        descriptor = contract.descriptor()
+        profiles = dict(descriptor.get('profiles') or {})
+        # Backup 契約的 profiles 只是每池第一個候選的佔位；同池其他候選要從 backup_plan 取。
+        for rows in ((descriptor.get('backup_plan') or {}).get('pools') or {}).values():
+            for row in rows:
+                profiles['backup:' + row['entry']['config_id']] = row['entry']['profile']
+        result[key] = {'receipt_root': Path(client.root).absolute(), 'profiles': profiles}
     return result
 
 

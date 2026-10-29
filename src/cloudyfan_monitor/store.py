@@ -365,8 +365,11 @@ class Store:
     def bind(self, client, payload, registry, *, expected_contract=None,
              feature_policy=None, feature_contracts=None, feature_recommendations=None,
              feature_capture_absent=False, feature_versions=None, with_creation=False, with_selection=False):
-        if not isinstance(payload, dict) or set(payload) != {"run_id", "category", "prompt"}:
+        if not isinstance(payload, dict) or set(payload) - {"context"} != {"run_id", "category", "prompt"}:
             raise MonitorError("unsupported_task_fields")
+        if "context" in payload and not isinstance(payload["context"], dict):
+            # 細節由 Core 依註冊政策驗證；這裡只確保是結構化物件，指紋自然涵蓋它。
+            raise MonitorError("unsupported_context_fields")
         if not isinstance(payload["run_id"], str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", payload["run_id"]):
             raise MonitorError("invalid_run_id")
         if not isinstance(payload["prompt"], str) or not payload["prompt"].strip() or len(payload["prompt"].encode()) > 32768:

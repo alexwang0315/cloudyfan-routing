@@ -15,7 +15,11 @@ window.CloudyFanCache = (() => {
   const money = value => value === null || value === undefined ? '未知' : '$' + h(value);
   const taskStates = {available:'可查看',raw_access_expired:'原文存取已到期，不重新開啟',contract_unsupported:'此契約不支援觀測'};
   let root, context, generation = 0, catalog = null, selected = '', detail = null, state = 'idle', notice = '';
-  let policy = null, choice = '', applying = false;
+  let policy = null, choice = '', applying = false, preparation = null;
+  const prepStates = {prepared:'已在付費前準備並凍結',not_requested:'此任務未使用參考區塊',raw_access_expired:'原文存取已到期，不重新開啟',
+    not_created:'任務尚未建立',unverifiable:'保存的準備資料無法核對；不重新準備'};
+  const blockReasons = {required_by_request:'呼叫端標為必要',server_policy_disallows_omission:'伺服器政策不允許省略',
+    fits_in_priority_order:'依優先序放得下',remaining_budget_insufficient:'剩餘額度不足，整塊省略'};
   const affinityReasons = {identical_leading_messages_in_same_scope:'等價候選中有一個與先前已送出請求的固定前綴相同。',
     no_earlier_sent_request_with_identical_prefix:'等價候選都沒有可信的相同前綴；沿原排序。',no_equivalent_set:'沒有完全等價的候選；不比較快取。',
     affinity_preference_outside_equivalent_set:'提示指向等價集合之外的候選；不採用，沿原排序。',affinity_port_failed:'提示無法取得；沿原排序。',
@@ -54,6 +58,11 @@ window.CloudyFanCache = (() => {
     const hint = hints[row.hint.status], usage = row.cache_usage;
     return `<li class="cache-call" data-cache-call="${h(row.index)}"><div class="cache-columns"><section><h4>前綴提示</h4><span class="badge ${hint[1]}" data-cache-hint="${h(row.hint.status)}">${hint[0]}</span><p class="metadata">${h(reasons[row.hint.reason] || '沒有可用的提示原因。')}</p><p>固定前綴 ${h(row.prefix.messages)} 則訊息 · ${h(row.prefix.bytes)} bytes${row.hint.matched_messages ? ` · 與先前相同 ${h(row.hint.matched_messages)} 則` : ''}</p></section><section><h4>實際快取用量</h4><p data-cache-usage="${h(usage.status)}">${h(usages[usage.status])}</p>${usage.status === 'observed' ? `<p>讀取 ${h(usage.cache_read_tokens ?? '未回報')} tokens · 寫入 ${h(usage.cache_write_tokens ?? '未回報')} tokens</p>` : ''}</section></div>${row.cache_result ? `<dl class="comparison-costs cache-cost" data-cache-cost="${h(row.index)}"><div><dt>快取結果</dt><dd data-cache-result="${h(row.cache_result)}">${h(cacheResults[row.cache_result] || '未知')}${row.cache_usage?.cache_write_tokens ? ` · 寫入 ${h(row.cache_usage.cache_write_tokens)} tokens` : ''}</dd></div><div><dt>Token 用量</dt><dd>輸入 ${h(row.tokens?.prompt_tokens ?? '未回報')} · 輸出 ${h(row.tokens?.completion_tokens ?? '未回報')}</dd></div>${row.api_cost !== undefined ? `<div><dt>API 實付（核帳權威值）</dt><dd data-api-cost="${h(row.api_cost?.status ?? 'none')}">${row.api_cost ? `${money(row.api_cost.amount_usd)} · ${h(apiStates[row.api_cost.status] || '')}${row.api_cost.verified ? ' · 已核帳' : ''}` : '未提供'}</dd></div><div><dt>保守費用上界（限制，不是花費）</dt><dd>${money(row.conservative_bound_usd)}</dd></div>` : ''}</dl>` : ''}<details data-cache-detail="${h(row.index)}"><summary>查看設定與時間</summary><dl class="comparison-facts"><div><dt>模型</dt><dd><code>${h(row.model ?? '未提供')}</code></dd></div><div><dt>供應商</dt><dd>${h(row.provider ?? '未提供')}</dd></div><div><dt>請求開始</dt><dd>${h(row.started_at ?? '未提供')}</dd></div><div><dt>先前相同前綴</dt><dd>${h(row.hint.previous_started_at ?? '無')}</dd></div><div><dt>本機提示窗口</dt><dd>${h(row.hint.local_window_seconds)} 秒（本機保守值，不是供應商 TTL）</dd></div><div><dt>來源 TTL</dt><dd>${row.hint.source_ttl_seconds === null ? '供應商未提供' : h(row.hint.source_ttl_seconds) + ' 秒'}</dd></div><div><dt>前綴身分</dt><dd class="mono">${h(row.prefix.identity ?? '無')}</dd></div><div><dt>已送出</dt><dd>${row.sent ? '是' : '否'}</dd></div></dl></details></li>`;
   }
+  function preparationView(value) {
+    if (!value || !Object.hasOwn(prepStates,value.status)) return '';
+    const p = value.preparation;
+    return `<section class="panel cache-preparation" data-preparation-status="${h(value.status)}"><div class="panel-header"><h2>參考區塊準備</h2><span class="badge ${value.status === 'prepared' ? 'blue' : 'amber'}">${h(prepStates[value.status])}</span></div><div class="panel-body">${p ? `<dl class="comparison-costs"><div><dt>準備版本</dt><dd><code>${h(p.version)}</code> · 只做整塊保留或省略</dd></div><div><dt>長度（${h(p.measure)}）</dt><dd>原始 ${h(p.original_bytes)} → 送出 ${h(p.prepared_bytes)} bytes · 預算 ${h(p.budget_bytes)}</dd></div><div><dt>實際送出與凍結內容</dt><dd data-preparation-sent="${h(String(p.sent_matches_prepared))}">${p.sent_matches_prepared === true ? '一致' : p.sent_matches_prepared === false ? '不一致' : '尚未送出'}</dd></div><div><dt>準備資格</dt><dd>${h(p.qualification.scope)}${p.qualification.synthetic ? ' · 合成接線，不是正式資格' : ''}</dd></div></dl><ol>${p.blocks.map(row => `<li data-preparation-block="${h(row.index)}" data-preparation-decision="${h(row.decision)}">區塊 ${h(row.index + 1)}（<span class="mono">${h(row.id_digest)}</span>）· ${row.decision === 'kept' ? '保留' : '省略'} · ${h(row.bytes)} bytes · 優先序 ${h(row.priority)}<br><span class="metadata">${h(blockReasons[row.reason] || '沒有可用原因。')}</span></li>`).join('')}</ol><p class="metadata">本機確定性擷取；沒有摘要、改寫或模型呼叫，不宣稱一般語意無損或節費。</p>` : ''}</div></section>`;
+  }
   function costView(costs) {
     if (!costs) return '';
     if (costs.status === 'unavailable') return '<p class="comparison-warning">費用明細目前無法確認；未重新計算。</p>';
@@ -76,9 +85,9 @@ window.CloudyFanCache = (() => {
     const rows = catalog?.tasks || [];
     const body = !selected ? '<div class="panel empty">選擇一個任務，查看它實際送出的請求。</div>'
       : state !== 'current' || !detail ? `<p class="comparison-warning" role="status">${h(notice || '正在讀取觀測；尚未確認。')}</p>`
-      : `<section class="panel"><div class="panel-header"><h2 class="mono">${h(detail.task.run_id)}</h2><span class="badge blue">${h(taskStates[detail.status])}</span></div><div class="panel-body"><p>客戶端 ${h(detail.task.client)}</p>${detail.calls.length ? `<ol class="cache-calls">${detail.calls.map(callView).join('')}</ol>` : '<p class="metadata">沒有可查看的請求。</p>'}${detail.calls_truncated ? '<p class="comparison-warning">請求數超過顯示上限，只列前段。</p>' : ''}</div></section>${costView(detail.costs)}${affinityView(detail.affinity)}`;
+      : `<section class="panel"><div class="panel-header"><h2 class="mono">${h(detail.task.run_id)}</h2><span class="badge blue">${h(taskStates[detail.status])}</span></div><div class="panel-body"><p>客戶端 ${h(detail.task.client)}</p>${detail.calls.length ? `<ol class="cache-calls">${detail.calls.map(callView).join('')}</ol>` : '<p class="metadata">沒有可查看的請求。</p>'}${detail.calls_truncated ? '<p class="comparison-warning">請求數超過顯示上限，只列前段。</p>' : ''}</div></section>${preparationView(preparation)}${costView(detail.costs)}${affinityView(detail.affinity)}`;
     root.querySelector('#cache-page').innerHTML = `<div class="page-heading"><div><div class="eyebrow">PREFIX CACHE OBSERVATION</div><h1>前綴與快取觀測</h1><p>只讀實際已送出請求與回應的安全摘要；提示不保證下次命中，也不改變路由排序。</p></div></div><p class="notice">不新增 cache-control、不改 TTL、不重排訊息、不預熱或探測。供應商未登記支援時只顯示「未登記支援」。${catalog ? ` 已登記支援：${catalog.supported_providers.map(row => h(row.provider)).join('、') || '無'}。` : ''}</p>${context.demo ? '<p class="metadata comparison-synthetic">合成驗收環境 · 不代表真實供應商的快取行為或費用。</p>' : ''}${policyView()}<section class="panel comparison-saved"><div class="panel-body"><label for="cache-task">選擇任務</label><select id="cache-task"><option value="">請明示選擇任務</option>${rows.map(row => `<option value="${h(key(row))}" ${selected === key(row) ? 'selected' : ''}>${h(row.run_id)} · ${h(row.client)}</option>`).join('')}</select></div></section>${body}`;
-    root.querySelector('#cache-task').onchange = event => {selected = event.target.value;detail = null;state = 'loading';notice = '';render();void readDetail();};
+    root.querySelector('#cache-task').onchange = event => {selected = event.target.value;detail = preparation = null;state = 'loading';notice = '';render();void readDetail();};
     const version = root.querySelector('#cache-affinity-version');
     if (version) version.onchange = event => {choice = event.target.value;render();};
     const apply = root.querySelector('#cache-affinity-apply');
@@ -121,6 +130,11 @@ window.CloudyFanCache = (() => {
       const value = await actionContext.api('/monitor/cache-observations/' + target.split('/').map(encodeURIComponent).join('/'));
       if (version !== generation || selected !== target || !mounted()) return;
       if (!validDetail(value) || key(value.task) !== target) throw Error('cache_detail_unconfirmed');
+      try {
+        const prep = await actionContext.api('/monitor/context-preparations/' + target.split('/').map(encodeURIComponent).join('/'));
+        preparation = prep?.schema_version === 'context-preparation-observation-v1' ? prep : null;
+      } catch {preparation = null;}
+      if (version !== generation || selected !== target || !mounted()) return;
       detail = value;state = 'current';render();
     } catch {if (version === generation && selected === target && mounted()) {state = 'stale';notice = '這個任務的觀測目前無法確認；未重新計算或送出任何請求。';render();}}
   }

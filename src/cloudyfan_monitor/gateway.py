@@ -118,7 +118,8 @@ class Gateway:
             binding, created, recorder = self._bind(principal, payload, expected_contract)
             with self._creation_owner(binding, created, recorder):
                 state = self.queue.submit(principal, {'run_id': binding['run'], 'contract_id': binding['contract'],
-                                                    'prompt': payload['prompt']})
+                                                    'prompt': payload['prompt'],
+                                                    **({'context': payload['context']} if 'context' in payload else {})})
             self.capture(binding, retain_metadata=created)
             return self.queue_view(binding, state)
         prior = (self.store.existing_binding(principal, payload.get("run_id"))
@@ -137,7 +138,8 @@ class Gateway:
                 try:
                     with self._creation_owner(binding, created, recorder):
                         self.service.create(principal, {"run_id": binding["run"], "contract_id": binding["contract"],
-                                                        "prompt": payload["prompt"]})
+                                                        "prompt": payload["prompt"],
+                                                        **({"context": payload["context"]} if "context" in payload else {})})
                 except Exception:
                     self.capture(binding, unavailable=True)
                     raise

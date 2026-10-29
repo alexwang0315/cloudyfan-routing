@@ -241,7 +241,23 @@ class App:
                 row.pop('conservative_bound_usd', None)
         return value
 
+    def _context_observation(self, client, run):
+        from .context_observations import observe_preparation
+        from .saved_comparisons import SourceUnavailable
+        try:
+            value = observe_preparation(self, client, run)
+        except (OSError, ValueError, KeyError, TypeError, sqlite3.Error, SourceUnavailable):
+            raise MonitorError('context_observation_unavailable', 503) from None
+        if value is None:
+            raise MonitorError('context_observation_task_not_found', 404)
+        return value
+
     def _admin(self, method, path, environ):
+        match = re.fullmatch(r'/monitor/context-preparations/([A-Za-z0-9][A-Za-z0-9._-]{0,127})/([A-Za-z0-9][A-Za-z0-9_-]{0,63})', path)
+        if match:
+            if method != 'GET' or environ.get('QUERY_STRING'):
+                raise MonitorError('endpoint_not_supported', 404)
+            return self._context_observation(match[1], match[2])
         if path == '/monitor/cache-affinity' or path == '/monitor/cache-affinity/activate':
             if environ.get('QUERY_STRING') or getattr(self, 'cache_affinity', None) is None:
                 raise MonitorError('endpoint_not_supported', 404)
@@ -434,6 +450,11 @@ class App:
             if getattr(self, 'cache_affinity', None) is not None:
                 self.cache_affinity.bind(principal, body)  # 接受前凍結當時的親和性版本
             return self.gateway.create(principal, body)
+        context = re.fullmatch(r"/v1/tasks/([A-Za-z0-9][A-Za-z0-9_-]{0,63})/context-preparation", path)
+        if context:
+            if method != 'GET' or environ.get('QUERY_STRING'):
+                raise MonitorError('endpoint_not_supported', 404)
+            return self._context_observation(principal, context[1])
         cache = re.fullmatch(r"/v1/tasks/([A-Za-z0-9][A-Za-z0-9_-]{0,63})/cache-observations", path)
         if cache:
             # 客戶端只能看自己的任務；比對對象也只限同一客戶端。

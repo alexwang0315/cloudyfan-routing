@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import sqlite3
 import sys
 import threading
 
@@ -23,6 +24,16 @@ TASKS = (('studio', 'qa44-equal-oss', 'open_source_first', (), '1+1 PRIVATE_QA44
          ('agent', 'qa44-equal-high', 'fixed_high', (), '1+1 PRIVATE_QA44_CANARY'),
          ('studio', 'qa44-rescued', 'cloudyfan', ('open_source',), '2+2 PRIVATE_QA44_CANARY'),
          ('batch', 'qa44-failed', 'open_source_first', ('open_source', 'low', 'mid', 'high'), '2+2 PRIVATE_QA44_CANARY'))
+
+
+def fingerprint(path):
+    """SQLite by table contents (page polling may rewrite unchanged rows), other files by bytes."""
+    if path.suffix in ('.sqlite', '.sqlite3'):
+        with sqlite3.connect(path.as_uri() + '?mode=ro', uri=True, timeout=5) as db:
+            tables = [row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")]
+            rows = {name: sorted(map(repr, db.execute('SELECT * FROM "' + name + '"').fetchall())) for name in tables}
+        return hashlib.sha256(json.dumps(rows, sort_keys=True).encode()).hexdigest()
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def check(value, code):
@@ -52,9 +63,9 @@ def main():
 
         def state():
             return {'model_calls': len(bundle.upstream.calls), 'original_files_sha256': hashlib.sha256(json.dumps({
-                str(path.relative_to(bundle.root)): hashlib.sha256(path.read_bytes()).hexdigest()
+                str(path.relative_to(bundle.root)): fingerprint(path)
                 for path in sorted(bundle.root.rglob('*')) if path.is_file()
-                and '.saved-comparisons' not in path.parts}, sort_keys=True).encode()).hexdigest()}
+                and '.saved-comparisons' not in path.parts and not path.name.endswith(('-wal', '-shm'))}, sort_keys=True).encode()).hexdigest()}
 
         with httpx.Client(base_url=origin, trust_env=False, timeout=10,
                           headers={'Authorization': 'Bearer ' + bundle.operator_token}) as operator:

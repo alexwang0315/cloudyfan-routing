@@ -102,6 +102,12 @@ integration entry on macOS/Linux with Python 3.12/3.13 and uv 0.11.7. Local succ
 does not establish that remote CI ran. No workflow dispatch or source push is
 part of installing this entry.
 
+雲端測試環境一律使用 uv 管理的 CPython（`UV_PYTHON_PREFERENCE: only-managed`）。
+原因：`actions/setup-python` 在 macOS 提供的是 python.org framework 版，其
+`sqlite3` 沒有 `enable_load_extension`，SQL 執行器會對每個查詢拒絕執行，第一次
+雲端矩陣（run 40839825871）因此在 macOS 兩格各有 165 個失敗。`setup-python`
+只用來執行 `scripts/check` 這個入口本身。
+
 ## Repository-local commit guard
 
 ```sh

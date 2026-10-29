@@ -15,6 +15,14 @@ from test_sql_environment import answer, contract, sql_core
 from test_engine import API
 
 
+def test_suite_interpreter_exposes_sqlite_extension_control():
+    # Builds without loadable-extension support omit this API; the executor would
+    # then refuse every query and surface only as SqlValidationUnavailable.
+    import sqlite3
+    assert hasattr(sqlite3.Connection, 'enable_load_extension'), (
+        'This Python lacks sqlite3 enable_load_extension; use uv-managed CPython.')
+
+
 def execute():
     return worker.execute({'t': [['n', 'INTEGER']]}, ['n'], {'t': [{'n': 7}]}, 'SELECT n FROM t')
 

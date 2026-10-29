@@ -9,6 +9,13 @@ jobs:
         os: [ubuntu-latest, macos-latest]
         python: ['3.12', '3.13']
     runs-on: ${{ matrix.os }}
+    # The test environment uses uv-managed CPython. macOS python.org framework
+    # builds from setup-python lack sqlite3 enable_load_extension, so the SQL
+    # executor fails closed on every query there. setup-python only runs the
+    # check entrypoint itself.
+    env:
+      UV_PYTHON: ${{ matrix.python }}
+      UV_PYTHON_PREFERENCE: only-managed
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -21,6 +28,7 @@ jobs:
       # used. Warm the separate isolated-build cache before the offline gate.
       - name: Prepare locked test and declared build dependencies
         run: |
+          uv python install ${{ matrix.python }}
           uv sync --locked --extra dev
           uv build --out-dir runtime/ci-build-preparation
       - name: Shared offline integration gate

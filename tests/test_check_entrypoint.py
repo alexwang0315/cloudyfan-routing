@@ -429,3 +429,14 @@ def test_repo_hook_preserves_prior_hooks_and_stops_on_secret_scan(tmp_path):
     assert result.returncode == 1
     assert b'refusing to skip' in result.stderr
     assert trace.read_text().splitlines() == ['secret', 'secret', 'quick']
+
+
+def test_remote_workflow_runs_checks_on_uv_managed_python():
+    # actions/setup-python on macOS provides python.org framework builds without
+    # sqlite3 enable_load_extension; the SQL executor then fails closed on every
+    # query (run 40839825871). The test venv must use uv-managed CPython instead.
+    workflow = (ROOT / '.github/workflows/tests.yml').read_text()
+    assert 'UV_PYTHON_PREFERENCE: only-managed' in workflow
+    assert 'UV_PYTHON: ${{ matrix.python }}' in workflow
+    install = workflow.index('uv python install ${{ matrix.python }}')
+    assert install < workflow.index('uv sync --locked --extra dev')

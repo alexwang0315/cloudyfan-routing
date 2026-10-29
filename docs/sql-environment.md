@@ -79,3 +79,6 @@ hard_heap_limit 32 MiB。這不限制 Python 的全部 RAM，也不是 OS securi
 額度設定；嚴格地址空間模式會在 POST 前停止，目標 OS 的完整記憶體／安全 sandbox
 資格未核定。RG-01 及其他正式 gate 保持 pending；模型、供應商與品質主張分別沿
 RG-02、RG-04、RG-07 補證，不用 mock 通過代替。
+
+沒有 `sqlite3` `enable_load_extension` 的 Python（例如 python.org macOS 安裝版）
+無法確認擴充載入已關閉，執行器拒絕執行並回報環境不可用；請改用 uv 管理的 CPython。

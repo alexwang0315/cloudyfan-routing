@@ -120,6 +120,8 @@ window.CloudyFanCache = (() => {
     } catch {if (version === generation && selected === target && mounted()) {state = 'stale';notice = '這個任務的觀測目前無法確認；未重新計算或送出任何請求。';render();}}
   }
   function mount(node, nextContext) {
+    // 主頁每次輪詢都會呼叫 mount；同一登入與同一容器時保留選取，只在真正換頁或換身分時重設。
+    if (context?.sessionVersion === nextContext.sessionVersion && root === node && mounted()) return;
     generation += 1;root = node;context = nextContext;catalog = detail = null;selected = notice = '';state = 'idle';
     policy = null;choice = '';applying = false;
     root.innerHTML = '<div id="cache-page"></div>';render();void readCatalog();void readPolicy();

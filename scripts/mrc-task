@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+MONITOR_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+CORE_ROOT=${CLOUDYFAN_CORE_ROOT:-"$MONITOR_ROOT/../cloudyfan-jev-core"}
+export PYTHONDONTWRITEBYTECODE=1
+export PYTHONPATH="$MONITOR_ROOT/src:$CORE_ROOT/src"
+exec "$CORE_ROOT/.venv/bin/python" -m cloudyfan_monitor.mrc_client "$@"

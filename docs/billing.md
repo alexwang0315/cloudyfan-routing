@@ -26,7 +26,7 @@ Monitor 導覽的「客戶帳務」可設定售價、記錄客戶美元入帳、
 
 ```sh
 ./scripts/preview --port 18767 --data runtime/billing-preview-20261023 \
-  --openrouter-billing --billing-key-file ../cloudyfan-jev-core/.env
+  --openrouter-billing --billing-key-file ../cloudyfan-mrc/.env
 ```
 
 此預覽仍使用合成模型與合成客戶帳務；只有明示更新的 OpenRouter 帳務來源可讀真實用量。一般受控主服務使用 `assemble_monitor(..., billing_source=OpenRouterAccounting(...))` 注入同一唯讀適配器，真實核帳時須保留原請求的 generation ID、模型身分與實際原生 token 用量。OpenRouter 回報的費用不包含外部 BYOK 供應商另行收取的費用；帳戶／金鑰範圍分開呈現，管理金鑰未設定時帳戶總額保持未知。

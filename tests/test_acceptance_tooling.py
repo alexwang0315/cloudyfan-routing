@@ -181,7 +181,7 @@ def successful_small_run(tmp_path, request):
     shutil.copy2(ROOT / "scripts/acceptance.py", monitor / "scripts/acceptance.py")
     (monitor / "config").mkdir()
     shutil.copy2(ROOT / "config/acceptance-scope.json", monitor / "config/acceptance-scope.json")
-    live_core = Path(os.environ.get("CLOUDYFAN_CORE_ROOT", ROOT.parent / "cloudyfan-jev-core"))
+    live_core = Path(os.environ.get("CLOUDYFAN_CORE_ROOT", ROOT.parent / "cloudyfan-mrc"))
     shutil.copy2(live_core / "scripts/check.py", core / "scripts/check.py")
     binaries = tmp_path / "mini-bin"
     binaries.mkdir()
@@ -486,7 +486,7 @@ def test_real_offline_sync_cannot_follow_an_inherited_environment_outside_snapsh
     (core / "scripts").mkdir(parents=True)
     (core / "pyproject.toml").write_text('[project]\nname="offline-env-fixture"\n'
         'version="0.0.0"\nrequires-python=">=3.12"\n[project.optional-dependencies]\ndev=[]\n')
-    live_core = Path(os.environ.get("CLOUDYFAN_CORE_ROOT", ROOT.parent / "cloudyfan-jev-core"))
+    live_core = Path(os.environ.get("CLOUDYFAN_CORE_ROOT", ROOT.parent / "cloudyfan-mrc"))
     shutil.copy2(live_core / "scripts/check.py", core / "scripts/check.py")
     env = {**os.environ, "UV_OFFLINE": "1", "UV_PYTHON_DOWNLOADS": "never"}
     env.pop("UV_PROJECT_ENVIRONMENT", None)
@@ -511,7 +511,7 @@ def test_real_offline_sync_cannot_follow_an_inherited_environment_outside_snapsh
 def test_failed_core_run_keeps_original_stderr_and_cannot_finalize(tmp_path, outcome):
     core = tmp_path / "core"
     (core / "scripts").mkdir(parents=True)
-    live_core = Path(os.environ.get("CLOUDYFAN_CORE_ROOT", ROOT.parent / "cloudyfan-jev-core"))
+    live_core = Path(os.environ.get("CLOUDYFAN_CORE_ROOT", ROOT.parent / "cloudyfan-mrc"))
     shutil.copy2(live_core / "scripts/check.py", core / "scripts/check.py")
     entry = core / "scripts/check"
     if outcome == "failure":

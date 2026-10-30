@@ -67,7 +67,7 @@ finally:
 
 def invoke(tmp_path, options, *, interrupt=False):
     env = dict(PATH=os.defpath, PYTHONPATH=os.pathsep.join([str(ROOT / "src"),
-                    str(ROOT.parent / "cloudyfan-jev-core/src")]),
+                    str(ROOT.parent / "cloudyfan-mrc/src")]),
                BILLING_TEST_INTERRUPT="1" if interrupt else "0",
                OPENROUTER_BILLING_API_KEY="invalid disabled environment value")
     return subprocess.run([sys.executable, "-c", HARNESS, "--demo", "--data", str(tmp_path / "preview"),

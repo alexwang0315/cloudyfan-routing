@@ -7,7 +7,7 @@ name = "cloudyfan-monitor"
 version = "0.1.0"
 description = "Local operator console for CloudyFan's controlled task service"
 requires-python = ">=3.12"
-dependencies = ["httpx>=0.28,<1", "cloudyfan-jev-core==0.1.0"]
+dependencies = ["httpx>=0.28,<1", "cloudyfan-mrc==0.1.0"]
 
 [project.optional-dependencies]
 simulation = ["ollama==0.6.3"]

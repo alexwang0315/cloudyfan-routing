@@ -530,7 +530,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     prepare = commands.add_parser("snapshot", help="freeze current inputs, retaining approved history separately")
-    prepare.add_argument("--core-root", type=Path, default=ROOT.parent / "cloudyfan-jev-core")
+    prepare.add_argument("--core-root", type=Path, default=ROOT.parent / "cloudyfan-mrc")
     prepare.add_argument("--output", type=Path, required=True)
     prepare.add_argument("--historical-policy", type=Path, default=ROOT / "config/acceptance-scope.json",
                          help="alternate location of the unchanged approved17-row policy")

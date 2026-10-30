@@ -54,7 +54,7 @@ commit; quick checks inspect the working tree and cannot certify a staged subset
 From the Monitor checkout, choose a new private output directory each time:
 
 ```sh
-python3 scripts/acceptance.py snapshot --core-root ../cloudyfan-jev-core --output runtime/acceptance/run-name
+python3 scripts/acceptance.py snapshot --core-root ../cloudyfan-mrc --output runtime/acceptance/run-name
 python3 scripts/acceptance.py run --snapshot runtime/acceptance/run-name
 python3 scripts/acceptance.py finalize --snapshot runtime/acceptance/run-name
 python3 scripts/acceptance.py status

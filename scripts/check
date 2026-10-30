@@ -32,7 +32,7 @@ def main():
     parser.add_argument("--quick", action="store_true", help="Ruff and JavaScript syntax only; not delivery verification")
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
-    core = Path(os.environ.get("CLOUDYFAN_CORE_ROOT", root.parent / "cloudyfan-jev-core")).resolve()
+    core = Path(os.environ.get("CLOUDYFAN_CORE_ROOT", root.parent / "cloudyfan-mrc")).resolve()
     output = root / "runtime/checks" / uuid.uuid4().hex[:12]
     output.mkdir(parents=True, mode=0o700)
     env = clean_environment(core, root)

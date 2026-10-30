@@ -135,7 +135,8 @@ def test_all_known_misses_are_rejected_then_repair_with_public_feedback(tmp_path
     assert result['first_public_pass'] is False and result['final_public_pass'] is True
     assert result['status'] == 'passed' and len(result['attempts']) == 2
     assert result['costs']['api_usd'] == '0.0201' and len(api.requests) == 3
-    assert result['attempts'][0]['public']['checks'] == ['SQL_PUBLIC_RESULT_MISMATCH']
+    assert result['attempts'][0]['public']['checks'] == (
+        ['SQL_ORDER_BY_REQUIRED'] if probe['feature'] == 'result-order' else ['SQL_PUBLIC_RESULT_MISMATCH'])
     assert run_sql(engine, probe['id'], task) == result and len(api.requests) == 3
 
 
@@ -143,8 +144,8 @@ def test_new_catalog_review_rejects_old_and_new_mutants_without_changing_old_cat
     report = sql_catalog.review()
     assert report['catalog_version'] == 'sql-review-catalog-v2-bounded'
     assert sum(r['old_mutants_rejected'] for r in report['cases']) == 14
-    assert sum(len(r['new_probes_rejected']) for r in report['cases']) == 13
-    assert sum(r['public_samples'] for r in report['cases']) == 53
+    assert sum(len(r['new_probes_rejected']) for r in report['cases']) == 14
+    assert sum(r['public_samples'] for r in report['cases']) == 54
     assert report['holdout'] is False and report['production_qualified'] is False
     assert len(cases()[0].contract().environment().spec['samples']) == 5
 

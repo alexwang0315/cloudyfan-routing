@@ -1,4 +1,4 @@
-# RG-01 SQL Environment v2：公開驗收、子程序與工程中斷
+# RG-01 SQL Environment v3：公開驗收、子程序與工程中斷
 
 狀態：**實作／離線驗證範圍，正式 RG-01 資格仍 pending**。目前 v2 使用獨立標準庫子程序執行每個 fixture；v1 的同程序實測保留為歷史。`sql.py` 是獨立套件的 tool-free `Environment` 接入；`sql_executor.py` 只抽取舊工作區的無資料 parser／SQLite 執行 helpers，不依賴舊 `cloudyfan` 套件、Pydantic、實驗題庫、oracle 或隱藏答案。
 
@@ -27,7 +27,7 @@ result = run_sql(controlled_core, "sql-job-001", contract)
 
 `SqlContract` 先拒絕欄位型別不符、NOT NULL 的空值及 INTEGER PRIMARY KEY 的 NULL 自動編號，避免 SQLite affinity 改寫公開資料。它將所有公開欄位複製為不可變 JSON 字串。`task()` 包含公開指示、schema、例子、期望結果與執行限制；`contract_version` 為 `sql-environment-v2:<sha256>`，綁定使用者契約版本、全部公開內容、executor 的限制版本、SQLite 版本與 native limits、worker 程式雜湊、Python／平台及程序資源策略。資料、期望值或 runtime 描述改變，原 run 必須拒絕重用；更改 adapter 的驗收語義須升版，不能沿用舊 SQL 實驗契約。
 
-`run_sql` 明確要求核心採用 `SQL_DIAGNOSTICS`（`sql-public-diagnostics-v2`、producer `sql-environment-v2`、4096 bytes），然後透過既有 `Core.run`／`BudgetedCore.run`，綁定 task、fresh environment factory 及版本。直接手動使用 `Core.run` 的可信應用仍須自己正確綁定這三者；此便利介面不防止管理者刻意繞過，也不授權付費。
+`run_sql` 明確要求核心採用 `SQL_DIAGNOSTICS`（`sql-public-diagnostics-v3`、producer `sql-environment-v3`、4096 bytes），然後透過既有 `Core.run`／`BudgetedCore.run`，綁定 task、fresh environment factory 及版本。直接手動使用 `Core.run` 的可信應用仍須自己正確綁定這三者；此便利介面不防止管理者刻意繞過，也不授權付費。
 
 `SqlEnvironment.tools_schema()` 為空；沒有工具往返，每個作答階段最多一個生成請求。首答通過不分類；目前 CloudyFan 採[順序式路由](sequential-routing.md)：低／中選模後先作答驗收，仍未通過才中／高選模最後作答，最多三次生成。對照模式仍最多兩次；這是執行器版本變更，SQL驗收規則不變。`call()` 一律拒絕，不讓模型建立任意 SQL／檔案工具。
 
@@ -35,11 +35,11 @@ result = run_sql(controlled_core, "sql-job-001", contract)
 
 - 使用明確的受信任表／欄位定義；只接受既有 allowlist 的 INTEGER／TEXT 宣告。每個例子須提供全部表、完整欄位及公開期望列，不接受額外 private／hidden 欄位。
 - 上限為 32 表／32 公開例子／每表每例 1000 筆輸入、整份公開設定 1 MiB；cell 僅限 int64、字串與 null。期望結果須符合欄數及現有 100 列／32768 cell bytes 上限。
-- 保留 `sqlite-readonly-contract-v2` 的 SQL parser 與執行限制：僅 `{"sql": "..."}`、單一 SELECT／WITH、既有函式 allowlist、禁止寫入／extension／ATTACH／遞迴 CTE、全新記憶體資料庫、query_only／authorizer／setlimit／progress handler。
+- 保留 `sqlite-readonly-contract-v3` 的 SQL parser 與執行限制：僅 `{"sql": "..."}`、單一 SELECT／WITH、既有函式 allowlist、禁止寫入／extension／ATTACH／遞迴 CTE、全新記憶體資料庫、query_only／authorizer／setlimit／progress handler。
 - SQL 20000 字元、回應／SQL UTF-8 32768 bytes、32 欄、expression depth 100、compound SELECT 20 terms、編譯 VM 25000 operations、函式參數 16、執行 VM 100000 步、每 500 步檢查、fixture 合作式 0.25 秒。精確值與 SQLite native limits 會出現在公開 task，不能為修正通過而調大。
 - factory 在第一個模型 POST 前以每個 fixture 的獨立記憶體 DB 做 preflight，確認資料／DDL、SQLite build 與限制可用。它不會證明題目語義或 expected 的正確性，也不會執行模型答案。
 
-結果比對欄名、允許型別、完整列及順序；NULL、重複值、空表、日期／排序語義仍須由任務契約定義。沒有公開例子時返回 `passed=None`，不是成功或模型答錯。
+結果比對欄名、允許型別、完整列及順序。契約任一例子的 `expected` 含 2 列以上不同的列時，順序才看得出差別，答案必須在最外層（括號深度 0）有 `ORDER BY`，否則回 `SQL_ORDER_BY_REQUIRED`；這條規則寫在公開執行限制內。僅檢查有沒有最外層排序，**不判斷排序鍵是否完整**：同值未排完整、靠內部順序碰巧相符的答案仍可能通過。NULL、重複值、空表、日期／排序語義仍須由任務契約定義。沒有公開例子時返回 `passed=None`，不是成功或模型答錯。
 
 ## 診斷投影與錯誤分類
 
@@ -47,11 +47,13 @@ Environment 僅返回 `passed` 與 flat string list `checks`；Core 再加入 di
 
 | 分類 | 結果／後續 | 例子 |
 |---|---|---|
-| 公開答案不合格 | `passed=False`；依凍結模式作有界修正，最終仍不合格為 failed。 | 壞 JSON／空答案、unsafe SQL、unknown column、欄名／型別／列不符、確定的 VM 步數或 compound／輸出界限。 |
+| 公開答案不合格 | `passed=False`；依凍結模式作有界修正，最終仍不合格為 failed。 | 壞 JSON／空答案、unsafe SQL、unknown column、欄名／型別／列不符、缺最外層排序、確定的 VM 步數或 compound／輸出界限；以及 SQL 階段基礎錯誤碼為 `SQLITE_ERROR`、`SQLITE_MISMATCH`、`SQLITE_RANGE`、`SQLITE_TOOBIG` 的錯誤（如欄位序號超出範圍、參數數量錯、compound 欄數不同、未閉合引號、整數溢位）。 |
 | 無公開可驗條件 | `passed=None`；核心仍可走同一個有界補救流程，最終未知為 unverifiable。 | 空 samples；未知不當成通過。 |
-| 工程／驗收環境異常 | 拋 `SqlValidationUnavailable`，category=`engineering`；當下停止，不分類、不發出新修正。 | 不相容 build、fixture 載入失敗、runtime 改變、I/O／記憶體／未知 SQLite 問題、驗收 wall timeout。 |
+| 工程／驗收環境異常 | 拋 `SqlValidationUnavailable`，category=`engineering`；當下停止，不分類、不發出新修正。 | 不相容 build、fixture 載入失敗、runtime 改變、I/O／記憶體、其他或沒有錯誤碼的 SQLite 問題、受 build 影響的 `parser stack overflow`、驗收 wall timeout。 |
 
 例如 `SQL_EXECUTION_ERROR:unknown_column`、`SQL_RESOURCE_LIMIT:compound_select_limit` 可讓模型對照公開 schema／上限修正，不需要錯誤訊息內的識別字。無法判定的 SQLite 錯誤保守歸工程中斷，不猜測為模型失敗；memory error 也可能來自編譯上限，未能可靠區分時同樣停止。
+
+v3 變更（2026-10-30）：v2 把文字分類器認不得的 SQLite 錯誤一律當工程中斷，使模型可預期的錯誤無法進入補救流程，續跑也會卡在同一份答案；v3 改依錯誤碼判定。[語義審查](rg01-semantic-review-20261019.md)記錄的「參考 SQL 中間累加溢位歸工程」屬 v2；v3 歸模型端失敗，參考答案若溢位屬契約問題。舊 run 因契約版本不同不能以 v3 續跑，也不重新評分；`docs/evidence/` 內的既有紀錄均屬 v2。
 
 **工程分類是此新 adapter 的明確語義**：與舊函式把不相容環境回成 False 不同；wall timeout 也不以模型答錯計算。舊函式、題庫、答案和歷史分數未修改。既有核心／HTTP 的通用工程中斷與帳務處理介面未改動，本輪主驗收仍是 Core.run。
 

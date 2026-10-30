@@ -48,6 +48,9 @@ def checked_in_suite_ids():
     def walk(value):
         if isinstance(value, dict):
             for key, item in value.items():
+                # Archived evidence records the suite it ran under; it never moves to a new one.
+                if key == 'archived_profile_evidence':
+                    continue
                 found.append(item) if key == 'suite_id' else walk(item)
         elif isinstance(value, list):
             for item in value:

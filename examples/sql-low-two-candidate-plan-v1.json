@@ -14,16 +14,16 @@
     }
   ],
   "source_bindings": {
-    "sql.py": "f8e037a71f4dca206bd8de231043e3bb802fa9d72b4ffc19f2564b659d9ac504",
+    "sql.py": "5e9f75cdaf80ecdbb5a21c30af396dc098993679a55a04fbe23f8230a7805760",
     "sql_catalog.py": "fd861ec13e79c8eb54b086e47f1b8050b34406fa52d86046e9fed2b9d65ba2d6",
     "sql_policy.py": "11d8a5c2edfcbdcbfc99b6e76f6384cf66c8e25dc1ace4f1bbfb4ce1836831ec",
     "sql_worker.py": "39bf49d049933809d4c328a49ce4c1c805f23ec6d666c45495e4c7c47f2dcbe0",
-    "sql_executor.py": "8133a36dba4d6170371a6ce304ed82a5ec4a9e3145b89bded385eb21c360d206",
+    "sql_executor.py": "3298947e2fff7515efac6626e9c4e5db651828e8267bfdf6e1995f6d96aa6a47",
     "sql_process.py": "e24b2eb0e4f475a6c8df9f89dc6fd562088f52fc860af30a199b60abbbd347cd",
     "sql_isolation.py": "a5f582f5bdb7bb1349039a2cebdf7bdc89f9d2d7cfbcbe83f2acb8446a2d9bd7",
     "sql_isolation_entry.py": "5cdee63bd172b74bbee702c55c9ec6af9f35f13c1c354c6dbc1f043e3b56c51c",
     "sql_public_suite.py": "6e31898280570458e3bdcc51a82568c10883d3fa2ce92fcb659e65c1df399905",
-    "sql_counterexamples.json": "e7044ba3cf3afc58b8d315b4bc1d6fcf34bedbcc563b32ef1d8e92e5866f0a92",
+    "sql_counterexamples.json": "17fd8b92aa5c826e9cb2ecc4a4c9faa1132adda65e15d0ee5ba6b0941000bdcd",
     "scores/sql_exam.py": "b6e6689b683e390312086e17e4c0b860d5a3d23249894537d3427c9e1b8b4302",
     "scores/sql_capability.py": "c6a0a533047947828eb376732bc20627b6f2a42bdbf4cc0d57864f75b5208c62",
     "scores/sql_runner.py": "ce985c114f95a352b53b52d8feac97e76e8cce4bea94d5ca170afcc62b4129cf",
@@ -32,17 +32,17 @@
     "diagnostics.py": "f9df8ad2685c590474efaee5126485754867ae2b24e15baf73bdb46805b51b0d",
     "scores/sql_low_preparation.py": "0c9ebce5defcc07057fae084075618cdaac99f3972f5b7e79329c3f682383399"
   },
-  "suite_id": "8a3127cdad4433aeb2aca12f23b059a6959e807889c8da2b5fb23ce6bb397f88",
+  "suite_id": "3e1c310156e5ef953f8c8cf5c208a7cc98bf7f01e41b497df2d6baf85b2d4e4b",
   "runtime": {
     "python_version": "3.13.13",
     "sqlite_version": "3.50.4"
   },
   "preparer_cli_sha256": "6d569021675e7f588fcdb646697890318a061a60e3a6c3b15d30551d1853b96c",
-  "public_tasks_sha256": "2257ca788f156cc188dc8d6ee8a96dae324f9cc8687daece81bcdd759e195313",
+  "public_tasks_sha256": "aa2d603f6512119a5ee39e7f77829a707d000655569a0a021127b8417958bdc0",
   "system_prompt": "Answer the public task with one JSON object containing a sql string. No tools are available.",
   "table": {
     "schema_version": "sql-multi-candidate-exam-v1",
-    "suite_id": "8a3127cdad4433aeb2aca12f23b059a6959e807889c8da2b5fb23ce6bb397f88",
+    "suite_id": "3e1c310156e5ef953f8c8cf5c208a7cc98bf7f01e41b497df2d6baf85b2d4e4b",
     "configurations": [
       {
         "role": "c4ba392516bcbd12fa02503be",
@@ -1635,5 +1635,5 @@
   "rg01_changed": false,
   "model_api_calls": 0,
   "source_gets": 0,
-  "plan_id": "5f9679f049a748b1c5ca8ceeaec1bb31649e85bc2e85d8dd97f81e7820286fdf"
+  "plan_id": "17e664e5573f9993a236f7037fbb31df6b7925d6656341a3c1b230679731fd62"
 }

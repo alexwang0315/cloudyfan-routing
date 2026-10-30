@@ -10,7 +10,7 @@ import time
 from contextlib import closing
 from functools import lru_cache
 
-SQL_EXECUTION_CONTRACT_VERSION = "sqlite-readonly-contract-v2"
+SQL_EXECUTION_CONTRACT_VERSION = "sqlite-readonly-contract-v3"
 
 MAX_SQL_CHARS = 20000
 
@@ -54,6 +54,9 @@ _FUNCTIONS = frozenset({
     "last_value", "lead", "length", "like", "lower", "max", "min", "nth_value", "nullif",
     "rank", "row_number", "strftime", "substr", "substring", "sum", "trim", "upper",
 })
+
+_MODEL_SQLITE_CODES = frozenset({sqlite3.SQLITE_ERROR, sqlite3.SQLITE_MISMATCH,
+                                 sqlite3.SQLITE_RANGE, sqlite3.SQLITE_TOOBIG})
 
 def table_ddl(tables):
     """Render trusted, frozen table specifications, never model-provided DDL."""
@@ -121,6 +124,7 @@ def _execution_constraints():
         "leading_sql_comments_allowed": False,
         "bound_parameters_allowed": False,
         "recursive_cte_allowed": False,
+        "top_level_order_by_required_when_row_order_is_observable": True,
         "cast_allowed": True,
         "supported_syntax": [
             "nonrecursive CTE", "joins", "subqueries", "GROUP BY", "HAVING", "CASE", "CAST",
@@ -298,14 +302,78 @@ def _compiler_feedback(error):
         ("You can only execute one statement", "multiple_statements", "Return one SQL statement."),
         ("Incorrect number of bindings supplied", "bound_parameters_forbidden",
          "Bound parameters are not provided. Return one self-contained SQL statement."),
+        ("wrong number of arguments to function", "wrong_argument_count",
+         "Check how many arguments each function takes."),
+        ("SELECTs to the left and right of", "compound_column_mismatch",
+         "Every compound SELECT term must return the same number of columns."),
+        ("integer overflow", "integer_overflow",
+         "A computed integer exceeds signed 64-bit range; change the calculation."),
     ]
     for prefix, category, hint in categories:
         if message.startswith(prefix):
             return {"category": category, "message": hint}
-    if ("syntax error" in message or re.fullmatch(
-            r"\d+(?:st|nd|rd|th) ORDER BY term does not match any column in the result set", message)):
+    if ("syntax error" in message or message.startswith("unrecognized token") or re.fullmatch(
+            r"\d+(?:st|nd|rd|th) (?:ORDER BY term does not match any column in the result set"
+            r"|(?:ORDER|GROUP) BY term out of range - should be between \d+ and \d+)", message)):
         return {"category": "syntax_error", "message": "Check the SQLite syntax and parentheses."}
     return {"category": "execution_error", "message": "Check the public SQL execution contract."}
+
+def _is_model_sql_error(error):
+    """True only when the failure follows from the SQL and frozen public data.
+
+    Unknown codes stay engineering: this must never turn a host failure into a
+    model failure. Parser stack depth is a SQLite build setting (YYSTACKDEPTH).
+    """
+    if _compiler_feedback(error)["category"] != "execution_error":
+        return True
+    code = getattr(error, "sqlite_errorcode", None)
+    return (code is not None and code & 255 in _MODEL_SQLITE_CODES
+            and not str(error).startswith("parser stack overflow"))
+
+def has_top_level_order_by(sql):
+    """Whether the statement itself orders its result; nested ORDER BY does not."""
+    depth, previous, index = 0, None, 0
+    closers = {"'": "'", '"': '"', "`": "`", "[": "]"}
+
+    def word_character(value):
+        # SQLite's tokenizer: every non-ASCII character is an identifier character, so
+        # Python's Unicode isspace()/isalnum() would split or join words differently.
+        return not value.isascii() or value.isalnum() or value in "_$"
+
+    while index < len(sql):
+        char = sql[index]
+        if char in closers:
+            index = sql.find(closers[char], index + 1)
+            while index != -1 and char != "[" and sql[index + 1:index + 2] == closers[char]:
+                index = sql.find(closers[char], index + 2)
+            if index == -1:
+                return False
+            previous = None
+        elif sql.startswith("--", index):
+            index = sql.find("\n", index)
+            if index == -1:
+                return False
+        elif sql.startswith("/*", index):
+            index = sql.find("*/", index + 2)
+            if index == -1:
+                return False
+            index += 1
+        elif char in " \t\n\f\r":
+            pass
+        elif word_character(char):
+            end = index
+            while end < len(sql) and word_character(sql[end]):
+                end += 1
+            word = sql[index:end].upper()
+            if depth == 0 and previous == "ORDER" and word == "BY":
+                return True
+            previous = word if depth == 0 else None
+            index = end - 1
+        else:
+            depth += {"(": 1, ")": -1}.get(char, 0)
+            previous = None
+        index += 1
+    return False
 
 def _execute_fixture(tables, expected_columns, data, sql, *, public=False):
     """A new isolated database per fixture; only public execution may return diagnostics."""
@@ -411,6 +479,7 @@ def _execute_fixture(tables, expected_columns, data, sql, *, public=False):
         return None, "SQL_EXECUTION_CONTRACT", detail
     except (sqlite3.Error, MemoryError, OverflowError) as error:
         # Setup/storage/allocation failures are validator failures, not bad SQL.
+        # SQLite cannot separate a compile-limit MemoryError from a host allocation failure.
         if not prepared or isinstance(error, (MemoryError, OverflowError)):
             return None, "SQL_VALIDATION_ENVIRONMENT", {}
         base = getattr(error, 'sqlite_errorcode', 0) & 255
@@ -419,7 +488,9 @@ def _execute_fixture(tables, expected_columns, data, sql, *, public=False):
                     sqlite3.SQLITE_CANTOPEN, sqlite3.SQLITE_NOTADB}:
             return None, "SQL_VALIDATION_ENVIRONMENT", {}
         resource = limited or _sqlite_resource_feedback(error)
-        if not denied and not resource and _compiler_feedback(error)['category'] == 'execution_error':
+        if not denied and not resource and str(error).startswith("Could not decode to UTF-8"):
+            return None, "SQL_RESULT_TYPES", {}
+        if not denied and not resource and not _is_model_sql_error(error):
             return None, "SQL_VALIDATION_ENVIRONMENT", {}
         code = ("SQL_UNSAFE" if denied else "SQL_RESOURCE_LIMIT" if resource
                 else "SQL_EXECUTION_ERROR")

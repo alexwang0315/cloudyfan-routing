@@ -14,9 +14,9 @@ from . import sql_policy
 from .sql_isolation import LinuxIsolation
 
 
-VERSION = 'sql-environment-v2'
+VERSION = 'sql-environment-v3'
 SQL_DIAGNOSTICS = DiagnosticContract(
-    version='sql-public-diagnostics-v2', source=VERSION, allowed_fields=('checks',))
+    version='sql-public-diagnostics-v3', source=VERSION, allowed_fields=('checks',))
 _MODEL_ERRORS = frozenset({
     'SQL_READ_ONLY_REQUIRED', 'SQL_RESULT_COLUMNS', 'SQL_RESULT_TYPES',
     'SQL_OUTPUT_LIMIT', 'SQL_RESOURCE_LIMIT', 'SQL_UNSAFE', 'SQL_EXECUTION_ERROR',
@@ -28,6 +28,7 @@ _PUBLIC_CATEGORIES = frozenset({
     'ambiguous_column', 'window_placement', 'aggregate_placement', 'incomplete_sql',
     'multiple_statements', 'bound_parameters_forbidden', 'syntax_error',
     'vm_step_limit', 'output_row_limit', 'output_byte_limit',
+    'wrong_argument_count', 'compound_column_mismatch', 'integer_overflow', 'execution_error',
 })
 
 
@@ -233,6 +234,10 @@ class SqlEnvironment:
                 checks.append(error + ':' + category if category in _PUBLIC_CATEGORIES else error)
             elif [list(row) for row in rows] != sample['expected']:
                 checks.append('SQL_PUBLIC_RESULT_MISMATCH')
+        # Comparison is order-exact, so an order only the scan provided is not an answer.
+        if (any(len({_json(row) for row in sample['expected']}) > 1 for sample in self.spec['samples'])
+                and not executor.has_top_level_order_by(sql)):
+            checks.append('SQL_ORDER_BY_REQUIRED')
         return {'passed': not checks, 'checks': sorted(set(checks))}
 
 

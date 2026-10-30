@@ -1,5 +1,5 @@
 {
-  "version": "rg01-public-counterexamples-v1",
+  "version": "rg01-public-counterexamples-v2",
   "probes": [
     {
       "id": "P01",
@@ -431,6 +431,35 @@
           99,
           111,
           5
+        ]
+      ]
+    },
+    {
+      "id": "P14",
+      "case_id": "S05",
+      "feature": "result-order",
+      "diagnostic_wrong_sql": "SELECT c.id FROM customers c WHERE NOT EXISTS(SELECT 1 FROM orders o WHERE o.customer=c.id AND o.status='paid')",
+      "counterexample_public_tables": {
+        "customers": [
+          {
+            "id": 1,
+            "name": "A"
+          },
+          {
+            "id": 2,
+            "name": "B"
+          }
+        ],
+        "orders": [],
+        "lefts": [],
+        "rights": []
+      },
+      "hand_expected": [
+        [
+          1
+        ],
+        [
+          2
         ]
       ]
     }

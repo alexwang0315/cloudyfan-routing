@@ -24,8 +24,15 @@ def foreign_runtime(monkeypatch):
 
 def test_checked_in_suite_ids_are_the_current_suite_on_the_frozen_machine():
     ids = checked_in_suite_ids()
-    assert len(ids) >= 5 and set(ids) == {suite_id_on_frozen_machine()}
+    assert len(ids) >= 3 and set(ids) == {suite_id_on_frozen_machine()}
     assert frozen_runtime() is (sql_exam.manifest()['suite_id'] == ids[0])
+
+
+def test_archived_evidence_keeps_the_suite_it_ran_under():
+    review = json.loads((ROOT / 'examples/sql-backup-candidate-review-v1.json').read_text())
+    archived = [c['archived_profile_evidence']['suite_id'] for c in review['configurations']
+                if (c.get('archived_profile_evidence') or {}).get('suite_id')]
+    assert len(archived) == 3 and suite_id_on_frozen_machine() not in archived
 
 
 def test_foreign_runtime_refuses_checked_in_table_but_runs_local_copy(tmp_path, foreign_runtime):

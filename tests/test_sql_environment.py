@@ -37,7 +37,7 @@ def test_public_sql_pass_skips_classification_and_reuses_answer(tmp_path):
     task = contract()
     result = run_sql(engine, 'sql-pass', task)
     assert result['status'] == 'passed' and result['selection'] is None
-    assert result['attempts'][0]['public']['diagnostic_source'] == 'sql-environment-v2'
+    assert result['attempts'][0]['public']['diagnostic_source'] == 'sql-environment-v3'
     assert run_sql(engine, 'sql-pass', task) == result
     assert len(api.requests) == 1 and 'tools' not in api.requests[0]
 
@@ -305,8 +305,17 @@ def test_output_row_limit_has_a_public_code_and_can_be_repaired(tmp_path):
     assert result['status'] == 'passed'
 
 
-def test_unknown_sqlite_error_does_not_guess_that_the_model_was_wrong(tmp_path):
-    api = API(messages=[answer('SELECT abs(-9223372036854775808) AS total')])
+def test_unknown_sqlite_error_does_not_guess_that_the_model_was_wrong(tmp_path, monkeypatch):
+    from cloudyfan_jev import sql_process
+    native = sql_process.execute
+
+    def execute(tables, columns, data, sql, **kwargs):
+        if sql == 'SELECT 1 AS preflight':
+            return native(tables, columns, data, sql, **kwargs)
+        return (None, 'SQL_VALIDATION_ENVIRONMENT', {}), None
+
+    monkeypatch.setattr(sql_process, 'execute', execute)
+    api = API(messages=[answer('SELECT SUM(n) AS total FROM numbers')])
     with pytest.raises(SqlValidationUnavailable):
         run_sql(sql_core(tmp_path, api), 'unknown-sqlite-error', contract())
     assert len(api.requests) == 1

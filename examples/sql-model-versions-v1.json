@@ -1,7 +1,7 @@
 {
   "schema_version": "sql-model-versions-v1",
   "profile": "examples/first-pool-profile-sql-v2.json",
-  "suite_id": "8a3127cdad4433aeb2aca12f23b059a6959e807889c8da2b5fb23ce6bb397f88",
+  "suite_id": "3e1c310156e5ef953f8c8cf5c208a7cc98bf7f01e41b497df2d6baf85b2d4e4b",
   "configurations": [
     {
       "role": "open_source",

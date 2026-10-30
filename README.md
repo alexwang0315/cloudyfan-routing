@@ -1,4 +1,4 @@
-# CloudyFan Jev Core
+# CloudyFan MRC
 
 [首版模型池接入與更新](docs/first-pool.md)：從保存的評分資料整理資格包／費用缺證，再以受控入口連接凍結路由。包含真 SQLite＋固定 MockTransport 的完整離線示範；實際候選缺證時保持阻擋，不宣稱正式合格。
 

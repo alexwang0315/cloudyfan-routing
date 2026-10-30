@@ -286,7 +286,7 @@ def _get(client: httpx.Client, url: str, *, headers: dict | None = None,
     try:
         # Standalone request avoids *all* inherited query/header/cookie state,
         # including application-specific credential names we cannot enumerate.
-        explicit_headers = {"User-Agent": "cloudyfan-jev-core-score-reader/0.1", **(headers or {})}
+        explicit_headers = {"User-Agent": "cloudyfan-mrc-score-reader/0.1", **(headers or {})}
         request = httpx.Request("GET", url, params=params, headers=explicit_headers,
                                 extensions={"timeout": httpx.Timeout(30).as_dict()})
         r = client.send(request, stream=True, auth=None, follow_redirects=False)

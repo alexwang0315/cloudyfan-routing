@@ -205,7 +205,7 @@ def test_livebench_fetch_two_commit_pinned_official_paths():
 
 def test_livebench_does_not_forward_inherited_client_credentials():
     def handler(request):
-        assert request.headers["User-Agent"] == "cloudyfan-jev-core-score-reader/0.1"
+        assert request.headers["User-Agent"] == "cloudyfan-mrc-score-reader/0.1"
         assert all(name not in request.headers for name in (
             "authorization", "cookie", "x-api-key", "x-custom-access-token"))
         assert not request.url.query
@@ -263,7 +263,7 @@ def test_livebench_discovery_pins_commit_before_loading_release_manifest():
     manifest = b'// Published releases\nexport const RELEASES = [\n"2025-12-23", "2026-01-08",\n];\n'
     def handler(request):
         calls.append(request)
-        assert request.headers["User-Agent"] == "cloudyfan-jev-core-score-reader/0.1"
+        assert request.headers["User-Agent"] == "cloudyfan-mrc-score-reader/0.1"
         if request.url.host == "api.github.com":
             assert request.url.path == "/repos/LiveBench/new-livebench/commits/main"
             return httpx.Response(200, json={"sha": REV})

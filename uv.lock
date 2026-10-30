@@ -34,7 +34,7 @@ wheels = [
 ]
 
 [[package]]
-name = "cloudyfan-jev-core"
+name = "cloudyfan-mrc"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

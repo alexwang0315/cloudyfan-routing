@@ -4,7 +4,7 @@ const esc = (v) => String(v ?? '—').replace(/[&<>"']/g, c => ({'&':'&amp;','<'
 const modes = {cloudyfan:'CloudyFan MRC',fixed_high:'全大模型優先',low_first:'全便宜模型優先',open_source_first:'全開源模型優先'};
 const tiers = {open_source:'開源池',low:'低分池',mid:'中分池',high:'高分池'};
 const candidateTiers = {open_source:'開源候選',low:'低分候選',mid:'中分候選',high:'高分候選'};
-const labels = {overview:'運作總覽',tasks:'任務與升級',ledger:'費用帳本',billing:'客戶帳務',pools:'候選池與契約',capacity:'供應商限額來源',queue:'排隊與等待',observations:'建立時觀測規則',comparisons:'保存證據比較',cache:'前綴與快取觀測',clients:'連線客戶端'};
+const labels = {overview:'運作總覽',playground:'試問 MRC（模擬）',tasks:'任務與升級',ledger:'費用帳本',billing:'客戶帳務',pools:'候選池與契約',capacity:'供應商限額來源',queue:'排隊與等待',observations:'建立時觀測規則',comparisons:'保存證據比較',cache:'前綴與快取觀測',clients:'連線客戶端'};
 const statuses = {passed:['通過','green'],failed:['未通過','red'],unverifiable:['無法確認','amber'],running:['執行中','blue'],ready:['已準備','blue'],bound:['已凍結','blue'],queued:['排隊中','blue'],expired:['已到期','amber'],task_busy:['執行中','blue'],engineering_interrupted:['工程中斷','red'],accounting_interrupted:['費用待核','amber'],policy_denied:['執行條件不符','amber']};
 const poolStatuses = {missing:'缺額',pending_unqualified:'待驗證',pending_unqualified_stale_source:'來源逾期',research_admitted_only:'僅舊研究准入',mock_only:'模擬設定'};
 const categoryLabels = {'agentic_index':'代理任務','coding_index':'程式與 SQL','intelligence_index':'綜合推理','3d':'3D 設計','asciiart':'字元藝術','audiorealism':'音訊擬真','codecategories':'程式設計','dataviz':'資料視覺化','gamedev':'遊戲開發','graphicdesign':'平面設計','image':'影像生成','imageediting':'影像編輯','logo':'Logo 設計','svg':'SVG 圖形','text-to-speech':'語音合成','uicomponent':'UI 元件','website':'網站設計','gpqa_diamond':'科學推理','search_browsecomp':'網頁搜尋','search_dsqa':'搜尋問答','search_hle':'高難度搜尋','search_widesearch':'廣域搜尋','tau_bench_verified_airline':'航空客服代理'};
@@ -22,7 +22,7 @@ function setToken(value) {
  selectedCandidateVersion='';selectedCandidateMode='cloudyfan';selectedClient='';taskFilter='';modeFilter='';search='';
  candidateFlight+=1;refreshCompleteness=null;pendingConfirm=null;confirmationVersion+=1;toastVersion+=1;busy=false;simulationStarting=false;
  expandedTaskTraces.clear();expandedCandidateDetails.clear();candidateRead={status:'idle'};candidateRequest=null;
- window.CloudyFanBilling?.resetView();window.CloudyFanCapacity?.resetView();window.CloudyFanQueue?.resetView();window.CloudyFanObservationPolicy?.resetView();window.CloudyFanComparisons?.resetView();
+ window.CloudyFanBilling?.resetView();window.CloudyFanCapacity?.resetView();window.CloudyFanQueue?.resetView();window.CloudyFanPlayground?.resetView();window.CloudyFanObservationPolicy?.resetView();window.CloudyFanComparisons?.resetView();
  $('#confirm').close();$('#apply-confirm').disabled=false;$('#error').hidden=true;$('#error').textContent='';$('#toast').hidden=true;
  $('#updated').textContent='尚未讀取此身分的資料';$('#environment').textContent='操作員身分尚未確認';$('#environment').className='badge';
  $('#main').innerHTML=`<div class="empty">${value?'正在核對操作員身分…':'已清除登入；請重新認證。'}</div>`;
@@ -245,6 +245,7 @@ function render() {
  $('#environment').textContent=operatorSession.demo?'模擬上游 · 非真實成效':'受控核心 · 正式資格另列';
  $('#environment').className='badge '+(operatorSession.demo?'amber':'blue');
  if(page==='capacity'){window.CloudyFanCapacity.mount($('#main'),sessionContext());return;}
+ if(page==='playground'){if(window.CloudyFanPlayground)window.CloudyFanPlayground.mount($('#main'),sessionContext());else $('#main').textContent='試問介面尚未載入，請重新讀取。';return;}
  if(page==='queue'){if(window.CloudyFanQueue)window.CloudyFanQueue.mount($('#main'),sessionContext());else $('#main').textContent='排隊觀測介面尚未載入，請重新讀取。';return;}
  if(page==='observations'){if(window.CloudyFanObservationPolicy)window.CloudyFanObservationPolicy.mount($('#main'),sessionContext());else $('#main').textContent='建立時觀測規則介面尚未載入，請重新讀取。';return;}
  if(page==='cache'){if(window.CloudyFanCache)window.CloudyFanCache.mount($('#main'),sessionContext());else $('#main').textContent='前綴與快取觀測介面尚未載入，請重新讀取。';return;}

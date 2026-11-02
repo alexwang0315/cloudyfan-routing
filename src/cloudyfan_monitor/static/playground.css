@@ -1,0 +1,23 @@
+#playground-page .playground-warning{border:1px solid #594b32;border-radius:8px;padding:11px 15px;color:var(--amber);margin-bottom:18px;background:#24251f}
+#playground-page .playground-form{padding:20px;margin-bottom:18px;display:grid;gap:8px}
+#playground-page label{font-size:12px;color:var(--muted);margin-top:6px}
+#playground-page textarea,#playground-page select{width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);font:inherit;padding:9px 11px}
+#playground-page textarea{resize:vertical}
+#playground-page .playground-actions{display:flex;align-items:center;gap:14px;margin-top:10px;flex-wrap:wrap}
+#playground-page .playground-result{padding:20px}
+#playground-page .playground-result:focus{outline:none}
+#playground-page .playground-failure{color:var(--red)}
+#playground-page .playground-result-heading{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+#playground-page .playground-result-heading h2{font-size:17px;margin:0}
+#playground-page .playground-steps{list-style:none;margin:18px 0;padding:0;display:grid;gap:14px}
+#playground-page .playground-step{display:flex;gap:12px;align-items:flex-start}
+#playground-page .playground-step h3{font-size:14px;margin:0 0 3px;font-weight:600}
+#playground-page .playground-step p{margin:0}
+#playground-page .playground-marker{flex:none;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:12px;background:var(--panel2);border:1px solid var(--border)}
+#playground-page .playground-step.jev .playground-marker{color:var(--blue);border-color:var(--blue)}
+#playground-page .playground-facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:0 0 12px;border-top:1px solid var(--border);padding-top:16px}
+#playground-page .playground-facts dt{font-size:11px;color:var(--muted)}
+#playground-page .playground-facts dd{margin:4px 0 0;font-family:var(--mono)}
+#playground-page .playground-answer-note{color:var(--amber);margin:0 0 12px}
+#playground-page .playground-detail{margin-bottom:12px}
+#playground-page .playground-detail summary{cursor:pointer;color:var(--blue)}

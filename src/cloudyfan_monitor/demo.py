@@ -1,4 +1,5 @@
 """Real Core + BudgetedCore + TaskService against MockTransport; no credentials read."""
+from contextvars import ContextVar
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -23,6 +24,8 @@ from .pools import empty_view, from_coverage
 from .store import Store, MODES
 
 CATEGORY = "artificial-analysis:coding_index"
+# 試問情境只跟著送出這題的執行流程，不改其他任務看到的 fail_tiers。
+SCENARIO = ContextVar("cloudyfan_monitor_demo_scenario", default=None)
 ADMIN_TOKEN = "cloudyfan-local-demo-operator-not-a-real-secret"
 TOKENS = {client: "local-demo-" + client + "-client-token-not-real" for client in ("studio", "agent", "batch")}
 
@@ -33,6 +36,14 @@ class Upstream:
         self.lock = threading.Lock()
         self.prefix = uuid.uuid4().hex[:12]
         self.before_response = None
+
+    def tier_fails(self, tier):
+        scenario = SCENARIO.get()
+        return tier in (self.fail_tiers if scenario is None else scenario["fail"])
+
+    def low_mid_choice(self):
+        scenario = SCENARIO.get()
+        return "mid" if scenario is None else scenario["low_mid"]
 
     def __call__(self, request):
         if request.method != "POST":
@@ -45,13 +56,13 @@ class Upstream:
             self.before_response(request)
         if request.url.path.endswith("/decisions"):
             stage = next(iter(payload["questions"]))
-            choice = "mid" if stage == "low_mid" else "high"
+            choice = self.low_mid_choice() if stage == "low_mid" else "high"
             return httpx.Response(200, json={"id": f"gen-monitor-{self.prefix}-{n}", "model": payload["model"], "provider": "TypeSafe",
                 "usage": {"cost": .0001, "input_tokens": 10, "output_tokens": 1},
                 "answers": {stage: {"type": "choice", "choice": choice,
                     "probabilities": {k: .8 if k == choice else .2 for k in payload["questions"][stage]["criteria"]}}}})
         tier = payload["model"].split("/")[-1]
-        answer = "3" if tier in self.fail_tiers else "2"
+        answer = "3" if self.tier_fails(tier) else "2"
         usage = {"prompt_tokens": 20, "completion_tokens": 1}
         if not self.unknown_cost:
             usage["cost"] = {"open_source": .0001, "low": .0003, "mid": .001, "high": .004}[tier]
@@ -123,4 +134,7 @@ def build_demo(root, *, core_root=None, seed=True, origin="http://127.0.0.1:8766
                                        "prompt": "Return only the integer sum of 1 and 1."})
         for principal in TOKENS:
             gateway.switch(store.control()["revision"], None, principal)
-    return App(gateway, admin_token=ADMIN_TOKEN, source=DemoSource(catalog), origin=origin), upstream
+    app = App(gateway, admin_token=ADMIN_TOKEN, source=DemoSource(catalog), origin=origin)
+    from .playground import Playground
+    app.playground = Playground(gateway)
+    return app, upstream

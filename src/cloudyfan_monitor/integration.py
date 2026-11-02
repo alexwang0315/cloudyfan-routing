@@ -219,4 +219,6 @@ def build_local_integration(root, *, origin="http://127.0.0.1:8766", clock=time.
                                             "prompt": "Return only the integer sum of 1 and 1."})
         for principal in TOKENS:
             app.gateway.switch(app.store.control()["revision"], None, principal)
+    from .playground import Playground
+    app.playground = Playground(app.gateway)
     return LocalIntegration(app, upstream, identities, credentials, root)

@@ -25,7 +25,8 @@ SECURITY_HEADERS = [("X-Content-Type-Options", "nosniff"), ("Referrer-Policy", "
 class App:
     def __init__(self, gateway, *, admin_token, source=None, origin="http://127.0.0.1:8766",
                  identity_store=None, billing_source=None, ollama_models=None, simulation=None,
-                 candidate_observer=None, task_observer=None, capacity_observer=None, capacity_controller=None):
+                 candidate_observer=None, task_observer=None, capacity_observer=None, capacity_controller=None,
+                 playground=None):
         if len(admin_token) < 32:
             raise ValueError("Strong operator token required")
         self.gateway, self.store, self.admin_token = gateway, gateway.store, admin_token
@@ -39,6 +40,7 @@ class App:
             raise ValueError("Controlled identity registry required")
         self.identity_store = identity_store
         self.simulation = simulation
+        self.playground = playground
         if capacity_observer is not None:
             from .capacity import CapacityObserver
             if type(capacity_observer) is not CapacityObserver:
@@ -163,6 +165,8 @@ class App:
                       "/observation-policy.css": ("observation-policy.css", "text/css; charset=utf-8"),
                       "/comparisons.js": ("comparisons.js", "text/javascript; charset=utf-8"),
                       "/comparisons.css": ("comparisons.css", "text/css; charset=utf-8"),
+                      "/playground.js": ("playground.js", "text/javascript; charset=utf-8"),
+                      "/playground.css": ("playground.css", "text/css; charset=utf-8"),
                       "/cache.js": ("cache.js", "text/javascript; charset=utf-8"),
                       "/cache.css": ("cache.css", "text/css; charset=utf-8"),
                       "/style.css": ("style.css", "text/css; charset=utf-8")}
@@ -358,6 +362,16 @@ class App:
                 raise MonitorError("simulation_not_available", 409)
             self._fields(self._body(environ), set())
             return self.simulation.start()
+        if path in ("/monitor/playground", "/monitor/playground/ask"):
+            if self.gateway.demo is not True or self.playground is None:
+                raise MonitorError("playground_not_available", 409)
+            if method == "GET" and path == "/monitor/playground":
+                return self.playground.descriptor()
+            if method == "POST" and path == "/monitor/playground/ask":
+                body = self._body(environ)
+                self._fields(body, {"prompt", "scenario"})
+                return self.playground.ask(body["prompt"], body["scenario"])
+            raise MonitorError("endpoint_not_supported", 404)
         if method == "GET" and path.startswith("/monitor/billing/evidence/"):
             return self.gateway.billing.evidence(path.removeprefix("/monitor/billing/evidence/"))
         if method == "GET" and path == "/monitor/billing":

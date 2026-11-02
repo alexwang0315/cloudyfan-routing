@@ -57,7 +57,7 @@ def main(argv=None):
             app = build_local_integration(args.data, core_root=args.core_root, origin=origin, seed=True).app
         if billing_source is not None:
             app = App(app.gateway, admin_token=app.admin_token, source=app.source, origin=app.origin,
-                      identity_store=app.identity_store, billing_source=billing_source)
+                      identity_store=app.identity_store, billing_source=billing_source, playground=app.playground)
         billing_notice = "; OpenRouter account queries require manual action" if billing_source else ""
         print(f"CloudyFan Monitor: {origin} (MockTransport models; synthetic task fees{billing_notice})", flush=True)
         if args.simulation50:

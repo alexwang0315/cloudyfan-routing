@@ -26,6 +26,13 @@ class UnresolvedCallsError(RuntimeError):
     pass
 
 
+class RequestNotSent(RuntimeError):
+    """The durable intent never reached the provider; the call is a verified zero."""
+
+
+NOT_DISPATCHED_ERRORS = frozenset({'enforcement_denied_before_post', 'connect_failed_before_request'})
+
+
 def _now():
     return datetime.now(timezone.utc).isoformat()
 
@@ -56,7 +63,23 @@ def _strict_json(raw):
 def not_dispatched(record):
     """Trusted transport evidence that the durable intent never reached POST."""
     return (record.get('not_dispatched') is True and record.get('http_status') is None
-            and record.get('raw') is None and record.get('error') == 'enforcement_denied_before_post')
+            and record.get('raw') is None and record.get('error') in NOT_DISPATCHED_ERRORS)
+
+
+def _failed_before_request(http, url, error):
+    """httpcore raises ConnectError/ConnectTimeout only while opening the TCP, TLS
+    or proxy connection, before any request byte is written. Trust that only for
+    a stock httpx client whose response hooks cannot raise after a send."""
+    import httpx
+    if not isinstance(error, (httpx.ConnectError, httpx.ConnectTimeout)):
+        return False
+    if type(http) is not httpx.Client or http.event_hooks['response']:
+        return False
+    try:
+        transport = http._transport_for_url(httpx.URL(url))
+    except Exception:
+        return False
+    return type(transport) in (httpx.HTTPTransport, httpx.MockTransport)
 
 
 def usage(record):
@@ -254,10 +277,14 @@ class Client(ReceiptStore):
                           "headers": {k.lower(): v for k, v in response.headers.items()
                                       if k.lower() in {"x-generation-id", "x-request-id"} and self.key not in v},
                           "finished_at": _now()}
-            except Exception:
+            except Exception as error:
                 record = {"call_id": cid, "request_sha256": request_hash, "http_status": None,
                           "elapsed_ms": (perf_counter() - started) * 1000, "raw": None,
-                          "interrupted": True, "error": "transport_failure", "finished_at": _now()}
+                          "transport_error": type(error).__name__, "finished_at": _now()}
+                if _failed_before_request(self.http, url, error):
+                    record.update(not_dispatched=True, error="connect_failed_before_request")
+                else:
+                    record.update(interrupted=True, error="transport_failure")
             observe = getattr(dispatch, 'response_headers', None)
             if record['http_status'] is not None and callable(observe):
                 try:

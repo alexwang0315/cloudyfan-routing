@@ -192,3 +192,49 @@ def test_saved_answer_can_be_read_when_another_call_unknown(tmp_path):
         api.call("b", client.CHAT, {})
         assert api.call("a", client.CHAT, {}) == first
     assert count == 2
+
+
+@pytest.mark.parametrize("error", [httpx.ConnectError, httpx.ConnectTimeout])
+def test_connect_failure_is_verified_zero_and_does_not_block(tmp_path, error):
+    calls = []
+    def handler(req):
+        calls.append(req)
+        if len(calls) == 1:
+            raise error("private failure detail", request=req)
+        return httpx.Response(200, json=body())
+    api, http = make(tmp_path, handler)
+    with http:
+        record = api.call("a", client.CHAT, {})
+        assert api.call("a", client.CHAT, {}) == record
+        api.call("b", client.CHAT, {})
+    info = client.usage(record)
+    assert client.not_dispatched(record) and "interrupted" not in record
+    assert record["error"] == "connect_failed_before_request"
+    assert record["transport_error"] == error.__name__
+    assert (info["cost_usd"], info["cost_source"]) == ("0", "not_dispatched")
+    assert len(calls) == 2 and "private failure detail" not in json.dumps(record)
+
+
+def test_after_send_failure_records_its_type_and_keeps_blocking(tmp_path):
+    api, http = make(tmp_path, lambda req: (_ for _ in ()).throw(httpx.RemoteProtocolError("x", request=req)))
+    with http:
+        record = api.call("a", client.CHAT, {})
+        with pytest.raises(client.UnresolvedCallsError):
+            api.call("b", client.CHAT, {})
+    assert (record["error"], record["transport_error"]) == ("transport_failure", "RemoteProtocolError")
+    assert record["interrupted"] is True and not client.not_dispatched(record)
+
+
+class _SubclassedClient(httpx.Client):
+    pass
+
+
+def test_connect_failure_through_unrecognized_http_stack_stays_unknown(tmp_path):
+    def refuse(req):
+        raise httpx.ConnectError("x", request=req)
+    for http in (_SubclassedClient(transport=httpx.MockTransport(refuse)),
+                 httpx.Client(transport=httpx.MockTransport(refuse), event_hooks={"response": [print]})):
+        with http:
+            record = client.Client(http, KEY, tmp_path / str(id(http))).call("a", client.CHAT, {})
+        assert record["error"] == "transport_failure" and not client.not_dispatched(record)
+

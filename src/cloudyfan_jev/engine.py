@@ -213,6 +213,8 @@ class Core:
 
     def _checked(self, cid, url, payload, accepted, provider, *, allow_rejection=False):
         record = self.client.call(cid, url, payload)
+        if transport.not_dispatched(record):
+            raise transport.RequestNotSent(f"Dispatch stopped: request not sent ({record['error']}): {cid}")
         info = transport.usage(record)
         if info['cost_unknown'] and info['generation_id']:
             record = self.client.reconcile(cid)

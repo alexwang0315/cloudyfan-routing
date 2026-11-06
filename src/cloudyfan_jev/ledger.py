@@ -2,7 +2,7 @@
 from decimal import Decimal
 import json
 
-from .client import usage
+from .client import not_dispatched, usage
 
 
 def summarize(client):
@@ -27,6 +27,8 @@ def summarize(client):
                 row['endpoint'] = intent['url']
                 local = info.get('execution_kind') == 'local'
                 identity = info.get('local_call_id') if local else info['generation_id']
+                if not_dispatched(record):
+                    identity = 'not-dispatched:' + directory.name
                 identity_key = ('local' if local else 'cloud', identity)
                 if local:
                     row.update({k: info[k] for k in ('local_call_id', 'run_id', 'execution_kind',

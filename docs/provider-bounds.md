@@ -103,6 +103,14 @@ Restart/sync preserves it and does not resend it. A transport exception after PO
 may have been billed and retains the existing unknown-cost stop. A real cap
 breach still invokes the durable shared-account violation logic.
 
+連線階段失敗也算 `not_dispatched`（2026-11-06）：httpx 在建立 TCP、TLS 或代理連線時丟出
+`ConnectError`／`ConnectTimeout`，此時請求內容一個位元組都還沒寫出，紀錄為
+`error: connect_failed_before_request`、費用 0、不擋後續呼叫。只有標準 `httpx.Client`
+（沒有 response hook）搭配 `HTTPTransport` 或 `MockTransport` 才這樣判定；其他網路堆疊照舊記成
+`transport_failure`。所有網路錯誤都另記 `transport_error`（例外類別名稱，不含訊息內容）。
+連線建立後才發生的錯誤（`ReadTimeout`、`RemoteProtocolError` 等）可能已計費，維持原本的停止規則。
+Engine 遇到未送出的呼叫會丟出 `RequestNotSent`，只停止這一次 run。
+
 Verifier configuration/credential/contract hashes are frozen in BudgetedCore and
 registered HTTP descriptors. Changed enforcement rejects reuse of a frozen task.
 Raw supplier statements, issuer secrets and credentials are excluded from public

@@ -249,3 +249,20 @@ def test_unknown_paid_fee_stops_before_classifier_and_remains_in_ledger(tmp_path
     report = summarize(engine.client)
     assert report['unknown_calls'] == 1 and report['total_api_usd'] is None
     assert len(api.requests) == 1 and report['calls'] == 1
+
+
+def test_connect_failure_stops_only_its_run_and_next_run_dispatches(tmp_path):
+    from cloudyfan_jev.client import RequestNotSent
+    from cloudyfan_jev.ledger import summarize
+    api, wan = API(first='2'), {'up': False}
+    def endpoint(req):
+        if not wan['up']:
+            raise httpx.ConnectError('offline', request=req)
+        return api(req)
+    engine = core(tmp_path, endpoint)
+    with pytest.raises(RequestNotSent, match='connect_failed_before_request'):
+        engine.run('offline', TASK, ArithmeticEnvironment, contract_version='v1')
+    wan['up'] = True
+    assert engine.run('online', TASK, ArithmeticEnvironment, contract_version='v1')['status'] == 'passed'
+    report = summarize(engine.client)
+    assert report['unknown_calls'] == 0 and len(api.requests) == 1

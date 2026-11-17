@@ -688,7 +688,49 @@ class BudgetedCore:
         if callable(verifier) and verifier(transport, endpoint, payload, bound) is not True:
             raise BudgetError('Original POST fee authority denied')
 
+    def _model_cap(self, profile, key):
+        model = profile[key]
+        bound = self.model_bounds.get(model)
+        if bound is None:
+            raise BudgetError('No confirmed model upper bound')
+        self._verify('model', model, profile, bound)
+        return money(bound.usd)
+
+    def _tool_max(self):
+        tool_max = Decimal(0)
+        for name, policy in self.tool_bounds.items():
+            self._verify('tool', name, {'external': policy.external}, policy.bound)
+            if not policy.external and money(policy.bound.usd) != 0:
+                raise BudgetError('Local deterministic tools need confirmed zero API fee')
+            tool_max = max(tool_max, money(policy.bound.usd))
+        return tool_max
+
+    def _admit_advisor_first(self):
+        """路徑二最壞預留（ADR 0034 第 6 點）。
+
+        顧問 1 次，加上每次作答（含顧問直接回答也計一次）以池內最高上界乘以
+        回合上限，再加上每次作答的裁判次數。缺任何一個上界就拒跑；
+        開源角色同樣要有上界，零模型費用情境只影響記帳呈現，不減少預留。
+        """
+        config = getattr(self.core, 'advisor_first', None)
+        if config is None:
+            raise ValueError('Unknown workflow mode')
+        limits = self.core.limits
+        pool = config.resolved_pool(self.core.profiles)
+        attempts = config.max_attempts
+        amount = _exact((self._model_cap(config.advisor, 'model_version'),
+                         _exact((max(self._model_cap(p, 'model_version') for p in pool.values()),),
+                                attempts * limits.max_turns)))
+        if config.judge_calls_per_attempt:
+            amount = _exact((amount, _exact((self._model_cap(config.judge, 'model_version'),),
+                                            attempts * config.judge_calls_per_attempt)))
+        tool_count = attempts * limits.max_turns * limits.max_tool_calls
+        return _exact((amount, _exact((self._tool_max(),), tool_count)))
+
     def _admit(self, mode):
+        from .advisor import ADVISOR_FIRST
+        if mode == ADVISOR_FIRST:
+            return self._admit_advisor_first()
         from .engine import generation_tiers
         phases = generation_tiers(mode)
         backup_hook = getattr(self.core, 'budget_reservation_plan', None)
@@ -697,13 +739,7 @@ class BudgetedCore:
         reachable = qcs.reservation_plan() if qcs is not None else None
         if reachable is not None:
             phases = reachable['phases']
-        def model_cap(profile, key):
-            model = profile[key]
-            bound = self.model_bounds.get(model)
-            if bound is None:
-                raise BudgetError('No confirmed model upper bound')
-            self._verify('model', model, profile, bound)
-            return money(bound.usd)
+        model_cap = self._model_cap
         if backup is not None:
             profiles = backup.get('generation_profiles')
             generation_count = backup.get('max_generation_calls')
@@ -734,12 +770,7 @@ class BudgetedCore:
                 if count:
                     amount = _exact((amount, _exact((model_cap(self.core.decision, 'version'),), count)))
             tool_count = len(phases) * self.core.limits.max_turns * self.core.limits.max_tool_calls
-        tool_max = Decimal(0)
-        for name, policy in self.tool_bounds.items():
-            self._verify('tool', name, {'external': policy.external}, policy.bound)
-            if not policy.external and money(policy.bound.usd) != 0:
-                raise BudgetError('Local deterministic tools need confirmed zero API fee')
-            tool_max = max(tool_max, money(policy.bound.usd))
+        tool_max = self._tool_max()
         # Legacy Core uses per-turn tool limits; backup runtime supplies its
         # independently enforced global tool envelope above.
         amount = _exact((amount, _exact((tool_max,), tool_count)))

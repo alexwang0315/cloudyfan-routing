@@ -2,14 +2,19 @@
 from decimal import Decimal
 import json
 
+from .advisor import ROLES, role_of
 from .client import not_dispatched, usage
 
 
-def summarize(client):
+def summarize(client, *, advisor=None):
     """Amounts with unknown evidence are never represented as a known grand total.
 
     Use this across the entire client root, not a sum of completed run results.
     Returned rows omit prompts, answers, credentials and full response bodies.
+
+    提供路徑二的 ``advisor``（AdvisorConfig）時，依 call_id 約定在每列加上
+    ``role``，並另列各角色金額與「明示開源角色計為零」的情境金額；
+    未提供時輸出與既有版本完全相同。
     """
     rows, seen = [], set()
     known, unknown = Decimal(0), 0
@@ -47,6 +52,29 @@ def summarize(client):
                 pass
             unknown += bool(row['cost_unknown'])
             rows.append(row)
-    return {'calls': len(rows), 'known_unique_cost_usd': str(known), 'unknown_calls': unknown,
-            'total_api_usd': None if unknown else str(known), 'rows': rows,
-            'host_and_human_usd': None}
+    summary = {'calls': len(rows), 'known_unique_cost_usd': str(known), 'unknown_calls': unknown,
+               'total_api_usd': None if unknown else str(known), 'rows': rows,
+               'host_and_human_usd': None}
+    if advisor is not None:
+        summary.update(_roles(rows, advisor, unknown))
+    return summary
+
+
+def _roles(rows, advisor, unknown):
+    totals = {role: {'calls': 0, 'known_usd': Decimal(0), 'unknown_calls': 0,
+                     'open_source': getattr(advisor, role)['open_source']} for role in ROLES}
+    scenario = Decimal(0)
+    for row in rows:
+        row['role'] = role = role_of(row['call_id'])
+        open_source = role is not None and totals[role]['open_source'] is True
+        if not row['cost_unknown'] and row['cost_usd'] is not None and not open_source:
+            scenario += Decimal(row['cost_usd'])
+        if role is None:
+            continue
+        totals[role]['calls'] += 1
+        if row['cost_unknown']:
+            totals[role]['unknown_calls'] += 1
+        elif row['cost_usd'] is not None:
+            totals[role]['known_usd'] += Decimal(row['cost_usd'])
+    return {'roles': {role: {**t, 'known_usd': str(t['known_usd'])} for role, t in totals.items()},
+            'hypothetical_open_source_roles_zero_usd': None if unknown else str(scenario)}

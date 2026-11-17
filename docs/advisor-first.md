@@ -19,8 +19,8 @@
   - `run()`：manifest 凍結、`advisor-decision.json`、`validation-a0.json`（顧問回答的驗收）與 `result.json` 都是不可覆寫的證據；重跑時內容不同即拒絕。
 - 收據 `call_id`：顧問 `run-<id>-advisor`；顧問回答記為第 0 次作答（沒有生成呼叫）；第 n 組建議的作答為 `run-<id>-a<n>-t<turn>`。同一 `call_id` 續跑讀舊收據，不重付。
 - 作答模型只收 `system` 與原題，不收顧問的判斷理由或顧問的回答草稿。
-- 沒有驗收器（驗收回 `passed: None`）時，顧問直接回答記為 `unverifiable`，不算通過。
-- 結果欄位：`advisor`（`calls`、`decision`：outcome、有效建議與理由、作廢清單、`score_snapshot`）、`attempts`（每次加註 `source`＝`advisor_answer`／`delegated`、`setting`、`pool_tier`、`recommendation_rank`）、`status`（`passed`／`failed`／`unverifiable`／`advisor_incomplete`）、`end_reason`（`passed`／`attempt_limit`／`recommendations_exhausted`／`advisor_incomplete`）、`selection` 恆為 `None`（不走 Jev）、`costs`（含 `advisor_usd`）。
+- 沒有驗收器（驗收回 `passed: None`）時，顧問直接回答記為 `unverifiable`，不算通過，並**就此停止、不再改派**（2026-11-17 使用者決定；`end_reason`＝`advisor_answer_unverifiable`）。改派模型作答若無法確認，仍照原規則改派下一組。
+- 結果欄位：`advisor`（`calls`、`decision`：outcome、有效建議與理由、作廢清單、`score_snapshot`）、`attempts`（每次加註 `source`＝`advisor_answer`／`delegated`、`setting`、`pool_tier`、`recommendation_rank`）、`status`（`passed`／`failed`／`unverifiable`／`advisor_incomplete`）、`end_reason`（`passed`／`attempt_limit`／`recommendations_exhausted`／`advisor_incomplete`／`advisor_answer_unverifiable`）、`selection` 恆為 `None`（不走 Jev）、`costs`（含 `advisor_usd`）。
 - `engine.py` 的小改動：
   - `run_advisor_first()` 改為呼叫 `advisor_flow.run`。
   - 新增 `_generation_profile(tier)`：一般層級照舊查 `profiles`；路徑二作答收據的 tier 記為 `pool:<設定>`，查凍結的池內設定。`_attempt` 與 `_with_costs` 改用它，其他模式行為不變。
@@ -35,7 +35,6 @@
 
 - 迴圈守衛裁判已由 #74 接上（見 `docs/loop-guard.md`）；契約經驗卡已由 #76 接上（見 `docs/advisor-experience-card.md`）。
 - 改派作答共用同一個工作區（與路徑一相同，工具動作照舊重播），但新模型只看到原題，看不到前一次的驗收診斷；這是依「只收原題」的字面規則，是否該附公開驗收診斷待實測後再議。
-- 顧問直接回答若是 `unverifiable`，目前仍會繼續改派（比照路徑一「無法確認時」升級）；沒有驗收器的題目因此會用滿作答次數。是否改為無驗收器時不改派，待使用者決定。
 - 顧問直接回答只驗收其文字回答，不能使用工具；需要改動工作區的題目，顧問實際上只能選改派。
 - 池內設定與評分快照入池資格的自動對照仍未做：目前以凍結的 `pool` 為準，`score_snapshot` 只記錄身分。
 - 容量佇列（`queue_initial`）尚未支援 `advisor_first`。

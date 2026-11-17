@@ -213,6 +213,16 @@ def test_direct_answer_without_verifier_stays_unverifiable(tmp_path):
     assert result['final_public_pass'] is None
 
 
+def test_unverifiable_direct_answer_stops_without_dispatching_recommendations(tmp_path):
+    # 2026-11-17 使用者決定：沒有驗收器時，顧問直接回答後就停止，不再改派。
+    api = API(decision('answer', '2'))
+    result = run(make_core(tmp_path, api), env=NoVerifier)
+    assert api.models() == [ADVISOR_MODEL]
+    assert [a['source'] for a in result['attempts']] == ['advisor_answer']
+    assert result['status'] == 'unverifiable'
+    assert result['end_reason'] == 'advisor_answer_unverifiable'
+
+
 def test_delegated_model_gets_only_the_original_task(tmp_path):
     reason = 'SECRET-ADVISOR-REASONING'
     recs = [rec('mid', reason=reason), rec('high', reason=reason)]

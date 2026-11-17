@@ -186,8 +186,12 @@ def run(core, run_id, task, environment_factory, *, contract_version, experience
                              'verification_ms': (perf_counter() - started) * 1000,
                              'cumulative_actions': 0})
         end_reason = 'advisor_incomplete' if decision['outcome'] == 'incomplete' else 'recommendations_exhausted'
+        # 2026-11-17 使用者決定：沒有驗收器（passed 為 None）時，顧問直接回答後就停止，不再改派。
+        if attempts and attempts[-1]['public']['passed'] is None:
+            end_reason = 'advisor_answer_unverifiable'
         for order, recommendation in enumerate(decision['recommendations'], start=1):
-            if attempts and attempts[-1]['public']['passed'] is True:
+            if attempts and (attempts[-1]['public']['passed'] is True
+                             or end_reason == 'advisor_answer_unverifiable'):
                 break
             if len(attempts) >= config.max_attempts:
                 end_reason = 'attempt_limit'

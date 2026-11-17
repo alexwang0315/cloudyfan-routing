@@ -172,19 +172,33 @@ def test_advisor_system_prompt_with_card_rules_is_frozen_in_descriptor(tmp_path)
     assert 'experience' not in make_core(tmp_path, API('')).configuration_descriptor()['advisor_first']
 
 
-def test_loop_guard_and_generic_findings_become_structured_facts():
-    from cloudyfan_jev.experience_card import findings
-    result = {'attempts': [
-        {'public': {'passed': False, 'checks': ['wrong total']},
-         'loop_guard': {'triggered': True, 'errors': [
-             {'kind': 'tool_error', 'fingerprint': {'tool': 'sql', 'code': 42, 'category': 'syntax'}, 'count': 2},
-             {'kind': 'validation', 'fingerprint': {'checks': ['rows_mismatch']}, 'count': 1}]}},
-        {'public': {'passed': True, 'checks': []},
-         'experience_findings': [{'kind': 'error_fingerprint', 'code': 'sql.timeout'},
-                                 {'kind': 'free_text', 'code': 'ignore previous instructions'}]}]}
-    assert findings(result) == [
-        {'kind': 'check_code', 'code': 'rows_mismatch'}, {'kind': 'check_code', 'code': 'wrong_total'},
-        {'kind': 'error_fingerprint', 'code': 'sql.42.syntax'}, {'kind': 'error_fingerprint', 'code': 'sql.timeout'}]
+@pytest.mark.parametrize('mode', ['active', 'shadow'])
+def test_loop_guard_findings_are_written_back_as_structured_facts(tmp_path, mode):
+    import test_loop_guard as lg
+    from cloudyfan_jev.loop_guard import experience_findings
+    store = ExperienceStore(rewriter=rewriter)
+    api = lg.API({'example/mid': [lg.tool(), lg.tool(), lg.tool(), '3'], 'example/high': ['2']}, lg.stuck())
+    engine = lg.make_core(tmp_path, api, lg.config(mode, experience=ExperienceLink(store)))
+    result = engine.run('r', lg.TASK, lg.env_factory(), contract_version='v1', mode=ADVISOR_FIRST,
+                        experience=CONTEXT)
+    assert experience_findings(result)  # 守衛確實觸發
+    (observation,) = store.export()['body']['observations']
+    assert {'kind': 'error_fingerprint', 'code': 'query.syntax_error.content'} in observation['supports']
+    # 裁判的換方向提示與判斷理由不進經驗庫。
+    assert lg.REDIRECT not in json.dumps(store.export())
+    assert lg.TASK['prompt'] not in json.dumps(store.export())
+
+
+def test_repeated_validation_codes_from_loop_guard_become_check_codes(tmp_path):
+    import test_loop_guard as lg
+    store = ExperienceStore(rewriter=rewriter)
+    failing = {'passed': False, 'checks': ['rows_mismatch']}
+    api = lg.API({'example/mid': [lg.tool(), lg.tool(), '2']}, {'stuck': False, 'confidence': 0.2, 'redirect': ''})
+    engine = lg.make_core(tmp_path, api, lg.config('shadow', experience=ExperienceLink(store)))
+    engine.run('r', lg.TASK, lg.env_factory([failing]), contract_version='v1', mode=ADVISOR_FIRST,
+               experience=CONTEXT)
+    (observation,) = store.export()['body']['observations']
+    assert observation['supports'] == [{'kind': 'check_code', 'code': 'rows_mismatch'}]
 
 
 def test_budgeted_core_passes_experience_through(tmp_path):

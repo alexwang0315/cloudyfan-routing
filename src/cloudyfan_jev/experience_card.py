@@ -159,34 +159,28 @@ def findings(result):
 
     來源：
     - 未通過的作答之公開驗收檢查碼 → ``check_code``；
-    - 迴圈守衛紀錄 ``attempt['loop_guard']['errors']``（#74：``tool_error`` 指紋或
-      ``validation`` 檢查碼）；
-    - 通用介面 ``attempt['experience_findings']``：``[{'kind', 'code'}]``，kind 只收
-      ``error_fingerprint``／``check_code``。
+    - 迴圈守衛發現（#74 ``loop_guard.experience_findings``，影子與主動模式皆收）：
+      ``tool_error`` 指紋（工具.code.category）→ ``error_fingerprint``；
+      ``validation`` 檢查碼 → ``check_code``。裁判判斷與處置不進經驗庫。
     """
+    from .loop_guard import experience_findings
     items = set()
     for attempt in result.get('attempts', []):
         public = attempt.get('public') or {}
         if public.get('passed') is False:
-            for check in public.get('checks') or []:
-                if isinstance(check, str) and _code(check):
-                    items.add(('check_code', _code(check)))
-        guard = attempt.get('loop_guard') or {}
-        if guard.get('triggered'):
-            for error in guard.get('errors') or []:
-                fingerprint = error.get('fingerprint') or {}
-                if error.get('kind') == 'tool_error':
-                    parts = [fingerprint.get(k) for k in ('tool', 'code', 'category')]
-                    code = _code('.'.join(str(p) for p in parts if p is not None))
-                    if code:
-                        items.add(('error_fingerprint', code))
-                elif error.get('kind') == 'validation':
-                    items.update(('check_code', _code(c)) for c in fingerprint.get('checks') or []
-                                 if isinstance(c, str) and _code(c))
-        for finding in attempt.get('experience_findings') or []:
-            if (isinstance(finding, dict) and finding.get('kind') in ('error_fingerprint', 'check_code')
-                    and isinstance(finding.get('code'), str) and _code(finding['code'])):
-                items.add((finding['kind'], _code(finding['code'])))
+            items.update(('check_code', _code(c)) for c in public.get('checks') or []
+                         if isinstance(c, str) and _code(c))
+    for finding in experience_findings(result):
+        for error in finding['errors']:
+            fingerprint = error['fingerprint']
+            if error['kind'] == 'tool_error':
+                parts = [fingerprint.get(k) for k in ('tool', 'code', 'category')]
+                code = _code('.'.join(str(p) for p in parts if p is not None))
+                if code:
+                    items.add(('error_fingerprint', code))
+            elif error['kind'] == 'validation':
+                items.update(('check_code', _code(c)) for c in fingerprint['checks']
+                             if isinstance(c, str) and _code(c))
     return [{'kind': kind, 'code': code} for kind, code in sorted(items)]
 
 

@@ -35,7 +35,7 @@ core.run(run_id, task, env, contract_version='v1', mode='advisor_first',
   - 大小上限：顧問看到的卡片 JSON（UTF-8）≤ 2048 bytes；超過時從尾端**整條**省略解題事實，並記 `facts_omitted`；連一條事實都沒有仍超過就拒絕。
   - `facts_block()`：參考區塊沿用 `context_preparation` 的固定框架 `\n\n[參考區塊 <id>]\n<text>`，區塊 id 為 `experience-<卡片編號>`（卡片編號是內容雜湊，即版本）。沒有事實時不附區塊，原題一字不變。
   - `freeze()`：建題時組卡，存成不可覆寫證據 `runs/<id>/experience-card.json`；續跑讀回、核對雜湊後沿用同一張，不重新讀經驗庫。卡片被改動就拒絕續跑。
-  - `write_back()`：每題結束回寫一筆觀察——顧問直接回答記 `role: advisor`，改派記 `role: solver`，結果 `passed`／`failed`／`unverifiable`、實際費用、模型池快照；`supports` 取未通過作答的公開檢查碼、迴圈守衛紀錄（`attempt['loop_guard']['errors']`，#74 的格式）與通用介面 `attempt['experience_findings']`（`[{kind, code}]`，只收 `error_fingerprint`／`check_code`）。只存代碼，不存題目或答案。同一題重寫內容相同時不重複計算；存檔後、回寫前中斷時，下次讀已完成結果會補寫。已被要求刪除的題目不回寫。
+  - `write_back()`：每題結束回寫一筆觀察——顧問直接回答記 `role: advisor`，改派記 `role: solver`，結果 `passed`／`failed`／`unverifiable`、實際費用、模型池快照；`supports` 取未通過作答的公開檢查碼、#74 `loop_guard.experience_findings()` 的發現（主動與影子模式都收；`tool_error` 指紋轉成 `error_fingerprint`「工具.code.category」，`validation` 檢查碼轉成 `check_code`；裁判判斷、換方向提示不進經驗庫）。只存代碼，不存題目或答案。同一題重寫內容相同時不重複計算；存檔後、回寫前中斷時，下次讀已完成結果會補寫。已被要求刪除的題目不回寫。
 - `experience.py`（#75）小擴充：代碼允許 `/`（模型版本如 `vendor/model-v1`）；成績可帶選用的 `pool_snapshot`；`model_stats(..., pool_snapshot=)` 篩選；`is_withdrawn()`。舊快照格式不變。
 - `advisor.py`：`AdvisorConfig.experience`；設定時描述多凍結 `experience`（卡片版本、上限、樣本門檻、顧問提示附註、事實區塊標頭）。未設定時描述與 #73 完全相同。
 - `advisor_flow.py`：顧問輸入多 `experience_card`，系統提示補一段固定附註（只是參考資料，不能改題目、池或權限）；結果多 `experience`（卡片編號、經驗庫版本、事實區塊 id）。
@@ -44,7 +44,7 @@ core.run(run_id, task, env, contract_version='v1', mode='advisor_first',
 ## 已測（全部離線，MockTransport）
 
 - `tests/test_experience_card.py`（10 項）：空庫全標樣本不足；滿 5 題才給通過率；`unverifiable` 另計；池內成績與平均成本；換模型池快照、換模型版本、換供應商都不沿用；事實區塊格式與版本；共用事實用改寫敘述；2 KB 上限與整條省略；關閉共用使用只看自己。
-- `tests/test_advisor_experience.py`（13 項）：顧問收到 ≤ 2 KB 卡片；作答模型只收事實區塊；沒有事實時原題不變；結果與發現回寫；`unverifiable` 回寫；卡片凍結、續跑沿用、回寫只算一次；卡片被竄改拒絕續跑；不傳經驗時路徑二不變；路徑一拒收；設定與身分檢查；描述凍結；迴圈守衛／通用發現轉成結構化事實；`BudgetedCore` 轉傳。
+- `tests/test_advisor_experience.py`（15 項）：顧問收到 ≤ 2 KB 卡片；作答模型只收事實區塊；沒有事實時原題不變；結果與發現回寫；`unverifiable` 回寫；卡片凍結、續跑沿用、回寫只算一次；卡片被竄改拒絕續跑；不傳經驗時路徑二不變；路徑一拒收；設定與身分檢查；描述凍結；迴圈守衛（主動／影子）的工具錯誤指紋與重複驗收檢查碼以真實 #74 流程回寫；`BudgetedCore` 轉傳。
 
 ## 未做／未知
 

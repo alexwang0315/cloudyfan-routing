@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 import re
 
 from .generation_request import reasoning_fields
+from .loop_guard import LoopGuardConfig
 
 ADVISOR_FIRST = 'advisor_first'
 VERSION = 'advisor-first-config-v1'
@@ -54,6 +55,7 @@ class AdvisorConfig:
     max_attempts: int = DEFAULT_MAX_ATTEMPTS
     judge_calls_per_attempt: int = DEFAULT_JUDGE_CALLS_PER_ATTEMPT
     pool: dict | None = field(default=None)
+    loop_guard: LoopGuardConfig = field(default_factory=LoopGuardConfig)
     # 契約經驗（#76，ADR 0036 第 10、11 點）：ExperienceLink；None 時路徑二行為不變。
     experience: object = field(default=None)
 
@@ -67,6 +69,8 @@ class AdvisorConfig:
             raise ValueError('max_attempts must be an integer from 1 to 3')
         if type(self.judge_calls_per_attempt) is not int or not 0 <= self.judge_calls_per_attempt <= 1:
             raise ValueError('judge_calls_per_attempt must be 0 or 1')
+        if not isinstance(self.loop_guard, LoopGuardConfig):
+            raise ValueError('loop_guard requires a LoopGuardConfig')
         if self.pool is not None:
             object.__setattr__(self, 'pool', deepcopy(self.pool))
         if self.experience is not None:
@@ -94,6 +98,7 @@ class AdvisorConfig:
                 'advisor': deepcopy(self.advisor), 'judge': deepcopy(self.judge),
                 'score_snapshot': self.score_snapshot, 'max_attempts': self.max_attempts,
                 'judge_calls_per_attempt': self.judge_calls_per_attempt,
+                'loop_guard': self.loop_guard.descriptor(),
                 'pool': self.resolved_pool(profiles),
                 # 只凍結卡片規則；經驗庫內容是執行期狀態，以每題凍結的卡片為準。
                 **({} if self.experience is None else {'experience': self.experience.descriptor()})}

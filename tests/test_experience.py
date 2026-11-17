@@ -341,3 +341,57 @@ def test_impossible_dates_are_rejected():
     store = ExperienceStore(rewriter=FakeAdvisor())
     with pytest.raises(ValueError):
         observe(store, "t1", "c1", day=31 + 1)
+
+
+# ---- 跨程序共用經驗庫檔案：重讀–修改–原子存檔（檔案鎖） ----
+
+def _obs(task):
+    return {"task_id": task, "client_id": "c1", "scope": SCOPE,
+            "settings": {"contribute": True, "use": True}, "created_at": "2026-11-01",
+            "supports": [FINGERPRINT], "contradicts": []}
+
+
+def test_two_links_writing_the_same_file_do_not_lose_each_others_records(tmp_path):
+    from cloudyfan_jev.experience_card import ExperienceLink
+    path = tmp_path / "experience.json"
+    ExperienceStore(rewriter=generic_rewriter).save(path)
+    # 兩個程序各自在啟動時讀進同一個檔案，之後交錯回寫。
+    first = ExperienceLink(ExperienceStore.open(path, rewriter=generic_rewriter), path)
+    second = ExperienceLink(ExperienceStore.open(path, rewriter=generic_rewriter), path)
+    assert first.record(_obs("t1")) is True
+    assert second.record(_obs("t2")) is True
+    assert first.record(_obs("t3")) is True
+    on_disk = ExperienceStore.open(path, rewriter=generic_rewriter)
+    assert sorted(on_disk._observations) == ["t1", "t2", "t3"]
+    # 記憶體中的經驗庫也跟上檔案最新內容（之後的卡片看得到另一方的紀錄）。
+    assert sorted(first.store._observations) == ["t1", "t2", "t3"]
+
+
+def test_update_serializes_concurrent_writers_with_a_file_lock(tmp_path):
+    import threading
+    import time
+    path = tmp_path / "experience.json"
+    ExperienceStore(rewriter=generic_rewriter).save(path)
+    inside = threading.Event()
+
+    def slow(store):
+        inside.set()
+        time.sleep(0.2)  # 持鎖期間另一方必須等待，否則兩方都讀到舊內容
+        store.record(_obs("slow"))
+
+    worker = threading.Thread(target=ExperienceStore.update, args=(path, slow),
+                              kwargs={"rewriter": generic_rewriter})
+    worker.start()
+    inside.wait(5)
+    ExperienceStore.update(path, lambda store: store.record(_obs("fast")), rewriter=generic_rewriter)
+    worker.join(5)
+    assert sorted(ExperienceStore.open(path, rewriter=generic_rewriter)._observations) == ["fast", "slow"]
+
+
+def test_update_creates_missing_file_from_initial_store_and_returns_fn_result(tmp_path):
+    path = tmp_path / "experience.json"
+    initial = ExperienceStore(rewriter=generic_rewriter, salt="fixedsalt")
+    store, value = ExperienceStore.update(path, lambda s: (s.record(_obs("t1")), "ok")[1],
+                                          rewriter=generic_rewriter, initial=initial)
+    assert value == "ok" and sorted(store._observations) == ["t1"]
+    assert ExperienceStore.open(path, rewriter=generic_rewriter).export()["body"]["salt"] == "fixedsalt"

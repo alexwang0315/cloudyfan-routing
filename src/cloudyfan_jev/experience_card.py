@@ -231,9 +231,22 @@ class ExperienceLink:
                 'min_sample': MIN_SAMPLE, 'advisor_note': ADVISOR_NOTE, 'facts_header': FACTS_HEADER}
 
     def record(self, observation):
-        if self.store.is_withdrawn(observation['task_id']):
-            return False
-        self.store.record(observation)
-        if self.path is not None:
-            self.store.save(self.path)
-        return True
+        """回寫一題觀察。給定 ``path`` 時走 ``ExperienceStore.update``：持檔案鎖重讀檔案最新內容、
+        記錄後原子存檔，再讓記憶體中的經驗庫跟上，避免多個程序互相覆蓋。
+        路徑二（``experience_card.write_back``）與路徑一加強版（``cloudyfan_plus.write_back``）都經過這裡。"""
+        if self.path is None:
+            if self.store.is_withdrawn(observation['task_id']):
+                return False
+            self.store.record(observation)
+            return True
+
+        def apply(store):
+            if store.is_withdrawn(observation['task_id']):
+                return False
+            store.record(observation)
+            return True
+        latest, recorded = ExperienceStore.update(self.path, apply, rewriter=self.store._rewriter,
+                                                  initial=self.store)
+        if latest is not self.store:
+            self.store._adopt(latest)
+        return recorded

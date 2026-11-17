@@ -5,7 +5,9 @@
 """
 from collections import defaultdict
 from collections.abc import Mapping
+from contextlib import contextmanager
 from decimal import Decimal, InvalidOperation
+import fcntl
 import hashlib
 from datetime import date, timedelta
 import json
@@ -439,3 +441,40 @@ class ExperienceStore:
     @classmethod
     def open(cls, path, *, rewriter):
         return cls.load(json.loads(Path(path).read_bytes()), rewriter=rewriter)
+
+    @staticmethod
+    @contextmanager
+    def _locked(path):
+        """以旁邊的 ``<檔名>.lock`` 取得排他檔案鎖（fcntl.flock），跨程序與跨執行緒都會互斥。"""
+        path = Path(path)
+        with open(path.with_name(path.name + ".lock"), "a+b") as handle:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+    @classmethod
+    def update(cls, path, fn, *, rewriter, initial=None):
+        """多個程序共用同一個經驗庫檔案時唯一安全的寫法：持檔案鎖「重讀–修改–原子存檔」。
+
+        持鎖期間從檔案重讀最新內容（檔案不存在時用 ``initial``，否則新建空庫），
+        呼叫 ``fn(store)`` 修改，再以 ``save``（暫存檔＋``os.replace``）原子寫回。
+        回傳 ``(store, fn 的回傳值)``；``store`` 是寫回後的最新內容。
+        直接對記憶體中的經驗庫 ``record`` 後再 ``save`` 會覆蓋其他程序同時寫入的紀錄。
+        """
+        path = Path(path)
+        with cls._locked(path):
+            if path.exists():
+                store = cls.open(path, rewriter=rewriter)
+            else:
+                store = initial if initial is not None else cls(rewriter=rewriter)
+            value = fn(store)
+            store.save(path)
+        return store, value
+
+    def _adopt(self, other):
+        """把記憶體中的狀態換成 ``other``（檔案最新內容）；改寫函式保留自己的。"""
+        rewriter = self._rewriter
+        self.__dict__.update(other.__dict__)
+        self._rewriter = rewriter

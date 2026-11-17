@@ -19,6 +19,7 @@ from typing import Protocol
 
 from . import client as transport
 from . import routing
+from .advisor import ADVISOR_FIRST, ROLES, AdvisorConfig
 from .diagnostics import DiagnosticContract
 from .generation_request import reasoning_fields, request_model
 from .privacy import PolicyDenied
@@ -142,7 +143,8 @@ class Core:
     enforceable spending limits, validation correctness and tool sandboxing.
     """
     def __init__(self, client, profiles, decision_profile, *, limits=None, system=SYSTEM,
-                 local_backend=None, diagnostic_contract=None, execution_policy=None, selection_policy=None):
+                 local_backend=None, diagnostic_contract=None, execution_policy=None, selection_policy=None,
+                 advisor_first=None):
         self.client = client
         self.profiles = deepcopy(profiles)
         self.decision = deepcopy(decision_profile)
@@ -174,6 +176,21 @@ class Core:
         self.execution_policy = deepcopy(execution_policy)
         if self.selection_policy is not None and self.selection_policy.plan['profiles'] != self.profiles:
             raise ValueError('Selection policy profiles differ from Core')
+        # 路徑二（ADR 0034）明示選用；None 時一切行為與既有版本相同。
+        if advisor_first is not None:
+            if not isinstance(advisor_first, AdvisorConfig):
+                raise ValueError('advisor_first requires an AdvisorConfig')
+            advisor_first.resolved_pool(self.profiles)
+        self.advisor_first = advisor_first
+
+    def workflow_modes(self):
+        """可用的路由模式；只有提供顧問設定時才註冊路徑二。"""
+        modes = tuple(INITIAL)
+        return modes + (ADVISOR_FIRST,) if getattr(self, 'advisor_first', None) is not None else modes
+
+    def run_advisor_first(self, run_id, task, environment_factory, *, contract_version):
+        """路徑二的作答流程掛鉤；#73 實作。目前不做任何 I/O 即拒絕。"""
+        raise NotImplementedError('advisor_first flow is not implemented yet (#73)')
 
     def configuration_descriptor(self):
         """Snapshot all behavior-defining Core configuration, without runtime state.
@@ -197,6 +214,8 @@ class Core:
         rejection_policy = getattr(self.client, 'rejection_fee_policy', None)
         if rejection_policy is not None:
             descriptor['rejection_fee_policy'] = rejection_policy.descriptor()
+        if getattr(self, 'advisor_first', None) is not None:
+            descriptor['advisor_first'] = self.advisor_first.descriptor(self.profiles)
         return deepcopy(descriptor)
 
     def execution_contract_descriptor(self, contract_version):
@@ -441,6 +460,10 @@ class Core:
     def _with_costs(self, result):
         result = deepcopy(result)
         refs = [c for a in result['attempts'] for c in a['calls']] + (result.get('selection') or {}).get('calls', [])
+        advisor = getattr(self, 'advisor_first', None)
+        if advisor is not None:
+            refs += (result.get('advisor') or {}).get('calls', [])
+        roles = {role: Decimal(0) for role in ROLES}
         cost, scenario, classifier = Decimal(0), Decimal(0), Decimal(0)
         unknown = 0
         for call in refs:
@@ -453,7 +476,13 @@ class Core:
                 continue
             record = self.client._load(self.client._directory(call['call_id']))
             info = transport.usage(record)
-            profile = self.decision if call['tier'] == 'classifier' else self.profiles[call['tier']]
+            if call['tier'] in ROLES:
+                # 顧問／裁判角色只在明示設定路徑二時存在；身分照樣以收據核對。
+                if advisor is None:
+                    raise RuntimeError('Role call without advisor configuration: ' + call['call_id'])
+                profile = getattr(advisor, call['tier'])
+            else:
+                profile = self.decision if call['tier'] == 'classifier' else self.profiles[call['tier']]
             accepted = ([profile['model'], profile['version']] if call['tier'] == 'classifier'
                         else profile['accepted_models'])
             rejected = (call['tier'] != 'classifier' and transport.rate_limit_rejection(
@@ -469,14 +498,19 @@ class Core:
                 continue
             amount = Decimal(info['cost_usd'])
             cost += amount
-            if call['tier'] != 'open_source':
+            # 零模型費用情境：開源池層級，或設定中明示 open_source 的顧問／裁判角色。
+            if call['tier'] != 'open_source' and not (call['tier'] in ROLES and profile['open_source'] is True):
                 scenario += amount
             if call['tier'] == 'classifier':
                 classifier += amount
+            if call['tier'] in ROLES:
+                roles[call['tier']] += amount
         result['costs'] = {'known_api_usd': str(cost), 'unknown_calls': unknown,
                            'api_usd': None if unknown else str(cost), 'classifier_usd': str(classifier),
                            'hypothetical_open_source_zero_usd': None if unknown else str(scenario),
                            'host_and_human_usd': None, 'calls': len(refs)}
+        if advisor is not None:
+            result['costs'].update({role + '_usd': str(amount) for role, amount in roles.items()})
         return result
 
     def read_completed(self, run_id):
@@ -492,7 +526,7 @@ class Core:
             if (directory / '.retired.json').exists() or (directory / '.retired.json').is_symlink():
                 raise ValueError('Retired run cannot be read or dispatched again')
             frozen = _read(directory / 'manifest.json')
-            expected = {'local_backend': None, 'execution_policy': None,
+            expected = {'local_backend': None, 'execution_policy': None, 'advisor_first': None,
                         **self.configuration_descriptor()}
             if any(_encoded(frozen.get(key)) != _encoded(value) for key, value in expected.items()):
                 raise ValueError('Completed result configuration changed')
@@ -504,7 +538,7 @@ class Core:
     def run(self, run_id, task, environment_factory, *, contract_version, mode='cloudyfan'):
         if not isinstance(run_id, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,79}', run_id):
             raise ValueError("run_id must be a short stable identifier")
-        if mode not in INITIAL:
+        if mode not in self.workflow_modes():
             raise ValueError("Unknown workflow mode")
         if not isinstance(task, dict) or not isinstance(task.get('prompt'), str) or not task['prompt'].strip():
             raise ValueError("Task requires a public prompt")
@@ -516,6 +550,8 @@ class Core:
         if self.selection_policy is not None and self.execution_contract_descriptor(contract_version) != (
                 self.selection_policy.plan['policy']['execution_contract']):
             raise ValueError('QCS calibrated execution contract differs from actual Core')
+        if mode == ADVISOR_FIRST:
+            return self.run_advisor_first(run_id, task, environment_factory, contract_version=contract_version)
         directory = Path(self.client.root) / 'runs' / run_id
         if directory.is_symlink():
             raise ValueError("Run directory cannot be a symlink")

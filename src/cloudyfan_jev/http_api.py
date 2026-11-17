@@ -107,6 +107,9 @@ class RegisteredContract:
                 or not isinstance(self.runner.core.diagnostic_contract, DiagnosticContract)):
             raise ValueError('Registered contract requires controlled runner, explicit privacy and validator')
         core = self.runner.core
+        # 路徑二（ADR 0034）只能在 Core 明示提供顧問設定時選用。
+        if self.mode == 'advisor_first' and getattr(core, 'advisor_first', None) is None:
+            raise ValueError('advisor_first mode requires an advisor configuration')
         return {**core.configuration_descriptor(),
                 'version': self.version, 'mode': self.mode, 'tool_names': list(self.tool_names),
                 'model_bounds': {key: asdict(bound) for key, bound in self.runner.model_bounds.items()},

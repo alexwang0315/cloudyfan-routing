@@ -115,13 +115,14 @@ def test_pool_entries_must_name_low_mid_or_high_tier(tmp_path):
         make_core(tmp_path, passing_api([]), advisor_config(pool=bad_pool))
 
 
-def test_advisor_first_mode_is_registered_but_flow_not_yet_dispatching(tmp_path):
+def test_advisor_first_mode_is_registered_and_dispatches_advisor_flow(tmp_path):
+    # #73 起，路徑二會先呼叫顧問；完整流程測試見 test_advisor_first.py。
     requests = []
     engine = make_core(tmp_path, passing_api(requests), advisor_config())
     assert ADVISOR_FIRST in engine.workflow_modes()
-    with pytest.raises(NotImplementedError):
-        engine.run('r', TASK, ArithmeticEnvironment, contract_version='v1', mode=ADVISOR_FIRST)
-    assert requests == []
+    result = engine.run('r', TASK, ArithmeticEnvironment, contract_version='v1', mode=ADVISOR_FIRST)
+    assert [p['model'] for p in requests] == ['oss/advisor-v1']
+    assert result['status'] == 'advisor_incomplete'
 
 
 def test_legacy_run_with_advisor_config_freezes_it_and_rejects_changed_config(tmp_path):

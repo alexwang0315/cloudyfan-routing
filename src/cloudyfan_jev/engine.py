@@ -189,8 +189,26 @@ class Core:
         return modes + (ADVISOR_FIRST,) if getattr(self, 'advisor_first', None) is not None else modes
 
     def run_advisor_first(self, run_id, task, environment_factory, *, contract_version):
-        """路徑二的作答流程掛鉤；#73 實作。目前不做任何 I/O 即拒絕。"""
-        raise NotImplementedError('advisor_first flow is not implemented yet (#73)')
+        """路徑二的作答流程（ADR 0034）；實作在 advisor_flow。"""
+        from . import advisor_flow
+        return advisor_flow.run(self, run_id, task, environment_factory, contract_version=contract_version)
+
+    def _advisor_answer_messages(self, task):
+        """路徑二作答模型的輸入：只有原題，不含顧問理由。
+
+        掛鉤：#76 契約經驗在此以參考區塊附上解題事實。
+        """
+        return [{'role': 'system', 'content': self.system}, {'role': 'user', 'content': task['prompt']}]
+
+    def _advisor_delegated_attempt(self, env, messages, tier, prefix, index, actions, directory):
+        """路徑二單次改派作答。掛鉤：#74 迴圈守衛裁判在此包住工具迴圈。"""
+        return self._attempt(env, messages, tier, prefix, index, actions, directory)
+
+    def _generation_profile(self, tier):
+        """作答設定：一般層級查 profiles；路徑二的 ``pool:<設定>`` 查凍結的池內設定。"""
+        if tier.startswith('pool:') and getattr(self, 'advisor_first', None) is not None:
+            return self.advisor_first.resolved_pool(self.profiles)[tier.removeprefix('pool:')]
+        return self.profiles[tier]
 
     def configuration_descriptor(self):
         """Snapshot all behavior-defining Core configuration, without runtime state.
@@ -346,7 +364,7 @@ class Core:
                 'local': profile.get('backend') == 'local'}
 
     def _attempt(self, env, messages, tier, prefix, index, actions, directory):
-        profile = self.profiles[tier]
+        profile = self._generation_profile(tier)
         if self.execution_policy:
             location = profile.get('execution_location')
             self.execution_policy.require('generation', location)
@@ -482,7 +500,7 @@ class Core:
                     raise RuntimeError('Role call without advisor configuration: ' + call['call_id'])
                 profile = getattr(advisor, call['tier'])
             else:
-                profile = self.decision if call['tier'] == 'classifier' else self.profiles[call['tier']]
+                profile = self.decision if call['tier'] == 'classifier' else self._generation_profile(call['tier'])
             accepted = ([profile['model'], profile['version']] if call['tier'] == 'classifier'
                         else profile['accepted_models'])
             rejected = (call['tier'] != 'classifier' and transport.rate_limit_rejection(

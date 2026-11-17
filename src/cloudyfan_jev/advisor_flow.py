@@ -5,8 +5,8 @@
 每題最多 ``max_attempts`` 次作答（含顧問直接回答）。建議用完、全部作廢或 JSON
 解析失敗即結束並照實記錄，不設預設接手、不回頭走 Jev。
 
-作答模型只收原題（之後由 #76 附上解題事實），不收顧問的判斷理由。
-迴圈守衛裁判（#74）與契約經驗（#76）只透過 Core 上的兩個掛鉤接入，本模組不實作。
+作答模型只收原題（有經驗卡時另附解題事實參考區塊，#76），不收顧問的判斷理由。
+迴圈守衛裁判（#74）透過 Core 上的掛鉤接入，本模組不實作；契約經驗卡見 experience_card。
 """
 import hashlib
 import json
@@ -90,19 +90,25 @@ def parse_decision(content, pool):
             'recommendations': valid, 'voided': voided}
 
 
-def advisor_messages(task, pool):
-    """顧問輸入：只放公開題目與池內設定識別；私有欄位一律擋下。"""
+def advisor_messages(task, pool, card=None):
+    """顧問輸入：只放公開題目與池內設定識別；私有欄位一律擋下。
+    有凍結的經驗卡時（#76）附上卡片，並在系統提示補一段固定說明。"""
     routing._reject_private(task)
     public = routing.project_public({'task': task})
     listing = [{'setting': key, 'tier': profile['tier'], **{k: profile[k] for k in _POOL_FIELDS}}
                for key, profile in pool.items()]
     content = {'task': public['task'], 'pool': listing}
+    system = ADVISOR_SYSTEM
+    if card is not None:
+        from .experience_card import ADVISOR_NOTE, advisor_view
+        content['experience_card'] = advisor_view(card)
+        system = ADVISOR_SYSTEM + ' ' + ADVISOR_NOTE
     routing._reject_private(content)
-    return [{'role': 'system', 'content': ADVISOR_SYSTEM},
+    return [{'role': 'system', 'content': system},
             {'role': 'user', 'content': json.dumps(content, sort_keys=True, ensure_ascii=False)}]
 
 
-def _consult(core, prefix, task, pool):
+def _consult(core, prefix, task, pool, card=None):
     """呼叫顧問一次（同 call_id 續跑讀舊收據，不重付）並解析。"""
     profile = core.advisor_first.advisor
     if core.execution_policy is not None:
@@ -110,7 +116,7 @@ def _consult(core, prefix, task, pool):
         core.execution_policy.require('generation', location)
         if not isinstance(location, str) or not location.startswith('cloud:'):
             raise PolicyDenied('generation', 'backend_location_mismatch')
-    messages = advisor_messages(task, pool)
+    messages = advisor_messages(task, pool, card)
     cid = advisor_call_id(prefix)
     payload = core.generation_payload(messages, profile, prefix, None)
     record, info = core._checked(cid, transport.CHAT, payload, profile['accepted_models'],
@@ -123,10 +129,15 @@ def _consult(core, prefix, task, pool):
     return calls, parse_decision(message.get('content'), pool)
 
 
-def run(core, run_id, task, environment_factory, *, contract_version):
+def run(core, run_id, task, environment_factory, *, contract_version, experience=None):
     from .engine import _encoded, _lock, _read, _save
+    from . import experience_card
     config = core.advisor_first
     pool = config.resolved_pool(core.profiles)
+    if experience is not None:
+        if config.experience is None:
+            raise ValueError('Contract experience requires an ExperienceLink in AdvisorConfig')
+        experience_card.check_context(experience)
     # 任何 I/O 前先擋私有欄位。
     advisor_messages(task, pool)
     directory = Path(core.client.root) / 'runs' / run_id
@@ -138,10 +149,20 @@ def run(core, run_id, task, environment_factory, *, contract_version):
             raise ValueError('Retired run cannot be read or dispatched again')
         frozen = {**core.configuration_descriptor(), 'task': task, 'mode': ADVISOR_FIRST,
                   'contract_version': contract_version}
+        if experience is not None:
+            frozen['experience'] = dict(experience)
         _save(directory / 'manifest.json', frozen)
+        # 經驗卡每題凍結一次；續跑讀回同一張，不重新讀經驗庫（#76）。
+        card = None
+        if experience is not None:
+            card = experience_card.freeze(directory / 'experience-card.json', config, pool, experience)
         completed = directory / 'result.json'
         if completed.exists():
-            return core._with_costs(_read(completed))
+            result = _read(completed)
+            if card is not None:
+                # 回寫是冪等的：上次在存檔後、回寫前中斷時在此補寫。
+                experience_card.write_back(config, pool, experience, card, result)
+            return core._with_costs(result)
         prefix = 'run-' + run_id
         resumed = any((Path(core.client.root) / 'calls').glob(prefix + '-*'))
         began = perf_counter()
@@ -152,7 +173,7 @@ def run(core, run_id, task, environment_factory, *, contract_version):
             raise ValueError('replayable_tools must explicitly name deterministic local tools')
         _save(directory / 'tool-replay-policy.json', {'replayable_tools': sorted(set(replayable))})
 
-        advisor_calls, decision = _consult(core, prefix, task, pool)
+        advisor_calls, decision = _consult(core, prefix, task, pool, card)
         # 顧問決定（含作廢原因與理由）只留在紀錄，不進任何作答模型的輸入。
         _save(directory / 'advisor-decision.json', decision)
         actions, attempts = [], []
@@ -173,7 +194,7 @@ def run(core, run_id, task, environment_factory, *, contract_version):
                 break
             setting = recommendation['setting']
             attempt = core._advisor_delegated_attempt(
-                env, core._advisor_answer_messages(task), pool_label(setting), prefix, order, actions, directory)
+                env, core._advisor_answer_messages(task, card), pool_label(setting), prefix, order, actions, directory)
             attempt.update(source='delegated', setting=setting, pool_tier=pool[setting]['tier'],
                            recommendation_rank=recommendation['rank'])
             attempts.append(attempt)
@@ -190,5 +211,11 @@ def run(core, run_id, task, environment_factory, *, contract_version):
                   'final_public_pass': passed, 'status': status, 'end_reason': end_reason,
                   'resumed': resumed, 'wall_seconds': None if resumed else perf_counter() - began,
                   'config_sha256': hashlib.sha256(_encoded(frozen)).hexdigest()}
+        if card is not None:
+            block = experience_card.facts_block(card)
+            result['experience'] = {'card': card['view']['card'], 'store_version': card['store_version'],
+                                    'facts_block': None if block is None else block['id']}
         _save(completed, result)
+        if card is not None:
+            experience_card.write_back(config, pool, experience, card, result)
         return core._with_costs(result)

@@ -54,6 +54,8 @@ class AdvisorConfig:
     max_attempts: int = DEFAULT_MAX_ATTEMPTS
     judge_calls_per_attempt: int = DEFAULT_JUDGE_CALLS_PER_ATTEMPT
     pool: dict | None = field(default=None)
+    # 契約經驗（#76，ADR 0036 第 10、11 點）：ExperienceLink；None 時路徑二行為不變。
+    experience: object = field(default=None)
 
     def __post_init__(self):
         for role in ROLES:
@@ -67,6 +69,10 @@ class AdvisorConfig:
             raise ValueError('judge_calls_per_attempt must be 0 or 1')
         if self.pool is not None:
             object.__setattr__(self, 'pool', deepcopy(self.pool))
+        if self.experience is not None:
+            from .experience_card import ExperienceLink
+            if not isinstance(self.experience, ExperienceLink):
+                raise ValueError('experience requires an ExperienceLink')
 
     def resolved_pool(self, profiles):
         """回傳要凍結的池內設定；每項都必須標明低／中／高層級。"""
@@ -88,7 +94,9 @@ class AdvisorConfig:
                 'advisor': deepcopy(self.advisor), 'judge': deepcopy(self.judge),
                 'score_snapshot': self.score_snapshot, 'max_attempts': self.max_attempts,
                 'judge_calls_per_attempt': self.judge_calls_per_attempt,
-                'pool': self.resolved_pool(profiles)}
+                'pool': self.resolved_pool(profiles),
+                # 只凍結卡片規則；經驗庫內容是執行期狀態，以每題凍結的卡片為準。
+                **({} if self.experience is None else {'experience': self.experience.descriptor()})}
 
 
 # 收據 call_id 命名約定：顧問 ``<prefix>-advisor``；裁判 ``<prefix>-a<i>-judge``。

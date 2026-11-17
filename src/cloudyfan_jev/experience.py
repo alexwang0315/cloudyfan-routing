@@ -23,12 +23,13 @@ RETENTION_DAYS = 365  # 比照中繼資料至少保存 365 天（第 9 點）
 SOURCE_KINDS = ("error_fingerprint", "check_code", "advisor_advice")
 OBSERVATION_FIELDS = ("task_id", "client_id", "scope", "settings", "created_at",
                       "supports", "contradicts", "outcomes")
-OUTCOME_FIELDS = ("role", "model_version", "effort", "provider", "verdict", "cost_usd")
+OUTCOME_FIELDS = ("role", "model_version", "effort", "provider", "verdict", "cost_usd", "pool_snapshot")
 VERDICTS = ("passed", "failed", "unverifiable")
 ROLES = ("solver", "advisor")
 ITEM_FIELDS = ("kind", "code", "detail")
 # 只接受不含空白的代碼型字串，擋掉題目或答案裡的自由文字指令（第 6 點）。
-TOKEN = re.compile(r"^[A-Za-z0-9_.:\-]{1,120}$")
+# 「/」供模型版本（如 vendor/model-v1）使用（#76）。
+TOKEN = re.compile(r"^[A-Za-z0-9_.:/\-]{1,120}$")
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
@@ -69,10 +70,14 @@ def _outcome(outcome):
         raise ValueError("cost_usd 必須是數字") from None
     if not cost.is_finite() or cost < 0:
         raise ValueError("cost_usd 必須是非負數")
-    return {"role": role, "model_version": _token(outcome.get("model_version"), "model_version"),
-            "effort": _token(outcome.get("effort"), "effort"),
-            "provider": _token(outcome.get("provider"), "provider"),
-            "verdict": outcome["verdict"], "cost_usd": str(cost)}
+    result = {"role": role, "model_version": _token(outcome.get("model_version"), "model_version"),
+              "effort": _token(outcome.get("effort"), "effort"),
+              "provider": _token(outcome.get("provider"), "provider"),
+              "verdict": outcome["verdict"], "cost_usd": str(cost)}
+    if "pool_snapshot" in outcome:
+        # 選用（#76）：成績綁定當時的模型池快照，換池後不沿用。
+        result["pool_snapshot"] = _token(outcome["pool_snapshot"], "pool_snapshot")
+    return result
 
 
 def _normalize(observation):
@@ -354,9 +359,14 @@ class ExperienceStore:
                    if obs["client_id"] == client and obs["scope"] == scope]
             yield self._tally(scope, own, shared=False)
 
-    def model_stats(self, scope, *, client_id=None):
+    def is_withdrawn(self, task_id):
+        """此題是否已被要求刪除（之後不得再記錄）。"""
+        return task_id in self._withdrawn_tasks
+
+    def model_stats(self, scope, *, client_id=None, pool_snapshot=None):
         """依精確角色／模型版本／強度／供應商統計。給 client_id 時是該客戶端私有成績，
-        否則是貢獻中客戶端的共用成績。unverifiable 另計，不算入通過率。"""
+        否則是貢獻中客戶端的共用成績。unverifiable 另計，不算入通過率。
+        給 pool_snapshot 時只算綁定該模型池快照的成績（#76，換池不沿用）。"""
         if client_id is None:
             observations = self._contributing(scope)
         else:
@@ -365,6 +375,8 @@ class ExperienceStore:
         groups = defaultdict(list)
         for obs in observations:
             for outcome in obs["outcomes"]:
+                if pool_snapshot is not None and outcome.get("pool_snapshot") != pool_snapshot:
+                    continue
                 key = tuple(outcome[name] for name in OUTCOME_FIELDS[:4])
                 groups[key].append(outcome)
         stats = []

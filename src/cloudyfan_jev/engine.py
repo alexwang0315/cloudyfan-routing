@@ -188,17 +188,25 @@ class Core:
         modes = tuple(INITIAL)
         return modes + (ADVISOR_FIRST,) if getattr(self, 'advisor_first', None) is not None else modes
 
-    def run_advisor_first(self, run_id, task, environment_factory, *, contract_version):
+    def run_advisor_first(self, run_id, task, environment_factory, *, contract_version, experience=None):
         """路徑二的作答流程（ADR 0034）；實作在 advisor_flow。"""
         from . import advisor_flow
-        return advisor_flow.run(self, run_id, task, environment_factory, contract_version=contract_version)
+        return advisor_flow.run(self, run_id, task, environment_factory, contract_version=contract_version,
+                                experience=experience)
 
-    def _advisor_answer_messages(self, task):
-        """路徑二作答模型的輸入：只有原題，不含顧問理由。
+    def _advisor_answer_messages(self, task, card=None):
+        """路徑二作答模型的輸入：原題，不含顧問理由。
 
-        掛鉤：#76 契約經驗在此以參考區塊附上解題事實。
+        有凍結的經驗卡且含解題事實時（#76），以參考區塊整塊附在原題之後；
+        作答模型看不到任何成績統計。
         """
-        return [{'role': 'system', 'content': self.system}, {'role': 'user', 'content': task['prompt']}]
+        prompt = task['prompt']
+        if card is not None:
+            from .experience_card import facts_block
+            block = facts_block(card)
+            if block is not None:
+                prompt += block['rendered']
+        return [{'role': 'system', 'content': self.system}, {'role': 'user', 'content': prompt}]
 
     def _advisor_delegated_attempt(self, env, messages, tier, prefix, index, actions, directory):
         """路徑二單次改派作答。掛鉤：#74 迴圈守衛裁判在此包住工具迴圈。"""
@@ -553,7 +561,7 @@ class Core:
                 raise ValueError('Completed result identity changed')
             return self._with_costs(result)
 
-    def run(self, run_id, task, environment_factory, *, contract_version, mode='cloudyfan'):
+    def run(self, run_id, task, environment_factory, *, contract_version, mode='cloudyfan', experience=None):
         if not isinstance(run_id, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,79}', run_id):
             raise ValueError("run_id must be a short stable identifier")
         if mode not in self.workflow_modes():
@@ -568,8 +576,12 @@ class Core:
         if self.selection_policy is not None and self.execution_contract_descriptor(contract_version) != (
                 self.selection_policy.plan['policy']['execution_contract']):
             raise ValueError('QCS calibrated execution contract differs from actual Core')
+        if experience is not None and mode != ADVISOR_FIRST:
+            # 契約經驗只用於路徑二（ADR 0036 第 10 點）；路徑一不收。
+            raise ValueError('Contract experience is only available in advisor_first mode')
         if mode == ADVISOR_FIRST:
-            return self.run_advisor_first(run_id, task, environment_factory, contract_version=contract_version)
+            return self.run_advisor_first(run_id, task, environment_factory, contract_version=contract_version,
+                                          experience=experience)
         directory = Path(self.client.root) / 'runs' / run_id
         if directory.is_symlink():
             raise ValueError("Run directory cannot be a symlink")

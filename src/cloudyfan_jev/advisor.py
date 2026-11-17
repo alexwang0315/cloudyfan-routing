@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 import re
 
 from .generation_request import reasoning_fields
+from .loop_guard import LoopGuardConfig
 
 ADVISOR_FIRST = 'advisor_first'
 VERSION = 'advisor-first-config-v1'
@@ -54,6 +55,7 @@ class AdvisorConfig:
     max_attempts: int = DEFAULT_MAX_ATTEMPTS
     judge_calls_per_attempt: int = DEFAULT_JUDGE_CALLS_PER_ATTEMPT
     pool: dict | None = field(default=None)
+    loop_guard: LoopGuardConfig = field(default_factory=LoopGuardConfig)
 
     def __post_init__(self):
         for role in ROLES:
@@ -65,6 +67,8 @@ class AdvisorConfig:
             raise ValueError('max_attempts must be an integer from 1 to 3')
         if type(self.judge_calls_per_attempt) is not int or not 0 <= self.judge_calls_per_attempt <= 1:
             raise ValueError('judge_calls_per_attempt must be 0 or 1')
+        if not isinstance(self.loop_guard, LoopGuardConfig):
+            raise ValueError('loop_guard requires a LoopGuardConfig')
         if self.pool is not None:
             object.__setattr__(self, 'pool', deepcopy(self.pool))
 
@@ -88,6 +92,7 @@ class AdvisorConfig:
                 'advisor': deepcopy(self.advisor), 'judge': deepcopy(self.judge),
                 'score_snapshot': self.score_snapshot, 'max_attempts': self.max_attempts,
                 'judge_calls_per_attempt': self.judge_calls_per_attempt,
+                'loop_guard': self.loop_guard.descriptor(),
                 'pool': self.resolved_pool(profiles)}
 
 

@@ -43,6 +43,8 @@ def generation_tiers(mode):
 
 PROVIDER_DIAGNOSTICS = DiagnosticContract(
     version='core-provider-diagnostics-v1', source='core-provider-response')
+HOOK_DIAGNOSTICS = DiagnosticContract(
+    version='core-turn-hook-diagnostics-v1', source='core-turn-hook')
 
 
 def repair_history(messages):
@@ -201,8 +203,14 @@ class Core:
         return [{'role': 'system', 'content': self.system}, {'role': 'user', 'content': task['prompt']}]
 
     def _advisor_delegated_attempt(self, env, messages, tier, prefix, index, actions, directory):
-        """路徑二單次改派作答。掛鉤：#74 迴圈守衛裁判在此包住工具迴圈。"""
-        return self._attempt(env, messages, tier, prefix, index, actions, directory)
+        """路徑二單次改派作答，由迴圈守衛裁判（#74）包住工具迴圈；停用裁判時照舊。"""
+        config = self.advisor_first
+        if config.judge_calls_per_attempt == 0:
+            return self._attempt(env, messages, tier, prefix, index, actions, directory)
+        from .loop_guard import guarded_attempt
+        return guarded_attempt(self, env, messages, tier, prefix, index, actions, directory,
+                               judge=config.judge, settings=config.loop_guard,
+                               judge_calls=config.judge_calls_per_attempt)
 
     def _generation_profile(self, tier):
         """作答設定：一般層級查 profiles；路徑二的 ``pool:<設定>`` 查凍結的池內設定。"""
@@ -363,7 +371,13 @@ class Core:
         return {'call_id': prefix + '-a0-t0', 'payload': self.generation_payload(messages, profile, prefix, tools),
                 'local': profile.get('backend') == 'local'}
 
-    def _attempt(self, env, messages, tier, prefix, index, actions, directory):
+    def _attempt(self, env, messages, tier, prefix, index, actions, directory, *, turn_hook=None):
+        """單次作答的工具迴圈。
+
+        ``turn_hook``（選用，#74）：每個含工具呼叫的回合結束後以
+        ``turn_hook(turn=, actions=, messages=)`` 呼叫；可在 ``messages`` 末尾附加提示，
+        回傳字串則以該停止原因結束本次作答。未提供時行為與既有版本相同。
+        """
         profile = self._generation_profile(tier)
         if self.execution_policy:
             location = profile.get('execution_location')
@@ -374,7 +388,7 @@ class Core:
                     raise PolicyDenied('generation', 'backend_location_mismatch')
             elif not location.startswith('cloud:'):
                 raise PolicyDenied('generation', 'backend_location_mismatch')
-        calls, final, stop = [], '', 'turn_limit'
+        calls, final, stop, hook_stopped = [], '', 'turn_limit', False
         for turn in range(self.limits.max_turns):
             tools = env.tools_schema()
             payload = self.generation_payload(messages, profile, prefix, tools)
@@ -464,10 +478,17 @@ class Core:
                 actions.append(action)
                 messages.append({'role': 'tool', 'tool_call_id': tc['id'],
                                  'content': _encoded(result).decode()})
+            if turn_hook is not None:
+                hooked = turn_hook(turn=turn, actions=actions, messages=messages)
+                if hooked is not None:
+                    stop, hook_stopped = hooked, True
+                    break
         started = perf_counter()
         public = (PROVIDER_DIAGNOSTICS.project({'passed': None, 'checks': [
                       'PROVIDER_UNAVAILABLE' if stop == 'provider_unavailable' else 'PROVIDER_RATE_LIMITED']})
                   if stop in ('provider_rate_limited', 'provider_unavailable')
+                  # 掛鉤提前結束（例如迴圈守衛判定仍卡住）：沒有最終答案，記為未通過。
+                  else HOOK_DIAGNOSTICS.project({'passed': False, 'checks': [stop.upper()]}) if hook_stopped
                   else self.diagnostic_contract.project(env.validate(final)))
         checkpoint = directory / f'validation-a{index}.json'
         _save(checkpoint, public)
@@ -481,6 +502,7 @@ class Core:
         advisor = getattr(self, 'advisor_first', None)
         if advisor is not None:
             refs += (result.get('advisor') or {}).get('calls', [])
+            refs += [c for a in result['attempts'] for c in (a.get('loop_guard') or {}).get('calls', [])]
         roles = {role: Decimal(0) for role in ROLES}
         cost, scenario, classifier = Decimal(0), Decimal(0), Decimal(0)
         unknown = 0

@@ -20,6 +20,10 @@ from cloudyfan_jev import task_recommendations as advice
 
 MODES = {"cloudyfan": "CloudyFan MRC", "fixed_high": "全大模型優先",
          "low_first": "全便宜模型優先", "open_source_first": "全開源模型優先"}
+# 路徑一加強版（#79）與路徑二顧問先答（#73）。只有主服務註冊了對應契約才可選用；
+# 既有四模式的統計、比較與示範照舊只看 MODES。
+PATH_MODES = {"cloudyfan_plus": "路徑一加強版", "advisor_first": "路徑二：顧問先答"}
+ROUTING_MODES = {**MODES, **PATH_MODES}
 TIERS = ("open_source", "low", "mid", "high")
 RETAINED_FIELD = '_retained_public_metadata'
 RETAINED_META_FIELDS = ('model', 'provider', 'cost_source', 'elapsed_ms', 'generation_id',
@@ -314,7 +318,7 @@ class Store:
     def change(self, *, revision, mode=None, client=None, catalog=None, routing=None, inherit=False):
         if type(revision) is not int:
             raise MonitorError("revision_required")
-        if mode is not None and mode not in MODES:
+        if mode is not None and mode not in ROUTING_MODES:
             raise MonitorError("unsupported_mode")
         with self.db() as db:
             old = db.execute("SELECT * FROM control").fetchone()

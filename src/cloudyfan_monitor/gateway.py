@@ -16,7 +16,7 @@ from cloudyfan_jev.http_api import ServiceError
 from .admission import Admission
 from .billing import Billing
 from .retention_policy import DAY, EvidenceRetentionPolicy
-from .store import MODES, MonitorError, digest, stats
+from .store import MODES, PATH_MODES, ROUTING_MODES, MonitorError, digest, stats
 from .observation_fields import identifier
 from .tracing import routing_trace
 
@@ -56,7 +56,7 @@ class Gateway:
             queue.transition_observer = self._queue_transition
         # Each key binds a previously registered, exact immutable contract to a mode.
         for (pool, category, mode), contract_id in self.registry.items():
-            if mode not in MODES or service.contracts[contract_id].mode != mode:
+            if mode not in ROUTING_MODES or service.contracts[contract_id].mode != mode:
                 raise ValueError("Pool mode must match the registered Core contract")
             view = store.pool(pool)
             if category not in view["categories"]:
@@ -579,11 +579,13 @@ class Gateway:
         view.update(tasks=tasks, summary={**stats(tasks), 'known_task_api_usd': str(known),
             'complete_task_api_usd': str(known) if all(task.get('complete_api_usd') is not None
                 for task in tasks) else None},
-            by_mode={mode: stats([task for task in tasks if task['mode'] == mode]) for mode in MODES})
+            by_mode={mode: stats([task for task in tasks if task['mode'] == mode]) for mode in MODES}
+                    | {mode: stats([task for task in tasks if task['mode'] == mode]) for mode in PATH_MODES
+                       if any(task['mode'] == mode for task in tasks)})
         for client in view['clients']:
             client['stats'] = stats([task for task in tasks if task['client'] == client['id']])
-        view.update({"demo": self.demo, "modes": MODES, "now": self.store.clock(),
-                     "available_modes": [m for m in MODES if self.mode_available(m)],
+        view.update({"demo": self.demo, "modes": ROUTING_MODES, "now": self.store.clock(),
+                     "available_modes": [m for m in ROUTING_MODES if self.mode_available(m)],
                      "correctness_basis": "public_validator_not_universal_or_independent_truth"})
         view["capabilities"] = self.capabilities()
         view["capability_matrix"] = [{"category": category, "modes": modes}

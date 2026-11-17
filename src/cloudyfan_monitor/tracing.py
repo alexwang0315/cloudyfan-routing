@@ -1,19 +1,53 @@
 """Public routing evidence from verified Core results, without prompts or answers."""
 
+ADVISOR_FIRST = "advisor_first"
+ROLES = ("advisor", "judge")
+
+
+def _call(call, *, role=None):
+    usage = call.get("usage") or {}
+    value = ({key: call.get(key) for key in ("model", "provider", "generation_id", "elapsed_ms", "cost_usd")}
+             | {"input_tokens": usage.get("prompt_tokens", usage.get("input_tokens")),
+                "output_tokens": usage.get("completion_tokens", usage.get("output_tokens"))})
+    if role is not None:
+        # 路徑二：標明這筆呼叫是顧問、裁判或池內作答，費用才分得清楚。
+        value["role"] = call.get("tier") if call.get("tier") in ROLES else role
+    return value
+
+
+def _advisor(result):
+    """路徑二的公開摘要：只放決定類型、設定識別、順位與作廢原因代碼。
+
+    顧問的回答草稿與每組建議的自由文字理由可能引用題目內容，一律不進 Monitor。
+    """
+    advisor = result.get("advisor") or {}
+    decision = advisor.get("decision") or {}
+    costs = result.get("costs") or {}
+    return {"path": ADVISOR_FIRST, "advisor_mode": decision.get("outcome"),
+            "incomplete_reason": decision.get("incomplete_reason"), "end_reason": result.get("end_reason"),
+            "score_snapshot": advisor.get("score_snapshot"),
+            "recommendations": [{key: item.get(key) for key in ("rank", "setting", "tier")}
+                                for item in decision.get("recommendations") or []],
+            "voided": [{key: item.get(key) for key in ("rank", "reason")} for item in decision.get("voided") or []],
+            "calls": [_call(call, role="advisor") for call in advisor.get("calls") or []],
+            # 研究全額＝全部收據；正式成本＝零模型費用情境（明示開源的角色不計）。
+            "costs": {"research_usd": costs.get("api_usd"),
+                      "formal_usd": costs.get("hypothetical_open_source_zero_usd"),
+                      "advisor_usd": costs.get("advisor_usd"), "judge_usd": costs.get("judge_usd"),
+                      "unknown_calls": costs.get("unknown_calls")}}
+
 
 def routing_trace(result):
+    path_two = result.get("mode") == ADVISOR_FIRST and isinstance(result.get("advisor"), dict)
     attempts = []
     for index, attempt in enumerate(result["attempts"], 1):
-        calls = []
-        for call in attempt["calls"]:
-            usage = call.get("usage") or {}
-            calls.append({key: call.get(key) for key in
-                          ("model", "provider", "generation_id", "elapsed_ms", "cost_usd")}
-                         | {"input_tokens": usage.get("prompt_tokens", usage.get("input_tokens")),
-                            "output_tokens": usage.get("completion_tokens", usage.get("output_tokens"))})
+        calls = [_call(call, role="answer" if path_two else None) for call in attempt["calls"]]
         attempts.append({"index": index, "tier": attempt["tier"],
                          "passed": attempt["public"].get("passed"), "stop": attempt.get("stop"),
                          "models": sorted({c["model"] for c in calls if c["model"]}), "calls": calls})
+        if path_two:
+            attempts[-1].update({key: attempt.get(key) for key in
+                                 ("source", "setting", "pool_tier", "recommendation_rank")})
     decisions = []
     next_attempt = 0
     for decision in (result.get("selection") or {}).get("decisions", []):
@@ -34,5 +68,8 @@ def routing_trace(result):
         if (decision.get("action") == "direct" or "fallback" in decision) and (
                 next_attempt < len(attempts) and attempts[next_attempt]["tier"] == decision.get("selected_tier")):
             next_attempt += 1
-    return {"complete": True, "attempts": attempts, "decisions": decisions,
-            "basis": "verified_core_result", "distributions_are_correctness_probabilities": False}
+    trace = {"complete": True, "attempts": attempts, "decisions": decisions,
+             "basis": "verified_core_result", "distributions_are_correctness_probabilities": False}
+    if path_two:
+        trace["advisor"] = _advisor(result)
+    return trace

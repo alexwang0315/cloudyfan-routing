@@ -169,6 +169,8 @@ class App:
                       "/playground.css": ("playground.css", "text/css; charset=utf-8"),
                       "/cache.js": ("cache.js", "text/javascript; charset=utf-8"),
                       "/cache.css": ("cache.css", "text/css; charset=utf-8"),
+                      "/advisor.js": ("advisor.js", "text/javascript; charset=utf-8"),
+                      "/advisor.css": ("advisor.css", "text/css; charset=utf-8"),
                       "/style.css": ("style.css", "text/css; charset=utf-8")}
             if method == "GET" and path in static:
                 filename, content_type = static[path]
@@ -256,7 +258,61 @@ class App:
             raise MonitorError('context_observation_task_not_found', 404)
         return value
 
+    def _audit(self, action, data):
+        with self.store.db() as db:
+            self.store.audit(db, action, data)
+
+    def _auto_pool(self, method, path, environ):
+        """換池紀錄頁（#80）；只在 /monitor/ 下，已由操作員 token 保護。"""
+        panel = getattr(self, 'auto_pool', None)
+        if environ.get('QUERY_STRING'):
+            raise MonitorError('endpoint_not_supported', 404)
+        if method == 'GET' and path == '/monitor/auto-pool':
+            return panel.snapshot() if panel is not None else {
+                'schema_version': 'monitor-auto-pool-v1', 'configured': False}
+        if method != 'POST' or path not in ('/monitor/auto-pool/rollback', '/monitor/auto-pool/auto-switch'):
+            raise MonitorError('endpoint_not_supported', 404)
+        body = self._body(environ)
+        if panel is None:
+            raise MonitorError('auto_pool_not_configured', 409)
+        if path.endswith('/rollback'):
+            self._fields(body, {'snapshot_id'})
+            result = panel.rollback(body['snapshot_id'])
+            self._audit('auto_pool_rollback', {key: result[key] for key in (
+                'before_snapshot_id', 'after_snapshot_id', 'restored_snapshot_id')})
+            return result
+        self._fields(body, {'enabled'})
+        result = panel.set_auto_switch(body['enabled'])
+        self._audit('auto_pool_auto_switch', {'enabled': body['enabled']})
+        return result
+
+    def _experience(self, method, path, environ):
+        """客戶端經驗「貢獻」「使用」開關（#80）；操作員專屬。"""
+        settings = getattr(self, 'experience', None)
+        if environ.get('QUERY_STRING'):
+            raise MonitorError('endpoint_not_supported', 404)
+        if method == 'GET' and path == '/monitor/experience':
+            if settings is None:
+                return {'schema_version': 'monitor-experience-settings-v1', 'configured': False}
+            return settings.snapshot(self.store.dashboard()['clients'])
+        if method != 'POST' or path != '/monitor/experience/settings':
+            raise MonitorError('endpoint_not_supported', 404)
+        body = self._body(environ)
+        self._fields(body, {'client'}, {'contribute', 'use'})
+        if settings is None:
+            raise MonitorError('experience_not_configured', 409)
+        if body['client'] not in {client['id'] for client in self.store.dashboard()['clients']}:
+            raise MonitorError('client_not_found', 404)
+        result = settings.change(body['client'], contribute=body.get('contribute'), use=body.get('use'))
+        self._audit('experience_settings_changed', {'client': body['client'], 'contribute': body.get('contribute'),
+                                                    'use': body.get('use')})
+        return result
+
     def _admin(self, method, path, environ):
+        if path == '/monitor/auto-pool' or path.startswith('/monitor/auto-pool/'):
+            return self._auto_pool(method, path, environ)
+        if path == '/monitor/experience' or path.startswith('/monitor/experience/'):
+            return self._experience(method, path, environ)
         match = re.fullmatch(r'/monitor/context-preparations/([A-Za-z0-9][A-Za-z0-9._-]{0,127})/([A-Za-z0-9][A-Za-z0-9_-]{0,63})', path)
         if match:
             if method != 'GET' or environ.get('QUERY_STRING'):

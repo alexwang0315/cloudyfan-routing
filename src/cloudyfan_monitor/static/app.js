@@ -1,10 +1,10 @@
 'use strict';
 const $ = (s) => document.querySelector(s);
 const esc = (v) => String(v ?? '—').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const modes = {cloudyfan:'CloudyFan MRC',fixed_high:'全大模型優先',low_first:'全便宜模型優先',open_source_first:'全開源模型優先'};
+const modes = {cloudyfan:'CloudyFan MRC',fixed_high:'全大模型優先',low_first:'全便宜模型優先',open_source_first:'全開源模型優先',cloudyfan_plus:'路徑一加強版',advisor_first:'路徑二：顧問先答'};
 const tiers = {open_source:'開源池',low:'低分池',mid:'中分池',high:'高分池'};
 const candidateTiers = {open_source:'開源候選',low:'低分候選',mid:'中分候選',high:'高分候選'};
-const labels = {overview:'運作總覽',playground:'試問 MRC（模擬）',tasks:'任務與升級',ledger:'費用帳本',billing:'客戶帳務',pools:'候選池與契約',capacity:'供應商限額來源',queue:'排隊與等待',observations:'建立時觀測規則',comparisons:'保存證據比較',cache:'前綴與快取觀測',clients:'連線客戶端'};
+const labels = {overview:'運作總覽',playground:'試問 MRC（模擬）',tasks:'任務與升級',ledger:'費用帳本',billing:'客戶帳務',pools:'候選池與契約',capacity:'供應商限額來源',queue:'排隊與等待',observations:'建立時觀測規則',comparisons:'保存證據比較',cache:'前綴與快取觀測',autopool:'換池紀錄',clients:'連線客戶端'};
 const statuses = {passed:['通過','green'],failed:['未通過','red'],unverifiable:['無法確認','amber'],running:['執行中','blue'],ready:['已準備','blue'],bound:['已凍結','blue'],queued:['排隊中','blue'],expired:['已到期','amber'],task_busy:['執行中','blue'],engineering_interrupted:['工程中斷','red'],accounting_interrupted:['費用待核','amber'],policy_denied:['執行條件不符','amber']};
 const poolStatuses = {missing:'缺額',pending_unqualified:'待驗證',pending_unqualified_stale_source:'來源逾期',research_admitted_only:'僅舊研究准入',mock_only:'模擬設定'};
 const categoryLabels = {'agentic_index':'代理任務','coding_index':'程式與 SQL','intelligence_index':'綜合推理','3d':'3D 設計','asciiart':'字元藝術','audiorealism':'音訊擬真','codecategories':'程式設計','dataviz':'資料視覺化','gamedev':'遊戲開發','graphicdesign':'平面設計','image':'影像生成','imageediting':'影像編輯','logo':'Logo 設計','svg':'SVG 圖形','text-to-speech':'語音合成','uicomponent':'UI 元件','website':'網站設計','gpqa_diamond':'科學推理','search_browsecomp':'網頁搜尋','search_dsqa':'搜尋問答','search_hle':'高難度搜尋','search_widesearch':'廣域搜尋','tau_bench_verified_airline':'航空客服代理'};
@@ -212,6 +212,7 @@ function clientsPage() {
  return heading('CLIENTS / INDIVIDUAL CONTROL','每個客戶端，各自看得清。','依受信任的客戶端身分統計，不以 IP 或使用者自行填寫的名稱歸戶。')+
  `<div class="cards">${data.clients.map(c=>`<article class="client-card">${badge(c.recently_seen?'最近有活動':'閒置',c.recently_seen?'green':'')}<h2>${esc(c.label)}</h2><p class="mono metadata">${esc(c.id)}</p><div class="client-numbers"><div><b>${c.stats.tasks}</b><small>任務</small></div><div><b>${pct(c.stats.final_rate)}</b><small>公開通過率</small></div><div><b>${c.stats.escalated}</b><small>進入補答</small></div></div>${modeControls(c.id,c.mode||'')}<p class="mt">實際新任務模式：${esc(modes[c.effective_mode])}<br>最後活動 ${esc(when(c.last_seen))}</p><button class="button small details" data-client="${esc(c.id)}">查看此客戶端儀表板 →</button></article>`).join('')}</div>`+
  (client?`<section class="panel mt"><div class="panel-header"><div><h2>${esc(client.label)} / 任務明細</h2><p>P50 ${secs(client.stats.latency_p50)} · P95 ${secs(client.stats.latency_p95)} · 未知 ${client.stats.unknown} 件</p></div></div>${taskRows(data.tasks.filter(t=>t.client===client.id))}</section>`:'')+
+ `<section class="panel mt"><div class="panel-header"><h2>經驗共用設定</h2>${badge('操作員設定')}</div><div class="panel-body" id="experience-settings"></div></section>`+
  `<section class="panel mt"><div class="panel-header"><h2>設定變更紀錄</h2>${badge('不含憑證、提示與答案')}</div><div class="table-wrap"><table><thead><tr><th>時間</th><th>事件</th><th>對象 / 設定</th></tr></thead><tbody>${data.audit.filter(a=>a.action==='configuration_changed').slice(0,12).map(a=>`<tr><td class="nowrap metadata">${esc(when(a.at))}</td><td>設定已變更</td><td>${esc(a.data.client||'全域')} · ${esc(a.data.inherit?'跟隨全域':modes[a.data.mode]||'模型池版本')}</td></tr>`).join('')}</tbody></table></div></section>`;
 }
 function rememberObservationView() {
@@ -249,11 +250,13 @@ function render() {
  if(page==='queue'){if(window.CloudyFanQueue)window.CloudyFanQueue.mount($('#main'),sessionContext());else $('#main').textContent='排隊觀測介面尚未載入，請重新讀取。';return;}
  if(page==='observations'){if(window.CloudyFanObservationPolicy)window.CloudyFanObservationPolicy.mount($('#main'),sessionContext());else $('#main').textContent='建立時觀測規則介面尚未載入，請重新讀取。';return;}
  if(page==='cache'){if(window.CloudyFanCache)window.CloudyFanCache.mount($('#main'),sessionContext());else $('#main').textContent='前綴與快取觀測介面尚未載入，請重新讀取。';return;}
+ if(page==='autopool'){if(window.CloudyFanAdvisor)window.CloudyFanAdvisor.mountAutoPool($('#main'),sessionContext());else $('#main').textContent='換池紀錄介面尚未載入，請重新讀取。';return;}
  if(page==='comparisons'){if(window.CloudyFanComparisons)window.CloudyFanComparisons.mount($('#main'),sessionContext());else $('#main').textContent='保存證據比較介面尚未載入，請重新讀取。';return;}
  if(!data){$('#main').innerHTML=heading('OPERATOR / VERIFIED',esc(labels[page]),'操作員身分已確認，正在讀取此身分的觀測資料。')+'<div class="panel empty" role="status">完整觀測資料尚未讀取；任務、費用與統計仍待確認。</div>';return;}
  if(page==='billing'){window.CloudyFanBilling.mount($('#main'),sessionContext());return;}
  $('#main').innerHTML=({overview,tasks:tasksPage,ledger:ledgerPage,pools:poolsPage,clients:clientsPage}[page])();
  bindTaskTraces();bindSimulation();
+ if(page==='clients'&&window.CloudyFanAdvisor)window.CloudyFanAdvisor.mountExperience($('#experience-settings'),sessionContext());
  restoreObservationView(focused,page);
  document.querySelectorAll('[data-change-mode]').forEach(button=>button.onclick=()=>{
    const client=button.dataset.changeMode,mode=document.querySelector(`[data-mode-client="${client}"]`).value || null, revision=data.control.revision;
@@ -353,6 +356,7 @@ $('#reload').onclick=async()=>{
  else if(page==='#observations')await window.CloudyFanObservationPolicy?.refresh(true);
  else if(page==='#comparisons')await window.CloudyFanComparisons?.refresh(true);
  else if(page==='#cache')await window.CloudyFanCache?.refresh();
+ else if(page==='#autopool')await window.CloudyFanAdvisor?.refreshPool();
  else{await history;if(page==='#billing'&&sameLogin(version,value)&&operatorSession)await window.CloudyFanBilling.refresh();}
 };
 $('#logout').onclick=()=>{setToken('');if(!$('#login').open)$('#login').showModal();};

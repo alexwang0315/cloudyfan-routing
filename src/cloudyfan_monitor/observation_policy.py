@@ -3,7 +3,7 @@ from cloudyfan_jev.task_features import POLICIES
 from cloudyfan_jev import task_recommendations as advice
 from types import MappingProxyType
 
-from .store import MonitorError, digest
+from .store import MODES, MonitorError, digest
 
 
 VERSIONS = {'features-v1': 'local-deterministic-v1', 'features-v2': 'local-deterministic-v2',
@@ -17,11 +17,16 @@ class ObservationPolicy:
         service = gateway.service
         port = binding_port if binding_port is not None else StoreFeatureBindingPort(gateway.store)
         current = service.creation_features
+        # MRC 的路由建議規則（task_recommendations）只認得四個既有模式；註冊了路徑一加強版
+        # 或路徑二契約時，該建議版本無法建立，只提供不含建議的觀測版本（#80 待 MRC 補齊）。
+        self.versions = MappingProxyType({version: feature for version, feature in VERSIONS.items()
+            if version != 'features-v2-advice-v1'
+            or all(contract.mode in MODES for contract in service.contracts.values())})
         self.prepared = MappingProxyType({version: service.prepare_creation_observation({
             'policy_bundle': dict(POLICIES[feature]), 'binding_port': port,
             **({'compute_clock': current.compute_clock} if current is not None else {}),
         }, recommendations=advice.enabled_policy() if version == 'features-v2-advice-v1' else None)
-            for version, feature in VERSIONS.items()})
+            for version, feature in self.versions.items()})
         self._binding_options = MappingProxyType({version: MappingProxyType(value)
                                                   for version, value in self._prepare_versions().items()})
         # Legacy App assembly may not install a reader. Publishing with capture
@@ -83,13 +88,13 @@ class ObservationPolicy:
                 'available_versions': [{'version': version, 'feature_version': feature,
                                         'recommendation_rule_version': advice.RULE_VERSION
                                         if version == 'features-v2-advice-v1' else None}
-                                       for version, feature in VERSIONS.items()],
+                                       for version, feature in self.versions.items()],
                 'scope': 'New task observations only; existing tasks retain their original records.'}
 
     def activate(self, revision, version):
         if type(revision) is not int or revision < 0:
             raise MonitorError('invalid_observation_revision')
-        if version is not None and (type(version) is not str or version not in VERSIONS):
+        if version is not None and (type(version) is not str or version not in self.versions):
             raise MonitorError('observation_rule_not_registered', 409)
         state = self.gateway.store.change_observation_control(revision, version, self._binding_options[version]['fingerprint'])
         self._apply(state)

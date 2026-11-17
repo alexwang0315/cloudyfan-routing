@@ -1,0 +1,7 @@
+/* #80：路徑二明細、換池紀錄、經驗共用開關 */
+.advisor-trace h4 { margin: 14px 0 6px; font-size: 13px; }
+.advisor-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.advisor-list { margin: 0; padding-left: 20px; }
+.advisor-costs { margin-top: 10px; }
+.advisor-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.advisor-toggle { display: inline-flex; align-items: center; gap: 6px; }

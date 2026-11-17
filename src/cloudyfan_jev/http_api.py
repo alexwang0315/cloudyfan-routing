@@ -31,6 +31,9 @@ from . import task_recommendations as advice
 
 _CREATION_SELECTION = ContextVar('task_service_creation_selection', default=())
 _CREATION_UNSET = object()
+# 已完成（有完整 result.json 可讀）的任務狀態。advisor_incomplete 是顧問先答路徑（路徑二）
+# 在顧問回覆無法使用、沒有任何作答時的終局：答案為 None，但顧問費用照收據記入。
+COMPLETED_STATUSES = frozenset({'passed', 'failed', 'unverifiable', 'advisor_incomplete'})
 
 
 def _creation_scoped(method):
@@ -577,7 +580,7 @@ class TaskService:
         directory, job = self._job(principal, run_id)
         state = _read(directory / 'state.json')
         completed = None
-        if state['status'] in ('passed', 'failed', 'unverifiable'):
+        if state['status'] in COMPLETED_STATUSES:
             completed = self._verified_completed(principal, run_id, directory, job)
         else:
             self._registered_contract(job)
@@ -639,7 +642,7 @@ class TaskService:
                     self.capacity_controller.terminal(internal)
                 state = {'run_id': run_id, 'status': result['status']}
                 _write(directory / 'outcome.json', {**state,
-                    'answer': result['attempts'][-1]['final'],
+                    'answer': result['attempts'][-1]['final'] if result['attempts'] else None,
                     'first_public_pass': result['first_public_pass'],
                     'final_public_pass': result['final_public_pass'],
                     'costs': {'complete_api_usd': result['budget']['run_total_usd'],
@@ -790,7 +793,7 @@ class TaskService:
                 paths.insert(1, (core_run, core_run.parent))
                 if unstarted and artifacts:
                     blockers.append('never_dispatched_evidence_conflict')
-                if state.get('status') not in {'passed', 'failed', 'unverifiable'}:
+                if state.get('status') not in COMPLETED_STATUSES:
                     blockers.append('task_not_completed')
                 if len(reservation) != 1 or reservation[0]['status'] != 'complete':
                     blockers.append('reservation_not_complete')

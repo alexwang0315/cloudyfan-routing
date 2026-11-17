@@ -62,14 +62,13 @@ class Gateway:
             if category not in view["categories"]:
                 raise ValueError("Unknown pool category")
             service.contracts[contract_id].descriptor()
+        store.registered_modes = frozenset((pool, mode) for pool, _, mode in self.registry)
 
     def mode_available(self, mode):
-        pool = self.store.control()["routing_pool"]
-        return any(p == pool and m == mode for p, _, m in self.registry)
+        return (self.store.control()["routing_pool"], mode) in self.store.registered_modes
 
     def switch(self, revision, mode, client=None):
-        if mode is not None and not self.mode_available(mode):
-            raise MonitorError("mode_not_registered_for_active_pool", 409)
+        # 沒有註冊契約的模式由 Store.change 在同一交易內拒絕（mode_not_registered_for_active_pool）。
         if client is None and mode is None:
             raise MonitorError("global_mode_required")
         return self.store.change(revision=revision, mode=mode, client=client,

@@ -357,3 +357,19 @@ def test_experience_toggle_waits_for_mrc_write_back_and_keeps_both(tmp_path):
     stored = ExperienceStore.open(path, rewriter=no_rewrite)
     assert stored.freeze_settings('agent') == {'contribute': True, 'use': False}
     assert stored.freeze_settings('studio') == {'contribute': False, 'use': True}
+
+
+def test_store_change_rejects_mode_without_registered_contract(advisor_system):
+    # 即使繞過 /monitor/mode 直接呼叫 Store.change，也不能把客戶端或全域切到沒有契約的模式。
+    from cloudyfan_monitor.store import MonitorError
+    app, upstream, admin, client = advisor_system
+    revision = app.store.control()['revision']
+    for kwargs in ({'client': 'studio'}, {}):
+        try:
+            app.store.change(revision=revision, mode='cloudyfan_plus', **kwargs)
+        except MonitorError as error:
+            assert (error.code, error.status) == ('mode_not_registered_for_active_pool', 409)
+        else:
+            raise AssertionError('沒有註冊契約的模式不應被接受')
+    assert app.store.control()['revision'] == revision
+    assert app.store.change(revision=revision, mode='advisor_first', client='studio')['revision'] == revision + 1

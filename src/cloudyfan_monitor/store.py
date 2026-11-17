@@ -141,6 +141,8 @@ def stats(tasks):
 class Store:
     def __init__(self, path, *, clock=time.time):
         self.path, self.clock = Path(path), clock
+        # (路由池, 模式) 的註冊契約組合；由 Gateway 綁定後，change 只接受有契約的模式。
+        self.registered_modes = None
         if self.path.is_symlink() or any(p.is_symlink() for p in self.path.parents):
             raise ValueError("Private monitor path must not use symlinks")
         self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -324,6 +326,11 @@ class Store:
             old = db.execute("SELECT * FROM control").fetchone()
             if revision != old["revision"]:
                 raise MonitorError("configuration_changed_reload", 409)
+            # 與修改同一交易內檢查：避免檢查後、寫入前路由池被換掉而選到沒有契約的模式。
+            pool = routing if routing is not None else old["routing_pool"]
+            if (mode is not None and self.registered_modes is not None
+                    and (pool, mode) not in self.registered_modes):
+                raise MonitorError("mode_not_registered_for_active_pool", 409)
             if client is not None:
                 if db.execute("SELECT id FROM clients WHERE id=?", (client,)).fetchone() is None:
                     raise MonitorError("client_not_found", 404)

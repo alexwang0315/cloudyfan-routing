@@ -146,7 +146,7 @@ class Core:
     """
     def __init__(self, client, profiles, decision_profile, *, limits=None, system=SYSTEM,
                  local_backend=None, diagnostic_contract=None, execution_policy=None, selection_policy=None,
-                 advisor_first=None):
+                 advisor_first=None, cloudyfan_plus=None):
         self.client = client
         self.profiles = deepcopy(profiles)
         self.decision = deepcopy(decision_profile)
@@ -184,11 +184,22 @@ class Core:
                 raise ValueError('advisor_first requires an AdvisorConfig')
             advisor_first.resolved_pool(self.profiles)
         self.advisor_first = advisor_first
+        # 路徑一加強版（#79）明示選用；None 時一切行為與既有版本相同。
+        if cloudyfan_plus is not None:
+            from .cloudyfan_plus import CloudyfanPlusConfig
+            if not isinstance(cloudyfan_plus, CloudyfanPlusConfig):
+                raise ValueError('cloudyfan_plus requires a CloudyfanPlusConfig')
+        self.cloudyfan_plus = cloudyfan_plus
 
     def workflow_modes(self):
         """可用的路由模式；只有提供顧問設定時才註冊路徑二。"""
         modes = tuple(INITIAL)
-        return modes + (ADVISOR_FIRST,) if getattr(self, 'advisor_first', None) is not None else modes
+        if getattr(self, 'advisor_first', None) is not None:
+            modes += (ADVISOR_FIRST,)
+        if getattr(self, 'cloudyfan_plus', None) is not None:
+            from .cloudyfan_plus import CLOUDYFAN_PLUS
+            modes += (CLOUDYFAN_PLUS,)
+        return modes
 
     def run_advisor_first(self, run_id, task, environment_factory, *, contract_version, experience=None):
         """路徑二的作答流程（ADR 0034）；實作在 advisor_flow。"""
@@ -508,8 +519,11 @@ class Core:
         result = deepcopy(result)
         refs = [c for a in result['attempts'] for c in a['calls']] + (result.get('selection') or {}).get('calls', [])
         advisor = getattr(self, 'advisor_first', None)
+        # 路徑一加強版（#79）的裁判設定只用於該模式的結果。
+        plus = (getattr(self, 'cloudyfan_plus', None) if result.get('mode') == 'cloudyfan_plus' else None)
         if advisor is not None:
             refs += (result.get('advisor') or {}).get('calls', [])
+        if advisor is not None or plus is not None:
             refs += [c for a in result['attempts'] for c in (a.get('loop_guard') or {}).get('calls', [])]
         roles = {role: Decimal(0) for role in ROLES}
         cost, scenario, classifier = Decimal(0), Decimal(0), Decimal(0)
@@ -525,10 +539,13 @@ class Core:
             record = self.client._load(self.client._directory(call['call_id']))
             info = transport.usage(record)
             if call['tier'] in ROLES:
-                # 顧問／裁判角色只在明示設定路徑二時存在；身分照樣以收據核對。
-                if advisor is None:
+                # 顧問／裁判角色只在明示設定路徑二或路徑一加強版時存在；身分照樣以收據核對。
+                if plus is not None and call['tier'] == 'judge':
+                    profile = plus.judge
+                elif advisor is None:
                     raise RuntimeError('Role call without advisor configuration: ' + call['call_id'])
-                profile = getattr(advisor, call['tier'])
+                else:
+                    profile = getattr(advisor, call['tier'])
             else:
                 profile = self.decision if call['tier'] == 'classifier' else self._generation_profile(call['tier'])
             accepted = ([profile['model'], profile['version']] if call['tier'] == 'classifier'
@@ -557,7 +574,9 @@ class Core:
                            'api_usd': None if unknown else str(cost), 'classifier_usd': str(classifier),
                            'hypothetical_open_source_zero_usd': None if unknown else str(scenario),
                            'host_and_human_usd': None, 'calls': len(refs)}
-        if advisor is not None:
+        if plus is not None:
+            result['costs']['judge_usd'] = str(roles['judge'])
+        elif advisor is not None:
             result['costs'].update({role + '_usd': str(amount) for role, amount in roles.items()})
         return result
 
@@ -576,6 +595,10 @@ class Core:
             frozen = _read(directory / 'manifest.json')
             expected = {'local_backend': None, 'execution_policy': None, 'advisor_first': None,
                         **self.configuration_descriptor()}
+            if frozen.get('mode') == 'cloudyfan_plus':
+                # 路徑一加強版（#79）的設定只凍結在該模式的題目中。
+                plus = getattr(self, 'cloudyfan_plus', None)
+                expected['cloudyfan_plus'] = None if plus is None else plus.descriptor()
             if any(_encoded(frozen.get(key)) != _encoded(value) for key, value in expected.items()):
                 raise ValueError('Completed result configuration changed')
             result = _read(directory / 'result.json')
@@ -598,9 +621,15 @@ class Core:
         if self.selection_policy is not None and self.execution_contract_descriptor(contract_version) != (
                 self.selection_policy.plan['policy']['execution_contract']):
             raise ValueError('QCS calibrated execution contract differs from actual Core')
-        if experience is not None and mode != ADVISOR_FIRST:
-            # 契約經驗只用於路徑二（ADR 0036 第 10 點）；路徑一不收。
+        # 路徑一加強版（#79）沿用 cloudyfan 的階段與 Jev 升級規則。
+        plus = mode == 'cloudyfan_plus'
+        route = 'cloudyfan' if plus else mode
+        if experience is not None and mode != ADVISOR_FIRST and not plus:
+            # 契約經驗只用於路徑二與明示選用的路徑一加強版（ADR 0036 第 10 點）；純路徑一不收。
             raise ValueError('Contract experience is only available in advisor_first mode')
+        if plus:
+            from . import cloudyfan_plus
+            cloudyfan_plus.check_experience(self.cloudyfan_plus, experience)
         if mode == ADVISOR_FIRST:
             return self.run_advisor_first(run_id, task, environment_factory, contract_version=contract_version,
                                           experience=experience)
@@ -613,10 +642,20 @@ class Core:
                 raise ValueError('Retired run cannot be read or dispatched again')
             frozen = {**self.configuration_descriptor(), 'task': task, 'mode': mode,
                       'contract_version': contract_version}
+            card = None
+            if plus:
+                frozen.update(cloudyfan_plus.manifest_fields(self.cloudyfan_plus, experience))
             _save(directory / 'manifest.json', frozen)
+            if plus and experience is not None:
+                card = cloudyfan_plus.freeze_facts(directory / 'experience-facts.json',
+                                                   self.cloudyfan_plus, experience)
             completed = directory / 'result.json'
             if completed.exists():
-                return self._with_costs(_read(completed))
+                result = _read(completed)
+                if card is not None:
+                    # 回寫是冪等的：上次在存檔後、回寫前中斷時在此補寫。
+                    cloudyfan_plus.write_back(self, experience, card, result)
+                return self._with_costs(result)
             prefix = 'run-' + run_id
             resumed = any((Path(self.client.root) / 'calls').glob(prefix + '-*'))
             if self.local_backend is not None:
@@ -629,14 +668,17 @@ class Core:
                 raise ValueError('replayable_tools must explicitly name deterministic local tools')
             _save(directory / 'tool-replay-policy.json', {'replayable_tools': sorted(set(replayable))})
             # Fresh sandbox is supplied by the caller. Prior tool actions replay into it.
-            messages = [{'role': 'system', 'content': self.system}, {'role': 'user', 'content': task['prompt']}]
+            prompt = task['prompt']
+            if card is not None:
+                prompt = cloudyfan_plus.with_facts(prompt, card)
+            messages = [{'role': 'system', 'content': self.system}, {'role': 'user', 'content': prompt}]
             actions, attempts, selection = [], [], None
-            phases = generation_tiers(mode)
+            phases = generation_tiers(route)
             for index in range(len(phases)):
-                tier = INITIAL[mode] if index == 0 else 'high'
+                tier = INITIAL[route] if index == 0 else 'high'
                 if index:
                     messages = repair_history(messages)
-                    if mode == 'cloudyfan':
+                    if route == 'cloudyfan':
                         selected = self._select(prefix, task, attempts[-1], actions,
                                                 stage='low_mid' if index == 1 else 'mid_high')
                         prior = selection or {'decisions': [], 'calls': [], 'classifier_calls': 0}
@@ -651,7 +693,11 @@ class Core:
                         + ('This is the final attempt. ' if index == len(phases) - 1
                            else 'Another bounded repair may follow only if public validation still fails. ')
                         + 'Public diagnostics: ' + _encoded(attempts[-1]['public']).decode()})
-                attempt = self._attempt(env, messages, tier, prefix, index, actions, directory)
+                if plus:
+                    attempt = cloudyfan_plus.attempt(self, env, messages, tier, prefix, index, actions,
+                                                     directory, attempts[-1] if attempts else None)
+                else:
+                    attempt = self._attempt(env, messages, tier, prefix, index, actions, directory)
                 attempts.append(attempt)
                 if (attempt['public']['passed'] is True
                         or (mode == 'fixed_high' and attempt['stop'] == 'provider_rate_limited')):
@@ -663,5 +709,9 @@ class Core:
                       ('failed' if passed is False else 'unverifiable'), 'resumed': resumed,
                       'wall_seconds': None if resumed else perf_counter()-began,
                       'config_sha256': hashlib.sha256(_encoded(frozen)).hexdigest()}
+            if card is not None:
+                result['experience'] = cloudyfan_plus.result_fields(card)
             _save(completed, result)
+            if card is not None:
+                cloudyfan_plus.write_back(self, experience, card, result)
             return self._with_costs(result)

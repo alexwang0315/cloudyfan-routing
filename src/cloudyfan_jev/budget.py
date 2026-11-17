@@ -727,10 +727,29 @@ class BudgetedCore:
         tool_count = attempts * limits.max_turns * limits.max_tool_calls
         return _exact((amount, _exact((self._tool_max(),), tool_count)))
 
+    def _admit_cloudyfan_plus(self):
+        """路徑一加強版最壞預留（#79）：純 cloudyfan 的預留，加上每個可到達的作答
+        階段各 ``judge_calls_per_attempt`` 次裁判。裁判缺上界就拒跑；開源裁判同樣要有上界。"""
+        config = getattr(self.core, 'cloudyfan_plus', None)
+        if config is None:
+            raise ValueError('Unknown workflow mode')
+        if getattr(self.core, 'selection_policy', None) is not None:
+            raise ValueError('QCS requires its bound CloudyFan workload')
+        from .engine import generation_tiers
+        amount = self._admit('cloudyfan')
+        if config.judge_calls_per_attempt:
+            attempts = len(generation_tiers('cloudyfan'))
+            amount = _exact((amount, _exact((self._model_cap(config.judge, 'model_version'),),
+                                            attempts * config.judge_calls_per_attempt)))
+        return amount
+
     def _admit(self, mode):
         from .advisor import ADVISOR_FIRST
+        from .cloudyfan_plus import CLOUDYFAN_PLUS
         if mode == ADVISOR_FIRST:
             return self._admit_advisor_first()
+        if mode == CLOUDYFAN_PLUS:
+            return self._admit_cloudyfan_plus()
         from .engine import generation_tiers
         phases = generation_tiers(mode)
         backup_hook = getattr(self.core, 'budget_reservation_plan', None)
@@ -825,6 +844,10 @@ class BudgetedCore:
         descriptor = self.enforcement_descriptor()
         if descriptor is not None:
             frozen['enforcement'] = descriptor
+        plus = getattr(self.core, 'cloudyfan_plus', None)
+        if mode == 'cloudyfan_plus' and plus is not None:
+            # 路徑一加強版設定只凍結在該模式的預留中，純 cloudyfan 的預留指紋不變。
+            frozen['cloudyfan_plus'] = plus.descriptor()
         self.sync_client(self.core.client)
         if getattr(self.core, 'local_backend', None) is not None:
             self.sync_client(self.core.local_backend)

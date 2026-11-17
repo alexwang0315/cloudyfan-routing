@@ -110,7 +110,13 @@ class RegisteredContract:
         # 路徑二（ADR 0034）只能在 Core 明示提供顧問設定時選用。
         if self.mode == 'advisor_first' and getattr(core, 'advisor_first', None) is None:
             raise ValueError('advisor_first mode requires an advisor configuration')
-        return {**core.configuration_descriptor(),
+        # 路徑一加強版（#79）同樣只能在明示提供設定時選用；設定只凍結在選用它的契約中。
+        plus = {}
+        if self.mode == 'cloudyfan_plus':
+            if getattr(core, 'cloudyfan_plus', None) is None:
+                raise ValueError('cloudyfan_plus mode requires a CloudyfanPlusConfig')
+            plus = {'cloudyfan_plus': core.cloudyfan_plus.descriptor()}
+        return {**core.configuration_descriptor(), **plus,
                 'version': self.version, 'mode': self.mode, 'tool_names': list(self.tool_names),
                 'model_bounds': {key: asdict(bound) for key, bound in self.runner.model_bounds.items()},
                 'tool_bounds': {key: asdict(bound) for key, bound in self.runner.tool_bounds.items()},

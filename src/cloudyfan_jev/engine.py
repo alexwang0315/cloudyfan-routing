@@ -182,8 +182,9 @@ class Core:
         if advisor_first is not None:
             if not isinstance(advisor_first, AdvisorConfig):
                 raise ValueError('advisor_first requires an AdvisorConfig')
-            advisor_first.resolved_pool(self.profiles)
         self.advisor_first = advisor_first
+        # 設定已凍結：池內設定只在建立時解析一次，作答每回合重用（見 ``_generation_profile``）。
+        self._advisor_pool = self._resolve_advisor_pool()
         # 路徑一加強版（#79）明示選用；None 時一切行為與既有版本相同。
         if cloudyfan_plus is not None:
             from .cloudyfan_plus import CloudyfanPlusConfig
@@ -231,10 +232,17 @@ class Core:
                                judge=config.judge, settings=config.loop_guard,
                                judge_calls=config.judge_calls_per_attempt)
 
+    def _resolve_advisor_pool(self):
+        config = getattr(self, 'advisor_first', None)
+        return (config, None if config is None else config.resolved_pool(self.profiles))
+
     def _generation_profile(self, tier):
         """作答設定：一般層級查 profiles；路徑二的 ``pool:<設定>`` 查凍結的池內設定。"""
         if tier.startswith('pool:') and getattr(self, 'advisor_first', None) is not None:
-            return self.advisor_first.resolved_pool(self.profiles)[tier.removeprefix('pool:')]
+            # 只有在 advisor_first 物件被整個換掉時（測試夾具或主機重新組裝）才重新解析。
+            if getattr(self, '_advisor_pool', (None, None))[0] is not self.advisor_first:
+                self._advisor_pool = self._resolve_advisor_pool()
+            return self._advisor_pool[1][tier.removeprefix('pool:')]
         return self.profiles[tier]
 
     def configuration_descriptor(self):

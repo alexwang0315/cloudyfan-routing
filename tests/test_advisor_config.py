@@ -319,3 +319,15 @@ def test_contract_selecting_advisor_first_freezes_mode_and_advisor_config(tmp_pa
     descriptor = registered(tmp_path, advisor_config()).descriptor()
     assert descriptor['mode'] == ADVISOR_FIRST
     assert descriptor['advisor_first']['score_snapshot'] == 'snapshot-20261117-a'
+
+
+def test_generation_profile_reuses_pool_resolved_at_init(tmp_path, monkeypatch):
+    # 設定在 Core 建立時凍結；作答每回合查池內設定不應重新解析整個池。
+    engine = make_core(tmp_path, passing_api([]), advisor_config())
+    expected = advisor_config().resolved_pool(engine.profiles)['mid']
+    def refuse(self, profiles):
+        raise AssertionError('pool re-resolved per generation call')
+    monkeypatch.setattr(AdvisorConfig, 'resolved_pool', refuse)
+    assert engine._generation_profile('pool:mid') == expected
+    assert engine._generation_profile('pool:mid') == expected
+    assert engine._generation_profile('low') is engine.profiles['low']

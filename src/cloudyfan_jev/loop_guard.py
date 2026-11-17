@@ -185,7 +185,7 @@ class LoopGuard:
     """單次作答的守衛；以 ``turn_hook`` 接進 ``Core._attempt`` 的每回合結尾。"""
 
     def __init__(self, core, judge, settings, *, prefix, index, tier, judge_calls=1,
-                 seed_checks=None, judge_tier='judge'):
+                 seed_checks=None, judge_tier='judge', start=0):
         self.core, self.judge, self.settings = core, judge, settings
         self.prefix, self.index, self.tier = prefix, index, tier
         self.judge_calls, self.judge_tier = judge_calls, judge_tier
@@ -193,7 +193,8 @@ class LoopGuard:
         self.calls = []
         self.record = None
         self.redirected = False
-        self.seen = 0
+        # ``actions`` 由同一題的各次作答共用；從本次作答開始時的長度起算，偵測與摘要只看本次作答。
+        self.start = self.seen = start
 
     def turn_hook(self, *, turn, actions, messages):
         """回傳 None 表示照常繼續；回傳停止原因字串表示結束本次作答。"""
@@ -211,7 +212,7 @@ class LoopGuard:
             return STOP
         if self.record is not None or len(self.calls) >= self.judge_calls:
             return None
-        self.record = self._consult(trigger, messages, fresh, turn, actions)
+        self.record = self._consult(trigger, messages, fresh, turn, actions[self.start:])
         if self.record['action'] == 'redirected':
             self.redirected = True
             messages.append({'role': 'user', 'content': REDIRECT_PREFIX + self.record['judge']['redirect']})
@@ -266,7 +267,7 @@ def guarded_attempt(core, env, messages, tier, prefix, index, actions, directory
     """
     from .engine import _save
     guard = LoopGuard(core, judge, settings, prefix=prefix, index=index, tier=tier,
-                      judge_calls=judge_calls, seed_checks=seed_checks)
+                      judge_calls=judge_calls, seed_checks=seed_checks, start=len(actions))
     attempt = core._attempt(env, messages, tier, prefix, index, actions, directory,
                             turn_hook=guard.turn_hook)
     model = next((c.get('model') for c in attempt['calls'] if c.get('model')), None)

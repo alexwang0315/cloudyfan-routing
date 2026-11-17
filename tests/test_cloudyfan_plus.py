@@ -417,3 +417,14 @@ def test_contract_selecting_plus_requires_and_freezes_its_configuration(tmp_path
     plain = registered(tmp_path / 'c', None, mode='cloudyfan').descriptor()
     with_plus = registered(tmp_path / 'c', plus_config(), mode='cloudyfan').descriptor()
     assert plain == with_plus
+
+
+def test_repair_attempt_does_not_count_earlier_attempt_tool_errors(tmp_path):
+    # 開源首答與修復作答各只撞一次同樣的工具錯誤；修復作答的守衛不得把首答的錯誤算進來。
+    api = API({'example/open_source': [TOOL, '3'], 'example/low': [TOOL, '2']}, stuck())
+    result = run_plus(make_core(tmp_path, api, plus_config()))
+    first, second = result['attempts']
+    assert second['tier'] == 'low' and result['status'] == 'passed'
+    assert first['loop_guard']['triggered'] is False
+    assert second['loop_guard']['triggered'] is False
+    assert not api.by_model(JUDGE_MODEL)

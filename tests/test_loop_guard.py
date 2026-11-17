@@ -362,3 +362,14 @@ def test_detector_accepts_previous_validation_checks_for_legacy_plus_reuse():
     hit = detector.observe('validate', {'passed': False, 'checks': ['A', 'B']})
     assert hit == {'kind': 'validation', 'fingerprint': {'checks': ['A', 'B']}, 'count': 1}
     assert Detector().observe('validate', {'passed': False, 'checks': ['A']}) is None
+
+
+def test_second_recommendation_does_not_count_earlier_attempt_tool_errors(tmp_path):
+    # 第一次作答與第二次作答各只撞一次同樣的工具錯誤；偵測以單次作答為範圍，不跨作答累計。
+    api = API({'example/mid': [tool(), 'x'], 'example/high': [tool(), '2']}, stuck())
+    result = run(make_core(tmp_path, api))
+    first, second = result['attempts']
+    assert second['setting'] == 'high' and result['status'] == 'passed'
+    assert first['loop_guard']['triggered'] is False
+    assert second['loop_guard']['triggered'] is False
+    assert not api.by_model(JUDGE_MODEL)

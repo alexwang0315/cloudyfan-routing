@@ -1,6 +1,6 @@
 """顧問先答路徑（路徑二，ADR 0034）的設定、凍結描述與角色記帳規則。
 
-本模組只定義設定與規則，不呼叫任何模型；顧問先答的實際流程由 #73 實作。
+本模組只定義設定與規則，不呼叫任何模型；顧問先答的實際流程在 ``advisor_flow``（#73）。
 沒有提供 ``AdvisorConfig`` 時，Core、預算與記帳行為完全不變。
 """
 from copy import deepcopy
@@ -83,7 +83,9 @@ class AdvisorConfig:
         return deepcopy(pool)
 
     def descriptor(self, profiles):
-        return {'version': VERSION, 'advisor': deepcopy(self.advisor), 'judge': deepcopy(self.judge),
+        from .advisor_flow import ADVISOR_SYSTEM, FLOW_VERSION
+        return {'version': VERSION, 'flow': {'version': FLOW_VERSION, 'advisor_system': ADVISOR_SYSTEM},
+                'advisor': deepcopy(self.advisor), 'judge': deepcopy(self.judge),
                 'score_snapshot': self.score_snapshot, 'max_attempts': self.max_attempts,
                 'judge_calls_per_attempt': self.judge_calls_per_attempt,
                 'pool': self.resolved_pool(profiles)}

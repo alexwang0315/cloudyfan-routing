@@ -62,7 +62,11 @@ class SnapshotStore:
 
     def publish(self, snapshot, *, now, expected_current_id=_UNCHECKED):
         verify_snapshot(snapshot, now=now)
-        if any(not snapshot['pools'][tier] for tier in ('low', 'mid', 'high')):
+        empty = [tier for tier in ('low', 'mid', 'high') if not snapshot['pools'][tier]]
+        # 唯一例外：自動換池（ADR 0035）明示停用並告警的池，可以發布為空池；
+        # 派送時 select_profiles 會直接拒絕，不會默默改用其他池。
+        disabled = (snapshot.get('pool_override') or {}).get('disabled_tiers')
+        if empty and empty != disabled:
             raise ValueError('All three pools must contain qualified candidates before publication')
         with _locked(self.root):
             current_path = self.root / 'current.json'

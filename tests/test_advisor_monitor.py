@@ -328,3 +328,32 @@ def test_experience_not_configured_is_explicit(advisor_system):
     assert admin.get('/monitor/experience').json() == {'schema_version': 'monitor-experience-settings-v1',
                                                        'configured': False}
     assert admin.post('/monitor/experience/settings', json={'client': 'studio', 'use': False}).status_code == 409
+
+
+def test_experience_toggle_waits_for_mrc_write_back_and_keeps_both(tmp_path):
+    # MRC 另一個程序正以檔案鎖「重讀–修改–存檔」時，Monitor 的開關不得在中途讀舊檔再覆寫。
+    import threading
+    path = tmp_path / 'experience.json'
+    ExperienceStore(rewriter=no_rewrite).save(path)
+    settings = ExperienceSettings(path)
+    inside, release = threading.Event(), threading.Event()
+
+    def mrc_write_back(store):
+        inside.set()
+        assert release.wait(5)
+        store.set_client_settings('agent', use=False)
+
+    mrc = threading.Thread(target=lambda: ExperienceStore.update(path, mrc_write_back, rewriter=no_rewrite))
+    mrc.start()
+    assert inside.wait(5)
+    monitor = threading.Thread(target=lambda: settings.change('studio', contribute=False))
+    monitor.start()
+    monitor.join(0.3)
+    blocked = monitor.is_alive()
+    release.set()
+    mrc.join(5)
+    monitor.join(5)
+    assert blocked, 'Monitor 必須等 MRC 的檔案鎖釋放後才重讀'
+    stored = ExperienceStore.open(path, rewriter=no_rewrite)
+    assert stored.freeze_settings('agent') == {'contribute': True, 'use': False}
+    assert stored.freeze_settings('studio') == {'contribute': False, 'use': True}

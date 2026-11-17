@@ -22,6 +22,17 @@
   - `_with_costs()` 認得 `advisor`、`judge` 角色（也讀 `result['advisor']['calls']`），以角色設定核對收據身分，並多列 `advisor_usd`、`judge_usd`。
 - `BudgetedCore._admit('advisor_first')`：預留＝顧問上界 × 1 ＋ 池內最高上界 × `max_attempts` × `max_turns` ＋ 裁判上界 × `max_attempts` × `judge_calls_per_attempt` ＋ 工具上界 × `max_attempts` × `max_turns` × `max_tool_calls`。顧問直接回答也算一次作答，所以這是保守上限。開源角色同樣需要已確認的上界。
 - `ledger.summarize(client, advisor=config)`：每列多 `role`，另列 `roles` 與 `hypothetical_open_source_roles_zero_usd`。
+
+### 兩個「零模型費用情境」數字不是同一個指標
+
+帳本的 `hypothetical_open_source_roles_zero_usd` 和每題結果 `costs` 裡的 `hypothetical_open_source_zero_usd` 名字很像，但算法不同，不能拿來互相比較或對帳：
+
+| 欄位 | 出處 | 哪些呼叫計為零 | 範圍 |
+|---|---|---|---|
+| `hypothetical_open_source_zero_usd` | `Core._with_costs()`（每題結果） | 池內 `open_source` 層級的作答（開源首答）＋明示 `open_source: True` 的顧問／裁判 | 單題結果引用的呼叫 |
+| `hypothetical_open_source_roles_zero_usd` | `ledger.summarize(client, advisor=config)` | 只有明示 `open_source: True` 的顧問／裁判角色；開源層級作答照收據計入（帳本列沒有作答層級資訊） | 整個 client 根目錄的全部收據 |
+
+所以就算只有一題，帳本數字也可能比每題數字高（差額就是開源層級作答的費用）。數字本身維持原樣，沒有改算法。
 - `RegisteredContract(mode='advisor_first')` 只有在 Core 有顧問設定時才能產生描述；模式本來就凍結在每題 manifest，中途不切換。
 
 ## 已測（全部離線，MockTransport）

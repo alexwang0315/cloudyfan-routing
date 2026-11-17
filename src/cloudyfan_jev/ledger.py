@@ -15,6 +15,12 @@ def summarize(client, *, advisor=None):
     提供路徑二的 ``advisor``（AdvisorConfig）時，依 call_id 約定在每列加上
     ``role``，並另列各角色金額與「明示開源角色計為零」的情境金額；
     未提供時輸出與既有版本完全相同。
+
+    注意：``hypothetical_open_source_roles_zero_usd`` 與 ``Core._with_costs`` 的
+    ``hypothetical_open_source_zero_usd`` 不是同一個指標，不可互相比較。本函式只把
+    明示 ``open_source: True`` 的顧問／裁判角色計為零；池內 ``open_source`` 層級的作答
+    （例如開源首答）照收據計入，因為帳本列沒有作答層級。範圍也不同：本函式涵蓋整個
+    client 根目錄的全部收據，``_with_costs`` 只算單題結果引用的呼叫。
     """
     rows, seen = [], set()
     known, unknown = Decimal(0), 0

@@ -45,3 +45,17 @@
 - 3 次、1 次等數值是 ADR 的起始設定，未經實測驗證。
 - `pool` 目前以設定識別對應固定設定；與評分快照入池資格的自動對照留給 #73。
 - 沒有呼叫任何真實模型，費用數字都只是測試用假值。
+
+## 顧問候選對照評分快照（2026-11-18）
+
+ADR 0034 第 2 點要求顧問只能建議「現行評分快照中低／中／高池已入池的固定設定」。建立方式：
+
+```python
+config = AdvisorConfig.from_snapshot(snapshot, now=now, advisor=..., judge=..., requirements=None)
+```
+
+- 候選＝快照 `pools.low/mid/high` 的每筆已入池設定，鍵為 `config_id`，附 `tier` 與 `score_selection`（快照 ID、政策 ID、設定 ID）。開源池不列入；自動換池停用的池（`pool_override.disabled_tiers`）不列入。
+- 快照必須通過雜湊驗證且在有效期內，否則建立時就拒絕；可另給 `requirements`（domain、capabilities、context_tokens）過濾。
+- 快照身分與有效期凍結在描述的 `pool_source`；**新題**開跑時若快照已過期，在任何模型呼叫前拒跑。已開始的題目續跑沿用建立時凍結的候選（ADR 0001）。
+- 舊的手動 `pool`／預設低中高設定照舊可用，描述不新增欄位；正式接入時應改用 `from_snapshot`。
+- 未做：主服務在自動換池發布新快照後，要用新快照重建 `AdvisorConfig`（屬主服務組裝，尚未接）。

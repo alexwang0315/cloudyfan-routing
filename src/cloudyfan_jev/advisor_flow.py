@@ -8,6 +8,7 @@
 作答模型只收原題（有經驗卡時另附解題事實參考區塊，#76），不收顧問的判斷理由。
 迴圈守衛裁判（#74）透過 Core 上的掛鉤接入，本模組不實作；契約經驗卡見 experience_card。
 """
+from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
@@ -32,6 +33,19 @@ ADVISOR_SYSTEM = (
 _DECISION_KEYS = {'mode', 'answer', 'recommendations'}
 _RECOMMENDATION_KEYS = {'setting', 'tier', 'reason'}
 _POOL_FIELDS = ('model_version', 'effort', 'provider_name')
+
+
+def _now():
+    return datetime.now(timezone.utc)
+
+
+def check_snapshot_validity(config):
+    """由評分快照建立的候選，快照過期就在任何呼叫前拒跑（ADR 0034 第 2 點）。"""
+    if config.snapshot_valid_until is None:
+        return
+    from .budget import timestamp
+    if _now() >= timestamp(config.snapshot_valid_until):
+        raise ValueError('Advisor pool score snapshot expired; rebuild from the current snapshot')
 
 
 def pool_label(setting):
@@ -138,7 +152,7 @@ def run(core, run_id, task, environment_factory, *, contract_version, experience
         if config.experience is None:
             raise ValueError('Contract experience requires an ExperienceLink in AdvisorConfig')
         experience_card.check_context(experience)
-    # 任何 I/O 前先擋私有欄位。
+    # 任何 I/O 前先擋私有欄位，並確認候選所依據的評分快照仍有效。
     advisor_messages(task, pool)
     directory = Path(core.client.root) / 'runs' / run_id
     if directory.is_symlink():
@@ -165,6 +179,9 @@ def run(core, run_id, task, environment_factory, *, contract_version, experience
             return core._with_costs(result)
         prefix = 'run-' + run_id
         resumed = any((Path(core.client.root) / 'calls').glob(prefix + '-*'))
+        if not resumed:
+            # 新題才檢查快照效期；已開始的題目沿用建立時凍結的候選（ADR 0001），續跑不受影響。
+            check_snapshot_validity(config)
         began = perf_counter()
         env = environment_factory()
         replayable = getattr(env, 'replayable_tools', ())

@@ -58,6 +58,8 @@ class AdvisorConfig:
     loop_guard: LoopGuardConfig = field(default_factory=LoopGuardConfig)
     # 契約經驗（#76，ADR 0036 第 10、11 點）：ExperienceLink；None 時路徑二行為不變。
     experience: object = field(default=None)
+    # 由 from_snapshot 建立時記錄評分快照的有效期限；過期後路徑二在任何呼叫前拒跑。
+    snapshot_valid_until: str | None = field(default=None)
 
     def __post_init__(self):
         for role in ROLES:
@@ -100,8 +102,52 @@ class AdvisorConfig:
                 'judge_calls_per_attempt': self.judge_calls_per_attempt,
                 'loop_guard': self.loop_guard.descriptor(),
                 'pool': self.resolved_pool(profiles),
+                # 由評分快照建立的候選，另凍結快照身分與有效期；手動設定保持原描述。
+                **({} if self.snapshot_valid_until is None else {'pool_source': {
+                    'kind': 'score_snapshot', 'snapshot_id': self.score_snapshot,
+                    'valid_until': self.snapshot_valid_until}}),
                 # 只凍結卡片規則；經驗庫內容是執行期狀態，以每題凍結的卡片為準。
                 **({} if self.experience is None else {'experience': self.experience.descriptor()})}
+
+    @classmethod
+    def from_snapshot(cls, snapshot, *, now, advisor, judge, requirements=None, **fields):
+        """以評分快照的低／中／高池建立顧問候選（ADR 0034 第 2 點）。
+
+        候選就是快照中已入池的固定設定，鍵為 ``config_id``；快照須通過雜湊驗證且在
+        有效期內。自動換池（ADR 0035）停用的池不列入；開源池不是可建議的品質池。
+        """
+        return cls(advisor=advisor, judge=judge, score_snapshot=snapshot['snapshot_id'],
+                   pool=pool_from_snapshot(snapshot, now=now, requirements=requirements),
+                   snapshot_valid_until=snapshot['valid_until'], **fields)
+
+
+def pool_from_snapshot(snapshot, *, now, requirements=None):
+    """回傳 ``{config_id: 設定（含 tier 與 score_selection）}``；缺合格候選即拒絕。"""
+    from .scores.catalog import verify_snapshot
+    verify_snapshot(snapshot, now=now)
+    if requirements is not None:
+        if requirements.get('domain') != snapshot['policy']['domain']:
+            raise ValueError('Task domain does not match score policy')
+        required = set(requirements.get('capabilities') or [])
+        context = requirements.get('context_tokens', 0)
+    disabled = set((snapshot.get('pool_override') or {}).get('disabled_tiers') or [])
+    pool = {}
+    for tier in POOL_TIERS:
+        if tier in disabled:
+            continue
+        for entry in snapshot['pools'][tier]:
+            if requirements is not None and not (required <= set(entry['capabilities'])
+                                                 and context <= entry['context_tokens']):
+                continue
+            profile = deepcopy(entry['profile'])
+            profile['tier'] = tier
+            profile.setdefault('capability_card', {})['score_selection'] = {
+                'snapshot_id': snapshot['snapshot_id'], 'policy_id': snapshot['policy']['id'],
+                'config_id': entry['config_id']}
+            pool[entry['config_id']] = profile
+    if not pool:
+        raise ValueError('No qualified configuration in the score snapshot for the advisor pool')
+    return pool
 
 
 # 收據 call_id 命名約定：顧問 ``<prefix>-advisor``；裁判 ``<prefix>-a<i>-judge``。

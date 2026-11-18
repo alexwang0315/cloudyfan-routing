@@ -88,3 +88,38 @@ def test_advisor_incomplete_is_a_terminal_task_end_to_end(tmp_path):
     service.retention_open_files = lambda path: []
     plan = service.retention_preview('admin', 'task-1')
     assert 'task_not_completed' not in plan['blockers']
+
+
+class WrongAdvisorAPI:
+    """顧問自答錯誤（3），附中、高池建議；中池作答正確（2）。"""
+    def __init__(self):
+        self.requests = []
+
+    def __call__(self, request):
+        p = json.loads(request.content)
+        self.requests.append(p)
+        if p['model'] == 'oss/advisor-v1':
+            content = json.dumps({'mode': 'answer', 'answer': '3', 'recommendations': [
+                {'setting': 'mid', 'tier': 'mid', 'reason': 'r'}, {'setting': 'high', 'tier': 'high', 'reason': 'r'}]})
+        else:
+            content = '2'
+        return httpx.Response(200, json={'id': f'gen-{len(self.requests)}', 'model': p['model'],
+            'provider': 'Example', 'usage': {'cost': .002},
+            'choices': [{'message': {'role': 'assistant', 'content': content}, 'finish_reason': 'stop'}]})
+
+
+def test_delegated_attempt_result_and_provenance_resolve_pool_settings(tmp_path):
+    # 2026-11-18 Monitor 演練發現：改派作答的 tier 是 ``pool:<設定>``，讀結果時的來源投影找不到設定而崩潰。
+    client, service, api, clock = advisor_service(tmp_path)
+    service.contracts['arithmetic'].runner.core.client.http._transport = httpx.MockTransport(WrongAdvisorAPI())
+    submitted = client.post('/v1/tasks', json=TASK)
+    assert submitted.status_code == 200 and submitted.json()['status'] == 'passed'
+    result = client.get('/v1/tasks/task-1/result')
+    assert result.status_code == 200
+    body = result.json()
+    assert body['answer'] == '2'
+    attempts = body['provenance']['attempts']
+    assert [a['tier'] for a in attempts] == ['advisor', 'pool:mid']
+    delegated = attempts[1]['calls'][0]['configuration']
+    mid = service.contracts['arithmetic'].runner.core.profiles['mid']
+    assert delegated['model_version'] == mid['model_version']

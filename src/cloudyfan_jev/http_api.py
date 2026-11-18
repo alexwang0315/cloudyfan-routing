@@ -137,9 +137,19 @@ def _provenance(result, frozen):
         value = obj.get(key) if isinstance(obj, dict) else None
         return value if isinstance(value, str) else None
 
+    def frozen_profile(tier):
+        # 路徑二（ADR 0034）：改派作答的 tier 是 ``pool:<設定>``，顧問／裁判是角色名；
+        # 都從該題凍結的 advisor_first 設定找回，不讀目前設定。
+        advisor = frozen.get('advisor_first') or {}
+        if tier.startswith('pool:') and tier.removeprefix('pool:') in advisor.get('pool', {}):
+            return advisor['pool'][tier.removeprefix('pool:')]
+        if tier in ('advisor', 'judge') and isinstance(advisor.get(tier), dict):
+            return advisor[tier]
+        return frozen['profiles'][tier]
+
     def call_metadata(call):
         classifier = call['tier'] == 'classifier'
-        profile = frozen['decision'] if classifier else frozen['profiles'][call['tier']]
+        profile = frozen['decision'] if classifier else frozen_profile(call['tier'])
         card = profile.get('capability_card', {})
         selection = card.get('score_selection', {})
         evidence = card.get('benchmark_evidence', {})

@@ -1,0 +1,197 @@
+"""#81 真實試跑的組裝與「階段 0 連線驗證」。
+
+這個模組會發出**真實、要付費**的請求，只在使用者當次授權後執行（指令列要加 ``--confirm-paid``）。
+金鑰只從使用者指定的單行檔案讀取，交給連線層使用，不顯示、不寫入任何紀錄。
+
+- ``list_models``：用 OpenRouter 金鑰讀模型目錄與價格（目錄查詢不收費）。
+- ``connect``：每個模型各跑一題極短的算術題，走完整的堆疊（廠商路由、收據、身分核對、預算預留、
+  牌價上界），回報狀態、token 用量與費用。用來確認轉接器的請求格式與費用計算對真實廠商成立。
+"""
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
+import json
+from pathlib import Path
+
+import httpx
+
+from .budget import Authorization, BudgetedCore, BudgetError, BudgetStore
+from .client import Client
+from .demo import ArithmeticEnvironment, example_config
+from .engine import Core, Limits
+from .pilot_bounds import ListPriceBounds
+from .vendors import AnthropicVendor, VendorTransport
+
+OPENROUTER_MODELS = 'https://openrouter.ai/api/v1/models'
+TASK = {'prompt': 'Return only the integer sum of 1 and 1.'}
+# 每百萬 token 牌價（2026-11-03 的資料）；開跑前請對照廠商公告，可用參數覆寫。
+ANTHROPIC_PRICES = {
+    'claude-haiku-5-5': {'input_per_mtok': '0.10', 'output_per_mtok': '0.50', 'long_context_tokens': 100000,
+                         'long_input_per_mtok': '0.50', 'long_output_per_mtok': '2.50'},
+    'claude-sonnet-5-5': {'input_per_mtok': '2', 'output_per_mtok': '10'},
+    'claude-fable-5-2': {'input_per_mtok': '8', 'output_per_mtok': '40'},
+}
+
+
+def read_key(path):
+    """讀使用者指定的金鑰檔：必須是一般檔案、剛好一行。內容不顯示、不落地。"""
+    path = Path(path)
+    if path.is_symlink() or not path.is_file():
+        raise ValueError('Key file must be an existing regular file')
+    lines = [line.strip() for line in path.read_text().splitlines() if line.strip()]
+    if len(lines) != 1:
+        raise ValueError('Key file must contain exactly one line')
+    return lines[0]
+
+
+def _per_mtok(value):
+    return format((Decimal(str(value)) * 1000000).normalize(), 'f')
+
+
+def list_models(openrouter_key, *, match=(), transport=None):
+    """OpenRouter 模型目錄（只讀、不收費）；``match`` 是模型代號要包含的字串（任一符合即列出）。"""
+    with httpx.Client(transport=transport, timeout=30, follow_redirects=False, trust_env=False) as http:
+        response = http.get(OPENROUTER_MODELS, headers={'Authorization': 'Bearer ' + openrouter_key})
+    response.raise_for_status()
+    rows = []
+    for item in response.json().get('data', []):
+        pricing = item.get('pricing') or {}
+        if match and not any(part in item.get('id', '') for part in match):
+            continue
+        if 'prompt' not in pricing or 'completion' not in pricing:
+            continue
+        rows.append({'id': item['id'], 'context_length': item.get('context_length'),
+                     'input_per_mtok': _per_mtok(pricing['prompt']),
+                     'output_per_mtok': _per_mtok(pricing['completion'])})
+    return sorted(rows, key=lambda row: row['id'])
+
+
+def anthropic_target(model, *, effort='low', prices=None):
+    price = (prices or ANTHROPIC_PRICES).get(model)
+    if price is None:
+        raise ValueError('No frozen Anthropic price for ' + model)
+    address = 'anthropic:' + model
+    return {'vendor': 'anthropic', 'address': address, 'price': dict(price), 'vendor_model': model,
+            'profile': {'model': address, 'model_version': address, 'accepted_models': [address],
+                        'provider': 'anthropic', 'provider_name': 'Anthropic', 'effort': effort,
+                        'capability_card': {}, 'external_score': None}}
+
+
+def openrouter_target(model, *, provider, provider_name, input_per_mtok, output_per_mtok, effort='low'):
+    address = 'openrouter:' + model
+    return {'vendor': 'openrouter', 'address': address, 'vendor_model': model,
+            'price': {'input_per_mtok': str(input_per_mtok), 'output_per_mtok': str(output_per_mtok)},
+            'profile': {'model': address, 'model_version': address, 'accepted_models': [address, model],
+                        'provider': provider, 'provider_name': provider_name, 'effort': effort,
+                        'capability_card': {}, 'external_score': None}}
+
+
+def _row(target, result):
+    calls = [call for attempt in result['attempts'] for call in attempt['calls']]
+    usage = calls[-1].get('usage') or {} if calls else {}
+    return {'address': target['address'], 'status': result['status'], 'calls': len(calls),
+            'model': calls[-1].get('model') if calls else None,
+            'provider': calls[-1].get('provider') if calls else None,
+            'input_tokens': usage.get('prompt_tokens'), 'output_tokens': usage.get('completion_tokens'),
+            'cost_usd': result['costs']['api_usd'],
+            'cost_basis': usage.get('cost_basis', 'provider_reported'),
+            'elapsed_ms': calls[-1].get('elapsed_ms') if calls else None}
+
+
+def connect(root, targets, *, openrouter_key, anthropic_key, cap_usd, transports=None, max_tokens=2048,
+            max_input_bytes=8192):
+    """階段 0：每個目標各跑一題。任何一題費用未知時，預算庫會擋下後面的題（照既有規則）。"""
+    root = Path(root)
+    if any(t['vendor'] == 'openrouter' for t in targets) and not openrouter_key:
+        raise ValueError('OpenRouter key required for openrouter targets')
+    if any(t['vendor'] == 'anthropic' for t in targets) and not anthropic_key:
+        raise ValueError('Anthropic key required for anthropic targets')
+    transports = transports or {}
+    vendors = {}
+    if anthropic_key:
+        prices = {t['vendor_model']: t['price'] for t in targets if t['vendor'] == 'anthropic'}
+        vendors['anthropic'] = AnthropicVendor(anthropic_key, prices, transport=transports.get('anthropic'))
+    http = httpx.Client(transport=VendorTransport(transports.get('openrouter') or httpx.HTTPTransport(), vendors),
+                        follow_redirects=False, trust_env=False)
+    root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    # 沒有 OpenRouter 目標時，Client 仍需要一個非空字串；它不會被送到任何地方。
+    client = Client(http, openrouter_key or 'no-openrouter-key-configured', root / 'receipts')
+    store = BudgetStore(root / 'budget.sqlite')
+    if store.report()['authorization'] is None:
+        store.authorize(Authorization('pilot-stage-0-connect', Decimal(str(cap_usd)),
+                                      (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()))
+    limits = Limits(max_turns=1, max_tokens=max_tokens, max_context_bytes=max_input_bytes)
+    _, decision = example_config()
+    rows = []
+    for index, target in enumerate(targets):
+        profiles = {tier: dict(target['profile']) for tier in ('open_source', 'low', 'mid', 'high')}
+        verifier = ListPriceBounds({target['address']: target['price']}, max_input_bytes=max_input_bytes,
+                                   max_output_tokens=max_tokens)
+        runner = BudgetedCore(Core(client, profiles, decision, limits=limits), store,
+                              model_bounds=verifier.model_bounds(), tool_bounds={}, verify_bound=verifier)
+        try:
+            result = runner.run(f'connect-{index:02d}', TASK, ArithmeticEnvironment,
+                                contract_version='pilot-connect-v1', mode='fixed_high')
+            rows.append(_row(target, result))
+        except BudgetError as error:
+            rows.append({'address': target['address'], 'status': 'not_run', 'reason': 'budget: ' + str(error)})
+        except Exception as error:  # 照實回報，不重試
+            rows.append({'address': target['address'], 'status': 'error',
+                         'reason': type(error).__name__ + ': ' + str(error)})
+    ledger = store.report()
+    known = sum((Decimal(r['cost_usd']) for r in rows if r.get('cost_usd') is not None), Decimal(0))
+    report = {'stage': 'connect', 'cap_usd': str(cap_usd), 'rows': rows,
+              'total_known_usd': format(known.normalize(), 'f'),
+              'unknown_events': sum(1 for event in ledger['events'] if event['cost'] is None)}
+    (root / 'connect-report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+    return rows
+
+
+def main(argv=None):
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    sub = parser.add_subparsers(dest='command', required=True)
+    models = sub.add_parser('models', help='列出 OpenRouter 模型與價格（不收費）')
+    models.add_argument('--openrouter-key-file', type=Path, required=True)
+    models.add_argument('--match', action='append', default=[])
+    run = sub.add_parser('connect', help='階段 0 連線驗證（會發出真實付費請求）')
+    run.add_argument('--root', type=Path, required=True, help='這次試跑的新資料夾（收據、帳本、報告）')
+    run.add_argument('--cap', default='1', help='這一階段的美元上限')
+    run.add_argument('--anthropic-key-file', type=Path)
+    run.add_argument('--anthropic-model', action='append', default=[])
+    run.add_argument('--openrouter-key-file', type=Path)
+    run.add_argument('--openrouter-model')
+    run.add_argument('--openrouter-provider')
+    run.add_argument('--openrouter-provider-name')
+    run.add_argument('--openrouter-input-price')
+    run.add_argument('--openrouter-output-price')
+    run.add_argument('--confirm-paid', action='store_true', help='確認要發出真實付費請求')
+    args = parser.parse_args(argv)
+    if args.command == 'models':
+        for row in list_models(read_key(args.openrouter_key_file), match=args.match):
+            print(json.dumps(row, ensure_ascii=False))
+        return 0
+    if not args.confirm_paid:
+        parser.error('paid_requests_require_--confirm-paid')
+    targets = [anthropic_target(model) for model in args.anthropic_model]
+    if args.openrouter_model:
+        required = (args.openrouter_provider, args.openrouter_provider_name,
+                    args.openrouter_input_price, args.openrouter_output_price)
+        if any(value is None for value in required):
+            parser.error('openrouter_model_requires_provider_name_and_prices')
+        targets.append(openrouter_target(args.openrouter_model, provider=args.openrouter_provider,
+                                         provider_name=args.openrouter_provider_name,
+                                         input_per_mtok=args.openrouter_input_price,
+                                         output_per_mtok=args.openrouter_output_price))
+    if not targets:
+        parser.error('no_targets')
+    rows = connect(args.root, targets,
+                   openrouter_key=read_key(args.openrouter_key_file) if args.openrouter_key_file else None,
+                   anthropic_key=read_key(args.anthropic_key_file) if args.anthropic_key_file else None,
+                   cap_usd=args.cap)
+    for row in rows:
+        print(json.dumps(row, ensure_ascii=False))
+    return 0 if all(row['status'] == 'passed' for row in rows) else 1
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

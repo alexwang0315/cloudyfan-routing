@@ -54,3 +54,12 @@ core.run(run_id, task, env, contract_version='v1', mode='advisor_first',
 - 顧問建議本身（`advisor_advice`）尚未回寫。
 - 經驗庫存檔沒有跨程序鎖（#75 已知限制）。
 - 卡片多花的輸入成本、經驗是否真的降低升級成本，都要等 ADR 0036 的時間序列對照評估；沒有呼叫任何真實模型。
+
+## 任務服務帶入客戶端與契約範圍（2026-11-19）
+
+- `TaskService.create` 在新題建立時，若註冊契約的路徑（路徑二或路徑一加強版）接上了經驗庫，就把經驗身分凍結進 `job.json` 的 `experience`：
+  - `client_id`：驗證後的 principal（客戶＝客戶端，ADR 0009）；不是代碼型字串時改存 `client-sha256:<雜湊>`，原字串不進經驗庫。
+  - `scope`：註冊契約 ID（同樣不合代碼格式時改存雜湊）。
+  - `created_at`：建題的 UTC 日期。
+- `execute` 把凍結的身分原樣交給 `Core.run(experience=...)`；重送不改身分。沒接經驗庫的契約不寫這個欄位，行為與先前相同。
+- 尚未做：以「類別」而非契約 ID 當範圍；Monitor 畫面尚未顯示每題的經驗身分。

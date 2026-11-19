@@ -131,6 +131,31 @@ class RegisteredContract:
                    if self.context_policy is not None else {})}
 
 
+def _experience_scope(contract, principal, contract_id, now):
+    """契約經驗的每題身分（ADR 0036）：只在契約的路徑接上經驗庫時產生，建題時凍結。
+
+    客戶＝客戶端（ADR 0009）：client_id 取自驗證後的 principal；不是代碼型字串時改用雜湊，
+    不把原字串寫進經驗庫。scope 是註冊契約 ID，created_at 是建題的 UTC 日期。
+    """
+    core = contract.runner.core
+    if contract.mode == 'advisor_first':
+        config = getattr(core, 'advisor_first', None)
+    elif contract.mode == 'cloudyfan_plus':
+        config = getattr(core, 'cloudyfan_plus', None)
+    else:
+        return None
+    if config is None or getattr(config, 'experience', None) is None:
+        return None
+    from datetime import datetime, timezone
+    from .experience_card import _TOKEN, check_context
+    client = principal if isinstance(principal, str) and _TOKEN.match(principal) else (
+        'client-sha256:' + hashlib.sha256(str(principal).encode()).hexdigest()[:32])
+    scope = contract_id if _TOKEN.match(contract_id) else (
+        'contract-sha256:' + hashlib.sha256(contract_id.encode()).hexdigest()[:32])
+    return check_context({'client_id': client, 'scope': scope,
+                          'created_at': datetime.fromtimestamp(now, timezone.utc).date().isoformat()})
+
+
 def _provenance(result, frozen):
     """Project task-owned identity references only; never expose capability prose."""
     def text_field(obj, key):
@@ -443,6 +468,9 @@ class TaskService:
             else:
                 if 'context' in payload:
                     frozen = {**frozen, 'prepared': prepared if prepared is not None else prepare_new()}
+                scope = _experience_scope(contract, principal, payload['contract_id'], self.clock())
+                if scope is not None:
+                    frozen = {**frozen, 'experience': scope}
                 if self.capacity_controller is not None:
                     try:
                         self.capacity_controller.adopt(self.internal_id(principal, payload['run_id']), principal, frozen['registered'])
@@ -646,6 +674,7 @@ class TaskService:
                 result = runner.run(internal,
                     {'prompt': task_prompt(job)}, environment,
                     contract_version=contract.version, mode=contract.mode,
+                    **({"experience": job["experience"]} if "experience" in job else {}),
                     **({"capacity_context": context, "capacity_descriptor": job["registered"]}
                        if self.capacity_controller is not None else {}))
                 if self.capacity_controller is not None:

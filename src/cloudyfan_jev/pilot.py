@@ -179,12 +179,25 @@ def connect(root, targets, *, openrouter_key, anthropic_key, cap_usd, transports
     return rows
 
 
+def key_from_args(args, vendor):
+    """指令列的金鑰來源：單行金鑰檔，或 .env 檔中指定的一個變數；都沒給時回傳 None。"""
+    key_file = getattr(args, vendor + '_key_file')
+    env_file = getattr(args, vendor + '_env_file')
+    if key_file is not None:
+        return read_key(key_file)
+    if env_file is not None:
+        return read_env_key(env_file, getattr(args, vendor + '_env_name'))
+    return None
+
+
 def main(argv=None):
     import argparse
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest='command', required=True)
     models = sub.add_parser('models', help='列出 OpenRouter 模型與價格（不收費）')
-    models.add_argument('--openrouter-key-file', type=Path, required=True)
+    models.add_argument('--openrouter-key-file', type=Path)
+    models.add_argument('--openrouter-env-file', type=Path)
+    models.add_argument('--openrouter-env-name', default='OPENROUTER_API_KEY')
     models.add_argument('--match', action='append', default=[])
     run = sub.add_parser('connect', help='階段 0 連線驗證（會發出真實付費請求）')
     run.add_argument('--root', type=Path, required=True, help='這次試跑的新資料夾（收據、帳本、報告）')
@@ -195,6 +208,8 @@ def main(argv=None):
     run.add_argument('--anthropic-model', action='append', default=[])
     run.add_argument('--anthropic-workspace-id', help='金鑰沒有綁定工作區時要帶的工作區 ID')
     run.add_argument('--openrouter-key-file', type=Path)
+    run.add_argument('--openrouter-env-file', type=Path)
+    run.add_argument('--openrouter-env-name', default='OPENROUTER_API_KEY')
     run.add_argument('--openrouter-model')
     run.add_argument('--openrouter-provider')
     run.add_argument('--openrouter-provider-name')
@@ -203,7 +218,10 @@ def main(argv=None):
     run.add_argument('--confirm-paid', action='store_true', help='確認要發出真實付費請求')
     args = parser.parse_args(argv)
     if args.command == 'models':
-        for row in list_models(read_key(args.openrouter_key_file), match=args.match):
+        key = key_from_args(args, 'openrouter')
+        if key is None:
+            parser.error('openrouter_key_required')
+        for row in list_models(key, match=args.match):
             print(json.dumps(row, ensure_ascii=False))
         return 0
     if not args.confirm_paid:
@@ -221,10 +239,8 @@ def main(argv=None):
     if not targets:
         parser.error('no_targets')
     rows = connect(args.root, targets,
-                   openrouter_key=read_key(args.openrouter_key_file) if args.openrouter_key_file else None,
-                   anthropic_key=(read_key(args.anthropic_key_file) if args.anthropic_key_file
-                                  else read_env_key(args.anthropic_env_file, args.anthropic_env_name)
-                                  if args.anthropic_env_file else None),
+                   openrouter_key=key_from_args(args, 'openrouter'),
+                   anthropic_key=key_from_args(args, 'anthropic'),
                    cap_usd=args.cap, anthropic_workspace_id=args.anthropic_workspace_id)
     for row in rows:
         print(json.dumps(row, ensure_ascii=False))

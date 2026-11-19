@@ -124,3 +124,16 @@ def test_env_file_yields_only_the_named_variable(tmp_path):
         pilot.read_env_key(env, 'ANTHROPIC_API_KEY')
     with pytest.raises(ValueError):
         pilot.read_env_key(env, 'bad name')
+
+
+def test_command_line_key_can_come_from_a_key_file_or_one_env_variable(tmp_path):
+    import argparse
+    env = tmp_path / '.env'
+    env.write_text('OPENROUTER_API_KEY=or-from-env\nCLAUDE_API_KEY=an-from-env\n')
+    args = argparse.Namespace(openrouter_key_file=None, openrouter_env_file=env, openrouter_env_name='OPENROUTER_API_KEY')
+    assert pilot.key_from_args(args, 'openrouter') == 'or-from-env'
+    args = argparse.Namespace(openrouter_key_file=keyfile(tmp_path, 'k', 'or-file'), openrouter_env_file=None,
+                              openrouter_env_name='OPENROUTER_API_KEY')
+    assert pilot.key_from_args(args, 'openrouter') == 'or-file'
+    args = argparse.Namespace(openrouter_key_file=None, openrouter_env_file=None, openrouter_env_name='X')
+    assert pilot.key_from_args(args, 'openrouter') is None

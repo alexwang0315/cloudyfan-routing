@@ -78,32 +78,33 @@ def test_c_hard_levels_have_no_direct_position_clues_and_the_answer_fits(task):
     assert all(h.c_holds(clue, pos) for clue in s['clues'])
 
 
-# ---- D：列舉所有路徑對動態規劃 ----
+# ---- D：列舉所有路線（允許繞圈，受時間、油料、道路數上限限制）對動態規劃 ----
 
-def d_enumerate(nodes, edges, time_limit, fuel_limit, via):
+def d_enumerate(nodes, edges, time_limit, fuel_limit, via, max_roads):
     out = {}
     for u, v, c, t, f in edges:
         out.setdefault(u, []).append((v, c, t, f))
     best = []
 
-    def walk(node, cost, time, fuel, seen):
-        if time > time_limit or fuel > fuel_limit:
+    def walk(node, cost, time, fuel, roads, seen):
+        if time > time_limit or fuel > fuel_limit or roads > max_roads:
             return
-        seen = seen or via is None or node == via
-        if node == nodes - 1:
-            if seen:
-                best.append(cost)
-            return
+        seen = seen or node == via
+        if node == nodes - 1 and seen:
+            best.append(cost)
         for v, c, t, f in out.get(node, []):
-            walk(v, cost + c, time + t, fuel + f, seen)
-    walk(0, 0, 0, 0, False)
+            walk(v, cost + c, time + t, fuel + f, roads + 1, seen)
+    walk(0, 0, 0, 0, 0, False)
     return min(best)
 
 
-@pytest.mark.parametrize('task', tasks('D'), ids=lambda t: t['id'])
-def test_d_minimum_cost_matches_path_enumeration(task):
+@pytest.mark.parametrize('task', tasks('D', seeds=range(2)), ids=lambda t: t['id'])
+def test_d_minimum_cost_matches_enumerating_every_route(task):
     s = task['source']
-    assert int(task['answer']) == d_enumerate(s['nodes'], s['edges'], s['time_limit'], s['fuel_limit'], s['via'])
+    assert int(task['answer']) == d_enumerate(s['nodes'], s['edges'], s['time_limit'], s['fuel_limit'], s['via'],
+                                              s['max_roads'])
+    pairs = {(u, v) for u, v, *_ in s['edges']}
+    assert any((v, u) in pairs for u, v in pairs) or any(u > v for u, v in pairs)  # 路網確實不是單向往前
 
 
 # ---- E：直接以 Python 寫出同樣的語意，對執行產生的程式碼 ----
@@ -171,31 +172,37 @@ def g_sql(data):
     db.executemany('INSERT INTO orders VALUES (:order_id, :customer, :date, :status, :amount, :currency)',
                    data['orders'])
     db.executemany('INSERT INTO refunds VALUES (:order_id, :amount, :date)', data['refunds'])
-    row = db.execute("""
+    rows = db.execute("""
         WITH o AS (SELECT DISTINCT * FROM orders),
              r AS (SELECT order_id, SUM(amount) AS total FROM refunds WHERE date <= :end GROUP BY order_id),
-             net AS (
-               SELECT o.*, o.amount - MIN(o.amount, COALESCE(r.total, 0)) AS net_amount,
+             c AS (
+               SELECT o.customer,
                       (SELECT h.region FROM history h WHERE h.customer = o.customer AND h.effective_from <= o.date
-                       ORDER BY h.effective_from DESC LIMIT 1) AS region_then
-               FROM o LEFT JOIN r ON r.order_id = o.order_id)
-        SELECT COALESCE(SUM(CASE WHEN n.currency = 'USD' THEN n.net_amount
-                                 ELSE (n.net_amount * rt.pct) / 100 END), 0)
-        FROM net n JOIN customers c ON c.customer = n.customer
-        JOIN rates rt ON rt.month = substr(n.date, 1, 7)
-        WHERE n.status IN ('shipped', 'delivered') AND n.date BETWEEN :start AND :end
-          AND c.joined <= n.date AND n.region_then = :region""", data).fetchone()
-    return row[0]
+                       ORDER BY h.effective_from DESC LIMIT 1) AS region,
+                      CASE WHEN o.currency = 'USD' THEN o.amount - MIN(o.amount, COALESCE(r.total, 0))
+                           ELSE ((o.amount - MIN(o.amount, COALESCE(r.total, 0))) * rt.pct) / 100 END AS usd
+               FROM o LEFT JOIN r ON r.order_id = o.order_id
+               JOIN customers cu ON cu.customer = o.customer
+               JOIN rates rt ON rt.month = substr(o.date, 1, 7)
+               WHERE o.status IN ('shipped', 'delivered') AND o.date BETWEEN :start AND :end
+                 AND cu.joined <= o.date),
+             counted AS (SELECT * FROM c WHERE region IS NOT NULL),
+             loyal AS (SELECT customer FROM counted GROUP BY customer HAVING COUNT(*) >= 3)
+        SELECT region, SUM(usd - CASE WHEN customer IN (SELECT customer FROM loyal) THEN (usd * 5) / 100 ELSE 0 END)
+        FROM counted GROUP BY region""", data).fetchall()
+    totals = dict.fromkeys(h.G_REGIONS, 0)
+    totals.update(dict(rows))
+    return ' '.join(f'{region}={totals[region]}' for region in h.G_REGIONS)
 
 
 @pytest.mark.parametrize('task', tasks('G'), ids=lambda t: t['id'])
-def test_g_net_revenue_matches_sqlite(task):
+def test_g_every_region_matches_sqlite(task):
     data = task['source']['data']
     assert all(o == next(x for x in data['orders'] if x['order_id'] == o['order_id']) for o in data['orders'])
-    # 同一客戶同一天不會有兩筆地區紀錄，「最新一筆」才沒有歧義。
     keys = [(r['customer'], r['effective_from']) for r in data['region_history']]
     assert len(keys) == len(set(keys))
-    assert int(task['answer']) == g_sql(data)
+    assert task['answer'] == g_sql(data)
+    assert sum(part.split('=')[1] != '0' for part in task['answer'].split()) >= 3
 
 
 # ---- H：窮舉所有字串對狀態 DP ----

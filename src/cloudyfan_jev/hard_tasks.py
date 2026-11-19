@@ -10,10 +10,10 @@ import json
 import random
 import re
 
-VERSION = 'cloudyfan-hard-tasks-v2'
-# 各題型的產生器版本：第 1 次校準後 B、C、D、G、I 太容易而改寫；其餘沿用第 1 版，
+VERSION = 'cloudyfan-hard-tasks-v3'
+# 各題型的產生器版本：第 1 次校準後 B、C、D、G、I 太容易而改寫；第 2 次校準後 D、G 再改寫；其餘沿用第 1 版，
 # 亂數種子也沿用第 1 版的命名，已校準的題目不變。
-FAMILY_REVISION = {'A': 1, 'B': 2, 'C': 2, 'D': 2, 'E': 1, 'F': 1, 'G': 2, 'H': 1, 'I': 2, 'J': 1}
+FAMILY_REVISION = {'A': 1, 'B': 2, 'C': 2, 'D': 3, 'E': 1, 'F': 1, 'G': 3, 'H': 1, 'I': 2, 'J': 1}
 LEVELS = (1, 2, 3, 4, 5)
 ANSWER_RULE = ('Think carefully. When you are done, end your response with exactly one final line of the form\n'
                'ANSWER: {fmt}\nwith nothing after it.')
@@ -263,61 +263,68 @@ def c_make(rng, level):
     return prompt, answer, 'houses', fmt, {'houses': houses, 'clues': clues}
 
 
-# ---- D（第 2 版）：雙重上限的最小成本路徑（時間與油料，難一點的要經過指定城鎮）----
+# ---- D（第 3 版）：可繞圈路網、時間與油料上限、道路數上限、必經城鎮 ----
+# 第 2 版（只能往前走的路網）開源模型仍答對 8／10，改為允許繞圈並加上道路數上限。
 
-def d_best(nodes, edges, time_limit, fuel_limit, via):
-    """參考解：依拓撲順序，對每個城鎮記錄 (已用時間, 已用油料, 是否經過指定城鎮) → 最小成本。
-    上限給 None 表示不限制該資源（此時不追蹤它，避免狀態暴增）。"""
+def d_best(nodes, edges, time_limit, fuel_limit, via, max_roads=None):
+    """參考解：依「已用時間」由小到大處理狀態（每條路的時間都至少為 1，時間嚴格遞增），
+    狀態為 (城鎮, 時間, 油料, 已走道路數, 是否經過指定城鎮) → 最小成本。上限給 None 表示不限制。"""
     out = {}
     for u, v, cost, time, fuel in edges:
         out.setdefault(u, []).append((v, cost, time, fuel))
-    states = [dict() for _ in range(nodes)]
-    states[0][(0, 0, via is None or via == 0)] = 0
-    for u in range(nodes):
-        for (used_t, used_f, seen), value in states[u].items():
-            for v, cost, time, fuel in out.get(u, []):
-                t = used_t + time if time_limit is not None else 0
-                f = used_f + fuel if fuel_limit is not None else 0
-                if (time_limit is not None and t > time_limit) or (fuel_limit is not None and f > fuel_limit):
+    # 不限時間時，最佳路線最多是「到指定城鎮」加「到終點」兩段簡單路徑，時間不超過總和的兩倍。
+    horizon = time_limit if time_limit is not None else 2 * sum(e[3] for e in edges)
+    layers = [dict() for _ in range(horizon + 1)]
+    layers[0][(0, 0, 0, via is None or via == 0)] = 0
+    best = None
+    for used_t in range(horizon + 1):
+        for (node, used_f, roads, seen), value in layers[used_t].items():
+            if node == nodes - 1 and seen:
+                best = value if best is None else min(best, value)
+            for v, cost, time, fuel in out.get(node, []):
+                t, f, r = used_t + time, used_f + fuel, roads + 1
+                if t > horizon or (fuel_limit is not None and f > fuel_limit) or (max_roads is not None and r > max_roads):
                     continue
-                key = (t, f, seen or v == via)
-                if value + cost < states[v].get(key, 10 ** 18):
-                    states[v][key] = value + cost
-    finals = [value for (_, _, seen), value in states[nodes - 1].items() if seen]
-    return min(finals) if finals else None
+                key = (v, f if fuel_limit is not None else 0, r if max_roads is not None else 0, seen or v == via)
+                if value + cost < layers[t].get(key, 10 ** 18):
+                    layers[t][key] = value + cost
+    return best
 
 
 def d_make(rng, level):
     names = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
     nodes = 10 + 2 * level
     while True:
-        edges = []
-        for u in range(nodes - 1):
-            for v in rng.sample(range(u + 1, min(nodes, u + 6)), min(nodes - u - 1, rng.randint(2, 3), 5)):
-                edges.append((u, v, rng.randint(1, 30), rng.randint(1, 12), rng.randint(1, 9)))
-        via = rng.randint(2, nodes - 3) if level >= 3 else None
+        edges, seen_pairs = [], set()
+        for u in range(nodes):
+            for v in rng.sample([x for x in range(nodes) if x != u], rng.randint(2, 3)):
+                if (u, v) not in seen_pairs and u != nodes - 1:
+                    seen_pairs.add((u, v))
+                    edges.append((u, v, rng.randint(1, 30), rng.randint(1, 9), rng.randint(1, 9)))
+        via = rng.randint(1, nodes - 2)
         loose = d_best(nodes, edges, None, None, via)
         if loose is None:
             continue
-        # 先找出不受限的最佳路徑，再把兩個上限設在它之下，迫使答案走別條路。
-        time_limit = rng.randint(14 + 4 * level, 22 + 6 * level)
-        fuel_limit = rng.randint(10 + 3 * level, 16 + 5 * level)
-        answer = d_best(nodes, edges, time_limit, fuel_limit, via)
-        only_time = d_best(nodes, edges, time_limit, None, via)
-        only_fuel = d_best(nodes, edges, None, fuel_limit, via)
-        # 兩個上限都要真的有作用：各自單獨套用時，最佳成本都已經比不受限時高。
-        if (answer is not None and only_time is not None and only_fuel is not None
-                and only_time > loose and only_fuel > loose):
+        time_limit = rng.randint(14 + 3 * level, 20 + 5 * level)
+        fuel_limit = rng.randint(12 + 3 * level, 18 + 5 * level)
+        max_roads = rng.randint(4 + level // 2, 6 + level)
+        answer = d_best(nodes, edges, time_limit, fuel_limit, via, max_roads)
+        partial = [d_best(nodes, edges, time_limit, None, via), d_best(nodes, edges, None, fuel_limit, via),
+                   d_best(nodes, edges, None, None, via, max_roads)]
+        # 三個上限都要真的有作用：各自單獨套用時，最佳成本都比不受限時高。
+        if answer is not None and all(p is not None and p > loose for p in partial):
             break
     rng.shuffle(edges)
     lines = '\n'.join(f'{names[u]} -> {names[v]}: cost {c}, time {t}, fuel {f}' for u, v, c, t, f in edges)
-    extra = f' The route must pass through town {names[via]}.' if via is not None else ''
     prompt = (f'A directed road network has {nodes} towns labelled {names[0]} to {names[nodes - 1]}. Roads can only be '
-              f'driven in the given direction:\n\n{lines}\n\n'
-              f'Find a route from {names[0]} to {names[nodes - 1]} whose total time is at most {time_limit} and whose '
-              f'total fuel is at most {fuel_limit}.{extra} Among such routes, what is the minimum total cost?')
+              f'driven in the given direction, and the network may contain cycles:\n\n{lines}\n\n'
+              f'Find a route from {names[0]} to {names[nodes - 1]} that passes through town {names[via]}, uses at most '
+              f'{max_roads} roads in total, has total time at most {time_limit} and total fuel at most {fuel_limit}. '
+              'A route may revisit towns and reuse roads (every use counts). Among such routes, what is the minimum '
+              'total cost?')
     return prompt, str(answer), 'integer', '<integer>', \
-        {'nodes': nodes, 'edges': edges, 'time_limit': time_limit, 'fuel_limit': fuel_limit, 'via': via}
+        {'nodes': nodes, 'edges': edges, 'time_limit': time_limit, 'fuel_limit': fuel_limit, 'via': via,
+         'max_roads': max_roads}
 
 
 # ---- E：程式追蹤 ----
@@ -394,14 +401,18 @@ def f_make(rng, level):
         {'rule': rule, 'cells': cells, 'steps': steps}
 
 
-# ---- G（第 2 版）：表格資料推理（匯率、地區變更紀錄、截止日後退款不計）----
+# ---- G（第 3 版）：表格資料推理（四個地區都要算、常客折扣需跨列統計）----
+# 第 2 版（單一地區）開源模型仍全對，改為四個地區都要算對，並加上需要先跨列統計的常客折扣。
+
+G_REGIONS = ('East', 'North', 'South', 'West')
+
 
 def g_month(date):
     return date[:7]
 
 
-def g_answer(data):
-    """參考解：逐列處理。"""
+def g_answer(data, stats=None):
+    """參考解：逐列處理，回傳「地區=金額」依地區名稱排序、以空白分隔。"""
     history = {}
     for row in data['region_history']:
         history.setdefault(row['customer'], []).append(row)
@@ -414,46 +425,64 @@ def g_answer(data):
     for row in data['refunds']:
         if row['date'] <= data['end']:
             refunds[row['order_id']] = refunds.get(row['order_id'], 0) + row['amount']
-    total = 0
+    counted = []
     for order in orders.values():
         if order['status'] not in ('shipped', 'delivered') or not data['start'] <= order['date'] <= data['end']:
             continue
         if joined[order['customer']] > order['date']:
             continue
         past = [h for h in history.get(order['customer'], []) if h['effective_from'] <= order['date']]
-        if not past or max(past, key=lambda h: h['effective_from'])['region'] != data['region']:
+        if not past:
             continue
+        region = max(past, key=lambda h: h['effective_from'])['region']
         net = order['amount'] - min(order['amount'], refunds.get(order['order_id'], 0))
-        total += net if order['currency'] == 'USD' else net * rates[g_month(order['date'])] // 100
-    return total
+        usd = net if order['currency'] == 'USD' else net * rates[g_month(order['date'])] // 100
+        counted.append((order['customer'], region, usd))
+    loyal = {c for c, _, _ in counted if sum(1 for x, _, _ in counted if x == c) >= 3}
+    if stats is not None:
+        stats.update(loyal=len(loyal), counted=len(counted))
+    totals = {region: 0 for region in G_REGIONS}
+    for customer, region, usd in counted:
+        totals[region] += usd - (usd * 5 // 100 if customer in loyal else 0)
+    return ' '.join(f'{region}={totals[region]}' for region in G_REGIONS)
 
 
 def g_make(rng, level):
-    regions = ['North', 'South', 'East', 'West']
+    # 至少三個地區有營收、至少一位常客折扣生效，避免「全填 0」也能矇對。
+    while True:
+        prompt, answer, kind, fmt, source = _g_candidate(rng, level)
+        stats = {}
+        g_answer(source['data'], stats)
+        if sum(part.split('=')[1] != '0' for part in answer.split()) >= 3 and stats['loyal'] >= 1:
+            return prompt, answer, kind, fmt, source
+
+
+def _g_candidate(rng, level):
     statuses = ['shipped', 'delivered', 'cancelled', 'pending', 'returned']
 
     def date(day):
         return f'2026-{1 + day // 28:02d}-{1 + day % 28:02d}'
-    customers = [{'customer': f'C{i:02d}', 'joined': date(rng.randint(0, 100))} for i in range(8 + 2 * level)]
+    customers = [{'customer': f'C{i:02d}', 'joined': date(rng.randint(0, 100))} for i in range(6 + 2 * level)]
     history = []
     for c in customers:
-        days = sorted(rng.sample(range(0, 160), rng.randint(1, 3)))
-        for day in days:
-            history.append({'customer': c['customer'], 'region': rng.choice(regions), 'effective_from': date(day)})
+        for day in sorted(rng.sample(range(0, 160), rng.randint(1, 3))):
+            history.append({'customer': c['customer'], 'region': rng.choice(G_REGIONS), 'effective_from': date(day)})
     rng.shuffle(history)
     rates = [{'month': f'2026-{m:02d}', 'eur_to_usd_percent': rng.randint(104, 118)} for m in range(1, 7)]
     orders = []
-    for i in range(16 + 10 * level):
+    for i in range(20 + 12 * level):
         orders.append({'order_id': f'O{100 + i}', 'customer': rng.choice(customers)['customer'],
                        'date': date(rng.randint(0, 160)), 'status': rng.choice(statuses),
                        'amount': rng.randint(5, 400), 'currency': rng.choice(['USD', 'EUR'])})
     for _ in range(2 + level):
         orders.insert(rng.randint(0, len(orders)), dict(rng.choice(orders)))
     start, end = sorted(rng.sample(range(20, 150), 2))
+    if end - start < 40:
+        start, end = max(0, start - 20), min(167, end + 20)
     refunds = [{'order_id': rng.choice(orders)['order_id'], 'amount': rng.randint(1, 250),
                 'date': date(rng.randint(start, 167))} for _ in range(4 + 2 * level)]
     data = {'customers': customers, 'region_history': history, 'rates': rates, 'orders': orders,
-            'refunds': refunds, 'region': rng.choice(regions), 'start': date(start), 'end': date(end)}
+            'refunds': refunds, 'start': date(start), 'end': date(end)}
 
     def table(rows, fields):
         return '\n'.join([' | '.join(fields)] + [' | '.join(str(r[f]) for f in fields) for r in rows])
@@ -467,17 +496,21 @@ def g_make(rng, level):
               table(orders, ['order_id', 'customer', 'date', 'status', 'amount', 'currency']) +
               '\n\nrefunds (amount is in the currency of the refunded order)\n' +
               table(refunds, ['order_id', 'amount', 'date']) +
-              f'\n\nCompute the net revenue in USD for region {data["region"]}, using these rules:\n'
+              '\n\nCompute the net revenue in USD of every region, using these rules:\n'
               '1. Some rows in orders are exact duplicates; count each order_id only once.\n'
-              f'2. Only orders with status shipped or delivered, dated from {data["start"]} to {data["end"]} inclusive.\n'
-              '3. Only orders whose customer had joined on or before the order date, and whose region on the order '
-              f'date was {data["region"]}.\n'
-              f'4. Ignore refunds dated after {data["end"]}. For each counted order, subtract the sum of its remaining '
+              f'2. An order is counted only if its status is shipped or delivered, it is dated from {data["start"]} to '
+              f'{data["end"]} inclusive, its customer had joined on or before the order date, and its customer had a '
+              'region on the order date. The order belongs to the customer\'s region on the order date.\n'
+              f'3. Ignore refunds dated after {data["end"]}. For each counted order, subtract the sum of its remaining '
               'refunds, but never subtract more than the order amount.\n'
-              '5. Convert each order\'s net amount to USD: USD orders stay as they are; for EUR orders multiply by '
-              'the rate of the order\'s month and divide by 100, rounding down to a whole number (per order).\n'
-              '6. Net revenue is the sum over counted orders.')
-    return prompt, str(g_answer(data)), 'integer', '<integer>', {'data': data}
+              '4. Convert each counted order\'s net amount to USD: USD orders stay as they are; for EUR orders multiply '
+              'by the rate of the order\'s month and divide by 100, rounding down to a whole number (per order).\n'
+              '5. Loyalty discount: a customer with at least 3 counted orders (in any regions) is loyal. For each '
+              'counted order of a loyal customer, subtract 5% of its USD amount, rounded down to a whole number '
+              '(per order).\n'
+              '6. A region\'s net revenue is the sum over its counted orders (0 if it has none).')
+    fmt = 'East=<amount> North=<amount> South=<amount> West=<amount>'
+    return prompt, g_answer(data), 'tokens', fmt, {'data': data}
 
 
 # ---- H：形式語言計數 ----

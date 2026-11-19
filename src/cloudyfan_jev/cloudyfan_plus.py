@@ -136,7 +136,7 @@ def result_fields(card):
     from .experience_card import facts_block
     block = facts_block(card)
     return {'card': card['view']['card'], 'store_version': card['store_version'],
-            'facts_block': None if block is None else block['id']}
+            'facts_block': None if block is None else block['id'], 'scope': card['view']['scope']}
 
 
 def attempt(core, env, messages, tier, prefix, index, actions, directory, previous):

@@ -235,7 +235,8 @@ def run(core, run_id, task, environment_factory, *, contract_version, experience
         if card is not None:
             block = experience_card.facts_block(card)
             result['experience'] = {'card': card['view']['card'], 'store_version': card['store_version'],
-                                    'facts_block': None if block is None else block['id']}
+                                    'facts_block': None if block is None else block['id'],
+                                    'scope': card['view']['scope']}
         _save(completed, result)
         if card is not None:
             experience_card.write_back(config, pool, experience, card, result)

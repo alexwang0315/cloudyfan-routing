@@ -116,3 +116,4 @@ python -m cloudyfan_jev.experience_rewrite --experience runtime/experience.json 
 - 輸出一行 JSON 摘要（`accepted`／`rejected`／`stale`／`provider_rejected`）。
 - 已測：`tests/test_experience_wiring.py` 新增 4 項；另以合成經驗庫實際跑過 `--dry-run` 與缺組裝的拒絕。
 - 未做：沒有內建排程（由主機用 cron 或自己的排程器定期呼叫）；沒有真實主機的組裝函式，沒有呼叫過真實模型。
+- 結果的 `experience` 多了 `scope`（契約／類別代碼），供 Monitor 任務頁顯示每題的經驗身分（2026-11-19）。舊結果沒有這個欄位。

@@ -48,6 +48,8 @@ def test_advisor_receives_card_within_two_kilobytes(tmp_path):
     assert set(card['pool']) == {'low', 'mid', 'high'}
     assert 'experience_card' in api.requests[0]['messages'][0]['content']
     assert result['experience']['card'] == card['card']
+    # 結果自帶經驗範圍（契約／類別代碼），Monitor 任務頁靠它顯示每題的經驗身分。
+    assert result['experience']['scope'] == SCOPE
 
 
 def test_delegated_model_receives_only_solving_facts_as_reference_block(tmp_path):

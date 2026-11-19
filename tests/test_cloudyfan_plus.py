@@ -223,7 +223,7 @@ def test_solving_facts_are_appended_as_a_versioned_reference_block(tmp_path):
     assert user.startswith(TASK['prompt'] + '\n\n[參考區塊 ' + block + ']\n')
     assert 'check_code: integer_sum_contract_failed' in user
     assert result['experience'] == {'card': card['view']['card'], 'store_version': card['store_version'],
-                                    'facts_block': block}
+                                    'facts_block': block, 'scope': CONTEXT['scope']}
     assert card['version'] == 'cloudyfan-plus-facts-v1' and set(card['view']) == {
         'card', 'scope', 'facts', 'facts_omitted'}
     manifest = json.loads((tmp_path / 'runs' / 'r' / 'manifest.json').read_text())

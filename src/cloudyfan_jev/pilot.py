@@ -149,7 +149,8 @@ def _row(target, result):
             'input_tokens': usage.get('prompt_tokens'), 'output_tokens': usage.get('completion_tokens'),
             'provider_rejected': any(call.get('provider_rejected') for call in calls),
             'cost_usd': result['costs']['api_usd'],
-            'cost_basis': usage.get('cost_basis', 'provider_reported'),
+            # 費用來源：Anthropic 是計算值；OpenRouter 是回應金額、核帳金額或 429 政策零費。
+            'cost_basis': usage.get('cost_basis') or (calls[-1].get('cost_source') if calls else None),
             'elapsed_ms': calls[-1].get('elapsed_ms') if calls else None}
 
 

@@ -195,6 +195,8 @@ def test_upstream_429_is_recorded_as_policy_zero_fee_and_does_not_block_the_next
                          transports={'openrouter': httpx.MockTransport(api)}, rejection_policy_source=source)
     assert rows[0]['address'] == 'openai/gpt-oss-20b' and rows[0]['status'] != 'error'
     assert rows[0]['provider_rejected'] is True and rows[0]['cost_usd'] == '0'
+    assert rows[0]['cost_basis'] == 'provider_error_no_charge_policy'
+    assert rows[1]['cost_basis'] == 'response_usage_cost'
     assert rows[1]['status'] == 'passed' and rows[1]['cost_usd'] == '0.0003'
     report = json.loads((tmp_path / 'run' / 'connect-report.json').read_text())
     assert report['unknown_events'] == 0

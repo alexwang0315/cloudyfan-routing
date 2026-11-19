@@ -1,7 +1,7 @@
 """#81 試跑題集：每個題型的參考答案以第二種獨立方法核對；驗收器只回傳代碼。不呼叫任何模型。"""
 from fractions import Fraction
 from functools import lru_cache
-from itertools import permutations, product
+from itertools import product
 import json
 import sqlite3
 
@@ -37,86 +37,73 @@ def test_a_paths_match_an_independent_recursion(task):
     assert int(task['answer']) == a_recursive(tuple(task['source']['grid']), task['source']['diagonal']) >= 10
 
 
-# ---- B：逐次抽球的狀態 DP 對組合公式 ----
+# ---- B：窮舉所有擲骰序列對逐回合機率 ----
 
-def b_sequential(counts, draws, exact_red, min_blue, last_red):
-    @lru_cache(maxsize=None)
-    def go(r, b, g, left, last):
-        if left == 0:
-            red, blue = counts[0] - r, counts[1] - b
-            ok = red == exact_red and blue >= min_blue and (not last_red or last == 'r')
-            return Fraction(int(ok))
-        total = r + b + g
-        out = Fraction(0)
-        for colour, n in (('r', r), ('b', b), ('g', g)):
-            if n:
-                nxt = (r - (colour == 'r'), b - (colour == 'b'), g - (colour == 'g'))
-                out += Fraction(n, total) * go(*nxt, left - 1, colour)
-        return out
-    return go(*counts, draws, None)
+def b_enumerate(board, die, turns, jumps):
+    hits = 0
+    for rolls in product(range(1, die + 1), repeat=turns):
+        square = 0
+        for roll in rolls:
+            square += roll
+            if square > board:
+                square = board - (square - board)
+            square = jumps.get(square, square)
+            if square == board:
+                hits += 1
+                break
+    return Fraction(hits, die ** turns)
 
 
 @pytest.mark.parametrize('task', tasks('B'), ids=lambda t: t['id'])
-def test_b_probability_matches_draw_by_draw_dp(task):
+def test_b_probability_matches_enumerating_every_roll_sequence(task):
     s = task['source']
-    expected = b_sequential(s['counts'], s['draws'], s['exact_red'], s['min_blue'], s['last_red'])
-    assert Fraction(task['answer']) == expected and 0 < expected < 1
+    assert Fraction(task['answer']) == b_enumerate(s['board'], s['die'], s['turns'], s['jumps'])
+    assert all(target not in s['jumps'] for target in s['jumps'].values())
 
 
-# ---- C：四間房以窮舉核對唯一解；五間房核對答案滿足所有線索 ----
+# ---- C：逐屬性排列的求解器（舊方法）對生成用的回溯求解器 ----
 
-def c_brute(houses, clues):
-    values = [h.C_NAMES[:houses], h.C_COLORS[:houses], h.C_PETS[:houses]]
-    found = []
-    for a in permutations(range(houses)):
-        for b in permutations(range(houses)):
-            for c in permutations(range(houses)):
-                pos = {}
-                for i, perm in enumerate((a, b, c)):
-                    pos.update({(i, v): p for v, p in zip(values[i], perm)})
-                if all(h.c_holds(cl, pos) for cl in clues):
-                    found.append(h.c_assignment(houses, pos))
-    return found
-
-
-@pytest.mark.parametrize('task', tasks('C', levels=(1, 2), seeds=range(2)), ids=lambda t: t['id'])
-def test_c_four_house_puzzles_have_exactly_the_reference_solution(task):
-    s = task['source']
-    assert c_brute(s['houses'], s['clues']) == [task['answer']]
-
-
-@pytest.mark.parametrize('task', tasks('C', levels=(3, 5), seeds=range(1)), ids=lambda t: t['id'])
-def test_c_five_house_answer_satisfies_every_clue(task):
+@pytest.mark.parametrize('task', tasks('C', levels=(1, 2, 3), seeds=range(1)), ids=lambda t: t['id'])
+def test_c_unique_solution_confirmed_by_the_permutation_solver(task):
     s, answer = task['source'], task['answer']
+    solutions = h.c_solutions(s['houses'], s['clues'], limit=2)
+    assert [h.c_assignment(s['houses'], p) for p in solutions] == [answer]
+
+
+@pytest.mark.parametrize('task', tasks('C', levels=(4, 5), seeds=range(1)), ids=lambda t: t['id'])
+def test_c_hard_levels_have_no_direct_position_clues_and_the_answer_fits(task):
+    s, answer = task['source'], task['answer']
+    assert s['houses'] == 6 and not any(clue[0] == 'at' for clue in s['clues'])
     pos = {(i, v): house for i, attr in enumerate(h.C_ATTRS) for house, v in enumerate(answer[attr])}
     assert all(h.c_holds(clue, pos) for clue in s['clues'])
-    assert len(h.c_solutions(s['houses'], s['clues'], limit=3)) == 1
 
 
-# ---- D：列舉所有路徑對時間維度 DP ----
+# ---- D：列舉所有路徑對動態規劃 ----
 
-def d_enumerate(nodes, edges, budget):
+def d_enumerate(nodes, edges, time_limit, fuel_limit, via):
     out = {}
-    for u, v, c, t in edges:
-        out.setdefault(u, []).append((v, c, t))
+    for u, v, c, t, f in edges:
+        out.setdefault(u, []).append((v, c, t, f))
     best = []
 
-    def walk(node, cost, time):
-        if time > budget:
+    def walk(node, cost, time, fuel, seen):
+        if time > time_limit or fuel > fuel_limit:
             return
+        seen = seen or via is None or node == via
         if node == nodes - 1:
-            best.append(cost)
+            if seen:
+                best.append(cost)
             return
-        for v, c, t in out.get(node, []):
-            walk(v, cost + c, time + t)
-    walk(0, 0, 0)
+        for v, c, t, f in out.get(node, []):
+            walk(v, cost + c, time + t, fuel + f, seen)
+    walk(0, 0, 0, 0, False)
     return min(best)
 
 
 @pytest.mark.parametrize('task', tasks('D'), ids=lambda t: t['id'])
 def test_d_minimum_cost_matches_path_enumeration(task):
     s = task['source']
-    assert int(task['answer']) == d_enumerate(s['nodes'], s['edges'], s['budget'])
+    assert int(task['answer']) == d_enumerate(s['nodes'], s['edges'], s['time_limit'], s['fuel_limit'], s['via'])
 
 
 # ---- E：直接以 Python 寫出同樣的語意，對執行產生的程式碼 ----
@@ -173,29 +160,41 @@ def test_f_row_matches_a_bitwise_simulation(task):
 
 def g_sql(data):
     db = sqlite3.connect(':memory:')
-    db.execute('CREATE TABLE customers (customer, region, joined)')
-    db.execute('CREATE TABLE orders (order_id, customer, date, status, amount)')
-    db.execute('CREATE TABLE refunds (order_id, amount)')
-    db.executemany('INSERT INTO customers VALUES (:customer, :region, :joined)', data['customers'])
-    db.executemany('INSERT INTO orders VALUES (:order_id, :customer, :date, :status, :amount)', data['orders'])
-    db.executemany('INSERT INTO refunds VALUES (:order_id, :amount)', data['refunds'])
+    db.execute('CREATE TABLE customers (customer, joined)')
+    db.execute('CREATE TABLE history (customer, region, effective_from)')
+    db.execute('CREATE TABLE rates (month, pct)')
+    db.execute('CREATE TABLE orders (order_id, customer, date, status, amount, currency)')
+    db.execute('CREATE TABLE refunds (order_id, amount, date)')
+    db.executemany('INSERT INTO customers VALUES (:customer, :joined)', data['customers'])
+    db.executemany('INSERT INTO history VALUES (:customer, :region, :effective_from)', data['region_history'])
+    db.executemany('INSERT INTO rates VALUES (:month, :eur_to_usd_percent)', data['rates'])
+    db.executemany('INSERT INTO orders VALUES (:order_id, :customer, :date, :status, :amount, :currency)',
+                   data['orders'])
+    db.executemany('INSERT INTO refunds VALUES (:order_id, :amount, :date)', data['refunds'])
     row = db.execute("""
-        SELECT COALESCE(SUM(o.amount - MIN(o.amount, COALESCE(r.total, 0))), 0)
-        FROM (SELECT DISTINCT * FROM orders) o
-        JOIN customers c ON c.customer = o.customer
-        LEFT JOIN (SELECT order_id, SUM(amount) AS total FROM refunds GROUP BY order_id) r ON r.order_id = o.order_id
-        WHERE c.region = ? AND o.status IN ('shipped', 'delivered') AND o.date BETWEEN ? AND ?
-          AND c.joined <= o.date""", (data['region'], data['start'], data['end'])).fetchone()
+        WITH o AS (SELECT DISTINCT * FROM orders),
+             r AS (SELECT order_id, SUM(amount) AS total FROM refunds WHERE date <= :end GROUP BY order_id),
+             net AS (
+               SELECT o.*, o.amount - MIN(o.amount, COALESCE(r.total, 0)) AS net_amount,
+                      (SELECT h.region FROM history h WHERE h.customer = o.customer AND h.effective_from <= o.date
+                       ORDER BY h.effective_from DESC LIMIT 1) AS region_then
+               FROM o LEFT JOIN r ON r.order_id = o.order_id)
+        SELECT COALESCE(SUM(CASE WHEN n.currency = 'USD' THEN n.net_amount
+                                 ELSE (n.net_amount * rt.pct) / 100 END), 0)
+        FROM net n JOIN customers c ON c.customer = n.customer
+        JOIN rates rt ON rt.month = substr(n.date, 1, 7)
+        WHERE n.status IN ('shipped', 'delivered') AND n.date BETWEEN :start AND :end
+          AND c.joined <= n.date AND n.region_then = :region""", data).fetchone()
     return row[0]
 
 
 @pytest.mark.parametrize('task', tasks('G'), ids=lambda t: t['id'])
 def test_g_net_revenue_matches_sqlite(task):
     data = task['source']['data']
-    ids = [o['order_id'] for o in data['orders']]
-    # 重複的 order_id 一定是完全相同的列，「去重」才沒有歧義。
     assert all(o == next(x for x in data['orders'] if x['order_id'] == o['order_id']) for o in data['orders'])
-    assert len(ids) > len(set(ids))
+    # 同一客戶同一天不會有兩筆地區紀錄，「最新一筆」才沒有歧義。
+    keys = [(r['customer'], r['effective_from']) for r in data['region_history']]
+    assert len(keys) == len(set(keys))
     assert int(task['answer']) == g_sql(data)
 
 
@@ -222,32 +221,36 @@ def test_h_count_matches_brute_force(task):
     assert expected == total
 
 
-# ---- I：逐點判斷是否在內部對 Pick 定理 ----
+# ---- I：繞數法逐點判斷對射線交叉法 ----
 
-def i_brute(points):
+def i_winding(points, a, b, modulus, residue):
     xs, ys = [p[0] for p in points], [p[1] for p in points]
     edges = list(zip(points, points[1:] + points[:1]))
 
-    def on_edge(x, y):
-        return any((bx - ax) * (y - ay) == (by - ay) * (x - ax) and min(ax, bx) <= x <= max(ax, bx)
-                   and min(ay, by) <= y <= max(ay, by) for (ax, ay), (bx, by) in edges)
+    def cross(ax, ay, bx, by, x, y):
+        return (bx - ax) * (y - ay) - (by - ay) * (x - ax)
 
-    def inside(x, y):
-        hits = 0
-        for (ax, ay), (bx, by) in edges:
-            if (ay > y) != (by > y):
-                # 交點 x 座標 > x 時計一次；用整數比較避免浮點誤差。
-                num, den = (bx - ax) * (y - ay), (by - ay)
-                if (num + ax * den - x * den) * (1 if den > 0 else -1) > 0:
-                    hits += 1
-        return hits % 2 == 1
-    return sum(1 for x in range(min(xs), max(xs) + 1) for y in range(min(ys), max(ys) + 1)
-               if not on_edge(x, y) and inside(x, y))
+    count = 0
+    for x in range(min(xs), max(xs) + 1):
+        for y in range(min(ys), max(ys) + 1):
+            if any(cross(ax, ay, bx, by, x, y) == 0 and min(ax, bx) <= x <= max(ax, bx)
+                   and min(ay, by) <= y <= max(ay, by) for (ax, ay), (bx, by) in edges):
+                continue
+            winding = 0
+            for (ax, ay), (bx, by) in edges:
+                if ay <= y < by and cross(ax, ay, bx, by, x, y) > 0:
+                    winding += 1
+                elif by <= y < ay and cross(ax, ay, bx, by, x, y) < 0:
+                    winding -= 1
+            if winding != 0 and (a * x + b * y) % modulus == residue:
+                count += 1
+    return count
 
 
 @pytest.mark.parametrize('task', tasks('I'), ids=lambda t: t['id'])
-def test_i_interior_points_match_point_by_point_check(task):
-    assert int(task['answer']) == i_brute(task['source']['points']) > 0
+def test_i_count_matches_the_winding_number_method(task):
+    s = task['source']
+    assert int(task['answer']) == i_winding(s['points'], s['a'], s['b'], s['modulus'], s['residue'])
 
 
 # ---- J：另一種寫法（先算每筆、再一次分組排序）對逐步轉換 ----
@@ -294,6 +297,7 @@ def test_generation_is_deterministic_and_covers_ten_families_five_levels():
     assert first == again and h.make('E', 3, 8)['prompt'] != first['prompt']
     pool = [h.make(f, level, 0) for f in 'ABDEFGHIJ' for level in h.LEVELS]
     assert len({t['id'] for t in pool}) == 45
+    assert {t['family']: t['revision'] for t in pool} == {f: h.FAMILY_REVISION[f] for f in 'ABDEFGHIJ'}
     assert all(t['prompt'].rstrip().endswith('with nothing after it.') for t in pool)
     # 標準答案不會出現在題目最後的作答說明裡。
     assert all('ANSWER: ' + str(t['answer']) not in t['prompt'] for t in pool if t['kind'] != 'json')

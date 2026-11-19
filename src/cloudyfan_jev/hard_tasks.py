@@ -7,11 +7,13 @@
 from fractions import Fraction
 from itertools import permutations
 import json
-from math import comb, gcd
 import random
 import re
 
-VERSION = 'cloudyfan-hard-tasks-v1'
+VERSION = 'cloudyfan-hard-tasks-v2'
+# 各題型的產生器版本：第 1 次校準後 B、C、D、G、I 太容易而改寫；其餘沿用第 1 版，
+# 亂數種子也沿用第 1 版的命名，已校準的題目不變。
+FAMILY_REVISION = {'A': 1, 'B': 2, 'C': 2, 'D': 2, 'E': 1, 'F': 1, 'G': 2, 'H': 1, 'I': 2, 'J': 1}
 LEVELS = (1, 2, 3, 4, 5)
 ANSWER_RULE = ('Think carefully. When you are done, end your response with exactly one final line of the form\n'
                'ANSWER: {fmt}\nwith nothing after it.')
@@ -68,42 +70,55 @@ def a_make(rng, level):
     return prompt, str(answer), 'integer', '<integer>', {'grid': grid, 'diagonal': diagonal}
 
 
-# ---- B：機率（不放回抽球，精確分數）----
+# ---- B（第 2 版）：機率（有梯子與蛇的棋盤、限定回合數，精確分數）----
+# 第 1 版（不放回抽球）有單一公式可套，開源模型全對（校準 2026-11-19），已改為需要逐回合推算的過程。
 
-def b_probability(counts, draws, exact_red, min_blue, last_red):
-    """參考解：組合公式；「最後一顆是紅球」依對稱性乘上 紅球數 / 抽出總數。"""
-    red, blue, green = counts
-    total = comb(red + blue + green, draws)
-    result = Fraction(0)
-    for b in range(min_blue, draws - exact_red + 1):
-        g = draws - exact_red - b
-        ways = comb(red, exact_red) * comb(blue, b) * comb(green, g)
-        if ways:
-            result += Fraction(ways, total) * (Fraction(exact_red, draws) if last_red else 1)
-    return result
+def b_probability(board, die, turns, jumps):
+    """參考解：逐回合追蹤每個位置的機率；到達終點即停止並累計。"""
+    dist, reached = {0: Fraction(1)}, Fraction(0)
+    for _ in range(turns):
+        nxt = {}
+        for square, prob in dist.items():
+            for roll in range(1, die + 1):
+                target = square + roll
+                if target > board:
+                    target = board - (target - board)
+                target = jumps.get(target, target)
+                if target == board:
+                    reached += prob / die
+                else:
+                    nxt[target] = nxt.get(target, 0) + prob / die
+        dist = nxt
+    return reached
 
 
 def b_make(rng, level):
+    board, die, turns, count = {1: (10, 3, 5, 2), 2: (12, 3, 6, 3), 3: (14, 4, 6, 3), 4: (16, 4, 7, 4),
+                                5: (18, 4, 8, 5)}[level]
     while True:
-        red, blue, green = (rng.randint(3, 5 + 2 * level) for _ in range(3))
-        draws = rng.randint(3 + level, 5 + 2 * level)
-        if draws > red + blue + green:
-            continue
-        exact_red = rng.randint(1, min(red, draws - 1))
-        min_blue = rng.randint(1, max(1, min(blue, draws - exact_red)))
-        last_red = level >= 3
-        answer = b_probability((red, blue, green), draws, exact_red, min_blue, last_red)
-        if 0 < answer < 1:
+        squares = rng.sample(range(2, board - 1), 2 * count)
+        jumps, targets = {}, set()
+        for start in squares[:count]:
+            options = [t for t in range(1, board) if t != start and t not in squares[:count] and t not in targets]
+            target = rng.choice(options)
+            jumps[start] = target
+            targets.add(target)
+        answer = b_probability(board, die, turns, jumps)
+        if Fraction(1, 20) < answer < Fraction(19, 20):
             break
-    extra = ' and the last ball drawn is red' if last_red else ''
-    prompt = (f'A bag contains {red} red, {blue} blue and {green} green balls. Balls of the same color are '
-              f'indistinguishable in color but every ball is equally likely to be drawn. You draw {draws} balls one '
-              f'at a time, uniformly at random, without replacement.\n\nWhat is the probability that exactly '
-              f'{exact_red} of the drawn balls are red, at least {min_blue} are blue{extra}? '
+    lines = '\n'.join(f'- landing on square {s} moves the token to square {t} '
+                      f'({"ladder up" if t > s else "snake down"})' for s, t in sorted(jumps.items()))
+    prompt = (f'A board has squares 0 to {board}. A token starts on square 0. Each turn you roll a fair die with faces '
+              f'1 to {die} and move the token forward by the roll.\n'
+              f'- If the move would go past square {board}, the token bounces back: it walks forward to square {board} '
+              'and then backward for the remaining steps.\n'
+              f'{lines}\n'
+              '- A jump happens at most once per turn, after the move (a jump destination is never itself a jump square).\n'
+              f'- As soon as the token is on square {board} the game stops.\n\n'
+              f'What is the probability that the token reaches square {board} within at most {turns} turns? '
               'Give the exact probability as a reduced fraction p/q.')
     return (prompt, f'{answer.numerator}/{answer.denominator}', 'fraction', '<p>/<q>',
-            {'counts': (red, blue, green), 'draws': draws, 'exact_red': exact_red, 'min_blue': min_blue,
-             'last_red': last_red})
+            {'board': board, 'die': die, 'turns': turns, 'jumps': jumps})
 
 
 # ---- C：約束滿足（房屋邏輯謎題）----
@@ -171,22 +186,53 @@ def c_text(clue):
             'before': f'{a} is somewhere to the left of {b}.'}[kind]
 
 
+def c_csp(houses, clues, limit=2):
+    """生成用求解器：以「每個項目放哪一間」為變數的回溯（同屬性不可重複），每放一個就檢查相關線索。
+    原本逐屬性排列的 ``c_solutions`` 保留作為測試裡的獨立核對。"""
+    values = [C_NAMES[:houses], C_COLORS[:houses], C_PETS[:houses]]
+    items = [(i, v) for i in range(3) for v in values[i]]
+    related = {item: [cl for cl in clues if item in _c_items(cl)] for item in items}
+    items.sort(key=lambda item: -len(related[item]))
+    pos, used, found = {}, [set(), set(), set()], []
+
+    def search(index):
+        if len(found) >= limit:
+            return
+        if index == len(items):
+            found.append(dict(pos))
+            return
+        item = items[index]
+        for house in range(houses):
+            if house in used[item[0]]:
+                continue
+            pos[item] = house
+            if all(c_holds(cl, pos) for cl in related[item] if all(x in pos for x in _c_items(cl))):
+                used[item[0]].add(house)
+                search(index + 1)
+                used[item[0]].discard(house)
+            del pos[item]
+    search(0)
+    return found
+
+
 def c_make(rng, level):
-    houses = 4 if level <= 2 else 5
+    """第 2 版：第 3 級以上六間房；第 2 級以上沒有「某項在第幾間」的直接線索。"""
+    houses = 5 if level <= 2 else 6
     values = [C_NAMES[:houses], C_COLORS[:houses], C_PETS[:houses]]
     pos = {}
     for i in range(3):
         for v, p in zip(values[i], rng.sample(range(houses), houses)):
             pos[(i, v)] = p
     items = list(pos)
-    direct = max(0.05, 0.35 - 0.07 * level)
+    direct = 0.08 if level == 1 else 0
+    negative = 0.18 if level <= 3 else 0.1
     clues = []
     while True:
         roll = rng.random()
         a = rng.choice(items)
         if roll < direct:
             clue = ('at', a, pos[a])
-        elif roll < direct + 0.15:
+        elif roll < direct + negative:
             clue = ('not_at', a, rng.choice([h for h in range(houses) if h != pos[a]]))
         else:
             b = rng.choice([i for i in items if i[0] != a[0]] if rng.random() < 0.4 else items)
@@ -199,12 +245,11 @@ def c_make(rng, level):
         if clue in clues:
             continue
         clues.append(clue)
-        if len(c_solutions(houses, clues)) == 1:
+        if len(c_csp(houses, clues)) == 1:
             break
-    # 去掉多餘的線索（拿掉後仍唯一就拿掉），讓題目更需要推理。
     for clue in list(clues):
         trial = [c for c in clues if c != clue]
-        if len(c_solutions(houses, trial)) == 1:
+        if len(c_csp(houses, trial)) == 1:
             clues = trial
     rng.shuffle(clues)
     answer = c_assignment(houses, pos)
@@ -218,58 +263,61 @@ def c_make(rng, level):
     return prompt, answer, 'houses', fmt, {'houses': houses, 'clues': clues}
 
 
-# ---- D：有限制的最短路徑（成本最小、總時間不超過上限）----
+# ---- D（第 2 版）：雙重上限的最小成本路徑（時間與油料，難一點的要經過指定城鎮）----
 
-def d_best(nodes, edges, budget):
-    """參考解：依拓撲順序對 (節點, 已用時間) 做動態規劃。"""
-    best = {(0, 0): 0}
-    for node in range(nodes):
-        for (u, v, cost, time) in edges:
-            if u != node:
-                continue
-            for (n, used), value in list(best.items()):
-                if n == u and used + time <= budget:
-                    key = (v, used + time)
-                    if value + cost < best.get(key, 10 ** 18):
-                        best[key] = value + cost
-    finals = [value for (n, _), value in best.items() if n == nodes - 1]
+def d_best(nodes, edges, time_limit, fuel_limit, via):
+    """參考解：依拓撲順序，對每個城鎮記錄 (已用時間, 已用油料, 是否經過指定城鎮) → 最小成本。
+    上限給 None 表示不限制該資源（此時不追蹤它，避免狀態暴增）。"""
+    out = {}
+    for u, v, cost, time, fuel in edges:
+        out.setdefault(u, []).append((v, cost, time, fuel))
+    states = [dict() for _ in range(nodes)]
+    states[0][(0, 0, via is None or via == 0)] = 0
+    for u in range(nodes):
+        for (used_t, used_f, seen), value in states[u].items():
+            for v, cost, time, fuel in out.get(u, []):
+                t = used_t + time if time_limit is not None else 0
+                f = used_f + fuel if fuel_limit is not None else 0
+                if (time_limit is not None and t > time_limit) or (fuel_limit is not None and f > fuel_limit):
+                    continue
+                key = (t, f, seen or v == via)
+                if value + cost < states[v].get(key, 10 ** 18):
+                    states[v][key] = value + cost
+    finals = [value for (_, _, seen), value in states[nodes - 1].items() if seen]
     return min(finals) if finals else None
-
-
-def _d_unconstrained(nodes, edges):
-    dist = {0: (0, 0)}
-    for node in range(nodes):
-        for (u, v, cost, time) in edges:
-            if u == node and u in dist:
-                c, t = dist[u][0] + cost, dist[u][1] + time
-                if v not in dist or c < dist[v][0]:
-                    dist[v] = (c, t)
-    return dist.get(nodes - 1)
 
 
 def d_make(rng, level):
     names = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    nodes = 10 + 2 * level
     while True:
-        nodes = 6 + 2 * level
         edges = []
         for u in range(nodes - 1):
-            targets = rng.sample(range(u + 1, nodes), min(nodes - u - 1, rng.randint(2, 3)))
-            for v in targets:
-                edges.append((u, v, rng.randint(1, 20), rng.randint(1, 15)))
-        free = _d_unconstrained(nodes, edges)
-        if free is None:
+            for v in rng.sample(range(u + 1, min(nodes, u + 6)), min(nodes - u - 1, rng.randint(2, 3), 5)):
+                edges.append((u, v, rng.randint(1, 30), rng.randint(1, 12), rng.randint(1, 9)))
+        via = rng.randint(2, nodes - 3) if level >= 3 else None
+        loose = d_best(nodes, edges, None, None, via)
+        if loose is None:
             continue
-        budget = free[1] - rng.randint(2, 6)
-        answer = d_best(nodes, edges, budget)
-        if budget > 0 and answer is not None and answer > free[0]:
+        # 先找出不受限的最佳路徑，再把兩個上限設在它之下，迫使答案走別條路。
+        time_limit = rng.randint(14 + 4 * level, 22 + 6 * level)
+        fuel_limit = rng.randint(10 + 3 * level, 16 + 5 * level)
+        answer = d_best(nodes, edges, time_limit, fuel_limit, via)
+        only_time = d_best(nodes, edges, time_limit, None, via)
+        only_fuel = d_best(nodes, edges, None, fuel_limit, via)
+        # 兩個上限都要真的有作用：各自單獨套用時，最佳成本都已經比不受限時高。
+        if (answer is not None and only_time is not None and only_fuel is not None
+                and only_time > loose and only_fuel > loose):
             break
     rng.shuffle(edges)
-    lines = '\n'.join(f'{names[u]} -> {names[v]}: cost {c}, time {t}' for u, v, c, t in edges)
-    prompt = (f'A directed road network has {nodes} towns labelled {names[0]} to {names[nodes - 1]}. '
-              f'Each road can only be driven in the given direction:\n\n{lines}\n\n'
-              f'Find a route from {names[0]} to {names[nodes - 1]} whose total time is at most {budget} and whose '
-              'total cost is as small as possible. What is that minimum total cost?')
-    return prompt, str(answer), 'integer', '<integer>', {'nodes': nodes, 'edges': edges, 'budget': budget}
+    lines = '\n'.join(f'{names[u]} -> {names[v]}: cost {c}, time {t}, fuel {f}' for u, v, c, t, f in edges)
+    extra = f' The route must pass through town {names[via]}.' if via is not None else ''
+    prompt = (f'A directed road network has {nodes} towns labelled {names[0]} to {names[nodes - 1]}. Roads can only be '
+              f'driven in the given direction:\n\n{lines}\n\n'
+              f'Find a route from {names[0]} to {names[nodes - 1]} whose total time is at most {time_limit} and whose '
+              f'total fuel is at most {fuel_limit}.{extra} Among such routes, what is the minimum total cost?')
+    return prompt, str(answer), 'integer', '<integer>', \
+        {'nodes': nodes, 'edges': edges, 'time_limit': time_limit, 'fuel_limit': fuel_limit, 'via': via}
 
 
 # ---- E：程式追蹤 ----
@@ -346,57 +394,89 @@ def f_make(rng, level):
         {'rule': rule, 'cells': cells, 'steps': steps}
 
 
-# ---- G：表格資料推理（純文字表格，不用 SQL）----
+# ---- G（第 2 版）：表格資料推理（匯率、地區變更紀錄、截止日後退款不計）----
+
+def g_month(date):
+    return date[:7]
+
 
 def g_answer(data):
     """參考解：逐列處理。"""
-    customers = {c['customer']: c for c in data['customers']}
+    history = {}
+    for row in data['region_history']:
+        history.setdefault(row['customer'], []).append(row)
+    joined = {c['customer']: c['joined'] for c in data['customers']}
+    rates = {r['month']: r['eur_to_usd_percent'] for r in data['rates']}
     orders = {}
     for row in data['orders']:
-        orders.setdefault(row['order_id'], row)  # 完全相同的重複列只算一次
+        orders.setdefault(row['order_id'], row)
     refunds = {}
     for row in data['refunds']:
-        refunds[row['order_id']] = refunds.get(row['order_id'], 0) + row['amount']
+        if row['date'] <= data['end']:
+            refunds[row['order_id']] = refunds.get(row['order_id'], 0) + row['amount']
     total = 0
     for order in orders.values():
-        customer = customers[order['customer']]
-        if (customer['region'] == data['region'] and order['status'] in ('shipped', 'delivered')
-                and data['start'] <= order['date'] <= data['end'] and customer['joined'] <= order['date']):
-            total += order['amount'] - min(order['amount'], refunds.get(order['order_id'], 0))
+        if order['status'] not in ('shipped', 'delivered') or not data['start'] <= order['date'] <= data['end']:
+            continue
+        if joined[order['customer']] > order['date']:
+            continue
+        past = [h for h in history.get(order['customer'], []) if h['effective_from'] <= order['date']]
+        if not past or max(past, key=lambda h: h['effective_from'])['region'] != data['region']:
+            continue
+        net = order['amount'] - min(order['amount'], refunds.get(order['order_id'], 0))
+        total += net if order['currency'] == 'USD' else net * rates[g_month(order['date'])] // 100
     return total
 
 
 def g_make(rng, level):
     regions = ['North', 'South', 'East', 'West']
-    statuses = ['shipped', 'delivered', 'cancelled', 'pending']
+    statuses = ['shipped', 'delivered', 'cancelled', 'pending', 'returned']
+
     def date(day):
         return f'2026-{1 + day // 28:02d}-{1 + day % 28:02d}'
-    customers = [{'customer': f'C{i:02d}', 'region': rng.choice(regions), 'joined': date(rng.randint(0, 120))}
-                 for i in range(5 + 2 * level)]
+    customers = [{'customer': f'C{i:02d}', 'joined': date(rng.randint(0, 100))} for i in range(8 + 2 * level)]
+    history = []
+    for c in customers:
+        days = sorted(rng.sample(range(0, 160), rng.randint(1, 3)))
+        for day in days:
+            history.append({'customer': c['customer'], 'region': rng.choice(regions), 'effective_from': date(day)})
+    rng.shuffle(history)
+    rates = [{'month': f'2026-{m:02d}', 'eur_to_usd_percent': rng.randint(104, 118)} for m in range(1, 7)]
     orders = []
-    for i in range(10 + 8 * level):
+    for i in range(16 + 10 * level):
         orders.append({'order_id': f'O{100 + i}', 'customer': rng.choice(customers)['customer'],
                        'date': date(rng.randint(0, 160)), 'status': rng.choice(statuses),
-                       'amount': rng.randint(5, 400)})
-    for _ in range(1 + level):
+                       'amount': rng.randint(5, 400), 'currency': rng.choice(['USD', 'EUR'])})
+    for _ in range(2 + level):
         orders.insert(rng.randint(0, len(orders)), dict(rng.choice(orders)))
-    refunds = [{'order_id': rng.choice(orders)['order_id'], 'amount': rng.randint(1, 250)}
-               for _ in range(3 + 2 * level)]
     start, end = sorted(rng.sample(range(20, 150), 2))
-    data = {'customers': customers, 'orders': orders, 'refunds': refunds, 'region': rng.choice(regions),
-            'start': date(start), 'end': date(end)}
+    refunds = [{'order_id': rng.choice(orders)['order_id'], 'amount': rng.randint(1, 250),
+                'date': date(rng.randint(start, 167))} for _ in range(4 + 2 * level)]
+    data = {'customers': customers, 'region_history': history, 'rates': rates, 'orders': orders,
+            'refunds': refunds, 'region': rng.choice(regions), 'start': date(start), 'end': date(end)}
+
     def table(rows, fields):
         return '\n'.join([' | '.join(fields)] + [' | '.join(str(r[f]) for f in fields) for r in rows])
-    prompt = ('Three tables follow.\n\ncustomers\n' + table(customers, ['customer', 'region', 'joined']) +
-              '\n\norders\n' + table(orders, ['order_id', 'customer', 'date', 'status', 'amount']) +
-              '\n\nrefunds\n' + table(refunds, ['order_id', 'amount']) +
-              f'\n\nCompute the net revenue for region {data["region"]}, using these rules:\n'
+    prompt = ('Five tables follow.\n\ncustomers\n' + table(customers, ['customer', 'joined']) +
+              '\n\nregion_history (a customer belongs to the region of their latest row whose effective_from is on or '
+              'before the date in question; before their first row they have no region)\n' +
+              table(history, ['customer', 'region', 'effective_from']) +
+              '\n\nrates (1 EUR = eur_to_usd_percent / 100 USD in that month)\n' +
+              table(rates, ['month', 'eur_to_usd_percent']) +
+              '\n\norders (amount is in the order currency)\n' +
+              table(orders, ['order_id', 'customer', 'date', 'status', 'amount', 'currency']) +
+              '\n\nrefunds (amount is in the currency of the refunded order)\n' +
+              table(refunds, ['order_id', 'amount', 'date']) +
+              f'\n\nCompute the net revenue in USD for region {data["region"]}, using these rules:\n'
               '1. Some rows in orders are exact duplicates; count each order_id only once.\n'
-              f'2. Only orders with status shipped or delivered, dated from {data["start"]} to {data["end"]} '
-              'inclusive.\n'
-              '3. Only orders whose customer is in that region and had joined on or before the order date.\n'
-              '4. For each counted order, subtract the sum of its refunds, but never subtract more than the '
-              'order amount.\n5. Net revenue is the sum over counted orders.')
+              f'2. Only orders with status shipped or delivered, dated from {data["start"]} to {data["end"]} inclusive.\n'
+              '3. Only orders whose customer had joined on or before the order date, and whose region on the order '
+              f'date was {data["region"]}.\n'
+              f'4. Ignore refunds dated after {data["end"]}. For each counted order, subtract the sum of its remaining '
+              'refunds, but never subtract more than the order amount.\n'
+              '5. Convert each order\'s net amount to USD: USD orders stay as they are; for EUR orders multiply by '
+              'the rate of the order\'s month and divide by 100, rounding down to a whole number (per order).\n'
+              '6. Net revenue is the sum over counted orders.')
     return prompt, str(g_answer(data)), 'integer', '<integer>', {'data': data}
 
 
@@ -444,18 +524,37 @@ def h_make(rng, level):
          'residue': residue, 'banned_start': banned_start}
 
 
-# ---- I：格點幾何（多邊形內部格點數）----
+# ---- I（第 2 版）：多邊形內部、滿足餘數條件的格點數 ----
+# 第 1 版只問內部格點總數，用 Pick 定理就能算，開源模型全對；改問 Pick 定理算不出的量。
 
-def i_interior(points):
-    """參考解：鞋帶公式求面積、gcd 求邊上格點，再用 Pick 定理。"""
-    twice_area = abs(sum(x1 * y2 - x2 * y1 for (x1, y1), (x2, y2) in zip(points, points[1:] + points[:1])))
-    boundary = sum(gcd(abs(x2 - x1), abs(y2 - y1)) for (x1, y1), (x2, y2) in zip(points, points[1:] + points[:1]))
-    return (twice_area - boundary + 2) // 2
+def i_points_inside(points):
+    """內部格點（不含邊上）：逐點以射線交叉法判斷，全部用整數運算。"""
+    xs, ys = [p[0] for p in points], [p[1] for p in points]
+    edges = list(zip(points, points[1:] + points[:1]))
+
+    def on_edge(x, y):
+        return any((bx - ax) * (y - ay) == (by - ay) * (x - ax) and min(ax, bx) <= x <= max(ax, bx)
+                   and min(ay, by) <= y <= max(ay, by) for (ax, ay), (bx, by) in edges)
+
+    def inside(x, y):
+        hits = 0
+        for (ax, ay), (bx, by) in edges:
+            if (ay > y) != (by > y):
+                den = by - ay
+                if ((bx - ax) * (y - ay) + (ax - x) * den) * (1 if den > 0 else -1) > 0:
+                    hits += 1
+        return hits % 2 == 1
+    return [(x, y) for x in range(min(xs), max(xs) + 1) for y in range(min(ys), max(ys) + 1)
+            if not on_edge(x, y) and inside(x, y)]
+
+
+def i_count(points, a, b, modulus, residue):
+    return sum(1 for x, y in i_points_inside(points) if (a * x + b * y) % modulus == residue)
 
 
 def i_make(rng, level):
     import math
-    radius = 6 + 4 * level
+    radius = 6 + 3 * level
     count = 5 + 2 * level
     while True:
         angles = sorted(rng.uniform(0, 2 * math.pi) for _ in range(count))
@@ -466,20 +565,24 @@ def i_make(rng, level):
                   for t in angles]
         if len(set(points)) != len(points):
             continue
-        ordered = sorted(points, key=lambda p: math.atan2(p[1], p[0]) % (2 * math.pi))
-        if ordered != points:
+        if sorted(points, key=lambda p: math.atan2(p[1], p[0]) % (2 * math.pi)) != points:
             continue
-        # 以原點為中心依角度排序且相鄰夾角小於 180 度：簡單多邊形；再確認沒有連續三點共線退化。
         if any((b[0] - a[0]) * (c[1] - a[1]) == (b[1] - a[1]) * (c[0] - a[0])
                for a, b, c in zip(points, points[1:] + points[:1], points[2:] + points[:2])):
             continue
         if all(x * y2 - x2 * y > 0 for (x, y), (x2, y2) in zip(points, points[1:] + points[:1])):
             break
+    a, b = rng.randint(1, 4), rng.randint(1, 4)
+    modulus = rng.randint(3, 5)
+    residue = rng.randrange(modulus)
     text = ', '.join(f'({x}, {y})' for x, y in points)
     prompt = (f'A simple polygon has these {count} vertices, listed in order around the boundary (the last vertex '
-              f'connects back to the first):\n{text}\n\nHow many points with integer coordinates lie strictly inside '
-              'the polygon (not on its boundary)?')
-    return prompt, str(i_interior(points)), 'integer', '<integer>', {'points': points}
+              f'connects back to the first):\n{text}\n\nConsider the points (x, y) with integer coordinates that lie '
+              'strictly inside the polygon (not on its boundary). How many of them satisfy '
+              f'({a}*x + {b}*y) mod {modulus} = {residue}? (mod gives a result from 0 to {modulus - 1}, also for '
+              'negative numbers.)')
+    return prompt, str(i_count(points, a, b, modulus, residue)), 'integer', '<integer>', \
+        {'points': points, 'a': a, 'b': b, 'modulus': modulus, 'residue': residue}
 
 
 # ---- J：依規格的結構轉換 ----
@@ -567,9 +670,10 @@ FAMILY_NAMES = {'A': 'combinatorics', 'B': 'probability', 'C': 'constraint_puzzl
 
 def make(family, level, seed):
     """產生一題；同樣的 (題型, 難度, 種子) 一定得到同一題。"""
-    rng = random.Random(f'{VERSION}:{family}:{level}:{seed}')
+    rng = random.Random(f'cloudyfan-hard-tasks-v{FAMILY_REVISION[family]}:{family}:{level}:{seed}')
     prompt, answer, kind, fmt, source = FAMILIES[family](rng, level)
     task = _task(family, level, seed, prompt, answer, kind, fmt)
+    task['revision'] = FAMILY_REVISION[family]
     task['source'] = source
     return task
 

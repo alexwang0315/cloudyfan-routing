@@ -132,7 +132,9 @@ def test_default_pilot_setup_uses_the_agreed_models_and_frozen_tasks():
     setup_ = pilot.pilot_setup()
     assert setup_['open_target']['vendor_model'] == 'openai/gpt-oss-120b'
     assert setup_['open_target']['profile']['provider'] == 'crusoe/bf16'
-    assert setup_['advisor_target']['profile']['provider'] == 'alibaba'
+    # 2026-11-19：qwen3.5-397b 在 Alibaba 被上游 429 拒絕，使用者決定換顧問模型。
+    assert setup_['advisor_target']['vendor_model'] == 'deepseek/deepseek-v4-pro'
+    assert setup_['advisor_target']['profile']['provider'] == 'siliconflow/fp8'
     assert setup_['judge_target']['profile']['provider'] == 'parasail/fp4'
     assert {t: p['vendor_model'] for t, p in setup_['pool_targets'].items()} == {
         'low': 'claude-haiku-5-5', 'mid': 'claude-sonnet-5-5', 'high': 'claude-fable-5-2'}

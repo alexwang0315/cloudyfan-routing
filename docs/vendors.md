@@ -91,7 +91,7 @@ python -m cloudyfan_jev.pilot compare --root .scratch/pilot81/compare-01 --cap 1
 ```
 
 - 組合（`pilot_setup()`，2026-11-19 核定）：開源首答 `gpt-oss-120b`＠Crusoe（低強度）；低池 Haiku 5.5（中）、中池 Sonnet 5.5（中）、
-  高池 Fable 5.2（高），直連 Anthropic；顧問 `qwen3.5-397b`＠Alibaba、裁判 `gpt-oss-20b`＠Parasail；Jev `typesafe/jev-1.13-20260917`。
+  高池 Fable 5.2（高），直連 Anthropic；顧問 `deepseek-v4-pro`＠SiliconFlow（原為 `qwen3.5-397b`＠Alibaba，試跑時被上游 429 拒絕而更換）、裁判 `gpt-oss-20b`＠Parasail；Jev `typesafe/jev-1.13-20260917`。
 - 題目：`docs/evidence/hard-tasks-50-20261119.json`，依題型輪流排序，`--limit` 只跑前幾題也涵蓋各題型。
 - 每題三組的先後順序輪替；同一個資料夾重跑讀舊收據、不重付。
 - 報表 `compare-report.json`：各組答對題數、首答答對、研究全額與正式成本、各池使用次數、Jev 呼叫次數、

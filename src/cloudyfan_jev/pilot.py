@@ -423,9 +423,10 @@ def pilot_setup():
     """2026-11-19 使用者核定的試跑組合（ADR 0037、#81）。價格為當日目錄與牌價，開跑前可覆寫。"""
     return {'open_target': openrouter_target('openai/gpt-oss-120b', provider='crusoe/bf16', provider_name='Crusoe',
                                              input_per_mtok='0.05', output_per_mtok='0.25'),
-            'advisor_target': openrouter_target('qwen/qwen3.5-397b-a17b', provider='alibaba',
-                                                provider_name='Alibaba', input_per_mtok='0.39',
-                                                output_per_mtok='2.34'),
+            # 顧問原用 qwen/qwen3.5-397b-a17b＠Alibaba；階段 1 試跑時被上游 429 拒絕，使用者決定換模型。
+            'advisor_target': openrouter_target('deepseek/deepseek-v4-pro', provider='siliconflow/fp8',
+                                                provider_name='SiliconFlow', input_per_mtok='0.9',
+                                                output_per_mtok='1.7'),
             'judge_target': openrouter_target('openai/gpt-oss-20b', provider='parasail/fp4', provider_name='Parasail',
                                               input_per_mtok='0.03', output_per_mtok='0.15'),
             'pool_targets': {'low': anthropic_target('claude-haiku-5-5', effort='medium'),

@@ -326,3 +326,39 @@ def test_environment_reports_only_codes():
     assert env.validate('ANSWER: ' + task['answer']) == {'passed': True, 'checks': []}
     wrong = env.validate('ANSWER: 1')
     assert wrong == {'passed': False, 'checks': ['answer_incorrect']} and task['answer'] not in json.dumps(wrong)
+
+
+def row(task_id, first_pass, *, rejected=False, status=None):
+    family, rest = task_id[0], task_id[1:]
+    level = int(rest.split('-')[0])
+    out = {'id': task_id, 'family': family, 'level': level, 'first_pass': first_pass,
+           'final_pass': first_pass, 'provider_rejected': rejected}
+    if status:
+        out = {'id': task_id, 'family': family, 'level': level, 'status': status}
+    return out
+
+
+def test_selection_prefers_open_model_failures_and_keeps_one_medium_task_per_family():
+    rows = [row(f'A{lv}-{s}', lv <= 2) for lv in h.LEVELS for s in range(2)]
+    picked = h.select(rows, per_family=5)
+    assert [r['id'] for r in picked] == ['A3-0', 'A3-1', 'A4-0', 'A4-1', 'A2-0']
+    assert [r['first_pass'] for r in picked] == [False, False, False, False, True]
+
+
+def test_selection_fills_from_hardest_passes_and_skips_rejected_or_unfinished():
+    rows = ([row(f'B{lv}-0', True) for lv in h.LEVELS] + [row('B5-1', False, rejected=True),
+            row('B4-1', None, status='error'), row('B1-1', False)])
+    picked = h.select(rows, per_family=5)
+    assert [r['id'] for r in picked] == ['B1-1', 'B5-0', 'B4-0', 'B3-0', 'B2-0']
+
+
+def test_frozen_set_rebuilds_tasks_and_hash_detects_changes():
+    rows = [row(f'{f}{lv}-0', False) for f in 'AE' for lv in h.LEVELS]
+    frozen = h.freeze_selection(h.select(rows, per_family=5))
+    assert frozen['version'] == h.VERSION and len(frozen['tasks']) == 10
+    rebuilt = h.load_selection(frozen)
+    assert [t['id'] for t in rebuilt] == [t['id'] for t in frozen['tasks']]
+    assert rebuilt[0]['answer'] == h.make('A', 1, 0)['answer']
+    frozen['tasks'][0]['seed'] = 9
+    with pytest.raises(ValueError):
+        h.load_selection(frozen)

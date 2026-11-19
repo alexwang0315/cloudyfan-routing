@@ -652,3 +652,47 @@ class HardTaskEnvironment:
     def validate(self, final_text):
         passed, code = grade(self.task, final_text)
         return {'passed': passed, 'checks': [] if passed else [code]}
+
+
+# ---- 選題與凍結 ----
+
+def select(rows, *, per_family=5, failures_per_family=None):
+    """依校準結果選題：每個題型以「首答答錯」為主（依難度由低到高），保留一題「首答答對、難度最高」
+    的中等題；答錯的題不夠時，由首答答對的題依難度由高到低補滿。被供應商拒絕或沒跑完的題不選。"""
+    failures_per_family = per_family - 1 if failures_per_family is None else failures_per_family
+    usable = [r for r in rows if r.get('first_pass') in (True, False) and not r.get('provider_rejected')]
+    picked = []
+    for family in FAMILIES:
+        mine = [r for r in usable if r['family'] == family]
+        fails = sorted((r for r in mine if r['first_pass'] is False), key=lambda r: (r['level'], r['id']))
+        passes = sorted((r for r in mine if r['first_pass'] is True), key=lambda r: (-r['level'], r['id']))
+        chosen = fails[:failures_per_family]
+        for r in passes + fails[failures_per_family:]:
+            if len(chosen) >= per_family:
+                break
+            chosen.append(r)
+        picked += chosen
+    return picked
+
+
+def freeze_selection(rows):
+    """凍結選出的題目：只存 (題型, 難度, 種子)，題目與答案由產生器重建，並以雜湊核對。"""
+    import hashlib
+    tasks = [{'id': r['id'], 'family': r['family'], 'level': r['level'],
+              'seed': int(r['id'].rsplit('-', 1)[1]), 'calibration_first_pass': r['first_pass']} for r in rows]
+    digest = hashlib.sha256(json.dumps([make(t['family'], t['level'], t['seed'])['prompt'] for t in tasks],
+                                       ensure_ascii=False).encode()).hexdigest()
+    return {'version': VERSION, 'tasks': tasks, 'prompts_sha256': digest}
+
+
+def load_selection(frozen):
+    import hashlib
+    if frozen.get('version') != VERSION:
+        raise ValueError('Task set version changed')
+    tasks = [make(t['family'], t['level'], t['seed']) for t in frozen['tasks']]
+    if any(t['id'] != f['id'] for t, f in zip(tasks, frozen['tasks'])):
+        raise ValueError('Frozen task identity changed')
+    digest = hashlib.sha256(json.dumps([t['prompt'] for t in tasks], ensure_ascii=False).encode()).hexdigest()
+    if digest != frozen['prompts_sha256']:
+        raise ValueError('Frozen task prompts changed')
+    return tasks

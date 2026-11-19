@@ -44,3 +44,9 @@ pool = hard_tasks.candidates(seeds_per_level=2)  # 校準用候選題：10 × 5 
 - J 題型的獨立核對也是同一個作者寫的另一種寫法，獨立性比其他題型弱。
 - C 題型五間房的唯一解只用同一個回溯求解器確認（窮舉太慢）。
 - 沒有驗收器的一般題尚未設計。
+
+## 難度校準（`python -m cloudyfan_jev.pilot calibrate`，會付費）
+
+所有層都設成同一個模型、用「開源先答」模式：每題記錄首答是否通過，以及答錯後看到檢查碼自己修正一次能否通過。
+報告 `calibration-report.json` 依題型統計，不含題目與標準答案；同一個資料夾重跑讀舊收據、不重付。
+已測：`tests/test_pilot_connect.py`（MockTransport）。尚未對真實模型執行。

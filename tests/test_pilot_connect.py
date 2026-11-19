@@ -210,3 +210,43 @@ def test_without_the_policy_an_upstream_429_still_stops_as_unknown_cost(tmp_path
         input_per_mtok='0.03', output_per_mtok='0.14')], openrouter_key='or-key', anthropic_key=None, cap_usd='1',
         transports={'openrouter': httpx.MockTransport(api)})
     assert rows[0]['status'] == 'error'
+
+
+def test_calibration_runs_each_task_on_the_open_model_and_reports_pass_rates(tmp_path):
+    from cloudyfan_jev import hard_tasks
+    tasks = [hardtask for hardtask in (hard_tasks.make('A', 1, 0), hard_tasks.make('F', 1, 0))]
+
+    class Solver:
+        def __init__(self):
+            self.requests = []
+
+        def __call__(self, request):
+            body = json.loads(request.content)
+            self.requests.append(body)
+            prompt = body['messages'][1]['content']
+            task = next(t for t in tasks if t['prompt'] == prompt)
+            answer = task['answer'] if task['family'] == 'A' else '0'
+            return httpx.Response(200, json={'id': f'gen-cal-{len(self.requests)}', 'model': body['model'],
+                'provider': 'Crusoe', 'usage': {'cost': .0002, 'prompt_tokens': 300, 'completion_tokens': 900},
+                'choices': [{'message': {'role': 'assistant', 'content': 'work\nANSWER: ' + answer},
+                             'finish_reason': 'stop'}]})
+    api = Solver()
+    target = pilot.openrouter_target('openai/gpt-oss-120b', provider='crusoe/bf16', provider_name='Crusoe',
+                                     input_per_mtok='0.05', output_per_mtok='0.25')
+    rows = pilot.calibrate(tmp_path / 'cal', tasks, target, openrouter_key='or-key', cap_usd='1',
+                           transports={'openrouter': httpx.MockTransport(api)})
+    assert [(r['id'], r['first_pass'], r['final_pass'], r['attempts']) for r in rows] == [
+        (tasks[0]['id'], True, True, 1), (tasks[1]['id'], False, False, 2)]
+    assert rows[1]['checks'] == ['answer_incorrect'] and rows[0]['cost_usd'] == '0.0002'
+    assert api.requests[0]['messages'][0]['content'] == pilot.CALIBRATION_SYSTEM
+    assert all(r['model'] == 'openai/gpt-oss-120b' for r in api.requests)
+    report = json.loads((tmp_path / 'cal' / 'calibration-report.json').read_text())
+    assert report['summary']['first_pass'] == 1 and report['summary']['tasks'] == 2
+    assert report['by_family']['A'] == {'tasks': 1, 'first_pass': 1, 'final_pass': 1}
+    # 標準答案不寫進報告。
+    assert all('answer' not in row and 'prompt' not in row for row in report['rows'])
+    assert tasks[1]['answer'] not in json.dumps(report)  # 細胞自動機的答案是一長串 0／1
+    # 同一個資料夾重跑：讀舊收據，不重付。
+    again = pilot.calibrate(tmp_path / 'cal', tasks, target, openrouter_key='or-key', cap_usd='1',
+                            transports={'openrouter': httpx.MockTransport(api)})
+    assert len(api.requests) == 3 and [r['first_pass'] for r in again] == [True, False]

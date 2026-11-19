@@ -216,6 +216,87 @@ def connect(root, targets, *, openrouter_key, anthropic_key, cap_usd, transports
     return rows
 
 
+CALIBRATION_SYSTEM = ('You are solving a self-contained reasoning task. Everything you need is in the task. '
+                      'Work it out carefully and follow the requested answer format exactly.')
+
+
+def calibrate(root, tasks, target, *, openrouter_key=None, anthropic_key=None, cap_usd, transports=None,
+              max_tokens=16000, max_input_bytes=16384, anthropic_workspace_id=None, rejection_policy_source=None):
+    """難度校準：每題用同一個模型作答；所有層都設成這個模型，所以答錯時的修正也由它自己做。
+    回傳每題是否首答通過、最終是否通過、作答次數、檢查碼與費用；報告不含標準答案。"""
+    from .hard_tasks import HardTaskEnvironment
+    root = Path(root)
+    key = openrouter_key if target['vendor'] == 'openrouter' else anthropic_key
+    if not key:
+        raise ValueError(('OpenRouter' if target['vendor'] == 'openrouter' else 'Anthropic') + ' key required')
+    transports = transports or {}
+    vendors = {}
+    if anthropic_key:
+        vendors['anthropic'] = AnthropicVendor(anthropic_key, {target['vendor_model']: target['price']}
+                                               if target['vendor'] == 'anthropic' else {},
+                                               transport=transports.get('anthropic'),
+                                               workspace_id=anthropic_workspace_id)
+    http = httpx.Client(transport=VendorTransport(transports.get('openrouter') or httpx.HTTPTransport(), vendors),
+                        follow_redirects=False, trust_env=False)
+    root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    policy = None
+    if rejection_policy_source is not None and target['vendor'] == 'openrouter':
+        import hashlib
+        from .rejection_fees import Text429FeePolicy
+        source = Path(rejection_policy_source)
+        policy = Text429FeePolicy(source, hashlib.sha256(source.read_bytes()).hexdigest(),
+                                  [{'model': target['vendor_model'], 'provider': target['profile']['provider'],
+                                    'provider_name': target['profile']['provider_name']}],
+                                  valid_until=(datetime.now(timezone.utc) + timedelta(days=2)).isoformat())
+    client = Client(http, openrouter_key or 'no-openrouter-key-configured', root / 'receipts',
+                    rejection_fee_policy=policy)
+    store = BudgetStore(root / 'budget.sqlite')
+    if store.report()['authorization'] is None:
+        store.authorize(Authorization('pilot-calibration', Decimal(str(cap_usd)),
+                                      (datetime.now(timezone.utc) + timedelta(days=2)).isoformat()))
+    profiles = {tier: dict(target['profile']) for tier in ('open_source', 'low', 'mid', 'high')}
+    _, decision = example_config()
+    verifier = ListPriceBounds({target['address']: target['price']}, max_input_bytes=max_input_bytes,
+                               max_output_tokens=max_tokens)
+    core = Core(client, profiles, decision, system=CALIBRATION_SYSTEM,
+                limits=Limits(max_turns=1, max_tokens=max_tokens, max_context_bytes=max_input_bytes))
+    runner = BudgetedCore(core, store, model_bounds=verifier.model_bounds(), tool_bounds={}, verify_bound=verifier)
+    rows = []
+    for task in tasks:
+        row = {'id': task['id'], 'family': task['family'], 'level': task['level']}
+        try:
+            result = runner.run('cal-' + task['id'], {'prompt': task['prompt']}, lambda t=task: HardTaskEnvironment(t),
+                                contract_version='hard-tasks-calibration-v1', mode='open_source_first')
+            calls = [call for attempt in result['attempts'] for call in attempt['calls']]
+            last = result['attempts'][-1] if result['attempts'] else {}
+            row.update(status=result['status'], first_pass=result['first_public_pass'],
+                       final_pass=result['final_public_pass'], attempts=len(result['attempts']),
+                       checks=list((last.get('public') or {}).get('checks') or []),
+                       output_tokens=sum((c.get('usage') or {}).get('completion_tokens') or 0 for c in calls),
+                       provider_rejected=any(c.get('provider_rejected') for c in calls),
+                       cost_usd=result['costs']['api_usd'], wall_seconds=result.get('wall_seconds'))
+        except BudgetError as error:
+            row.update(status='not_run', reason='budget: ' + str(error))
+        except Exception as error:  # 照實記錄，不重試
+            row.update(status='error', reason=type(error).__name__ + ': ' + str(error)[:300])
+        rows.append(row)
+    done = [r for r in rows if 'first_pass' in r]
+    by_family = {}
+    for r in done:
+        entry = by_family.setdefault(r['family'], {'tasks': 0, 'first_pass': 0, 'final_pass': 0})
+        entry['tasks'] += 1
+        entry['first_pass'] += r['first_pass'] is True
+        entry['final_pass'] += r['final_pass'] is True
+    known = sum((Decimal(r['cost_usd']) for r in done if r.get('cost_usd') is not None), Decimal(0))
+    report = {'stage': 'calibration', 'target': target['address'], 'cap_usd': str(cap_usd), 'rows': rows,
+              'summary': {'tasks': len(done), 'first_pass': sum(r['first_pass'] is True for r in done),
+                          'final_pass': sum(r['final_pass'] is True for r in done),
+                          'not_completed': len(rows) - len(done), 'known_usd': format(known.normalize(), 'f')},
+              'by_family': by_family}
+    (root / 'calibration-report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+    return rows
+
+
 def key_from_args(args, vendor):
     """指令列的金鑰來源：單行金鑰檔，或 .env 檔中指定的一個變數；都沒給時回傳 None。"""
     key_file = getattr(args, vendor + '_key_file')
@@ -241,6 +322,22 @@ def main(argv=None):
     endpoints.add_argument('--openrouter-key-file', type=Path)
     endpoints.add_argument('--openrouter-env-file', type=Path)
     endpoints.add_argument('--openrouter-env-name', default='OPENROUTER_API_KEY')
+    cal = sub.add_parser('calibrate', help='用一個開源模型跑候選難題做難度校準（會發出真實付費請求）')
+    cal.add_argument('--root', type=Path, required=True)
+    cal.add_argument('--cap', default='2')
+    cal.add_argument('--seeds-per-level', type=int, default=2)
+    cal.add_argument('--family', action='append', default=[])
+    cal.add_argument('--max-tokens', type=int, default=16000)
+    cal.add_argument('--openrouter-key-file', type=Path)
+    cal.add_argument('--openrouter-env-file', type=Path)
+    cal.add_argument('--openrouter-env-name', default='OPENROUTER_API_KEY')
+    cal.add_argument('--openrouter-model', required=True)
+    cal.add_argument('--openrouter-provider', required=True)
+    cal.add_argument('--openrouter-provider-name', required=True)
+    cal.add_argument('--openrouter-input-price', required=True)
+    cal.add_argument('--openrouter-output-price', required=True)
+    cal.add_argument('--rejection-policy-source', type=Path)
+    cal.add_argument('--confirm-paid', action='store_true')
     run = sub.add_parser('connect', help='階段 0 連線驗證（會發出真實付費請求）')
     run.add_argument('--root', type=Path, required=True, help='這次試跑的新資料夾（收據、帳本、報告）')
     run.add_argument('--cap', default='1', help='這一階段的美元上限')
@@ -274,6 +371,22 @@ def main(argv=None):
             parser.error('openrouter_key_required')
         for row in list_endpoints(key, args.model):
             print(json.dumps(row, ensure_ascii=False))
+        return 0
+    if args.command == 'calibrate':
+        if not args.confirm_paid:
+            parser.error('paid_requests_require_--confirm-paid')
+        from . import hard_tasks
+        tasks = [t for t in hard_tasks.candidates(args.seeds_per_level)
+                 if not args.family or t['family'] in args.family]
+        target = openrouter_target(args.openrouter_model, provider=args.openrouter_provider,
+                                   provider_name=args.openrouter_provider_name,
+                                   input_per_mtok=args.openrouter_input_price,
+                                   output_per_mtok=args.openrouter_output_price)
+        rows = calibrate(args.root, tasks, target, openrouter_key=key_from_args(args, 'openrouter'),
+                         cap_usd=args.cap, max_tokens=args.max_tokens,
+                         rejection_policy_source=args.rejection_policy_source)
+        for row in rows:
+            print(json.dumps(row, ensure_ascii=False), flush=True)
         return 0
     if not args.confirm_paid:
         parser.error('paid_requests_require_--confirm-paid')

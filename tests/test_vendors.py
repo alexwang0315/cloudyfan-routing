@@ -231,3 +231,19 @@ def test_core_runs_a_task_on_an_anthropic_addressed_pool_with_receipts(tmp_path)
     info = usage(record)
     assert info['generation_id'] == 'gen-anthropic-msg_0001' and info['provider'] == 'Anthropic'
     assert info['cost_source'] == 'response_usage_cost' and 'anthropic-secret-key' not in record['raw']
+
+
+def test_workspace_id_is_sent_only_when_configured():
+    api = AnthropicAPI()
+    vendor = AnthropicVendor('anthropic-secret-key', PRICES, transport=httpx.MockTransport(api),
+                             workspace_id='wrkspc_test01')
+    http = httpx.Client(transport=VendorTransport(httpx.MockTransport(OpenRouterAPI()), {'anthropic': vendor}))
+    assert post(http, 'anthropic:claude-haiku-5-5').status_code == 200
+    assert api.requests[0].headers['anthropic-workspace-id'] == 'wrkspc_test01'
+    assert vendor.descriptor()['workspace_scoped_by_header'] is True
+    plain = AnthropicAPI()
+    http, _ = routed(plain)
+    post(http, 'anthropic:claude-haiku-5-5')
+    assert 'anthropic-workspace-id' not in plain.requests[0].headers
+    with pytest.raises(ValueError):
+        AnthropicVendor('k', PRICES, workspace_id='bad id with spaces')

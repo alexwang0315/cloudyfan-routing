@@ -12,6 +12,7 @@ OpenRouter 的請求去掉前綴後照舊送出；其他廠商交給各自的轉
 from decimal import Decimal
 import hashlib
 import json
+import re
 
 import httpx
 
@@ -142,9 +143,13 @@ class AnthropicVendor:
     name, provider_name = ANTHROPIC, 'Anthropic'
 
     def __init__(self, key, prices, *, transport=None, api_version=ANTHROPIC_VERSION, url=ANTHROPIC_MESSAGES,
-                 timeout=600):
+                 timeout=600, workspace_id=None):
         if not isinstance(key, str) or not key:
             raise ValueError('Anthropic API key required')
+        # 沒有綁定工作區的金鑰，每個請求都要帶 anthropic-workspace-id（階段 0 實測得知）。
+        if workspace_id is not None and not re.fullmatch(r'[A-Za-z0-9_\-]{1,128}', workspace_id):
+            raise ValueError('Invalid Anthropic workspace id')
+        self._workspace_id = workspace_id
         self._key, self.url, self.api_version = key, url, api_version
         self.prices = json.loads(json.dumps(prices))
         for model, price in self.prices.items():
@@ -155,7 +160,8 @@ class AnthropicVendor:
 
     def descriptor(self):
         """凍結進設定的部分：網址、API 版本與價格表（不含金鑰）。"""
-        return {'vendor': self.name, 'url': self.url, 'api_version': self.api_version, 'prices': self.prices}
+        return {'vendor': self.name, 'url': self.url, 'api_version': self.api_version, 'prices': self.prices,
+                'workspace_scoped_by_header': self._workspace_id is not None}
 
     def _json(self, status, body):
         text = json.dumps(body, ensure_ascii=False).replace(self._key, '[REDACTED]')
@@ -167,8 +173,11 @@ class AnthropicVendor:
             return self._json(400, {'provider': self.provider_name,
                                     'error': {'code': 400, 'message': 'vendor_model_not_priced'}})
         body = translate_request(payload, model)
-        response = self._http.post(self.url, json=body, headers={
-            'x-api-key': self._key, 'anthropic-version': self.api_version, 'content-type': 'application/json'})
+        headers = {'x-api-key': self._key, 'anthropic-version': self.api_version,
+                   'content-type': 'application/json'}
+        if self._workspace_id is not None:
+            headers['anthropic-workspace-id'] = self._workspace_id
+        response = self._http.post(self.url, json=body, headers=headers)
         try:
             data = response.json()
         except ValueError:

@@ -130,7 +130,7 @@ def _row(target, result):
 
 
 def connect(root, targets, *, openrouter_key, anthropic_key, cap_usd, transports=None, max_tokens=2048,
-            max_input_bytes=8192):
+            max_input_bytes=8192, anthropic_workspace_id=None):
     """階段 0：每個目標各跑一題。任何一題費用未知時，預算庫會擋下後面的題（照既有規則）。"""
     root = Path(root)
     if any(t['vendor'] == 'openrouter' for t in targets) and not openrouter_key:
@@ -141,7 +141,8 @@ def connect(root, targets, *, openrouter_key, anthropic_key, cap_usd, transports
     vendors = {}
     if anthropic_key:
         prices = {t['vendor_model']: t['price'] for t in targets if t['vendor'] == 'anthropic'}
-        vendors['anthropic'] = AnthropicVendor(anthropic_key, prices, transport=transports.get('anthropic'))
+        vendors['anthropic'] = AnthropicVendor(anthropic_key, prices, transport=transports.get('anthropic'),
+                                               workspace_id=anthropic_workspace_id)
     http = httpx.Client(transport=VendorTransport(transports.get('openrouter') or httpx.HTTPTransport(), vendors),
                         follow_redirects=False, trust_env=False)
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -192,6 +193,7 @@ def main(argv=None):
     run.add_argument('--anthropic-env-file', type=Path, help='改從 .env 檔只取 --anthropic-env-name 這一個變數')
     run.add_argument('--anthropic-env-name', default='ANTHROPIC_API_KEY')
     run.add_argument('--anthropic-model', action='append', default=[])
+    run.add_argument('--anthropic-workspace-id', help='金鑰沒有綁定工作區時要帶的工作區 ID')
     run.add_argument('--openrouter-key-file', type=Path)
     run.add_argument('--openrouter-model')
     run.add_argument('--openrouter-provider')
@@ -223,7 +225,7 @@ def main(argv=None):
                    anthropic_key=(read_key(args.anthropic_key_file) if args.anthropic_key_file
                                   else read_env_key(args.anthropic_env_file, args.anthropic_env_name)
                                   if args.anthropic_env_file else None),
-                   cap_usd=args.cap)
+                   cap_usd=args.cap, anthropic_workspace_id=args.anthropic_workspace_id)
     for row in rows:
         print(json.dumps(row, ensure_ascii=False))
     return 0 if all(row['status'] == 'passed' for row in rows) else 1

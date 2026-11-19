@@ -141,3 +141,39 @@ def test_default_pilot_setup_uses_the_agreed_models_and_frozen_tasks():
     tasks = pilot.frozen_tasks()
     assert len(tasks) == 50 and pilot.frozen_tasks(limit=10, interleave=True)[0]['family'] != \
         pilot.frozen_tasks(limit=10, interleave=True)[1]['family']
+
+
+def test_spend_cap_is_separate_from_the_ledger_exposure(tmp_path):
+    """帳本授權只容納保守暫扣；實際花費上限另外檢查：已花＋這題最壞花費超過上限就不跑。"""
+    orouter, anth = OpenRouter(), Anthropic()
+    rows = pilot.compare(tmp_path / 'cmp', TASKS, openrouter_key='or-key', anthropic_key='an-key',
+                         cap_usd='0.5', ledger_exposure_usd='100',
+                         transports={'openrouter': httpx.MockTransport(orouter),
+                                     'anthropic': httpx.MockTransport(anth)}, **setup())
+    # 每題最壞花費（含 Fable 的牌價上界）超過 0.5：一題都不送出。
+    assert {r['status'] for r in rows} == {'not_run'} and all(r['reason'] == 'spend_cap' for r in rows)
+    assert orouter.models == [] and anth.models == []
+    report = json.loads((tmp_path / 'cmp' / 'compare-report.json').read_text())
+    assert report['spend_cap_usd'] == '0.5' and report['ledger_exposure_usd'] == '100'
+
+
+def test_spend_cap_counts_what_was_already_spent_and_completed_runs_are_still_read(tmp_path):
+    orouter, anth = OpenRouter(), Anthropic()
+    kw = dict(openrouter_key='or-key', anthropic_key='an-key', ledger_exposure_usd='100',
+              arms=('cloudyfan', 'advisor_first'), **setup())
+    first = pilot.compare(tmp_path / 'cmp', TASKS[:1], cap_usd='100',
+                          transports={'openrouter': httpx.MockTransport(orouter),
+                                      'anthropic': httpx.MockTransport(anth)}, **kw)
+    spent = sum(float(r['research_usd']) for r in first)
+    worst = pilot.compare_worst_case_usd(**setup())
+    cap = str(round(spent + float(min(worst['cloudyfan'], worst['advisor_first'])) - 0.001, 6))
+    rows = pilot.compare(tmp_path / 'cmp', TASKS, cap_usd=cap,
+                         transports={'openrouter': httpx.MockTransport(orouter),
+                                     'anthropic': httpx.MockTransport(anth)}, **kw)
+    assert [r['task'] for r in rows if 'final_pass' in r] == [TASKS[0]['id'], TASKS[0]['id']]
+    assert [r.get('reason') for r in rows if r['task'] == TASKS[1]['id']] == ['spend_cap', 'spend_cap']
+
+
+def test_task_filter_runs_only_named_tasks(tmp_path):
+    tasks = pilot.frozen_tasks(only=['H1-1', 'I1-1'])
+    assert [t['id'] for t in tasks] == ['H1-1', 'I1-1']

@@ -308,20 +308,14 @@ def _role(target):
     return dict(target['profile'], open_source=True)
 
 
-def compare(root, tasks, *, open_target, pool_targets, advisor_target, judge_target, decision,
-            decision_per_call_usd, openrouter_key, anthropic_key, cap_usd, arms=ARMS, transports=None,
-            max_tokens=16000, max_input_bytes=24576, anthropic_workspace_id=None, rejection_policy_source=None,
-            order_seed=0):
-    """#81 三組比較：每題依輪替的順序在選定的組別各跑一次（同一個 Core、同一份收據與預算庫）。
-    回傳每題每組一列；報告 ``compare-report.json`` 依組別統計，不含題目與標準答案。"""
+def _compare_runner(root, *, open_target, pool_targets, advisor_target, judge_target, decision,
+                    decision_per_call_usd, openrouter_key, anthropic_key, ledger_exposure_usd, transports=None,
+                    max_tokens=16000, max_input_bytes=24576, anthropic_workspace_id=None,
+                    rejection_policy_source=None):
+    """組出比較用的 BudgetedCore（同一個 Core、收據與預算庫）。預算庫的授權是「帳本暫扣上限」，
+    只用來容納未核帳呼叫的保守暫扣，不是要花的錢；實際花費上限由 ``compare`` 另外檢查。"""
     from .advisor import AdvisorConfig
     from .cloudyfan_plus import CloudyfanPlusConfig
-    from .hard_tasks import HardTaskEnvironment
-    if not openrouter_key or not anthropic_key:
-        raise ValueError('Both OpenRouter and Anthropic keys are required')
-    unknown = set(arms) - set(ARMS)
-    if unknown or not arms:
-        raise ValueError('Unknown arms: ' + ', '.join(sorted(unknown)))
     root = Path(root)
     transports = transports or {}
     anthropic_prices = {t['vendor_model']: t['price'] for t in pool_targets.values() if t['vendor'] == 'anthropic'}
@@ -344,7 +338,7 @@ def compare(root, tasks, *, open_target, pool_targets, advisor_target, judge_tar
     client = Client(http, openrouter_key, root / 'receipts', rejection_fee_policy=policy)
     store = BudgetStore(root / 'budget.sqlite')
     if store.report()['authorization'] is None:
-        store.authorize(Authorization('pilot-compare', Decimal(str(cap_usd)),
+        store.authorize(Authorization('pilot-ledger-exposure-only', Decimal(str(ledger_exposure_usd)),
                                       (datetime.now(timezone.utc) + timedelta(days=3)).isoformat()))
     profiles = {'open_source': dict(open_target['profile']),
                 **{tier: dict(pool_targets[tier]['profile']) for tier in ('low', 'mid', 'high')}}
@@ -357,23 +351,59 @@ def compare(root, tasks, *, open_target, pool_targets, advisor_target, judge_tar
     core = Core(client, profiles, dict(decision), system=CALIBRATION_SYSTEM,
                 limits=Limits(max_turns=1, max_tokens=max_tokens, max_context_bytes=max_input_bytes),
                 advisor_first=advisor, cloudyfan_plus=plus)
-    runner = BudgetedCore(core, store, model_bounds=verifier.model_bounds(), tool_bounds={}, verify_bound=verifier)
+    return BudgetedCore(core, store, model_bounds=verifier.model_bounds(), tool_bounds={}, verify_bound=verifier)
+
+
+def compare_worst_case_usd(*, max_tokens=16000, max_input_bytes=24576, **setup):
+    """每組跑一題的最壞花費（牌價 × token 上限），不發出任何請求。"""
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        runner = _compare_runner(tmp, **setup, openrouter_key='offline', anthropic_key='offline',
+                                 ledger_exposure_usd='1', max_tokens=max_tokens, max_input_bytes=max_input_bytes)
+        return {arm: runner._admit(arm) for arm in ARMS}
+
+
+def compare(root, tasks, *, cap_usd, openrouter_key, anthropic_key, ledger_exposure_usd='100', arms=ARMS,
+            order_seed=0, **setup):
+    """#81 三組比較：每題依輪替的順序在選定的組別各跑一次。
+
+    ``cap_usd`` 是**實際花費上限**：每跑一題之前檢查「帳本已知花費＋這題最壞花費」，超過就不送出（記為
+    ``spend_cap``）。``ledger_exposure_usd`` 只是預算庫的暫扣上限。同一個資料夾裡已完成的題直接讀回，不重付、
+    不受上限影響。回傳每題每組一列；報告 ``compare-report.json`` 依組別統計，不含題目與標準答案。"""
+    from .hard_tasks import HardTaskEnvironment
+    if not openrouter_key or not anthropic_key:
+        raise ValueError('Both OpenRouter and Anthropic keys are required')
+    unknown = set(arms) - set(ARMS)
+    if unknown or not arms:
+        raise ValueError('Unknown arms: ' + ', '.join(sorted(unknown)))
+    root = Path(root)
+    runner = _compare_runner(root, openrouter_key=openrouter_key, anthropic_key=anthropic_key,
+                             ledger_exposure_usd=ledger_exposure_usd, **setup)
+    spend_cap = Decimal(str(cap_usd))
     rows = []
     for index, task in enumerate(tasks):
         shift = (index + order_seed) % len(arms)
         for arm in arms[shift:] + arms[:shift]:
+            run_id = f'{ARM_CODES[arm]}-{task["id"]}'
             row = {'task': task['id'], 'family': task['family'], 'level': task['level'], 'arm': arm}
             try:
-                result = runner.run(f'{ARM_CODES[arm]}-{task["id"]}', {'prompt': task['prompt']},
-                                    lambda t=task: HardTaskEnvironment(t),
-                                    contract_version='hard-tasks-compare-v1', mode=arm)
+                try:
+                    result = runner.core.read_completed(run_id)
+                except ValueError:
+                    known = Decimal(runner.store.report()['known_usd'])
+                    if known + runner._admit(arm) > spend_cap:
+                        row.update(status='not_run', reason='spend_cap')
+                        rows.append(row)
+                        continue
+                    result = runner.run(run_id, {'prompt': task['prompt']}, lambda t=task: HardTaskEnvironment(t),
+                                        contract_version='hard-tasks-compare-v1', mode=arm)
                 row.update(_compare_row(result))
             except BudgetError as error:
                 row.update(status='not_run', reason='budget: ' + str(error))
             except Exception as error:  # 照實記錄，不重試
                 row.update(status='error', reason=type(error).__name__ + ': ' + str(error)[:300])
             rows.append(row)
-    _write_compare_report(root, rows, arms, cap_usd)
+    _write_compare_report(root, rows, arms, cap_usd, ledger_exposure_usd, runner.store.report())
     return rows
 
 
@@ -393,7 +423,7 @@ def _compare_row(result):
             'wall_seconds': result.get('wall_seconds')}
 
 
-def _write_compare_report(root, rows, arms, cap_usd):
+def _write_compare_report(root, rows, arms, cap_usd, ledger_exposure_usd, ledger):
     def total(items, key):
         return format(sum((Decimal(r[key]) for r in items if r.get(key) is not None), Decimal(0)).normalize(), 'f')
     summary = {}
@@ -412,7 +442,9 @@ def _write_compare_report(root, rows, arms, cap_usd):
                         'advisor_delegate': sum(r['advisor_outcome'] == 'delegate' for r in done),
                         'advisor_incomplete': sum(r['advisor_outcome'] == 'incomplete' for r in done),
                         'provider_rejected': sum(r['provider_rejected'] for r in done)}
-    report = {'stage': 'compare', 'cap_usd': str(cap_usd), 'arms': summary, 'rows': rows}
+    report = {'stage': 'compare', 'spend_cap_usd': str(cap_usd), 'ledger_exposure_usd': str(ledger_exposure_usd),
+              'ledger': {k: ledger[k] for k in ('known_usd', 'verified_usd', 'provisional_hold_usd', 'unknown_events')},
+              'arms': summary, 'rows': rows}
     (root / 'compare-report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
 
 
@@ -435,7 +467,7 @@ def pilot_setup():
             'decision': JEV, 'decision_per_call_usd': '0.01'}
 
 
-def frozen_tasks(limit=None, *, interleave=True, path=FROZEN_TASKS):
+def frozen_tasks(limit=None, *, interleave=True, only=None, path=FROZEN_TASKS):
     """讀凍結的 50 題並重建題目。``interleave`` 時依題型輪流排序，只跑前幾題也能涵蓋各題型。"""
     from .hard_tasks import FAMILIES, load_selection
     tasks = load_selection(json.loads(Path(path).read_text()))
@@ -447,6 +479,10 @@ def frozen_tasks(limit=None, *, interleave=True, path=FROZEN_TASKS):
                 if queues[family]:
                     ordered.append(queues[family].pop(0))
         tasks = ordered
+    if only:
+        tasks = [t for t in tasks if t['id'] in set(only)]
+        if len(tasks) != len(set(only)):
+            raise ValueError('Unknown task id in --task')
     return tasks[:limit] if limit else tasks
 
 
@@ -493,7 +529,9 @@ def main(argv=None):
     cal.add_argument('--confirm-paid', action='store_true')
     cmp = sub.add_parser('compare', help='三組比較：凍結的難題在各路徑上各跑一次（會發出真實付費請求）')
     cmp.add_argument('--root', type=Path, required=True)
-    cmp.add_argument('--cap', required=True, help='這一階段的美元上限')
+    cmp.add_argument('--cap', required=True, help='這一階段的實際花費上限（美元）')
+    cmp.add_argument('--ledger-exposure', default='100', help='預算庫的暫扣上限（容納未核帳呼叫的保守暫扣，不是要花的錢）')
+    cmp.add_argument('--task', action='append', default=[], help='只跑指定的題目編號')
     cmp.add_argument('--limit', type=int, help='只跑前幾題（依題型輪流排序）')
     cmp.add_argument('--arm', action='append', choices=ARMS, default=[])
     cmp.add_argument('--max-tokens', type=int, default=16000)
@@ -543,7 +581,8 @@ def main(argv=None):
     if args.command == 'compare':
         if not args.confirm_paid:
             parser.error('paid_requests_require_--confirm-paid')
-        rows = compare(args.root, frozen_tasks(args.limit), **pilot_setup(),
+        rows = compare(args.root, frozen_tasks(args.limit, only=args.task or None), **pilot_setup(),
+                       ledger_exposure_usd=args.ledger_exposure,
                        openrouter_key=key_from_args(args, 'openrouter'),
                        anthropic_key=key_from_args(args, 'anthropic'), cap_usd=args.cap,
                        arms=tuple(args.arm) or ARMS, max_tokens=args.max_tokens,

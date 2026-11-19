@@ -137,3 +137,24 @@ def test_command_line_key_can_come_from_a_key_file_or_one_env_variable(tmp_path)
     assert pilot.key_from_args(args, 'openrouter') == 'or-file'
     args = argparse.Namespace(openrouter_key_file=None, openrouter_env_file=None, openrouter_env_name='X')
     assert pilot.key_from_args(args, 'openrouter') is None
+
+
+def test_listing_endpoints_shows_each_provider_with_its_own_price():
+    seen = []
+
+    def api(request):
+        seen.append(str(request.url))
+        return httpx.Response(200, json={'data': {'id': 'openai/gpt-oss-120b', 'endpoints': [
+            {'provider_name': 'BaseTen', 'tag': 'baseten/fp4', 'quantization': 'fp4', 'context_length': 131072,
+             'max_completion_tokens': 32768, 'pricing': {'prompt': '0.0000001', 'completion': '0.0000005'},
+             'supported_parameters': ['tools', 'reasoning'], 'uptime_last_30m': 99.5, 'status': 0},
+            {'provider_name': 'Other', 'tag': 'other', 'pricing': {'prompt': '0.0000002', 'completion': '0.0000006'}}]}})
+    rows = pilot.list_endpoints('or-key', 'openai/gpt-oss-120b', transport=httpx.MockTransport(api))
+    assert seen == ['https://openrouter.ai/api/v1/models/openai/gpt-oss-120b/endpoints']
+    assert rows[0] == {'provider_name': 'BaseTen', 'tag': 'baseten/fp4', 'quantization': 'fp4',
+                       'context_length': 131072, 'max_completion_tokens': 32768, 'input_per_mtok': '0.1',
+                       'output_per_mtok': '0.5', 'tools': True, 'reasoning': True, 'uptime_last_30m': 99.5,
+                       'status': 0}
+    assert rows[1]['provider_name'] == 'Other' and rows[1]['tools'] is False
+    with pytest.raises(ValueError):
+        pilot.list_endpoints('or-key', '../etc/passwd', transport=httpx.MockTransport(api))

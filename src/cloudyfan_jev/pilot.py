@@ -97,6 +97,28 @@ def list_models(openrouter_key, *, match=(), transport=None):
     return sorted(rows, key=lambda row: row['id'])
 
 
+def list_endpoints(openrouter_key, model, *, transport=None):
+    """某個模型在 OpenRouter 上的各家供應商、價格與量化（只讀、不收費）。"""
+    import re
+    if not re.fullmatch(r'[A-Za-z0-9_.\-]+/[A-Za-z0-9_.:\-]+', model):
+        raise ValueError('Invalid OpenRouter model id')
+    with httpx.Client(transport=transport, timeout=30, follow_redirects=False, trust_env=False) as http:
+        response = http.get(OPENROUTER_MODELS + '/' + model + '/endpoints',
+                            headers={'Authorization': 'Bearer ' + openrouter_key})
+    response.raise_for_status()
+    rows = []
+    for item in (response.json().get('data') or {}).get('endpoints', []):
+        pricing, parameters = item.get('pricing') or {}, item.get('supported_parameters') or []
+        rows.append({'provider_name': item.get('provider_name'), 'tag': item.get('tag'),
+                     'quantization': item.get('quantization'), 'context_length': item.get('context_length'),
+                     'max_completion_tokens': item.get('max_completion_tokens'),
+                     'input_per_mtok': _per_mtok(pricing['prompt']) if 'prompt' in pricing else None,
+                     'output_per_mtok': _per_mtok(pricing['completion']) if 'completion' in pricing else None,
+                     'tools': 'tools' in parameters, 'reasoning': 'reasoning' in parameters,
+                     'uptime_last_30m': item.get('uptime_last_30m'), 'status': item.get('status')})
+    return rows
+
+
 def anthropic_target(model, *, effort='low', prices=None):
     price = (prices or ANTHROPIC_PRICES).get(model)
     if price is None:
@@ -199,6 +221,11 @@ def main(argv=None):
     models.add_argument('--openrouter-env-file', type=Path)
     models.add_argument('--openrouter-env-name', default='OPENROUTER_API_KEY')
     models.add_argument('--match', action='append', default=[])
+    endpoints = sub.add_parser('endpoints', help='列出某個 OpenRouter 模型的供應商與價格（不收費）')
+    endpoints.add_argument('model')
+    endpoints.add_argument('--openrouter-key-file', type=Path)
+    endpoints.add_argument('--openrouter-env-file', type=Path)
+    endpoints.add_argument('--openrouter-env-name', default='OPENROUTER_API_KEY')
     run = sub.add_parser('connect', help='階段 0 連線驗證（會發出真實付費請求）')
     run.add_argument('--root', type=Path, required=True, help='這次試跑的新資料夾（收據、帳本、報告）')
     run.add_argument('--cap', default='1', help='這一階段的美元上限')
@@ -222,6 +249,13 @@ def main(argv=None):
         if key is None:
             parser.error('openrouter_key_required')
         for row in list_models(key, match=args.match):
+            print(json.dumps(row, ensure_ascii=False))
+        return 0
+    if args.command == 'endpoints':
+        key = key_from_args(args, 'openrouter')
+        if key is None:
+            parser.error('openrouter_key_required')
+        for row in list_endpoints(key, args.model):
             print(json.dumps(row, ensure_ascii=False))
         return 0
     if not args.confirm_paid:

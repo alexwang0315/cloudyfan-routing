@@ -52,7 +52,7 @@ core.run(run_id, task, env, contract_version='v1', mode='advisor_first',
 - `task_id` 直接用 `run_id`；不同 MRC 根目錄若重用同一 `run_id` 寫同一個經驗庫，會因內容不同被拒絕。
 - 未通過作答的檢查碼一律記為「支持」，不記反例；何時算反例（例如帶事實後仍犯同錯）未定。
 - 顧問建議本身（`advisor_advice`）尚未回寫。
-- 經驗庫存檔沒有跨程序鎖（#75 已知限制）。
+- 經驗庫存檔沒有跨程序鎖（#75 已知限制）。→ 已由 `ExperienceStore.update` 檔案鎖解決，見下方「主服務接上經驗庫檔案與改寫器」。
 - 卡片多花的輸入成本、經驗是否真的降低升級成本，都要等 ADR 0036 的時間序列對照評估；沒有呼叫任何真實模型。
 
 ## 任務服務帶入客戶端與契約範圍（2026-11-19）
@@ -63,3 +63,40 @@ core.run(run_id, task, env, contract_version='v1', mode='advisor_first',
   - `created_at`：建題的 UTC 日期。
 - `execute` 把凍結的身分原樣交給 `Core.run(experience=...)`；重送不改身分。沒接經驗庫的契約不寫這個欄位，行為與先前相同。
 - 尚未做：以「類別」而非契約 ID 當範圍；Monitor 畫面尚未顯示每題的經驗身分。
+
+## 主服務接上經驗庫檔案與改寫器（2026-11-19）
+
+白話：主服務現在有一個固定的接法，把經驗庫存成一個檔案，多個程序共用；
+「把事實改寫成通用敘述」不在作答時做，改成另外批次做，先預留預算再呼叫開源顧問。
+
+```python
+from cloudyfan_jev.experience_rewrite import open_experience, rewrite_pending
+link = open_experience('runtime/experience.json')            # 啟動時組裝一次
+config = AdvisorConfig(..., experience=link)                  # 路徑二；路徑一加強版同樣傳 link
+# 維運批次（另外排程，不在作答流程中）：
+rewrite_pending(runner, 'runtime/experience.json', advisor_profile, run_id='experience-rewrite-20261119', limit=10)
+```
+
+- `open_experience`：讀既有檔案（沒有就第一次回寫時建立），改寫器固定為 `defer_rewrite`。
+  作答回寫時，新達共用門檻的事實只標成「待改寫」（`pending`），**作答流程不呼叫任何改寫模型**，
+  所以每題的最壞預留不必包含改寫。
+- 組卡前重讀檔案（`ExperienceLink.refresh`，路徑二與路徑一加強版都會）：其他程序的回寫、
+  Monitor 改的「貢獻」「使用」開關，在下一題建卡時就生效，不會沿用啟動時的舊內容。
+- `rewrite_pending`：
+  - 改寫器設定必須明示 `open_source: True`，且要有已確認的費用上界；缺上界就在任何呼叫前拒跑。
+  - 一批最多 `limit` 條；先以 `BudgetedCore` 的預算庫預留「筆數 × 上界」，每次呼叫照收據記帳。
+  - 呼叫編號 `experience-rewrite-<事實編號>-<支持集合雜湊前 16 碼>`：同一批中斷後用同一個 `run_id` 重跑，讀舊收據、不重付；
+    和題目流程一樣，只有整批呼叫都完成才釋放預留。
+  - 改寫器只收到契約範圍、事實種類與代碼；回覆只收單行、≤ 400 字元的敘述。
+  - 結果持檔案鎖寫回：通過去識別檢查才進共用層（`accepted`），否則 `rejected`；
+    改寫期間支持集合變了則記 `stale`，維持待改寫，下一批再改。
+  - 被擋下的事實，之後有新的支持才會再排進待改寫。
+
+已測（`tests/test_experience_wiring.py`，12 個，全部 MockTransport）：作答回寫只標待改寫、開檔沿用同一鹽值、
+改寫後共用層出現敘述、預留金額與固定呼叫編號、寫回前中斷後同批續跑不重付、外洩敘述被擋、支持改變後重新排隊、過期結果不套用、
+`limit` 同時限制呼叫數與預留、非開源或缺上界拒跑、Monitor 在另一程序關掉「使用」後新卡不再附共用事實。
+
+未做／未知：
+- 沒有排程器或指令列入口來定期跑 `rewrite_pending`；目前由主服務自行呼叫。
+- Monitor 的示範組裝尚未改用 `open_experience`。
+- 真實開源顧問的改寫品質、每條改寫的實際費用都沒測（沒有呼叫任何真實模型）。

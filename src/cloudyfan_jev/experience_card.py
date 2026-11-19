@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 import hashlib
 import json
+from pathlib import Path
 import re
 
 from .context_preparation import _render
@@ -141,7 +142,7 @@ def freeze(path, config, pool, context):
         if card['client_id'] != context['client_id'] or card['view']['scope'] != context['scope']:
             raise ValueError('Frozen experience card unverifiable')
         return card
-    store = config.experience.store
+    store = config.experience.refresh()
     card = build_card(store, client_id=context['client_id'], scope=context['scope'],
                       settings=store.freeze_settings(context['client_id']),
                       advisor=config.advisor, pool=pool, pool_snapshot=config.score_snapshot)
@@ -229,6 +230,13 @@ class ExperienceLink:
     def descriptor():
         return {'card_version': CARD_VERSION, 'max_card_bytes': MAX_CARD_BYTES,
                 'min_sample': MIN_SAMPLE, 'advisor_note': ADVISOR_NOTE, 'facts_header': FACTS_HEADER}
+
+    def refresh(self):
+        """組卡前呼叫：給定 ``path`` 且檔案存在時重讀最新內容（其他程序的回寫、Monitor 的
+        「貢獻」「使用」開關），避免用到啟動時的舊內容。存檔是原子替換，讀取不必持鎖。"""
+        if self.path is not None and Path(self.path).exists():
+            self.store._adopt(ExperienceStore.open(self.path, rewriter=self.store._rewriter))
+        return self.store
 
     def record(self, observation):
         """回寫一題觀察。給定 ``path`` 時走 ``ExperienceStore.update``：持檔案鎖重讀檔案最新內容、

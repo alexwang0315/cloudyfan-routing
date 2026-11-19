@@ -35,6 +35,20 @@ TOKEN = re.compile(r"^[A-Za-z0-9_.:/\-]{1,120}$")
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
+class _Deferred:
+    def __repr__(self):
+        return "DEFERRED"
+
+
+# 改寫函式回傳 DEFERRED 表示「先標成待改寫」：作答時不呼叫模型，另由批次步驟改寫
+#（experience_rewrite.rewrite_pending），呼叫才能先算進預算預留。
+DEFERRED = _Deferred()
+
+
+def defer_rewrite(fact):
+    return DEFERRED
+
+
 def _token(value, what):
     if not isinstance(value, str) or not TOKEN.match(value):
         raise ValueError(f"{what} 必須是代碼型字串")
@@ -233,12 +247,48 @@ class ExperienceStore:
                                          or previous["support_sha256"] == _hash(tasks)):
                 continue
             statement = self._rewriter({"scope": scope, "kind": kind, "code": code})
+            if statement is DEFERRED:
+                self._rewrites[fid] = {"status": "pending", "support_sha256": _hash(tasks),
+                                       "scope": scope, "kind": kind, "code": code}
+                continue
             if not isinstance(statement, str) or not statement.strip():
                 raise ValueError("顧問改寫必須回傳非空字串")
-            if self._deidentified(statement, tasks):
-                self._rewrites[fid] = {"status": "accepted", "statement": statement}
-            else:
-                self._rewrites[fid] = {"status": "rejected", "support_sha256": _hash(tasks)}
+            self._judge_rewrite(fid, tasks, statement)
+
+    def _judge_rewrite(self, fid, tasks, statement):
+        if self._deidentified(statement, tasks):
+            self._rewrites[fid] = {"status": "accepted", "statement": statement}
+        else:
+            self._rewrites[fid] = {"status": "rejected", "support_sha256": _hash(tasks)}
+        return self._rewrites[fid]["status"]
+
+    def pending_rewrites(self):
+        """待改寫且支持集合仍與標記時相同的共用事實，依事實編號排序。"""
+        pending = []
+        for fid, entry in sorted(self._rewrites.items()):
+            if entry["status"] != "pending":
+                continue
+            fact = self._shared_candidates(entry["scope"]).get((entry["kind"], entry["code"]))
+            if fact is not None and _hash(sorted(fact["tasks"])) == entry["support_sha256"]:
+                pending.append({"fact_id": fid, **{k: entry[k] for k in
+                                                   ("scope", "kind", "code", "support_sha256")}})
+        return pending
+
+    def apply_rewrite(self, fid, support_sha256, statement):
+        """套用批次改寫結果。支持集合已改變（或事實已不在共用門檻內）回傳 ``stale`` 不動；
+        否則照常做去識別檢查，回傳 ``accepted``／``rejected``。不合格式的回覆視為 rejected。"""
+        entry = self._rewrites.get(fid)
+        if entry is None or entry["status"] != "pending" or entry["support_sha256"] != support_sha256:
+            return "stale"
+        fact = self._shared_candidates(entry["scope"]).get((entry["kind"], entry["code"]))
+        tasks = sorted(fact["tasks"]) if fact is not None else None
+        if tasks is None or _hash(tasks) != support_sha256:
+            return "stale"
+        self._version += 1
+        if not isinstance(statement, str) or not statement.strip():
+            self._rewrites[fid] = {"status": "rejected", "support_sha256": support_sha256}
+            return "rejected"
+        return self._judge_rewrite(fid, tasks, statement)
 
     # ---- 推導 ----
 

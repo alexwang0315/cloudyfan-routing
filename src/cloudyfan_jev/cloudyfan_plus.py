@@ -118,7 +118,7 @@ def freeze_facts(path, config, context):
                 or card['view'].get('scope') != context['scope']):
             raise ValueError('Frozen experience facts unverifiable')
         return card
-    store = config.experience.store
+    store = config.experience.refresh()
     card = build_facts(store, client_id=context['client_id'], scope=context['scope'],
                        settings=store.freeze_settings(context['client_id']))
     _save(path, card)

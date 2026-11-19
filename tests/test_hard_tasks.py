@@ -78,33 +78,32 @@ def test_c_hard_levels_have_no_direct_position_clues_and_the_answer_fits(task):
     assert all(h.c_holds(clue, pos) for clue in s['clues'])
 
 
-# ---- D：列舉所有路線（允許繞圈，受時間、油料、道路數上限限制）對動態規劃 ----
+# ---- D：逐一搜尋同餘解與手寫反覆平方，對公式構造與內建模冪 ----
 
-def d_enumerate(nodes, edges, time_limit, fuel_limit, via, max_roads):
-    out = {}
-    for u, v, c, t, f in edges:
-        out.setdefault(u, []).append((v, c, t, f))
-    best = []
-
-    def walk(node, cost, time, fuel, roads, seen):
-        if time > time_limit or fuel > fuel_limit or roads > max_roads:
-            return
-        seen = seen or node == via
-        if node == nodes - 1 and seen:
-            best.append(cost)
-        for v, c, t, f in out.get(node, []):
-            walk(v, cost + c, time + t, fuel + f, roads + 1, seen)
-    walk(0, 0, 0, 0, 0, False)
-    return min(best)
+def d_search(residues, moduli):
+    step, start = moduli[0], residues[0] or moduli[0]
+    x = start
+    while not all(x % m == r for r, m in zip(residues, moduli)):
+        x += step
+    return x
 
 
-@pytest.mark.parametrize('task', tasks('D', seeds=range(2)), ids=lambda t: t['id'])
-def test_d_minimum_cost_matches_enumerating_every_route(task):
+def d_square_and_multiply(base, exponent, modulus):
+    result, base = 1, base % modulus
+    while exponent:
+        if exponent & 1:
+            result = result * base % modulus
+        base = base * base % modulus
+        exponent >>= 1
+    return result
+
+
+@pytest.mark.parametrize('task', tasks('D'), ids=lambda t: t['id'])
+def test_d_answer_matches_search_and_manual_exponentiation(task):
     s = task['source']
-    assert int(task['answer']) == d_enumerate(s['nodes'], s['edges'], s['time_limit'], s['fuel_limit'], s['via'],
-                                              s['max_roads'])
-    pairs = {(u, v) for u, v, *_ in s['edges']}
-    assert any((v, u) in pairs for u, v in pairs) or any(u > v for u, v in pairs)  # 路網確實不是單向往前
+    x = d_search(s['residues'], s['moduli'])
+    y = d_square_and_multiply(x, s['exponent'], s['prime'])
+    assert task['answer'] == f'{x} {y}' and x % s['prime'] != 0
 
 
 # ---- E：直接以 Python 寫出同樣的語意，對執行產生的程式碼 ----

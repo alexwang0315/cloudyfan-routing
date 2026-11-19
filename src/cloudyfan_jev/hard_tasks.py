@@ -7,13 +7,14 @@
 from fractions import Fraction
 from itertools import permutations
 import json
+from math import gcd
 import random
 import re
 
-VERSION = 'cloudyfan-hard-tasks-v3'
-# 各題型的產生器版本：第 1 次校準後 B、C、D、G、I 太容易而改寫；第 2 次校準後 D、G 再改寫；其餘沿用第 1 版，
+VERSION = 'cloudyfan-hard-tasks-v4'
+# 各題型的產生器版本：第 1 次校準後 B、C、D、G、I 太容易而改寫；第 2 次校準後 D、G 再改寫；第 3 次校準後 D 換成新題型；其餘沿用第 1 版，
 # 亂數種子也沿用第 1 版的命名，已校準的題目不變。
-FAMILY_REVISION = {'A': 1, 'B': 2, 'C': 2, 'D': 3, 'E': 1, 'F': 1, 'G': 3, 'H': 1, 'I': 2, 'J': 1}
+FAMILY_REVISION = {'A': 1, 'B': 2, 'C': 2, 'D': 4, 'E': 1, 'F': 1, 'G': 3, 'H': 1, 'I': 2, 'J': 1}
 LEVELS = (1, 2, 3, 4, 5)
 ANSWER_RULE = ('Think carefully. When you are done, end your response with exactly one final line of the form\n'
                'ANSWER: {fmt}\nwith nothing after it.')
@@ -263,68 +264,49 @@ def c_make(rng, level):
     return prompt, answer, 'houses', fmt, {'houses': houses, 'clues': clues}
 
 
-# ---- D（第 3 版）：可繞圈路網、時間與油料上限、道路數上限、必經城鎮 ----
-# 第 2 版（只能往前走的路網）開源模型仍答對 8／10，改為允許繞圈並加上道路數上限。
+# ---- D（第 4 版）：同餘方程組加大數模冪 ----
+# 第 1–3 版（受限最短路徑）不論怎麼加難，開源模型都答對 9–10／10；改為需要精確長串計算的題型。
 
-def d_best(nodes, edges, time_limit, fuel_limit, via, max_roads=None):
-    """參考解：依「已用時間」由小到大處理狀態（每條路的時間都至少為 1，時間嚴格遞增），
-    狀態為 (城鎮, 時間, 油料, 已走道路數, 是否經過指定城鎮) → 最小成本。上限給 None 表示不限制。"""
-    out = {}
-    for u, v, cost, time, fuel in edges:
-        out.setdefault(u, []).append((v, cost, time, fuel))
-    # 不限時間時，最佳路線最多是「到指定城鎮」加「到終點」兩段簡單路徑，時間不超過總和的兩倍。
-    horizon = time_limit if time_limit is not None else 2 * sum(e[3] for e in edges)
-    layers = [dict() for _ in range(horizon + 1)]
-    layers[0][(0, 0, 0, via is None or via == 0)] = 0
-    best = None
-    for used_t in range(horizon + 1):
-        for (node, used_f, roads, seen), value in layers[used_t].items():
-            if node == nodes - 1 and seen:
-                best = value if best is None else min(best, value)
-            for v, cost, time, fuel in out.get(node, []):
-                t, f, r = used_t + time, used_f + fuel, roads + 1
-                if t > horizon or (fuel_limit is not None and f > fuel_limit) or (max_roads is not None and r > max_roads):
-                    continue
-                key = (v, f if fuel_limit is not None else 0, r if max_roads is not None else 0, seen or v == via)
-                if value + cost < layers[t].get(key, 10 ** 18):
-                    layers[t][key] = value + cost
-    return best
+D_MODULI = (7, 8, 9, 11, 13, 17, 19, 23, 25, 27, 29, 31, 32, 37, 41, 43, 47, 49, 53, 59)
+D_PRIMES = (97, 101, 211, 257, 331, 409, 557, 769, 1009, 2003, 4099, 7919, 10007, 30011, 65537, 99991)
+
+
+def d_crt(residues, moduli):
+    """參考解：逐條合併同餘式（模數兩兩互質），回傳最小正整數解。"""
+    x, m = 0, 1
+    for r, n in zip(residues, moduli):
+        # 找 k 使 x + m*k ≡ r (mod n)：k = (r - x) * m^{-1} mod n
+        k = ((r - x) * pow(m, -1, n)) % n
+        x, m = x + m * k, m * n
+    return x % m or m
+
+
+def d_answer(residues, moduli, exponent, prime):
+    x = d_crt(residues, moduli)
+    return f'{x} {pow(x, exponent, prime)}'
 
 
 def d_make(rng, level):
-    names = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-    nodes = 10 + 2 * level
+    count, limit, exp_range, primes = {1: (2, 30, (20, 60), D_PRIMES[:3]), 2: (3, 40, (100, 400), D_PRIMES[2:6]),
+                                       3: (3, 60, (1000, 9000), D_PRIMES[5:10]),
+                                       4: (4, 45, (10 ** 4, 9 * 10 ** 4), D_PRIMES[8:13]),
+                                       5: (4, 60, (10 ** 5, 9 * 10 ** 5), D_PRIMES[11:])}[level]
     while True:
-        edges, seen_pairs = [], set()
-        for u in range(nodes):
-            for v in rng.sample([x for x in range(nodes) if x != u], rng.randint(2, 3)):
-                if (u, v) not in seen_pairs and u != nodes - 1:
-                    seen_pairs.add((u, v))
-                    edges.append((u, v, rng.randint(1, 30), rng.randint(1, 9), rng.randint(1, 9)))
-        via = rng.randint(1, nodes - 2)
-        loose = d_best(nodes, edges, None, None, via)
-        if loose is None:
-            continue
-        time_limit = rng.randint(14 + 3 * level, 20 + 5 * level)
-        fuel_limit = rng.randint(12 + 3 * level, 18 + 5 * level)
-        max_roads = rng.randint(4 + level // 2, 6 + level)
-        answer = d_best(nodes, edges, time_limit, fuel_limit, via, max_roads)
-        partial = [d_best(nodes, edges, time_limit, None, via), d_best(nodes, edges, None, fuel_limit, via),
-                   d_best(nodes, edges, None, None, via, max_roads)]
-        # 三個上限都要真的有作用：各自單獨套用時，最佳成本都比不受限時高。
-        if answer is not None and all(p is not None and p > loose for p in partial):
+        moduli = rng.sample([m for m in D_MODULI if m <= limit], count)
+        if all(gcd(a, b) == 1 for i, a in enumerate(moduli) for b in moduli[i + 1:]):
             break
-    rng.shuffle(edges)
-    lines = '\n'.join(f'{names[u]} -> {names[v]}: cost {c}, time {t}, fuel {f}' for u, v, c, t, f in edges)
-    prompt = (f'A directed road network has {nodes} towns labelled {names[0]} to {names[nodes - 1]}. Roads can only be '
-              f'driven in the given direction, and the network may contain cycles:\n\n{lines}\n\n'
-              f'Find a route from {names[0]} to {names[nodes - 1]} that passes through town {names[via]}, uses at most '
-              f'{max_roads} roads in total, has total time at most {time_limit} and total fuel at most {fuel_limit}. '
-              'A route may revisit towns and reuse roads (every use counts). Among such routes, what is the minimum '
-              'total cost?')
-    return prompt, str(answer), 'integer', '<integer>', \
-        {'nodes': nodes, 'edges': edges, 'time_limit': time_limit, 'fuel_limit': fuel_limit, 'via': via,
-         'max_roads': max_roads}
+    prime = rng.choice(primes)
+    while True:
+        residues = [rng.randrange(m) for m in moduli]
+        if d_crt(residues, moduli) % prime:  # x 是質數的倍數時餘數必為 0，太簡單
+            break
+    exponent = rng.randint(*exp_range)
+    lines = '\n'.join(f'  x mod {m} = {r}' for r, m in zip(residues, moduli))
+    prompt = (f'Let x be the smallest positive integer such that\n{lines}\n\n'
+              f'Then compute y = x^{exponent} mod {prime} (the remainder of x raised to the power {exponent} when '
+              f'divided by {prime}). Give both x and y.')
+    return prompt, d_answer(residues, moduli, exponent, prime), 'tokens', '<x> <y>', \
+        {'residues': residues, 'moduli': moduli, 'exponent': exponent, 'prime': prime}
 
 
 # ---- E：程式追蹤 ----
@@ -696,7 +678,7 @@ def j_make(rng, level):
 
 FAMILIES = {'A': a_make, 'B': b_make, 'C': c_make, 'D': d_make, 'E': e_make,
             'F': f_make, 'G': g_make, 'H': h_make, 'I': i_make, 'J': j_make}
-FAMILY_NAMES = {'A': 'combinatorics', 'B': 'probability', 'C': 'constraint_puzzle', 'D': 'constrained_shortest_path',
+FAMILY_NAMES = {'A': 'combinatorics', 'B': 'probability', 'C': 'constraint_puzzle', 'D': 'modular_arithmetic',
                 'E': 'program_trace', 'F': 'cellular_automaton', 'G': 'table_reasoning', 'H': 'formal_language',
                 'I': 'lattice_geometry', 'J': 'spec_transformation'}
 

@@ -63,7 +63,7 @@ def test_connect_runs_one_tiny_task_per_model_through_the_full_stack(tmp_path):
                                      'anthropic': httpx.MockTransport(anthropic)})
     assert [(r['address'], r['status'], r['calls']) for r in rows] == [
         ('anthropic:claude-haiku-5-5', 'passed', 1), ('anthropic:claude-fable-5-2', 'passed', 1),
-        ('openrouter:openai/gpt-oss-120b', 'passed', 1)]
+        ('openai/gpt-oss-120b', 'passed', 1)]
     assert rows[1]['cost_usd'] == '0.016' and rows[1]['cost_basis'] == 'computed_from_vendor_token_usage'
     assert rows[2]['cost_usd'] == '0.0003' and rows[2]['provider'] == 'BaseTen'
     assert rows[0]['input_tokens'] == 1000 and rows[0]['output_tokens'] == 200
@@ -158,3 +158,53 @@ def test_listing_endpoints_shows_each_provider_with_its_own_price():
     assert rows[1]['provider_name'] == 'Other' and rows[1]['tools'] is False
     with pytest.raises(ValueError):
         pilot.list_endpoints('or-key', '../etc/passwd', transport=httpx.MockTransport(api))
+
+
+class BusyOpenRouter:
+    """第一個模型被上游以 429 拒絕（帶請求編號、核帳查不到）；第二個模型正常回答。"""
+    def __init__(self):
+        self.posts, self.gets = [], []
+
+    def __call__(self, request):
+        if request.method == 'GET':
+            self.gets.append(str(request.url))
+            return httpx.Response(404, json={'error': {'message': 'Generation not found', 'code': 404}})
+        body = json.loads(request.content)
+        self.posts.append(body['model'])
+        if body['model'] == 'openai/gpt-oss-20b':
+            return httpx.Response(429, headers={'x-generation-id': 'gen-1795075455-busy'}, json={
+                'error': {'message': 'Provider returned error', 'code': 429, 'metadata': {
+                    'raw': 'temporarily rate-limited upstream', 'provider_name': 'DeepInfra', 'is_byok': False,
+                    'limit_source': 'upstream_provider_shared_pool'}},
+                'openrouter_metadata': {'requested': 'openai/gpt-oss-20b', 'is_byok': False}})
+        return httpx.Response(200, json={'id': 'gen-ok-1', 'model': body['model'], 'provider': 'Crusoe',
+            'usage': {'cost': .0003, 'prompt_tokens': 20, 'completion_tokens': 3},
+            'choices': [{'message': {'role': 'assistant', 'content': '2'}, 'finish_reason': 'stop'}]})
+
+
+def test_upstream_429_is_recorded_as_policy_zero_fee_and_does_not_block_the_next_model(tmp_path):
+    from cloudyfan_jev.rejection_fees import Text429FeePolicy
+    source = tmp_path / 'openrouter-pricing.txt'
+    source.write_text('No. ' + Text429FeePolicy.EXCERPT + ', so with fallback you pay only for the run that answers.')
+    api = BusyOpenRouter()
+    targets = [pilot.openrouter_target('openai/gpt-oss-20b', provider='deepinfra/bf16', provider_name='DeepInfra',
+                                       input_per_mtok='0.03', output_per_mtok='0.14'),
+               pilot.openrouter_target('openai/gpt-oss-120b', provider='crusoe/bf16', provider_name='Crusoe',
+                                       input_per_mtok='0.05', output_per_mtok='0.25')]
+    rows = pilot.connect(tmp_path / 'run', targets, openrouter_key='or-key', anthropic_key=None, cap_usd='1',
+                         transports={'openrouter': httpx.MockTransport(api)}, rejection_policy_source=source)
+    assert rows[0]['address'] == 'openai/gpt-oss-20b' and rows[0]['status'] != 'error'
+    assert rows[0]['provider_rejected'] is True and rows[0]['cost_usd'] == '0'
+    assert rows[1]['status'] == 'passed' and rows[1]['cost_usd'] == '0.0003'
+    report = json.loads((tmp_path / 'run' / 'connect-report.json').read_text())
+    assert report['unknown_events'] == 0
+    assert list((tmp_path / 'run' / 'receipts' / 'calls').glob('*/rejection-fee.json'))
+
+
+def test_without_the_policy_an_upstream_429_still_stops_as_unknown_cost(tmp_path):
+    api = BusyOpenRouter()
+    rows = pilot.connect(tmp_path / 'run', [pilot.openrouter_target(
+        'openai/gpt-oss-20b', provider='deepinfra/bf16', provider_name='DeepInfra',
+        input_per_mtok='0.03', output_per_mtok='0.14')], openrouter_key='or-key', anthropic_key=None, cap_usd='1',
+        transports={'openrouter': httpx.MockTransport(api)})
+    assert rows[0]['status'] == 'error'

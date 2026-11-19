@@ -131,10 +131,11 @@ def anthropic_target(model, *, effort='low', prices=None):
 
 
 def openrouter_target(model, *, provider, provider_name, input_per_mtok, output_per_mtok, effort='low'):
-    address = 'openrouter:' + model
+    # 不帶前綴就是 OpenRouter（ADR 0037）；既有的 429 零費政策以不帶前綴的名稱比對。
+    address = model
     return {'vendor': 'openrouter', 'address': address, 'vendor_model': model,
             'price': {'input_per_mtok': str(input_per_mtok), 'output_per_mtok': str(output_per_mtok)},
-            'profile': {'model': address, 'model_version': address, 'accepted_models': [address, model],
+            'profile': {'model': address, 'model_version': address, 'accepted_models': [model],
                         'provider': provider, 'provider_name': provider_name, 'effort': effort,
                         'capability_card': {}, 'external_score': None}}
 
@@ -146,13 +147,14 @@ def _row(target, result):
             'model': calls[-1].get('model') if calls else None,
             'provider': calls[-1].get('provider') if calls else None,
             'input_tokens': usage.get('prompt_tokens'), 'output_tokens': usage.get('completion_tokens'),
+            'provider_rejected': any(call.get('provider_rejected') for call in calls),
             'cost_usd': result['costs']['api_usd'],
             'cost_basis': usage.get('cost_basis', 'provider_reported'),
             'elapsed_ms': calls[-1].get('elapsed_ms') if calls else None}
 
 
 def connect(root, targets, *, openrouter_key, anthropic_key, cap_usd, transports=None, max_tokens=2048,
-            max_input_bytes=8192, anthropic_workspace_id=None):
+            max_input_bytes=8192, anthropic_workspace_id=None, rejection_policy_source=None):
     """階段 0：每個目標各跑一題。任何一題費用未知時，預算庫會擋下後面的題（照既有規則）。"""
     root = Path(root)
     if any(t['vendor'] == 'openrouter' for t in targets) and not openrouter_key:
@@ -169,7 +171,19 @@ def connect(root, targets, *, openrouter_key, anthropic_key, cap_usd, transports
                         follow_redirects=False, trust_env=False)
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
     # 沒有 OpenRouter 目標時，Client 仍需要一個非空字串；它不會被送到任何地方。
-    client = Client(http, openrouter_key or 'no-openrouter-key-configured', root / 'receipts')
+    policy = None
+    if rejection_policy_source is not None and any(t['vendor'] == 'openrouter' for t in targets):
+        # 上游 429 且沒有答案時，依 OpenRouter 官方定價政策（存檔為證）記為 0 元；其他未知費用照舊停止。
+        import hashlib
+        from .rejection_fees import Text429FeePolicy
+        source = Path(rejection_policy_source)
+        policy = Text429FeePolicy(
+            source, hashlib.sha256(source.read_bytes()).hexdigest(),
+            [{'model': t['vendor_model'], 'provider': t['profile']['provider'],
+              'provider_name': t['profile']['provider_name']} for t in targets if t['vendor'] == 'openrouter'],
+            valid_until=(datetime.now(timezone.utc) + timedelta(days=1)).isoformat())
+    client = Client(http, openrouter_key or 'no-openrouter-key-configured', root / 'receipts',
+                    rejection_fee_policy=policy)
     store = BudgetStore(root / 'budget.sqlite')
     if store.report()['authorization'] is None:
         store.authorize(Authorization('pilot-stage-0-connect', Decimal(str(cap_usd)),
@@ -242,6 +256,8 @@ def main(argv=None):
     run.add_argument('--openrouter-provider-name')
     run.add_argument('--openrouter-input-price')
     run.add_argument('--openrouter-output-price')
+    run.add_argument('--rejection-policy-source', type=Path,
+                     help='OpenRouter 定價政策存檔；有給時，上游 429 且無答案記為政策 0 元')
     run.add_argument('--confirm-paid', action='store_true', help='確認要發出真實付費請求')
     args = parser.parse_args(argv)
     if args.command == 'models':
@@ -275,7 +291,8 @@ def main(argv=None):
     rows = connect(args.root, targets,
                    openrouter_key=key_from_args(args, 'openrouter'),
                    anthropic_key=key_from_args(args, 'anthropic'),
-                   cap_usd=args.cap, anthropic_workspace_id=args.anthropic_workspace_id)
+                   cap_usd=args.cap, anthropic_workspace_id=args.anthropic_workspace_id,
+                   rejection_policy_source=args.rejection_policy_source)
     for row in rows:
         print(json.dumps(row, ensure_ascii=False))
     return 0 if all(row['status'] == 'passed' for row in rows) else 1

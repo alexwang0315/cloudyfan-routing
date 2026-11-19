@@ -421,3 +421,81 @@ def test_demo_without_advisor_path_leaves_experience_unconfigured(tmp_path):
                          headers={'Authorization': 'Bearer ' + ADMIN_TOKEN})
     assert admin.get('/monitor/experience').json()['configured'] is False
     assert not (tmp_path / 'experience.json').exists()
+
+
+# ---- 任務明細：每題的經驗身分；路徑二不套用路徑一的區塊 ----
+
+def test_path_two_task_view_shows_experience_identity(advisor_system):
+    app, upstream, admin, client = advisor_system
+    path_two_task(app, admin, client, 'exp-view')
+    task = next(t for t in admin.get('/monitor/snapshot').json()['tasks'] if t['run'] == 'exp-view')
+    experience = task['trace']['advisor']['experience']
+    assert set(experience) == {'card', 'store_version', 'facts_attached', 'scope'}
+    assert experience['scope'] == 'demo-advisor_first' and experience['facts_attached'] is False
+    assert isinstance(experience['card'], str) and experience['card']
+    assert task['client'] == 'studio'
+
+
+def test_path_two_trace_without_experience_has_no_experience_block(tmp_path):
+    result = advisor_result(tmp_path, decision('answer', '2'), {})
+    assert routing_trace(result)['advisor']['experience'] is None
+
+
+def render_trace(task):
+    """用 node 載入實際的 advisor.js／trace.js 畫出任務明細（沒有 node 時略過）。"""
+    import shutil
+    import subprocess
+    from pathlib import Path
+    node = shutil.which('node')
+    if node is None:
+        pytest.skip('node not available')
+    static = Path(__file__).resolve().parents[1] / 'src/cloudyfan_monitor/static'
+    script = ('const fs=require("fs");global.window={};'
+              f'eval(fs.readFileSync({json.dumps(str(static / "advisor.js"))},"utf8"));'
+              f'eval(fs.readFileSync({json.dumps(str(static / "trace.js"))},"utf8"));'
+              'const api=Object.values(window).find(v=>v&&typeof v.render==="function");'
+              f'process.stdout.write(api.render({json.dumps(task)}));')
+    return subprocess.run([node, '-e', script], capture_output=True, text=True, check=True).stdout
+
+
+def test_path_two_detail_page_omits_path_one_sections_and_shows_experience(advisor_system):
+    app, upstream, admin, client = advisor_system
+    path_two_task(app, admin, client, 'exp-page')
+    task = next(t for t in admin.get('/monitor/snapshot').json()['tasks'] if t['run'] == 'exp-page')
+    html = render_trace(task)
+    assert '路徑二：顧問先答' in html and '契約經驗' in html and 'demo-advisor_first' in html
+    for legacy in ('四池嘗試紀錄', '模型作答時間線', 'Jev 階段決策'):
+        assert legacy not in html
+    assert '未知，無法推定' not in html
+
+
+def test_path_one_detail_page_keeps_its_sections(advisor_system):
+    app, upstream, admin, client = advisor_system
+    response = client.post('/v1/tasks', json={'run_id': 'p1-page', 'category': CATEGORY,
+                                              'prompt': 'Return only the integer sum of 1 and 1.'})
+    assert response.status_code == 200
+    task = next(t for t in admin.get('/monitor/snapshot').json()['tasks'] if t['run'] == 'p1-page')
+    html = render_trace(task)
+    for section in ('四池嘗試紀錄', '模型作答時間線', 'Jev 階段決策'):
+        assert section in html
+    assert '路徑二：顧問先答' not in html
+
+
+# ---- 預覽／本機整合：明示開啟路徑二時接上經驗庫 ----
+
+def test_local_integration_with_advisor_path_wires_experience_and_stays_off_by_default(tmp_path):
+    from cloudyfan_monitor.integration import build_local_integration
+    plain = build_local_integration(tmp_path / 'plain', origin='http://monitor')
+    assert getattr(plain.app, 'experience', None) is None
+    local = build_local_integration(tmp_path / 'advisor', origin='http://monitor', advisor_first=True)
+    admin = httpx.Client(transport=httpx.WSGITransport(local.app), base_url='http://monitor',
+                         headers={'Authorization': 'Bearer ' + local.operator_token})
+    assert admin.get('/monitor/experience').json()['configured'] is True
+    assert 'advisor_first' in admin.get('/monitor/snapshot').json()['available_modes']
+    assert local.app.experience.path == tmp_path / 'advisor' / 'experience.json'
+
+
+def test_preview_command_accepts_advisor_first_flag():
+    import cloudyfan_monitor.__main__ as entry
+    import inspect
+    assert '--advisor-first' in inspect.getsource(entry.main)

@@ -24,6 +24,10 @@ window.CloudyFanAdvisor = (() => {
   function callRows(calls) {
     return calls.map(call => `<tr><td>${esc(roles[call.role] || call.role)}</td><td class="mono">${esc(call.model)}</td><td class="mono">${esc(call.generation_id)}</td><td class="amount">${money(call.cost_usd)}</td></tr>`).join('');
   }
+  function experienceBlock(experience) {
+    if (!experience || typeof experience !== 'object') return '<p class="metadata muted" data-task-experience="none">這題沒有接契約經驗庫。</p>';
+    return `<h4>契約經驗</h4><dl class="trace-facts" data-task-experience="linked"><div><dt>經驗範圍（契約）</dt><dd class="mono">${esc(experience.scope ?? '舊紀錄未保存')}</dd></div><div><dt>經驗卡編號</dt><dd class="mono">${esc(experience.card ?? '—')}</dd></div><div><dt>經驗庫版本</dt><dd class="mono">${esc(experience.store_version ?? '—')}</dd></div><div><dt>解題事實</dt><dd>${experience.facts_attached ? '已附給作答模型' : '這題沒有可附的事實'}</dd></div></dl><p class="metadata muted">只顯示代碼與編號；事實內容與成績不在 Monitor 顯示。客戶端見任務列。</p>`;
+  }
   function traceSection(trace) {
     const advisor = trace && typeof trace.advisor === 'object' && trace.advisor ? trace.advisor : null;
     if (!advisor) return '';
@@ -36,6 +40,7 @@ window.CloudyFanAdvisor = (() => {
     const allCalls = [...(advisor.calls || []), ...attempts.flatMap(a => a.calls || [])];
     return `<section class="trace-section advisor-trace" data-advisor-trace><div class="trace-section-title"><h3>路徑二：顧問先答</h3>${badge(label, tone)}</div>
 <dl class="trace-facts"><div><dt>結束原因</dt><dd>${esc(endReasons[advisor.end_reason] || advisor.end_reason)}</dd></div>${advisor.incomplete_reason ? `<div><dt>未完成原因</dt><dd>${esc(incompleteReasons[advisor.incomplete_reason] || advisor.incomplete_reason)}</dd></div>` : ''}<div><dt>評分快照</dt><dd class="mono">${esc(advisor.score_snapshot)}</dd></div></dl>
+${experienceBlock(advisor.experience)}
 <div class="advisor-columns"><div><h4>有效建議（依順位）</h4>${recs ? `<ol class="advisor-list">${recs}</ol>` : '<p class="muted">沒有有效建議</p>'}</div><div><h4>作廢建議</h4>${voided ? `<ul class="advisor-list">${voided}</ul>` : '<p class="muted">沒有作廢</p>'}</div></div>
 <h4>各次作答</h4><div class="table-wrap"><table><thead><tr><th>#</th><th>來源</th><th>池內設定</th><th>驗收</th><th>費用</th></tr></thead><tbody>${attemptRows || '<tr><td colspan="5" class="muted">沒有作答</td></tr>'}</tbody></table></div>
 <h4>各筆呼叫（含顧問／裁判）</h4><div class="table-wrap"><table><thead><tr><th>角色</th><th>模型</th><th>generation</th><th>費用</th></tr></thead><tbody>${callRows(allCalls) || '<tr><td colspan="4" class="muted">沒有呼叫</td></tr>'}</tbody></table></div>

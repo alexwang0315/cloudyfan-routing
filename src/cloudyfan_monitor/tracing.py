@@ -15,6 +15,19 @@ def _call(call, *, role=None):
     return value
 
 
+def _experience(result):
+    """這題的經驗身分：只有代碼與編號（契約範圍、經驗卡編號、經驗庫版本、有沒有附解題事實）。
+
+    沒接經驗庫的題目回傳 None。舊結果沒有 scope 欄位時為 None。事實內容不進 Monitor。
+    """
+    experience = result.get("experience")
+    if not isinstance(experience, dict):
+        return None
+    return {"scope": experience.get("scope"), "card": experience.get("card"),
+            "store_version": experience.get("store_version"),
+            "facts_attached": experience.get("facts_block") is not None}
+
+
 def _advisor(result):
     """路徑二的公開摘要：只放決定類型、設定識別、順位與作廢原因代碼。
 
@@ -26,6 +39,7 @@ def _advisor(result):
     return {"path": ADVISOR_FIRST, "advisor_mode": decision.get("outcome"),
             "incomplete_reason": decision.get("incomplete_reason"), "end_reason": result.get("end_reason"),
             "score_snapshot": advisor.get("score_snapshot"),
+            "experience": _experience(result),
             "recommendations": [{key: item.get(key) for key in ("rank", "setting", "tier")}
                                 for item in decision.get("recommendations") or []],
             "voided": [{key: item.get(key) for key in ("rank", "reason")} for item in decision.get("voided") or []],

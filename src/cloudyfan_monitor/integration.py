@@ -181,7 +181,7 @@ class LocalIntegration:
 
 
 def build_local_integration(root, *, origin="http://127.0.0.1:8766", clock=time.time,
-                            core_root=None, seed=False):
+                            core_root=None, seed=False, advisor_first=False):
     """Synthetic fixture only: fixed mock pepper, mock models and synthetic fees.
 
     Use a dedicated root. Existing legacy task directories without lifecycle
@@ -192,7 +192,7 @@ def build_local_integration(root, *, origin="http://127.0.0.1:8766", clock=time.
     if tasks.exists() and not (tasks / ".retention").exists() and any(tasks.iterdir()):
         raise ValueError("Use a separate integration root; legacy tasks cannot be auto-migrated")
     original, upstream = build_demo(root, core_root=core_root, seed=False, origin=origin, clock=clock,
-                                     retention_policy=ACCESS_POLICY)
+                                     retention_policy=ACCESS_POLICY, advisor_first=advisor_first)
     identities = IdentityStore(root / "identities.sqlite",
                                 pepper=b"synthetic-local-integration-pepper-000000", clock=clock)
     credentials = {}
@@ -221,4 +221,7 @@ def build_local_integration(root, *, origin="http://127.0.0.1:8766", clock=time.
             app.gateway.switch(app.store.control()["revision"], None, principal)
     from .playground import Playground
     app.playground = Playground(app.gateway)
+    # 明示開啟路徑二時，示範組裝已接上經驗庫檔案；經驗共用頁沿用同一個檔案。
+    if getattr(original, "experience", None) is not None:
+        app.experience = original.experience
     return LocalIntegration(app, upstream, identities, credentials, root)

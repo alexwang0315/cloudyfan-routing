@@ -77,3 +77,4 @@ python -m cloudyfan_jev.pilot connect --root runtime/pilot-connect-01 --cap 1 --
 - 每題走完整堆疊：廠商路由、收據、模型身分核對、預算預留、牌價上界。超過階段上限就不送出。
 - 輸出每個模型一行（狀態、token、費用與費用來源），並寫 `connect-report.json`。
 - 已測：`tests/test_pilot_connect.py` 6 項（MockTransport）。**尚未對真實廠商執行過。**
+- 金鑰也可用 `--anthropic-env-file <.env 路徑> --anthropic-env-name ANTHROPIC_API_KEY`：腳本只取出這一個變數，其他變數不保留，錯誤訊息不帶檔案內容。

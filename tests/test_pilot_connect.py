@@ -103,3 +103,24 @@ def test_openrouter_target_needs_a_key_and_missing_keys_are_refused(tmp_path):
     with pytest.raises(ValueError, match='Anthropic'):
         pilot.connect(tmp_path / 'run2', [pilot.anthropic_target('claude-haiku-5-5')],
                       openrouter_key='or-key', anthropic_key=None, cap_usd='1')
+
+
+def test_env_file_yields_only_the_named_variable(tmp_path):
+    env = tmp_path / '.env'
+    env.write_text('# comment\nOTHER_SECRET=do-not-touch\nexport ANTHROPIC_API_KEY="sk-test-123"\n\nTHIRD=x\n')
+    assert pilot.read_env_key(env, 'ANTHROPIC_API_KEY') == 'sk-test-123'
+    env.write_text("ANTHROPIC_API_KEY='sk-single'\n")
+    assert pilot.read_env_key(env, 'ANTHROPIC_API_KEY') == 'sk-single'
+    env.write_text('ANTHROPIC_API_KEY=plain # trailing\n')
+    assert pilot.read_env_key(env, 'ANTHROPIC_API_KEY') == 'plain'
+    with pytest.raises(ValueError, match='not found') as missing:
+        pilot.read_env_key(env, 'OPENROUTER_API_KEY')
+    assert 'plain' not in str(missing.value)            # 錯誤訊息不帶任何內容
+    env.write_text('ANTHROPIC_API_KEY=a\nANTHROPIC_API_KEY=b\n')
+    with pytest.raises(ValueError, match='more than once'):
+        pilot.read_env_key(env, 'ANTHROPIC_API_KEY')
+    env.write_text('ANTHROPIC_API_KEY=\n')
+    with pytest.raises(ValueError, match='empty'):
+        pilot.read_env_key(env, 'ANTHROPIC_API_KEY')
+    with pytest.raises(ValueError):
+        pilot.read_env_key(env, 'bad name')

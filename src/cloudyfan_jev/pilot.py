@@ -43,6 +43,38 @@ def read_key(path):
     return lines[0]
 
 
+def read_env_key(path, name):
+    """從使用者指定的 ``.env`` 檔只取出一個指定變數；其他變數不保留、不回傳，錯誤訊息不帶檔案內容。"""
+    import re
+    if not isinstance(name, str) or not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', name):
+        raise ValueError('Invalid variable name')
+    path = Path(path)
+    if path.is_symlink() or not path.is_file():
+        raise ValueError('Env file must be an existing regular file')
+    found = []
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if line.startswith('export '):
+            line = line[len('export '):].lstrip()
+        key, separator, value = line.partition('=')
+        if not separator or key.strip() != name:
+            continue
+        value = value.strip()
+        if value[:1] in ('"', "'"):
+            end = value.find(value[0], 1)
+            value = value[1:end] if end > 0 else value[1:]
+        else:
+            value = value.split(' #', 1)[0].strip()
+        found.append(value)
+    if not found:
+        raise ValueError(name + ' not found in env file')
+    if len(found) > 1:
+        raise ValueError(name + ' appears more than once in env file')
+    if not found[0]:
+        raise ValueError(name + ' is empty in env file')
+    return found[0]
+
+
 def _per_mtok(value):
     return format((Decimal(str(value)) * 1000000).normalize(), 'f')
 
@@ -157,6 +189,8 @@ def main(argv=None):
     run.add_argument('--root', type=Path, required=True, help='這次試跑的新資料夾（收據、帳本、報告）')
     run.add_argument('--cap', default='1', help='這一階段的美元上限')
     run.add_argument('--anthropic-key-file', type=Path)
+    run.add_argument('--anthropic-env-file', type=Path, help='改從 .env 檔只取 --anthropic-env-name 這一個變數')
+    run.add_argument('--anthropic-env-name', default='ANTHROPIC_API_KEY')
     run.add_argument('--anthropic-model', action='append', default=[])
     run.add_argument('--openrouter-key-file', type=Path)
     run.add_argument('--openrouter-model')
@@ -186,7 +220,9 @@ def main(argv=None):
         parser.error('no_targets')
     rows = connect(args.root, targets,
                    openrouter_key=read_key(args.openrouter_key_file) if args.openrouter_key_file else None,
-                   anthropic_key=read_key(args.anthropic_key_file) if args.anthropic_key_file else None,
+                   anthropic_key=(read_key(args.anthropic_key_file) if args.anthropic_key_file
+                                  else read_env_key(args.anthropic_env_file, args.anthropic_env_name)
+                                  if args.anthropic_env_file else None),
                    cap_usd=args.cap)
     for row in rows:
         print(json.dumps(row, ensure_ascii=False))

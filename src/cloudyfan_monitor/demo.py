@@ -114,8 +114,13 @@ def build_demo(root, *, core_root=None, seed=True, origin="http://127.0.0.1:8766
     advisor = None
     if advisor_first:
         from cloudyfan_jev.advisor import AdvisorConfig
+        from cloudyfan_jev.experience_rewrite import open_experience
+        # 契約經驗庫存成資料夾裡的一個檔案：任務回寫與畫面上的「貢獻」「使用」開關共用它。
+        # 改寫一律延後（只標待改寫），示範不會為改寫呼叫任何模型。
+        experience_path = root / "experience.json"
         advisor = AdvisorConfig(advisor=_role_profile("advisor"), judge=_role_profile("judge"),
-                                score_snapshot="synthetic-score-snapshot")
+                                score_snapshot="synthetic-score-snapshot",
+                                experience=open_experience(experience_path))
     core = Core(client, profiles, decision, limits=Limits(max_turns=1, max_tokens=128),
                 execution_policy=ExecutionPolicy(mode="unrestricted", origin="home:fixture", classifier="cloud:typesafe"),
                 diagnostic_contract=DiagnosticContract("monitor-arithmetic-v1", "demo-public-contract"),
@@ -164,4 +169,7 @@ def build_demo(root, *, core_root=None, seed=True, origin="http://127.0.0.1:8766
     app = App(gateway, admin_token=ADMIN_TOKEN, source=DemoSource(catalog), origin=origin)
     from .playground import Playground
     app.playground = Playground(gateway)
+    if advisor is not None:
+        from .experience_settings import ExperienceSettings
+        app.experience = ExperienceSettings(experience_path)
     return app, upstream

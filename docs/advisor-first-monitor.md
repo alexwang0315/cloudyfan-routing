@@ -39,7 +39,21 @@ MRC 新增了三個機制：路徑二（開源顧問先看題目，能答就答�
 - **路徑一加強版（#79）尚未合併**：Monitor 認得 `cloudyfan_plus`，但沒有 MRC 契約可註冊，所以畫面上不能選。
 - **MRC 的建立時路由建議規則只認既有四模式**（`task_recommendations.context` 的模式白名單）：主機註冊路徑二契約時，Monitor 的「特徵 v2 ＋ 觀察性建議 v1」版本無法建立，`ObservationPolicy` 改為只提供不含建議的版本。要恢復需 MRC 擴充白名單（本單不改 MRC）。
 - 裁判（#74）尚未合併：明細已能顯示 `judge` 角色與裁判費用，但沒有實際裁判呼叫可測。
-- 經驗庫是單一 JSON 檔、沒有跨程序鎖；Monitor 與 MRC 同時寫入可能互相覆蓋（MRC 文件已註明）。
+- 經驗庫是單一 JSON 檔、沒有跨程序鎖；Monitor 與 MRC 同時寫入可能互相覆蓋（MRC 文件已註明）。→ 已改由 MRC `ExperienceStore.update` 持檔案鎖寫入。
 - 換池紀錄只顯示 MRC 已寫入的紀錄；體檢與評估本身不從 Monitor 觸發。
 - 預覽（`./scripts/preview`）沒有接上自動換池與經驗庫，兩頁會顯示「尚未接上」。畫面另以一次性合成伺服器（`build_demo(advisor_first=True)` 加上合成換池紀錄與經驗庫檔）在桌機瀏覽器操作過：換池紀錄顯示與回復、經驗開關切換、路由模式選單（加強版顯示無已註冊契約）、路徑二任務明細，主控台無錯誤；這不是正式驗收紀錄。
 - Monitor CI 指定的 MRC 版本在 GitHub repository 變數 `CLOUDYFAN_CORE_REF`／`CLOUDYFAN_CORE_INPUT_SHA256`；MRC 本機沒有 remote，本單沒有、也不能更新這兩個變數，需在 MRC 推上遠端後另行同步。
+
+## 示範組裝接上經驗庫檔案（2026-11-19）
+
+白話：以前示範伺服器的「經驗共用」頁要另外手動掛一個檔案才會亮。現在只要用路徑二示範（`build_demo(advisor_first=True)`），就會自動把經驗庫存成資料夾裡的 `experience.json`，任務回寫和畫面上的開關讀寫的是同一個檔案。
+
+- 組裝：`cloudyfan_jev.experience_rewrite.open_experience(root / "experience.json")` 交給 `AdvisorConfig(experience=...)`，同一路徑交給 `ExperienceSettings` 掛在 `app.experience`。
+- 路徑二的題目建立時，MRC 任務服務把客戶端（Monitor 的客戶端 ID）與契約（`demo-advisor_first`）凍結成經驗身分；顧問收到經驗卡，題目結束後回寫檔案。
+- 畫面上切換某客戶端的「貢獻」「使用」後，**下一題**建卡時就生效，不必重啟（MRC 組卡前重讀檔案）。
+- 改寫一律延後：示範只會把新達共用門檻的事實標成待改寫，不為改寫呼叫任何模型；批次改寫（MRC `rewrite_pending`）示範沒有接。
+- 沒開路徑二的示範與本機整合（`build_local_integration`）不變：經驗頁仍顯示尚未接上，也不會建立檔案。
+- 影響：路徑二示範的顧問設定多了經驗卡版本描述，舊的路徑二示範資料夾請換新資料夾再開。
+
+已測（`tests/test_advisor_monitor.py` 新增 3 項，MockTransport）：路徑二建題後檔案出現、內容的客戶端與契約正確、顧問輸入帶經驗卡；畫面關掉開關後下一題凍結的是新設定；沒開路徑二時不接也不建檔。
+未做：畫面還看不到每題的經驗身分與經驗卡內容；預覽（`./scripts/preview`）仍沒有接經驗庫。

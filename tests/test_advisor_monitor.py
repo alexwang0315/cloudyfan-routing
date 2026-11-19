@@ -325,6 +325,7 @@ def test_operator_toggles_experience_contribute_and_use_per_client(advisor_syste
 
 def test_experience_not_configured_is_explicit(advisor_system):
     app, upstream, admin, client = advisor_system
+    app.experience = None  # 主服務沒接經驗庫檔案時
     assert admin.get('/monitor/experience').json() == {'schema_version': 'monitor-experience-settings-v1',
                                                        'configured': False}
     assert admin.post('/monitor/experience/settings', json={'client': 'studio', 'use': False}).status_code == 409
@@ -373,3 +374,50 @@ def test_store_change_rejects_mode_without_registered_contract(advisor_system):
             raise AssertionError('沒有註冊契約的模式不應被接受')
     assert app.store.control()['revision'] == revision
     assert app.store.change(revision=revision, mode='advisor_first', client='studio')['revision'] == revision + 1
+
+
+# ---- 示範組裝接上經驗庫檔案（MRC open_experience）：畫面開關與任務回寫共用同一個檔案 ----
+
+def path_two_task(app, admin, client, run_id, principal='studio'):
+    admin.post('/monitor/mode', json={'revision': app.store.control()['revision'], 'client': principal,
+                                      'mode': 'advisor_first'})
+    response = client.post('/v1/tasks', json={'run_id': run_id, 'category': CATEGORY,
+                                              'prompt': 'Return only the integer sum of 1 and 1.'})
+    assert response.status_code == 200, response.text
+
+
+def test_demo_path_two_writes_task_experience_into_the_file_the_panel_reads(advisor_system, tmp_path):
+    from cloudyfan_jev.experience import defer_rewrite
+    app, upstream, admin, client = advisor_system
+    path = tmp_path / 'experience.json'
+    view = admin.get('/monitor/experience').json()
+    assert view['configured'] is True and view['stored'] is False
+    path_two_task(app, admin, client, 'exp1')
+    assert admin.get('/monitor/experience').json()['stored'] is True
+    body = ExperienceStore.open(path, rewriter=defer_rewrite).export()['body']
+    assert [(o['client_id'], o['scope'], o['settings']) for o in body['observations']] == [
+        ('studio', 'demo-advisor_first', {'contribute': True, 'use': True})]
+    # 顧問輸入帶有經驗卡；改寫只延後標記，示範不會為改寫呼叫任何模型。
+    advisor_calls = [c for c in upstream.calls if c.get('model') == 'oss/advisor']
+    assert len(advisor_calls) == 1 and 'experience_card' in json.loads(advisor_calls[0]['messages'][1]['content'])
+
+
+def test_demo_panel_switch_applies_to_next_task_without_restart(advisor_system, tmp_path):
+    from cloudyfan_jev.experience import defer_rewrite
+    app, upstream, admin, client = advisor_system
+    path_two_task(app, admin, client, 'exp1')
+    assert admin.post('/monitor/experience/settings', json={'client': 'studio', 'contribute': False,
+                                                            'use': False}).status_code == 200
+    path_two_task(app, admin, client, 'exp2')
+    body = ExperienceStore.open(tmp_path / 'experience.json', rewriter=defer_rewrite).export()['body']
+    # 題號是內部編號；兩題各自凍結建卡當下的設定：開關前一題全開、開關後一題全關。
+    frozen = sorted((o['settings']['contribute'], o['settings']['use']) for o in body['observations'])
+    assert frozen == [(False, False), (True, True)]
+
+
+def test_demo_without_advisor_path_leaves_experience_unconfigured(tmp_path):
+    app, _ = build_demo(tmp_path, seed=False, origin='http://monitor')
+    admin = httpx.Client(transport=httpx.WSGITransport(app), base_url='http://monitor',
+                         headers={'Authorization': 'Bearer ' + ADMIN_TOKEN})
+    assert admin.get('/monitor/experience').json()['configured'] is False
+    assert not (tmp_path / 'experience.json').exists()

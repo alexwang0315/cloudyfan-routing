@@ -1,0 +1,438 @@
+{
+ "version": "cloudyfan-hard-tasks-v4",
+ "tasks": [
+  {
+   "id": "A3-0",
+   "family": "A",
+   "level": 3,
+   "seed": 0,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "A3-1",
+   "family": "A",
+   "level": 3,
+   "seed": 1,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "A4-0",
+   "family": "A",
+   "level": 4,
+   "seed": 0,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "A4-1",
+   "family": "A",
+   "level": 4,
+   "seed": 1,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "A2-0",
+   "family": "A",
+   "level": 2,
+   "seed": 0,
+   "calibration_first_pass": true
+  },
+  {
+   "id": "B1-0",
+   "family": "B",
+   "level": 1,
+   "seed": 0,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "B1-1",
+   "family": "B",
+   "level": 1,
+   "seed": 1,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "B2-0",
+   "family": "B",
+   "level": 2,
+   "seed": 0,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "B2-1",
+   "family": "B",
+   "level": 2,
+   "seed": 1,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "B3-0",
+   "family": "B",
+   "level": 3,
+   "seed": 0,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "C1-0",
+   "family": "C",
+   "level": 1,
+   "seed": 0,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "C2-0",
+   "family": "C",
+   "level": 2,
+   "seed": 0,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "C2-1",
+   "family": "C",
+   "level": 2,
+   "seed": 1,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "C3-0",
+   "family": "C",
+   "level": 3,
+   "seed": 0,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "C5-0",
+   "family": "C",
+   "level": 5,
+   "seed": 0,
+   "calibration_first_pass": true
+  },
+  {
+   "id": "D4-0",
+   "family": "D",
+   "level": 4,
+   "seed": 0,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "D5-0",
+   "family": "D",
+   "level": 5,
+   "seed": 0,
+   "calibration_first_pass": true
+  },
+  {
+   "id": "D5-1",
+   "family": "D",
+   "level": 5,
+   "seed": 1,
+   "calibration_first_pass": true
+  },
+  {
+   "id": "D4-1",
+   "family": "D",
+   "level": 4,
+   "seed": 1,
+   "calibration_first_pass": true
+  },
+  {
+   "id": "D3-0",
+   "family": "D",
+   "level": 3,
+   "seed": 0,
+   "calibration_first_pass": true
+  },
+  {
+   "id": "E2-0",
+   "family": "E",
+   "level": 2,
+   "seed": 0,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "E2-1",
+   "family": "E",
+   "level": 2,
+   "seed": 1,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "E3-1",
+   "family": "E",
+   "level": 3,
+   "seed": 1,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "E4-0",
+   "family": "E",
+   "level": 4,
+   "seed": 0,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "E3-0",
+   "family": "E",
+   "level": 3,
+   "seed": 0,
+   "calibration_first_pass": true
+  },
+  {
+   "id": "F1-1",
+   "family": "F",
+   "level": 1,
+   "seed": 1,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "F2-0",
+   "family": "F",
+   "level": 2,
+   "seed": 0,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "F3-0",
+   "family": "F",
+   "level": 3,
+   "seed": 0,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "F3-1",
+   "family": "F",
+   "level": 3,
+   "seed": 1,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "F2-1",
+   "family": "F",
+   "level": 2,
+   "seed": 1,
+   "calibration_first_pass": true
+  },
+  {
+   "id": "G2-1",
+   "family": "G",
+   "level": 2,
+   "seed": 1,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "G3-1",
+   "family": "G",
+   "level": 3,
+   "seed": 1,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "G4-0",
+   "family": "G",
+   "level": 4,
+   "seed": 0,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "G4-1",
+   "family": "G",
+   "level": 4,
+   "seed": 1,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "G3-0",
+   "family": "G",
+   "level": 3,
+   "seed": 0,
+   "calibration_first_pass": true
+  },
+  {
+   "id": "H1-0",
+   "family": "H",
+   "level": 1,
+   "seed": 0,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "H1-1",
+   "family": "H",
+   "level": 1,
+   "seed": 1,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "H2-0",
+   "family": "H",
+   "level": 2,
+   "seed": 0,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "H3-0",
+   "family": "H",
+   "level": 3,
+   "seed": 0,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "H2-1",
+   "family": "H",
+   "level": 2,
+   "seed": 1,
+   "calibration_first_pass": true
+  },
+  {
+   "id": "I1-0",
+   "family": "I",
+   "level": 1,
+   "seed": 0,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "I1-1",
+   "family": "I",
+   "level": 1,
+   "seed": 1,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "I2-1",
+   "family": "I",
+   "level": 2,
+   "seed": 1,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "I4-0",
+   "family": "I",
+   "level": 4,
+   "seed": 0,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "I4-1",
+   "family": "I",
+   "level": 4,
+   "seed": 1,
+   "calibration_first_pass": true
+  },
+  {
+   "id": "J3-1",
+   "family": "J",
+   "level": 3,
+   "seed": 1,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "J4-0",
+   "family": "J",
+   "level": 4,
+   "seed": 0,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "J5-0",
+   "family": "J",
+   "level": 5,
+   "seed": 0,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "J5-1",
+   "family": "J",
+   "level": 5,
+   "seed": 1,
+   "calibration_first_pass": false
+  },
+  {
+   "id": "J4-1",
+   "family": "J",
+   "level": 4,
+   "seed": 1,
+   "calibration_first_pass": true
+  }
+ ],
+ "prompts_sha256": "a29b6c1d14f8f7f251be2e88f1d56657e9ec46b5278193e0978c98cba7abca53",
+ "selected_on": "2026-11-19",
+ "calibration": {
+  "model": "openai/gpt-oss-120b",
+  "provider": "crusoe/bf16",
+  "effort": "low",
+  "mode": "open_source_first (all tiers the same model)",
+  "candidates": 100,
+  "first_pass_total": 35,
+  "by_family": {
+   "A": {
+    "tasks": 10,
+    "first_pass": 4
+   },
+   "B": {
+    "tasks": 10,
+    "first_pass": 0
+   },
+   "C": {
+    "tasks": 10,
+    "first_pass": 2
+   },
+   "D": {
+    "tasks": 10,
+    "first_pass": 9
+   },
+   "E": {
+    "tasks": 10,
+    "first_pass": 3
+   },
+   "F": {
+    "tasks": 10,
+    "first_pass": 2
+   },
+   "G": {
+    "tasks": 10,
+    "first_pass": 4
+   },
+   "H": {
+    "tasks": 10,
+    "first_pass": 1
+   },
+   "I": {
+    "tasks": 10,
+    "first_pass": 4
+   },
+   "J": {
+    "tasks": 10,
+    "first_pass": 6
+   }
+  },
+  "runs": [
+   "calibrate-01 (A,E,F,H,J)",
+   "calibrate-02 (B,C,I)",
+   "calibrate-03 (G)",
+   "calibrate-04 (D)"
+  ],
+  "cost_usd_response_reported": "0.0997"
+ },
+ "selection_rule": "per family: up to 4 open-model first-pass failures (lowest level first), then first-pass successes from the hardest level down",
+ "summary": {
+  "tasks": 50,
+  "open_model_failures": 38,
+  "by_family": {
+   "A": 5,
+   "B": 5,
+   "C": 5,
+   "D": 5,
+   "E": 5,
+   "F": 5,
+   "G": 5,
+   "H": 5,
+   "I": 5,
+   "J": 5
+  },
+  "by_level": {
+   "1": 8,
+   "2": 13,
+   "3": 13,
+   "4": 11,
+   "5": 5
+  }
+ }
+}

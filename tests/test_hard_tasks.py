@@ -372,3 +372,15 @@ def test_frozen_set_rebuilds_tasks_and_hash_detects_changes():
     frozen['tasks'][0]['seed'] = 9
     with pytest.raises(ValueError):
         h.load_selection(frozen)
+
+
+def test_frozen_fifty_task_set_rebuilds_exactly():
+    from pathlib import Path
+    frozen = json.loads((Path(__file__).resolve().parents[1] / 'docs/evidence/hard-tasks-50-20261119.json').read_text())
+    tasks_ = h.load_selection(frozen)
+    assert len(tasks_) == 50 and len({t['id'] for t in tasks_}) == 50
+    assert frozen['summary']['open_model_failures'] == sum(t['calibration_first_pass'] is False for t in frozen['tasks'])
+    assert {t['family'] for t in tasks_} == set(h.FAMILIES)
+    # 凍結檔不含題目與標準答案。
+    text = json.dumps(frozen)
+    assert '"answer"' not in text and '"prompt"' not in text

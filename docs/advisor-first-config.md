@@ -58,4 +58,20 @@ config = AdvisorConfig.from_snapshot(snapshot, now=now, advisor=..., judge=..., 
 - 快照必須通過雜湊驗證且在有效期內，否則建立時就拒絕；可另給 `requirements`（domain、capabilities、context_tokens）過濾。
 - 快照身分與有效期凍結在描述的 `pool_source`；**新題**開跑時若快照已過期，在任何模型呼叫前拒跑。已開始的題目續跑沿用建立時凍結的候選（ADR 0001）。
 - 舊的手動 `pool`／預設低中高設定照舊可用，描述不新增欄位；正式接入時應改用 `from_snapshot`。
-- 未做：主服務在自動換池發布新快照後，要用新快照重建 `AdvisorConfig`（屬主服務組裝，尚未接）。
+- 未做：主服務在自動換池發布新快照後，要用新快照重建 `AdvisorConfig`（屬主服務組裝，尚未接）。→ 重建工具已補，見下方「換池後重建顧問設定」。
+
+## 換池後重建顧問設定（2026-11-19）
+
+- `AdvisorConfig.refreshed(snapshot, now=...)`：自動換池發布新快照後，回傳以新快照候選組成的**新**設定
+  （顧問、裁判、作答上限、迴圈守衛、經驗庫連結沿用）；快照沒變就回傳原設定，原設定不被改動。
+- 主服務要把新設定註冊成**新的契約**（新的 Core／契約 ID），舊契約保留：任務服務以建題時凍結的設定核對，
+  原地換掉設定會讓舊題讀結果時得到 `frozen_configuration_changed`。
+- 已測：`tests/test_advisor_snapshot_pool.py` 新增 2 項（換池後候選層級跟著新快照、舊設定不變、過期快照拒絕）。
+- 未做：Monitor 的版本登記（路由池版本 → 契約）還沒有「換池後自動註冊新契約並切換」的流程，需另行決定做法。
+
+## 其他介面認得路徑二（2026-11-19）
+
+- Ollama 介面：`advisor_incomplete` 視為已結束的題目，回 422、`error: advisor_incomplete`，帶最終費用與來源、不帶答案
+  （先前被當成「還沒做完」回 409，且沒有最終費用）。
+- 任務建議（`task_recommendations`）：凍結的情境接受 `advisor_first` 與 `cloudyfan_plus`。路徑二沒有 Jev 分類，
+  建議為「不適用」；路徑一加強版的 Jev 選層與純路徑一相同，分類校準建議照常適用。建議仍然只供觀察、不改路由（ADR 0017）。

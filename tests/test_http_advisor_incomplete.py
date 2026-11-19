@@ -123,3 +123,22 @@ def test_delegated_attempt_result_and_provenance_resolve_pool_settings(tmp_path)
     delegated = attempts[1]['calls'][0]['configuration']
     mid = service.contracts['arithmetic'].runner.core.profiles['mid']
     assert delegated['model_version'] == mid['model_version']
+
+
+def test_ollama_interface_reports_advisor_incomplete_as_finished_with_final_costs(tmp_path):
+    """Ollama 介面：顧問未完成是已結束的題目，不是「還沒做完」；回覆帶最終費用與來源，不帶答案。"""
+    from cloudyfan_jev.ollama_api import OllamaApp
+    _, service, api, _ = advisor_service(tmp_path)
+    app = OllamaApp(service, models={'cloudyfan/arithmetic:v1': 'arithmetic'},
+                    authenticate=lambda env: 'admin', clock=lambda: '2026-11-19T10:00:00Z')
+    client = httpx.Client(transport=httpx.WSGITransport(app), base_url='http://fixture',
+                          headers={'X-CloudyFan-Run-ID': 'ollama-incomplete'})
+    response = client.post('/api/generate', json={'model': 'cloudyfan/arithmetic:v1',
+                                                  'prompt': TASK['prompt'], 'stream': False})
+    assert response.status_code == 422
+    body = response.json()
+    assert body['error'] == 'advisor_incomplete' and 'response' not in body
+    assert body['cloudyfan']['status'] == 'advisor_incomplete'
+    assert body['cloudyfan']['costs']['complete_api_usd'] == '0.002'
+    assert 'provenance' in body['cloudyfan']
+    assert [p['model'] for p in api.requests] == ['oss/advisor-v1']

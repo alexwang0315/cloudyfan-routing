@@ -227,3 +227,59 @@ def test_card_rereads_file_so_opt_out_from_another_process_applies(tmp_path):
         store.set_client_settings('c9', use=False)
     ExperienceStore.update(path, opt_out, rewriter=defer_rewrite)
     assert card_for('c9', 'after')['facts'] == []
+
+
+# ---- 批次改寫的指令入口（主服務或排程呼叫）----
+
+def assembly_for(tmp_path, api, calls=None):
+    def build():
+        if calls is not None:
+            calls.append('built')
+        return {'runner': runner(tmp_path, api), 'profile': ADVISOR}
+    return build
+
+
+def test_batch_without_run_id_derives_a_stable_id_from_the_pending_set(tmp_path):
+    from cloudyfan_jev.experience_rewrite import batch_run_id
+    path = tmp_path / 'experience.json'
+    shared_ready(path)
+    pending = ExperienceStore.open(path, rewriter=defer_rewrite).pending_rewrites()
+    api = RewriteAPI()
+    summary = rewrite_pending(runner(tmp_path, api), path, ADVISOR, limit=5)
+    assert summary['run_id'] == batch_run_id(pending) and summary['run_id'].startswith('experience-rewrite-')
+    assert batch_run_id(pending) == batch_run_id(list(pending))
+    assert batch_run_id(pending) != batch_run_id([{**pending[0], 'support_sha256': 'f' * 64}])
+
+
+def test_command_dry_run_lists_pending_without_any_call_or_reservation(tmp_path, capsys):
+    from cloudyfan_jev.experience_rewrite import main
+    path = tmp_path / 'experience.json'
+    shared_ready(path)
+    api = RewriteAPI()
+    built = []
+    code = main(['--experience', str(path), '--limit', '5', '--dry-run'],
+                assembly=assembly_for(tmp_path, api, built))
+    out = json.loads(capsys.readouterr().out)
+    assert code == 0 and out['dry_run'] is True
+    assert [p['fact_id'] for p in out['pending']] == [FID] and out['total_pending'] == 1
+    assert api.requests == []
+    assert built == [] and not (tmp_path / 'budget.sqlite').exists()  # 沒有組裝，也就沒有預留
+    assert ExperienceStore.open(path, rewriter=defer_rewrite).pending_rewrites() != []
+
+
+def test_command_runs_one_batch_and_prints_summary(tmp_path, capsys):
+    from cloudyfan_jev.experience_rewrite import main
+    path = tmp_path / 'experience.json'
+    shared_ready(path)
+    api = RewriteAPI()
+    code = main(['--experience', str(path), '--limit', '5'], assembly=assembly_for(tmp_path, api))
+    out = json.loads(capsys.readouterr().out)
+    assert code == 0 and out['accepted'] == [FID] and len(api.requests) == 1
+
+
+def test_command_requires_an_explicit_host_assembly(tmp_path, capsys):
+    from cloudyfan_jev.experience_rewrite import main
+    path = tmp_path / 'experience.json'
+    shared_ready(path)
+    with pytest.raises(SystemExit):
+        main(['--experience', str(path), '--limit', '5'])

@@ -120,6 +120,20 @@ class AdvisorConfig:
                    pool=pool_from_snapshot(snapshot, now=now, requirements=requirements),
                    snapshot_valid_until=snapshot['valid_until'], **fields)
 
+    def refreshed(self, snapshot, *, now, requirements=None):
+        """自動換池發布新快照後，回傳以新快照候選組成的**新**設定；快照沒變就回傳自己。
+
+        顧問、裁判、作答上限、迴圈守衛與經驗庫連結沿用。主服務要把新設定註冊成新的契約
+        （新的 Core／契約 ID），舊契約保留給已建立的題目：任務服務以建題時凍結的設定核對，
+        原地換掉設定會讓舊題的結果讀不出來（``frozen_configuration_changed``）。
+        """
+        if snapshot['snapshot_id'] == self.score_snapshot:
+            return self
+        from dataclasses import replace
+        return replace(self, score_snapshot=snapshot['snapshot_id'],
+                       pool=pool_from_snapshot(snapshot, now=now, requirements=requirements),
+                       snapshot_valid_until=snapshot['valid_until'])
+
 
 def pool_from_snapshot(snapshot, *, now, requirements=None):
     """回傳 ``{config_id: 設定（含 tier 與 score_selection）}``；缺合格候選即拒絕。"""

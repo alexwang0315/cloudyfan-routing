@@ -65,6 +65,15 @@ def adoption(value):
     return value
 
 
+# 任務建議認得的路由模式。路徑二（advisor_first）沒有 Jev 分類；路徑一加強版（cloudyfan_plus）
+# 的 Jev 選層與純路徑一相同（ADR 0034 第 8 點），分類校準的建議同樣適用。
+MODES = ('cloudyfan', 'fixed_high', 'low_first', 'open_source_first', 'cloudyfan_plus', 'advisor_first')
+
+
+def has_classification(mode):
+    return mode in ('cloudyfan', 'cloudyfan_plus')
+
+
 def context(value):
     keys = {'schema_version', 'contract_id', 'registered_sha256', 'category', 'mode',
             'calibration_status', 'source_kind'}
@@ -75,7 +84,7 @@ def context(value):
             or value['schema_version'] not in ('creation-routing-context-v1', 'creation-routing-context-v2', 'creation-routing-context-v3')
             or not _identifier(value['contract_id']) or not _hash(value['registered_sha256'])
             or value['category'] is not None and not _identifier(value['category'])
-            or value['mode'] not in ('cloudyfan', 'fixed_high', 'low_first', 'open_source_first')
+            or value['mode'] not in MODES
             or value['calibration_status'] not in ('missing', 'unverified', 'verified', 'unsupported')
             or value['source_kind'] not in ('not_provided', 'observed_calibration', 'offline_fixture')
             or len(encoded(value)) > BOUNDS['pure_context_bytes']):
@@ -298,7 +307,7 @@ def _economics(value):
 def recommend(value):
     """No sources are verified by this rule; absence never proves a loss."""
     value = frozen_input(value)
-    applicable = value['context']['mode'] == 'cloudyfan'
+    applicable = has_classification(value['context']['mode'])
     reason = ('exact_classifier_calibration_missing' if value['context']['calibration_status'] == 'missing'
               else 'exact_classifier_calibration_unverified')
     if not applicable:

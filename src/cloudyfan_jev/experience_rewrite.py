@@ -69,7 +69,13 @@ def _require(profile, core):
             raise PolicyDenied('generation', 'backend_location_mismatch')
 
 
-def rewrite_pending(runner, path, profile, *, run_id, limit):
+def batch_run_id(pending):
+    """沒指定 run_id 時，由這一批的待改寫內容決定：同一批中斷後重跑得到同一個編號
+    （讀舊收據、沿用同一筆預留），內容不同的下一批得到新編號。"""
+    return 'experience-rewrite-' + _fingerprint(pending)[:16]
+
+
+def rewrite_pending(runner, path, profile, *, limit, run_id=None):
     """改寫最多 ``limit`` 條待改寫事實，回傳摘要。沒有待改寫時不預留也不呼叫。"""
     if type(limit) is not int or limit < 1:
         raise ValueError('limit must be a positive integer')
@@ -79,6 +85,8 @@ def rewrite_pending(runner, path, profile, *, run_id, limit):
         return {'run_id': run_id, 'attempted': 0, 'accepted': [], 'rejected': [], 'stale': [],
                 'provider_rejected': []}
     pending = ExperienceStore.open(path, rewriter=defer_rewrite).pending_rewrites()[:limit]
+    if run_id is None:
+        run_id = batch_run_id(pending)
     summary = {'run_id': run_id, 'attempted': len(pending), 'accepted': [], 'rejected': [], 'stale': [],
                'provider_rejected': []}
     if not pending:
@@ -113,3 +121,49 @@ def rewrite_pending(runner, path, profile, *, run_id, limit):
         for fid, outcome in outcomes:
             summary[outcome].append(fid)
     return summary
+
+
+def _load_assembly(spec):
+    import importlib
+    module, _, name = spec.partition(':')
+    if not module or not name:
+        raise ValueError('assembly must be "module:function"')
+    return getattr(importlib.import_module(module), name)
+
+
+def main(argv=None, *, assembly=None):
+    """批次改寫的指令入口：``python -m cloudyfan_jev.experience_rewrite``。
+
+    這個模組不知道真實的金鑰、預算庫或模型設定；由主機提供 ``--assembly 模組:函式``，
+    該函式回傳 ``{'runner': BudgetedCore, 'profile': 開源顧問設定}``。``--dry-run`` 只列出
+    待改寫，不需要組裝、不預留、不呼叫。
+    """
+    import argparse
+    parser = argparse.ArgumentParser(description='Rewrite pending shared experience facts in one bounded batch.')
+    parser.add_argument('--experience', type=Path, required=True, help='契約經驗庫檔案')
+    parser.add_argument('--limit', type=int, default=10, help='這一批最多改寫幾條')
+    parser.add_argument('--run-id', help='預算預留用的批次編號；省略時由待改寫內容決定')
+    parser.add_argument('--assembly', help='主機組裝函式，格式 "模組:函式"')
+    parser.add_argument('--dry-run', action='store_true', help='只列出待改寫，不呼叫任何模型')
+    args = parser.parse_args(argv)
+    if args.limit < 1:
+        parser.error('limit_must_be_positive')
+    if args.dry_run:
+        pending = (ExperienceStore.open(args.experience, rewriter=defer_rewrite).pending_rewrites()
+                   if args.experience.exists() else [])
+        print(json.dumps({'dry_run': True, 'total_pending': len(pending), 'pending': pending[:args.limit]},
+                         ensure_ascii=False, sort_keys=True))
+        return 0
+    if assembly is None:
+        if not args.assembly:
+            parser.error('assembly_required')
+        assembly = _load_assembly(args.assembly)
+    built = assembly()
+    summary = rewrite_pending(built['runner'], args.experience, built['profile'],
+                              limit=args.limit, run_id=args.run_id)
+    print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

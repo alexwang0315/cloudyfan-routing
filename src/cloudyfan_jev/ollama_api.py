@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from http import HTTPStatus
 import json
 
-from .http_api import HTTPApp, ServiceError
+from .http_api import COMPLETED_STATUSES, HTTPApp, ServiceError
 
 PROTOCOL_VERSION = 'cloudyfan-ollama-text-v2'
 DOCS_AS_OF = '2026-10-18'
@@ -111,7 +111,7 @@ class OllamaApp:
                     metadata.update(pending=True, queue=state['queue'], reason=state.get('reason'),
                                     task_url='/v1/tasks/' + run_id)
                     body = {'model': alias, 'created_at': self.clock(), 'done': False, 'cloudyfan': metadata}
-                elif state['status'] in ('passed', 'failed', 'unverifiable'):
+                elif state['status'] in COMPLETED_STATUSES:
                     result = self.service.result(principal, run_id)
                     metadata['costs'] = result['costs']
                     metadata['provenance'] = result['provenance']
@@ -122,8 +122,10 @@ class OllamaApp:
                             body['message'] = {'role': 'assistant', 'content': body.pop('response')}
                     else:
                         code = 422
-                        error = ('public_validation_failed' if result['status'] == 'failed'
-                                 else 'public_validation_unavailable')
+                        # 顧問未完成（路徑二）：題目已結束但沒有任何作答，明示原因而不是「無法驗收」。
+                        error = {'failed': 'public_validation_failed',
+                                 'advisor_incomplete': 'advisor_incomplete'}.get(
+                                     result['status'], 'public_validation_unavailable')
                         body = {'error': error, 'cloudyfan': metadata}
                 else:
                     code = {'policy_denied': 403, 'capacity_denied': 429, 'accounting_interrupted': 409,

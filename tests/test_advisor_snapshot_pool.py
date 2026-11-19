@@ -121,3 +121,31 @@ def test_advisor_cannot_name_a_setting_outside_the_snapshot(tmp_path, monkeypatc
     assert result['status'] == 'advisor_incomplete'
     assert [v['reason'] for v in result['advisor']['decision']['voided']] == ['not_in_pool', 'not_in_pool']
     assert api.models() == [ADVISOR_MODEL]
+
+
+# ---- 自動換池發布新快照後：以新快照重建顧問設定（主服務註冊成新契約）----
+
+def test_refreshed_config_follows_new_pool_snapshot_and_keeps_roles(tmp_path):
+    controller = test_auto_pool.AutoPoolController(tmp_path / 'pool')
+    controller.store.publish(snapshot(), now=NOW)
+    old = AdvisorConfig.from_snapshot(controller.store.load(), now=INSIDE, advisor=role_profile('advisor'),
+                                      judge=role_profile('judge'), max_attempts=2)
+    assert old.refreshed(controller.store.load(), now=INSIDE) is old  # 快照沒變：同一份設定
+    records = [r for r in test_auto_pool.baseline_records() if r['configuration_id'] != 'mid-b'] + [
+        test_auto_pool.record('mid-b', 99)]
+    assert controller.evaluate(records, test_auto_pool.POLICY, now=test_auto_pool.T1,
+                               model_bounds=test_auto_pool.ALL_BOUNDS)['status'] == 'changed'
+    new_snapshot = controller.store.load()
+    new = old.refreshed(new_snapshot, now=INSIDE)
+    assert new is not old and new.score_snapshot == new_snapshot['snapshot_id']
+    assert new.pool['mid-b']['tier'] == 'high' and old.pool['mid-b']['tier'] == 'mid'  # 舊設定不被改動
+    assert new.snapshot_valid_until == new_snapshot['valid_until']
+    assert (new.advisor, new.judge, new.max_attempts) == (old.advisor, old.judge, old.max_attempts)
+
+
+def test_refreshed_rejects_expired_snapshot():
+    config = from_snapshot()
+    other = snapshot()
+    other['snapshot_id'] = 'someone-elses-id'
+    with pytest.raises(ValueError):
+        config.refreshed(other, now=EXPIRED)

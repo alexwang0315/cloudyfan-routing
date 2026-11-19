@@ -97,6 +97,22 @@ rewrite_pending(runner, 'runtime/experience.json', advisor_profile, run_id='expe
 `limit` 同時限制呼叫數與預留、非開源或缺上界拒跑、Monitor 在另一程序關掉「使用」後新卡不再附共用事實。
 
 未做／未知：
-- 沒有排程器或指令列入口來定期跑 `rewrite_pending`；目前由主服務自行呼叫。
-- Monitor 的示範組裝尚未改用 `open_experience`。
+- 沒有排程器或指令列入口來定期跑 `rewrite_pending`；目前由主服務自行呼叫。→ 指令入口已補，見下方。
+- Monitor 的示範組裝尚未改用 `open_experience`。→ 已接（monitor/main c45ea35）。
 - 真實開源顧問的改寫品質、每條改寫的實際費用都沒測（沒有呼叫任何真實模型）。
+
+## 批次改寫的指令入口（2026-11-19）
+
+```bash
+python -m cloudyfan_jev.experience_rewrite --experience runtime/experience.json --dry-run
+python -m cloudyfan_jev.experience_rewrite --experience runtime/experience.json --limit 10 --assembly 主機模組:函式
+```
+
+- `--dry-run`：只列出待改寫的事實與總數；不需要組裝、不預留、不呼叫任何模型。
+- 真的改寫時必須給 `--assembly 模組:函式`：這個模組不知道真實的金鑰、預算庫或模型設定，由主機的函式回傳
+  `{'runner': BudgetedCore, 'profile': 開源顧問設定}`。沒給就拒絕（`assembly_required`）。
+- `--run-id` 可省略：省略時由這一批的待改寫內容決定（`batch_run_id`）。同一批中斷後重跑得到同一個編號，
+  沿用同一筆預留、讀舊收據不重付；內容不同的下一批得到新編號。
+- 輸出一行 JSON 摘要（`accepted`／`rejected`／`stale`／`provider_rejected`）。
+- 已測：`tests/test_experience_wiring.py` 新增 4 項；另以合成經驗庫實際跑過 `--dry-run` 與缺組裝的拒絕。
+- 未做：沒有內建排程（由主機用 cron 或自己的排程器定期呼叫）；沒有真實主機的組裝函式，沒有呼叫過真實模型。

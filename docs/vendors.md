@@ -78,3 +78,25 @@ python -m cloudyfan_jev.pilot connect --root runtime/pilot-connect-01 --cap 1 --
 - 輸出每個模型一行（狀態、token、費用與費用來源），並寫 `connect-report.json`。
 - 已測：`tests/test_pilot_connect.py` 6 項（MockTransport）。**尚未對真實廠商執行過。**
 - 金鑰也可用 `--anthropic-env-file <.env 路徑> --anthropic-env-name ANTHROPIC_API_KEY`：腳本只取出這一個變數，其他變數不保留，錯誤訊息不帶檔案內容。
+
+## 三組比較執行器（`python -m cloudyfan_jev.pilot compare`，會付費）
+
+白話：把凍結的難題在「純路徑一」「路徑一加強版」「路徑二」各跑一次，產出比較報表。
+
+```bash
+python -m cloudyfan_jev.pilot compare --root .scratch/pilot81/compare-01 --cap 10 --limit 20 --confirm-paid \
+  --openrouter-env-file ~/scout-fusion/.env --anthropic-env-file ~/scout-fusion/.env \
+  --anthropic-env-name CLAUDE_API_KEY --anthropic-workspace-id <工作區 ID> \
+  --rejection-policy-source .scratch/pilot81/openrouter-pricing-excerpt-20261119.txt
+```
+
+- 組合（`pilot_setup()`，2026-11-19 核定）：開源首答 `gpt-oss-120b`＠Crusoe（低強度）；低池 Haiku 5.5（中）、中池 Sonnet 5.5（中）、
+  高池 Fable 5.2（高），直連 Anthropic；顧問 `qwen3.5-397b`＠Alibaba、裁判 `gpt-oss-20b`＠Parasail；Jev `typesafe/jev-1.13-20260917`。
+- 題目：`docs/evidence/hard-tasks-50-20261119.json`，依題型輪流排序，`--limit` 只跑前幾題也涵蓋各題型。
+- 每題三組的先後順序輪替；同一個資料夾重跑讀舊收據、不重付。
+- 報表 `compare-report.json`：各組答對題數、首答答對、研究全額與正式成本、各池使用次數、Jev 呼叫次數、
+  顧問自答／改派／未完成次數、供應商拒絕次數；不含題目與答案。
+- 經驗庫這一輪不開。**這批題目不用工具，迴圈守衛不會出手，經驗也累積不出有用的解題事實，
+  所以路徑一加強版在這批題目上的行為與純路徑一相同。** 可用 `--arm` 只跑部分組別。
+- Jev 沒有公開單價，上限檢查暫用每次 US$0.01，實際照回應記帳。
+- 已測：`tests/test_pilot_compare.py` 5 項（MockTransport）。尚未對真實模型執行。

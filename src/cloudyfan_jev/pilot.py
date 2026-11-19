@@ -297,6 +297,158 @@ def calibrate(root, tasks, target, *, openrouter_key=None, anthropic_key=None, c
     return rows
 
 
+ARMS = ('cloudyfan', 'cloudyfan_plus', 'advisor_first')
+ARM_CODES = {'cloudyfan': 'p1', 'cloudyfan_plus': 'p1plus', 'advisor_first': 'p2'}
+# Jev 分類器（OpenRouter 的 decisions 端點）。沒有公開單價，上限檢查用保守的每次固定價，實際照回應記帳。
+JEV = {'model': 'typesafe/jev-1.13', 'version': 'typesafe/jev-1.13-20260917', 'provider': 'typesafe',
+       'provider_name': 'TypeSafe'}
+
+
+def _role(target):
+    return dict(target['profile'], open_source=True)
+
+
+def compare(root, tasks, *, open_target, pool_targets, advisor_target, judge_target, decision,
+            decision_per_call_usd, openrouter_key, anthropic_key, cap_usd, arms=ARMS, transports=None,
+            max_tokens=16000, max_input_bytes=24576, anthropic_workspace_id=None, rejection_policy_source=None,
+            order_seed=0):
+    """#81 三組比較：每題依輪替的順序在選定的組別各跑一次（同一個 Core、同一份收據與預算庫）。
+    回傳每題每組一列；報告 ``compare-report.json`` 依組別統計，不含題目與標準答案。"""
+    from .advisor import AdvisorConfig
+    from .cloudyfan_plus import CloudyfanPlusConfig
+    from .hard_tasks import HardTaskEnvironment
+    if not openrouter_key or not anthropic_key:
+        raise ValueError('Both OpenRouter and Anthropic keys are required')
+    unknown = set(arms) - set(ARMS)
+    if unknown or not arms:
+        raise ValueError('Unknown arms: ' + ', '.join(sorted(unknown)))
+    root = Path(root)
+    transports = transports or {}
+    anthropic_prices = {t['vendor_model']: t['price'] for t in pool_targets.values() if t['vendor'] == 'anthropic'}
+    vendors = {'anthropic': AnthropicVendor(anthropic_key, anthropic_prices, transport=transports.get('anthropic'),
+                                            workspace_id=anthropic_workspace_id)}
+    http = httpx.Client(transport=VendorTransport(transports.get('openrouter') or httpx.HTTPTransport(), vendors),
+                        follow_redirects=False, trust_env=False)
+    root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    openrouter_targets = [t for t in (open_target, advisor_target, judge_target, *pool_targets.values())
+                          if t['vendor'] == 'openrouter']
+    policy = None
+    if rejection_policy_source is not None:
+        import hashlib
+        from .rejection_fees import Text429FeePolicy
+        source = Path(rejection_policy_source)
+        policy = Text429FeePolicy(source, hashlib.sha256(source.read_bytes()).hexdigest(),
+                                  [{'model': t['vendor_model'], 'provider': t['profile']['provider'],
+                                    'provider_name': t['profile']['provider_name']} for t in openrouter_targets],
+                                  valid_until=(datetime.now(timezone.utc) + timedelta(days=3)).isoformat())
+    client = Client(http, openrouter_key, root / 'receipts', rejection_fee_policy=policy)
+    store = BudgetStore(root / 'budget.sqlite')
+    if store.report()['authorization'] is None:
+        store.authorize(Authorization('pilot-compare', Decimal(str(cap_usd)),
+                                      (datetime.now(timezone.utc) + timedelta(days=3)).isoformat()))
+    profiles = {'open_source': dict(open_target['profile']),
+                **{tier: dict(pool_targets[tier]['profile']) for tier in ('low', 'mid', 'high')}}
+    advisor = AdvisorConfig(advisor=_role(advisor_target), judge=_role(judge_target),
+                            score_snapshot='pilot-81-20261119')
+    plus = CloudyfanPlusConfig(judge=_role(judge_target))
+    prices = {t['address']: t['price'] for t in (open_target, advisor_target, judge_target, *pool_targets.values())}
+    prices[decision['version']] = {'per_call_usd': str(decision_per_call_usd)}
+    verifier = ListPriceBounds(prices, max_input_bytes=max_input_bytes, max_output_tokens=max_tokens)
+    core = Core(client, profiles, dict(decision), system=CALIBRATION_SYSTEM,
+                limits=Limits(max_turns=1, max_tokens=max_tokens, max_context_bytes=max_input_bytes),
+                advisor_first=advisor, cloudyfan_plus=plus)
+    runner = BudgetedCore(core, store, model_bounds=verifier.model_bounds(), tool_bounds={}, verify_bound=verifier)
+    rows = []
+    for index, task in enumerate(tasks):
+        shift = (index + order_seed) % len(arms)
+        for arm in arms[shift:] + arms[:shift]:
+            row = {'task': task['id'], 'family': task['family'], 'level': task['level'], 'arm': arm}
+            try:
+                result = runner.run(f'{ARM_CODES[arm]}-{task["id"]}', {'prompt': task['prompt']},
+                                    lambda t=task: HardTaskEnvironment(t),
+                                    contract_version='hard-tasks-compare-v1', mode=arm)
+                row.update(_compare_row(result))
+            except BudgetError as error:
+                row.update(status='not_run', reason='budget: ' + str(error))
+            except Exception as error:  # 照實記錄，不重試
+                row.update(status='error', reason=type(error).__name__ + ': ' + str(error)[:300])
+            rows.append(row)
+    _write_compare_report(root, rows, arms, cap_usd)
+    return rows
+
+
+def _compare_row(result):
+    calls = [c for a in result['attempts'] for c in a['calls']]
+    advisor = (result.get('advisor') or {}).get('decision') or {}
+    last = result['attempts'][-1] if result['attempts'] else {}
+    return {'status': result['status'], 'first_pass': result['first_public_pass'],
+            'final_pass': result['final_public_pass'],
+            'tiers': [a['tier'] for a in result['attempts']],
+            'classifier_calls': (result.get('selection') or {}).get('classifier_calls', 0),
+            'advisor_outcome': advisor.get('outcome'), 'end_reason': result.get('end_reason'),
+            'checks': list((last.get('public') or {}).get('checks') or []),
+            'provider_rejected': any(c.get('provider_rejected') for c in calls),
+            'research_usd': result['costs']['api_usd'],
+            'formal_usd': result['costs']['hypothetical_open_source_zero_usd'],
+            'wall_seconds': result.get('wall_seconds')}
+
+
+def _write_compare_report(root, rows, arms, cap_usd):
+    def total(items, key):
+        return format(sum((Decimal(r[key]) for r in items if r.get(key) is not None), Decimal(0)).normalize(), 'f')
+    summary = {}
+    for arm in arms:
+        done = [r for r in rows if r['arm'] == arm and 'final_pass' in r]
+        tiers = {}
+        for r in done:
+            for tier in r['tiers']:
+                tiers[tier] = tiers.get(tier, 0) + 1
+        summary[arm] = {'tasks': len(done), 'not_completed': sum(1 for r in rows if r['arm'] == arm) - len(done),
+                        'first_pass': sum(r['first_pass'] is True for r in done),
+                        'final_pass': sum(r['final_pass'] is True for r in done),
+                        'research_usd': total(done, 'research_usd'), 'formal_usd': total(done, 'formal_usd'),
+                        'tier_counts': tiers, 'classifier_calls': sum(r['classifier_calls'] for r in done),
+                        'advisor_answer': sum(r['advisor_outcome'] == 'answer' for r in done),
+                        'advisor_delegate': sum(r['advisor_outcome'] == 'delegate' for r in done),
+                        'advisor_incomplete': sum(r['advisor_outcome'] == 'incomplete' for r in done),
+                        'provider_rejected': sum(r['provider_rejected'] for r in done)}
+    report = {'stage': 'compare', 'cap_usd': str(cap_usd), 'arms': summary, 'rows': rows}
+    (root / 'compare-report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+
+
+FROZEN_TASKS = Path(__file__).resolve().parents[2] / 'docs/evidence/hard-tasks-50-20261119.json'
+
+
+def pilot_setup():
+    """2026-11-19 使用者核定的試跑組合（ADR 0037、#81）。價格為當日目錄與牌價，開跑前可覆寫。"""
+    return {'open_target': openrouter_target('openai/gpt-oss-120b', provider='crusoe/bf16', provider_name='Crusoe',
+                                             input_per_mtok='0.05', output_per_mtok='0.25'),
+            'advisor_target': openrouter_target('qwen/qwen3.5-397b-a17b', provider='alibaba',
+                                                provider_name='Alibaba', input_per_mtok='0.39',
+                                                output_per_mtok='2.34'),
+            'judge_target': openrouter_target('openai/gpt-oss-20b', provider='parasail/fp4', provider_name='Parasail',
+                                              input_per_mtok='0.03', output_per_mtok='0.15'),
+            'pool_targets': {'low': anthropic_target('claude-haiku-5-5', effort='medium'),
+                             'mid': anthropic_target('claude-sonnet-5-5', effort='medium'),
+                             'high': anthropic_target('claude-fable-5-2', effort='high')},
+            'decision': JEV, 'decision_per_call_usd': '0.01'}
+
+
+def frozen_tasks(limit=None, *, interleave=True, path=FROZEN_TASKS):
+    """讀凍結的 50 題並重建題目。``interleave`` 時依題型輪流排序，只跑前幾題也能涵蓋各題型。"""
+    from .hard_tasks import FAMILIES, load_selection
+    tasks = load_selection(json.loads(Path(path).read_text()))
+    if interleave:
+        queues = {f: [t for t in tasks if t['family'] == f] for f in FAMILIES}
+        ordered = []
+        while any(queues.values()):
+            for family in FAMILIES:
+                if queues[family]:
+                    ordered.append(queues[family].pop(0))
+        tasks = ordered
+    return tasks[:limit] if limit else tasks
+
+
 def key_from_args(args, vendor):
     """指令列的金鑰來源：單行金鑰檔，或 .env 檔中指定的一個變數；都沒給時回傳 None。"""
     key_file = getattr(args, vendor + '_key_file')
@@ -338,6 +490,21 @@ def main(argv=None):
     cal.add_argument('--openrouter-output-price', required=True)
     cal.add_argument('--rejection-policy-source', type=Path)
     cal.add_argument('--confirm-paid', action='store_true')
+    cmp = sub.add_parser('compare', help='三組比較：凍結的難題在各路徑上各跑一次（會發出真實付費請求）')
+    cmp.add_argument('--root', type=Path, required=True)
+    cmp.add_argument('--cap', required=True, help='這一階段的美元上限')
+    cmp.add_argument('--limit', type=int, help='只跑前幾題（依題型輪流排序）')
+    cmp.add_argument('--arm', action='append', choices=ARMS, default=[])
+    cmp.add_argument('--max-tokens', type=int, default=16000)
+    cmp.add_argument('--openrouter-env-file', type=Path)
+    cmp.add_argument('--openrouter-key-file', type=Path)
+    cmp.add_argument('--openrouter-env-name', default='OPENROUTER_API_KEY')
+    cmp.add_argument('--anthropic-env-file', type=Path)
+    cmp.add_argument('--anthropic-key-file', type=Path)
+    cmp.add_argument('--anthropic-env-name', default='ANTHROPIC_API_KEY')
+    cmp.add_argument('--anthropic-workspace-id')
+    cmp.add_argument('--rejection-policy-source', type=Path)
+    cmp.add_argument('--confirm-paid', action='store_true')
     run = sub.add_parser('connect', help='階段 0 連線驗證（會發出真實付費請求）')
     run.add_argument('--root', type=Path, required=True, help='這次試跑的新資料夾（收據、帳本、報告）')
     run.add_argument('--cap', default='1', help='這一階段的美元上限')
@@ -371,6 +538,18 @@ def main(argv=None):
             parser.error('openrouter_key_required')
         for row in list_endpoints(key, args.model):
             print(json.dumps(row, ensure_ascii=False))
+        return 0
+    if args.command == 'compare':
+        if not args.confirm_paid:
+            parser.error('paid_requests_require_--confirm-paid')
+        rows = compare(args.root, frozen_tasks(args.limit), **pilot_setup(),
+                       openrouter_key=key_from_args(args, 'openrouter'),
+                       anthropic_key=key_from_args(args, 'anthropic'), cap_usd=args.cap,
+                       arms=tuple(args.arm) or ARMS, max_tokens=args.max_tokens,
+                       anthropic_workspace_id=args.anthropic_workspace_id,
+                       rejection_policy_source=args.rejection_policy_source)
+        for row in rows:
+            print(json.dumps(row, ensure_ascii=False), flush=True)
         return 0
     if args.command == 'calibrate':
         if not args.confirm_paid:

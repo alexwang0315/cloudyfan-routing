@@ -456,8 +456,10 @@ def pilot_setup():
     # 2026-11-20 使用者決定：路徑一的開源層與路徑二的顧問用同一個模型與供應商，比較才公平。
     # 第一次 50 題比較（compare-02～04）的開源層是 openai/gpt-oss-120b＠Crusoe（0.05／0.25）。
     # 顧問原用 qwen/qwen3.5-397b-a17b＠Alibaba；階段 1 試跑時被上游 429 拒絕，使用者決定換模型。
-    shared = openrouter_target('deepseek/deepseek-v4-pro', provider='siliconflow/fp8', provider_name='SiliconFlow',
-                               input_per_mtok='0.9', output_per_mtok='1.7')
+    # 2026-11-20 起 SiliconFlow 在約 3,200 token 截斷推理、不輸出答案（探測見 .scratch/pilot81/probe-20261120），
+    # 使用者同意改用同模型的 Relace（fp4）；第一次 50 題的顧問結果是 SiliconFlow（fp8）11-19 的條件。
+    shared = openrouter_target('deepseek/deepseek-v4-pro', provider='relace/fp4', provider_name='Relace',
+                               input_per_mtok='0.9', output_per_mtok='1.5')
     return {'open_target': shared,
             'advisor_target': shared,
             'judge_target': openrouter_target('openai/gpt-oss-20b', provider='parasail/fp4', provider_name='Parasail',

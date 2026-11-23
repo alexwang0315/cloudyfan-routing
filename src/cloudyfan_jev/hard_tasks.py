@@ -773,6 +773,56 @@ class HardTaskEnvironment:
         return {'passed': passed, 'checks': [] if passed else [code]}
 
 
+TOOL_VERSION = 'hard-tasks-check-tool-v1'
+CHECKS_PER_ATTEMPT = 3
+CHECK_TOOL = {'type': 'function', 'function': {
+    'name': 'check_answer',
+    'description': ('Check one candidate final answer. Returns {"passed": true} when it is correct, otherwise '
+                    '{"passed": false, "checks": [code]}. Limited uses per attempt.'),
+    'parameters': {'type': 'object', 'additionalProperties': False, 'required': ['answer'],
+                   'properties': {'answer': {'type': 'string',
+                                             'description': 'The answer exactly as it would follow "ANSWER: ".'}}}}}
+
+
+def tool_prompt(task):
+    """工具題的題目：原題加上工具用法。答案仍以最後一行 ANSWER: 交出並由同一個驗收器評分。"""
+    return (task['prompt'] + f'\n\nYou may call the check_answer tool up to {CHECKS_PER_ATTEMPT} times in this '
+            'attempt to test a candidate answer before you commit. It only says whether the candidate is correct. '
+            'After checking, still end your reply with the final ANSWER: line.')
+
+
+class HardToolTaskEnvironment(HardTaskEnvironment):
+    """#81 路徑一加強版用的工具題：同一題、同一驗收器，多一個 check_answer 工具。
+
+    回傳形狀沿用迴圈守衛認得的驗收結果；每次作答可檢查 ``CHECKS_PER_ATTEMPT`` 次，
+    超過回 ``CHECK_LIMIT`` 錯誤。Core 在每次作答結束時呼叫 ``validate``，次數在那時歸零。
+    """
+    replayable_tools = ('check_answer',)
+
+    def __init__(self, task):
+        super().__init__(task)
+        self.checks_used = 0
+
+    def tools_schema(self):
+        return [CHECK_TOOL]
+
+    def call(self, name, arguments):
+        if name != 'check_answer':
+            return {'ok': False, 'error': {'code': 'unknown_tool', 'category': 'content'}}
+        answer = arguments.get('answer')
+        if not isinstance(answer, str) or set(arguments) != {'answer'}:
+            return {'ok': False, 'error': {'code': 'invalid_arguments', 'category': 'content'}}
+        if self.checks_used >= CHECKS_PER_ATTEMPT:
+            return {'ok': False, 'error': {'code': 'CHECK_LIMIT', 'category': 'limit'}}
+        self.checks_used += 1
+        passed, code = grade(self.task, 'ANSWER: ' + answer)
+        return {'passed': True} if passed else {'passed': False, 'checks': [code]}
+
+    def validate(self, final_text):
+        self.checks_used = 0
+        return super().validate(final_text)
+
+
 # ---- 選題與凍結 ----
 
 def select(rows, *, per_family=5, failures_per_family=None):

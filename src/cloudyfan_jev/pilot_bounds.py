@@ -24,7 +24,7 @@ def _text(value):
 
 
 class ListPriceBounds:
-    def __init__(self, prices, *, max_input_bytes, max_output_tokens, overhead_tokens=2000):
+    def __init__(self, prices, *, max_input_bytes, max_output_tokens, overhead_tokens=2000, local_tools=()):
         for name, number in (('max_input_bytes', max_input_bytes), ('max_output_tokens', max_output_tokens),
                              ('overhead_tokens', overhead_tokens)):
             if type(number) is not int or number < 0:
@@ -32,13 +32,16 @@ class ListPriceBounds:
         self.prices = {model: dict(price) for model, price in prices.items()}
         self.max_input_bytes, self.max_output_tokens = max_input_bytes, max_output_tokens
         self.overhead_tokens = overhead_tokens
+        # 只核可明列的本機確定性工具；預算層在呼叫時傳入的是工具參數，看不到 external 旗標。
+        self.local_tools = frozenset(local_tools)
         for model in self.prices:
             Decimal(self.ceiling(model))
 
     def descriptor(self):
         return {'kind': KIND, 'prices': self.prices, 'max_input_bytes': self.max_input_bytes,
                 'max_output_tokens': self.max_output_tokens, 'overhead_tokens': self.overhead_tokens,
-                'supplier_guaranteed': False}
+                'supplier_guaranteed': False,
+                **({'local_tools': sorted(self.local_tools)} if self.local_tools else {})}
 
     def ceiling(self, model):
         price = self.prices[model]
@@ -60,7 +63,7 @@ class ListPriceBounds:
     def __call__(self, kind, identity, payload, bound):
         if kind == 'tool':
             # 本機確定性工具沒有 API 費用；外部工具不在試跑範圍。
-            return payload.get('external') is False and Decimal(bound.usd) == 0
+            return identity in self.local_tools and Decimal(bound.usd) == 0
         return kind == 'model' and self._covered(identity, bound)
 
     def verify_dispatch(self, client, endpoint, payload, bound):

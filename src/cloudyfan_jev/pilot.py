@@ -315,7 +315,7 @@ def _role(target):
 def _compare_runner(root, *, open_target, pool_targets, advisor_target, judge_target, decision,
                     decision_per_call_usd, openrouter_key, anthropic_key, ledger_exposure_usd, transports=None,
                     max_tokens=16000, max_input_bytes=24576, anthropic_workspace_id=None,
-                    rejection_policy_source=None):
+                    rejection_policy_source=None, max_turns=1, loop_guard_mode='shadow', tools=False):
     """組出比較用的 BudgetedCore（同一個 Core、收據與預算庫）。預算庫的授權是「帳本暫扣上限」，
     只用來容納未核帳呼叫的保守暫扣，不是要花的錢；實際花費上限由 ``compare`` 另外檢查。"""
     from .advisor import AdvisorConfig
@@ -348,33 +348,42 @@ def _compare_runner(root, *, open_target, pool_targets, advisor_target, judge_ta
                 **{tier: dict(pool_targets[tier]['profile']) for tier in ('low', 'mid', 'high')}}
     advisor = AdvisorConfig(advisor=_role(advisor_target), judge=_role(judge_target),
                             score_snapshot='pilot-81-20261119')
-    plus = CloudyfanPlusConfig(judge=_role(judge_target))
+    from .loop_guard import LoopGuardConfig
+    plus = CloudyfanPlusConfig(judge=_role(judge_target), loop_guard=LoopGuardConfig(mode=loop_guard_mode))
     prices = {t['address']: t['price'] for t in (open_target, advisor_target, judge_target, *pool_targets.values())}
     prices[decision['version']] = {'per_call_usd': str(decision_per_call_usd)}
-    verifier = ListPriceBounds(prices, max_input_bytes=max_input_bytes, max_output_tokens=max_tokens)
+    verifier = ListPriceBounds(prices, max_input_bytes=max_input_bytes, max_output_tokens=max_tokens,
+                               local_tools=('check_answer',) if tools else ())
     core = Core(client, profiles, dict(decision), system=CALIBRATION_SYSTEM,
-                limits=Limits(max_turns=1, max_tokens=max_tokens, max_context_bytes=max_input_bytes),
+                limits=Limits(max_turns=max_turns, max_tokens=max_tokens, max_context_bytes=max_input_bytes),
                 advisor_first=advisor, cloudyfan_plus=plus)
-    return BudgetedCore(core, store, model_bounds=verifier.model_bounds(), tool_bounds={}, verify_bound=verifier)
+    from .budget import EnforcedBound, ToolBound
+    tool_bounds = ({'check_answer': ToolBound(EnforcedBound('0', 'local deterministic answer check'), external=False)}
+                   if tools else {})
+    return BudgetedCore(core, store, model_bounds=verifier.model_bounds(), tool_bounds=tool_bounds,
+                        verify_bound=verifier)
 
 
-def compare_worst_case_usd(*, max_tokens=16000, max_input_bytes=24576, **setup):
+def compare_worst_case_usd(*, max_tokens=16000, max_input_bytes=24576, max_turns=1, **setup):
     """每組跑一題的最壞花費（牌價 × token 上限），不發出任何請求。"""
     import tempfile
     with tempfile.TemporaryDirectory() as tmp:
         runner = _compare_runner(tmp, **setup, openrouter_key='offline', anthropic_key='offline',
-                                 ledger_exposure_usd='1', max_tokens=max_tokens, max_input_bytes=max_input_bytes)
+                                 ledger_exposure_usd='1', max_tokens=max_tokens, max_input_bytes=max_input_bytes,
+                                 max_turns=max_turns)
         return {arm: runner._admit(arm) for arm in ALL_ARMS}
 
 
 def compare(root, tasks, *, cap_usd, openrouter_key, anthropic_key, ledger_exposure_usd='100', arms=ARMS,
-            order_seed=0, **setup):
+            order_seed=0, tools=False, **setup):
     """#81 三組比較：每題依輪替的順序在選定的組別各跑一次。
 
     ``cap_usd`` 是**實際花費上限**：每跑一題之前檢查「帳本已知花費＋這題最壞花費」，超過就不送出（記為
     ``spend_cap``）。``ledger_exposure_usd`` 只是預算庫的暫扣上限。同一個資料夾裡已完成的題直接讀回，不重付、
     不受上限影響。回傳每題每組一列；報告 ``compare-report.json`` 依組別統計，不含題目與標準答案。"""
-    from .hard_tasks import HardTaskEnvironment
+    from .hard_tasks import HardTaskEnvironment, HardToolTaskEnvironment, tool_prompt
+    environment = HardToolTaskEnvironment if tools else HardTaskEnvironment
+    contract_version = 'hard-tasks-tools-compare-v1' if tools else 'hard-tasks-compare-v1'
     if not openrouter_key or not anthropic_key:
         raise ValueError('Both OpenRouter and Anthropic keys are required')
     unknown = set(arms) - set(ALL_ARMS)
@@ -382,7 +391,7 @@ def compare(root, tasks, *, cap_usd, openrouter_key, anthropic_key, ledger_expos
         raise ValueError('Unknown arms: ' + ', '.join(sorted(unknown)))
     root = Path(root)
     runner = _compare_runner(root, openrouter_key=openrouter_key, anthropic_key=anthropic_key,
-                             ledger_exposure_usd=ledger_exposure_usd, **setup)
+                             ledger_exposure_usd=ledger_exposure_usd, tools=tools, **setup)
     spend_cap = Decimal(str(cap_usd))
     rows = []
     for index, task in enumerate(tasks):
@@ -399,8 +408,9 @@ def compare(root, tasks, *, cap_usd, openrouter_key, anthropic_key, ledger_expos
                         row.update(status='not_run', reason='spend_cap')
                         rows.append(row)
                         continue
-                    result = runner.run(run_id, {'prompt': task['prompt']}, lambda t=task: HardTaskEnvironment(t),
-                                        contract_version='hard-tasks-compare-v1', mode=arm)
+                    prompt = tool_prompt(task) if tools else task['prompt']
+                    result = runner.run(run_id, {'prompt': prompt}, lambda t=task: environment(t),
+                                        contract_version=contract_version, mode=arm)
                 row.update(_compare_row(result))
             except BudgetError as error:
                 row.update(status='not_run', reason='budget: ' + str(error))
@@ -424,7 +434,9 @@ def _compare_row(result):
             'provider_rejected': any(c.get('provider_rejected') for c in calls),
             'research_usd': result['costs']['api_usd'],
             'formal_usd': result['costs']['hypothetical_open_source_zero_usd'],
-            'wall_seconds': result.get('wall_seconds')}
+            'wall_seconds': result.get('wall_seconds'),
+            'stops': [a['stop'] for a in result['attempts']],
+            'tool_calls': last.get('cumulative_actions', 0)}
 
 
 def _write_compare_report(root, rows, arms, cap_usd, ledger_exposure_usd, ledger):
@@ -544,6 +556,10 @@ def main(argv=None):
     cmp.add_argument('--high-model', help='把高池換成這個 Anthropic 模型（例如 claude-opus-5-5）')
     cmp.add_argument('--high-effort', choices=('low', 'medium', 'high', 'xhigh', 'max'), help='高池的推理強度')
     cmp.add_argument('--max-tokens', type=int, default=16000)
+    cmp.add_argument('--tools', action='store_true', help='工具題：每題多一個 check_answer 工具（多回合）')
+    cmp.add_argument('--max-turns', type=int, help='每次作答的回合上限；工具題預設 6，否則 1')
+    cmp.add_argument('--max-input-bytes', type=int, help='每次請求的輸入上限；工具題預設 131072，否則 24576')
+    cmp.add_argument('--loop-guard', choices=('shadow', 'active'), default='shadow', help='路徑一加強版的迴圈守衛模式')
     cmp.add_argument('--openrouter-env-file', type=Path)
     cmp.add_argument('--openrouter-key-file', type=Path)
     cmp.add_argument('--openrouter-env-name', default='OPENROUTER_API_KEY')
@@ -601,7 +617,10 @@ def main(argv=None):
                        anthropic_key=key_from_args(args, 'anthropic'), cap_usd=args.cap,
                        arms=tuple(args.arm) or ARMS, max_tokens=args.max_tokens,
                        anthropic_workspace_id=args.anthropic_workspace_id,
-                       rejection_policy_source=args.rejection_policy_source)
+                       rejection_policy_source=args.rejection_policy_source, tools=args.tools,
+                       max_turns=args.max_turns or (6 if args.tools else 1),
+                       max_input_bytes=args.max_input_bytes or (131072 if args.tools else 24576),
+                       loop_guard_mode=args.loop_guard)
         for row in rows:
             print(json.dumps(row, ensure_ascii=False), flush=True)
         return 0

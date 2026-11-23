@@ -29,6 +29,8 @@ ANTHROPIC_PRICES = {
                          'long_input_per_mtok': '0.50', 'long_output_per_mtok': '2.50'},
     'claude-sonnet-5-5': {'input_per_mtok': '2', 'output_per_mtok': '10'},
     'claude-fable-5-2': {'input_per_mtok': '8', 'output_per_mtok': '40'},
+    # 2026-11-23 加入：前沿模型直接作答的對照組（#81）。價格取自 claude-api 技能的模型表（2026-11-03 快取）。
+    'claude-opus-5-5': {'input_per_mtok': '4', 'output_per_mtok': '20'},
 }
 
 
@@ -298,7 +300,9 @@ def calibrate(root, tasks, target, *, openrouter_key=None, anthropic_key=None, c
 
 
 ARMS = ('cloudyfan', 'cloudyfan_plus', 'advisor_first')
-ARM_CODES = {'cloudyfan': 'p1', 'cloudyfan_plus': 'p1plus', 'advisor_first': 'p2'}
+# 對照組：每題直接交給高池（不換模型、一路用前沿模型）；答錯時同一高池再修一次。只在指定 --arm 時跑。
+ALL_ARMS = ARMS + ('fixed_high',)
+ARM_CODES = {'cloudyfan': 'p1', 'cloudyfan_plus': 'p1plus', 'advisor_first': 'p2', 'fixed_high': 'fh'}
 # Jev 分類器（OpenRouter 的 decisions 端點）。沒有公開單價，上限檢查用保守的每次固定價，實際照回應記帳。
 JEV = {'model': 'typesafe/jev-1.13', 'version': 'typesafe/jev-1.13-20260917', 'provider': 'typesafe',
        'provider_name': 'TypeSafe'}
@@ -360,7 +364,7 @@ def compare_worst_case_usd(*, max_tokens=16000, max_input_bytes=24576, **setup):
     with tempfile.TemporaryDirectory() as tmp:
         runner = _compare_runner(tmp, **setup, openrouter_key='offline', anthropic_key='offline',
                                  ledger_exposure_usd='1', max_tokens=max_tokens, max_input_bytes=max_input_bytes)
-        return {arm: runner._admit(arm) for arm in ARMS}
+        return {arm: runner._admit(arm) for arm in ALL_ARMS}
 
 
 def compare(root, tasks, *, cap_usd, openrouter_key, anthropic_key, ledger_exposure_usd='100', arms=ARMS,
@@ -373,7 +377,7 @@ def compare(root, tasks, *, cap_usd, openrouter_key, anthropic_key, ledger_expos
     from .hard_tasks import HardTaskEnvironment
     if not openrouter_key or not anthropic_key:
         raise ValueError('Both OpenRouter and Anthropic keys are required')
-    unknown = set(arms) - set(ARMS)
+    unknown = set(arms) - set(ALL_ARMS)
     if unknown or not arms:
         raise ValueError('Unknown arms: ' + ', '.join(sorted(unknown)))
     root = Path(root)
@@ -536,7 +540,9 @@ def main(argv=None):
     cmp.add_argument('--ledger-exposure', default='100', help='預算庫的暫扣上限（容納未核帳呼叫的保守暫扣，不是要花的錢）')
     cmp.add_argument('--task', action='append', default=[], help='只跑指定的題目編號')
     cmp.add_argument('--limit', type=int, help='只跑前幾題（依題型輪流排序）')
-    cmp.add_argument('--arm', action='append', choices=ARMS, default=[])
+    cmp.add_argument('--arm', action='append', choices=ALL_ARMS, default=[])
+    cmp.add_argument('--high-model', help='把高池換成這個 Anthropic 模型（例如 claude-opus-5-5）')
+    cmp.add_argument('--high-effort', choices=('low', 'medium', 'high', 'xhigh', 'max'), help='高池的推理強度')
     cmp.add_argument('--max-tokens', type=int, default=16000)
     cmp.add_argument('--openrouter-env-file', type=Path)
     cmp.add_argument('--openrouter-key-file', type=Path)
@@ -584,7 +590,12 @@ def main(argv=None):
     if args.command == 'compare':
         if not args.confirm_paid:
             parser.error('paid_requests_require_--confirm-paid')
-        rows = compare(args.root, frozen_tasks(args.limit, only=args.task or None), **pilot_setup(),
+        setup_ = pilot_setup()
+        if args.high_model or args.high_effort:
+            current = setup_['pool_targets']['high']
+            setup_['pool_targets']['high'] = anthropic_target(args.high_model or current['vendor_model'],
+                                                              effort=args.high_effort or current['profile']['effort'])
+        rows = compare(args.root, frozen_tasks(args.limit, only=args.task or None), **setup_,
                        ledger_exposure_usd=args.ledger_exposure,
                        openrouter_key=key_from_args(args, 'openrouter'),
                        anthropic_key=key_from_args(args, 'anthropic'), cap_usd=args.cap,

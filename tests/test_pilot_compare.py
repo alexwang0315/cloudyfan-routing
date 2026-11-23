@@ -178,3 +178,30 @@ def test_spend_cap_counts_what_was_already_spent_and_completed_runs_are_still_re
 def test_task_filter_runs_only_named_tasks(tmp_path):
     tasks = pilot.frozen_tasks(only=['H1-1', 'I1-1'])
     assert [t['id'] for t in tasks] == ['H1-1', 'I1-1']
+
+
+def test_fixed_high_baseline_sends_every_task_to_the_high_pool_only(tmp_path):
+    """對照組：每題直接交給高池，不經開源、Jev 或顧問。"""
+    rows, orouter, anth = run(tmp_path, arms=('fixed_high',))
+    assert {r['arm'] for r in rows} == {'fixed_high'}
+    assert all(r['tiers'] == ['high'] and r['final_pass'] is True and r['classifier_calls'] == 0 for r in rows)
+    assert set(anth.models) == {'claude-fable-5-2'} and orouter.models == []
+    report = json.loads((tmp_path / 'cmp' / 'compare-report.json').read_text())
+    # Fable 每題 1000 × $8/M + 200 × $40/M = 0.016；沒有開源呼叫，正式成本等於研究全額。
+    assert report['arms']['fixed_high']['formal_usd'] == report['arms']['fixed_high']['research_usd'] == '0.032'
+
+
+def test_high_pool_can_be_swapped_to_opus_with_extra_high_effort(tmp_path):
+    setup_ = setup()
+    setup_['pool_targets']['high'] = pilot.anthropic_target('claude-opus-5-5', effort='xhigh')
+    orouter, anth = OpenRouter(), Anthropic()
+    sent = []
+    def spy(request):
+        sent.append(json.loads(request.content))
+        return anth(request)
+    rows = pilot.compare(tmp_path / 'opus', TASKS, openrouter_key='or-key', anthropic_key='an-key', cap_usd='5',
+                         arms=('fixed_high',), transports={'openrouter': httpx.MockTransport(orouter),
+                                                           'anthropic': httpx.MockTransport(spy)}, **setup_)
+    assert all(r['final_pass'] is True for r in rows)
+    assert {b['model'] for b in sent} == {'claude-opus-5-5'}
+    assert all(b['output_config'] == {'effort': 'xhigh'} for b in sent)

@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+import uuid
 
 import httpx
 import pytest
@@ -183,8 +184,21 @@ def test_mock_identity_bridge_keeps_runtime_limits_and_completed_receipts(tmp_pa
     assert len(posts) == 2 and not plan['launch']['ready']
 
 
-def test_cli_is_offline_exclusive_and_confined_to_runtime(tmp_path):
-    path = ROOT/'runtime'/('low-two-cli-'+digest(str(tmp_path))[:16]+'.json')
+@pytest.fixture
+def runtime_output():
+    """CLI 只肯寫專案 runtime/ 內的新檔：用不重複檔名，結束時清掉檔案與本題建立的 runtime/。"""
+    runtime = ROOT/'runtime'
+    created = not runtime.exists()
+    runtime.mkdir(exist_ok=True)
+    path = runtime/f'low-two-cli-{uuid.uuid4().hex}.json'
+    yield path
+    path.unlink(missing_ok=True)
+    if created:
+        runtime.rmdir()
+
+
+def test_cli_is_offline_exclusive_and_confined_to_runtime(tmp_path, runtime_output):
+    path = runtime_output
     command = [sys.executable,str(ROOT/'scripts/prepare_sql_low_trial.py'),
                '--input',str(INPUT),'--now',frozen()['created_at'],'--output',str(path)]
     initial = subprocess.run(command,capture_output=True,text=True)

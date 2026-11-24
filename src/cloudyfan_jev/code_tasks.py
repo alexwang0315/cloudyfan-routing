@@ -33,7 +33,7 @@ LEVELS = (1, 2, 3, 4, 5)
 FAMILY_REVISION = {'A': 1, 'B': 1, 'C': 1, 'D': 1, 'E': 1, 'F': 1, 'G': 1, 'H': 1,
                    'I': 1, 'J': 1, 'K': 1, 'L': 1, 'M': 1, 'N': 1, 'O': 1, 'P': 1,
                    'Q': 1, 'R': 1, 'S': 1, 'T': 1, 'U': 1, 'V': 1, 'W': 1, 'X': 1,
-                   'ZA': 1, 'ZB': 1, 'ZC': 1, 'ZD': 1, 'ZE': 1, 'ZF': 1, 'ZG': 1, 'ZH': 1}
+                   'ZA': 1, 'ZB': 1, 'ZC': 2, 'ZD': 1, 'ZE': 1, 'ZF': 1, 'ZG': 1, 'ZH': 1}
 FROZEN_CODE_TASKS_V1 = Path(__file__).resolve().parents[2] / 'docs/evidence/code-tasks-20261124.json'
 FROZEN_CODE_TASKS_V2 = Path(__file__).resolve().parents[2] / 'docs/evidence/code-tasks-v2-20261124.json'
 FROZEN_CODE_TASKS_V3 = Path(__file__).resolve().parents[2] / 'docs/evidence/code-tasks-v3-20261124.json'

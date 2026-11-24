@@ -623,9 +623,10 @@ class OrdersPerHour(RepoFamily):
     reference_target, trap_targets = ZC_REFERENCE, ZC_TRAPS
     ticket = ('Orders per hour for staffing',
               'Store managers want to see how busy each hour of a day was, to plan shifts. Please add '
-              '`orders_per_hour(orders, day)` to the reports. `day` is a date string like "2026-03-02". Return a '
-              'list of 24 counts, where index 0 is 00:00-00:59 store time and index 23 is 23:00-23:59. Count every '
-              'order customers placed, whatever its status is now.')
+              '`orders_per_hour(orders, day)` to the reports. `day` is a date string like "2026-03-02", the same '
+              'kind of day that `daily_revenue` reports on. Return a list of 24 counts, where index h counts the '
+              'orders placed between h:00 and h:59 store time. Count every order customers placed, whatever its '
+              'status is now.')
     trap_breaks = {'calendar_day': {'zc_cutoff'}, 'with_internal': {'zc_internal'}}
     requirements = {
         'zc_cutoff': ('「一天」是營業日（店內時間 04:00～隔天 03:59）：隔天凌晨 0～3 點的單算這天，'

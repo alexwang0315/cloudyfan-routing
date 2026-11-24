@@ -657,6 +657,9 @@ def key_from_args(args, vendor):
     return None
 
 
+CODE_TASK_SETS = ('v1', 'v2', 'v3')
+
+
 def main(argv=None):
     import argparse
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -689,6 +692,8 @@ def main(argv=None):
     cal.add_argument('--anthropic-model', help='盲測校準用的 Anthropic 模型，例如 claude-sonnet-5-5')
     cal.add_argument('--effort', choices=('low', 'medium', 'high', 'xhigh', 'max'), default='xhigh')
     cal.add_argument('--task', action='append', default=[], help='盲測校準只跑指定題目編號')
+    cal.add_argument('--task-set', choices=CODE_TASK_SETS, default='v3',
+                     help='盲測題集版本：v1 規格逐條寫明、v2 演算法陷阱、v3 工單式（預設）')
     cal.add_argument('--anthropic-env-file', type=Path)
     cal.add_argument('--anthropic-key-file', type=Path)
     cal.add_argument('--anthropic-env-name', default='ANTHROPIC_API_KEY')
@@ -709,6 +714,8 @@ def main(argv=None):
     cmp.add_argument('--max-turns', type=int, help='每次作答的回合上限；工具題預設 6，否則 1')
     cmp.add_argument('--max-input-bytes', type=int, help='每次請求的輸入上限；工具題預設 131072，否則 24576')
     cmp.add_argument('--loop-guard', choices=('shadow', 'active'), default='shadow', help='路徑一加強版的迴圈守衛模式')
+    cmp.add_argument('--task-set', choices=CODE_TASK_SETS, default='v3',
+                     help='盲測題集版本：v1 規格逐條寫明、v2 演算法陷阱、v3 工單式（預設）')
     cmp.add_argument('--blind', action='store_true',
                      help='盲測：改程式題、只看公開測試，事後用隱藏測試計分；角色依 blind_setup')
     cmp.add_argument('--openrouter-env-file', type=Path)
@@ -765,8 +772,8 @@ def main(argv=None):
             setup_['pool_targets']['high'] = anthropic_target(args.high_model or current['vendor_model'],
                                                               effort=args.high_effort or current['profile']['effort'])
         if args.blind:
-            from .code_tasks import frozen_code_tasks
-            tasks = frozen_code_tasks(limit=args.limit)
+            from .code_tasks import FROZEN_CODE_TASK_SETS, frozen_code_tasks
+            tasks = frozen_code_tasks(path=FROZEN_CODE_TASK_SETS[args.task_set], limit=args.limit)
             if args.task:
                 tasks = [t for t in tasks if t['id'] in set(args.task)]
         else:
@@ -790,8 +797,9 @@ def main(argv=None):
         if args.blind:
             if not args.anthropic_model:
                 parser.error('blind_calibration_requires_--anthropic-model')
-            from .code_tasks import frozen_code_tasks
-            tasks = [t for t in frozen_code_tasks() if (not args.task or t['id'] in set(args.task))
+            from .code_tasks import FROZEN_CODE_TASK_SETS, frozen_code_tasks
+            tasks = [t for t in frozen_code_tasks(path=FROZEN_CODE_TASK_SETS[args.task_set])
+                     if (not args.task or t['id'] in set(args.task))
                      and (not args.family or t['family'] in args.family)]
             rows = calibrate(args.root, tasks, anthropic_target(args.anthropic_model, effort=args.effort),
                              anthropic_key=key_from_args(args, 'anthropic'), cap_usd=args.cap,

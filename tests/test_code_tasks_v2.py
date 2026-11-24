@@ -734,14 +734,16 @@ def test_grade_hidden_uses_the_longer_overall_limit():
 
 # ---- 凍結與相容 ----
 
-def test_committed_v2_frozen_set_is_the_default_and_interleaved():
-    tasks = ct.frozen_code_tasks()
+def test_committed_v2_frozen_set_still_rebuilds_and_is_interleaved():
+    # 第二版凍結檔（校準 02、03 用）；預設已改成第三版，這裡確認舊檔仍能重建、通過核對。
+    tasks = ct.frozen_code_tasks(path=ct.FROZEN_CODE_TASKS_V2)
+    assert ct.FROZEN_CODE_TASK_SETS['v2'] == ct.FROZEN_CODE_TASKS_V2 != ct.FROZEN_CODE_TASKS
     assert len(tasks) == 40
     assert {(t['family'], t['level']) for t in tasks} == {(f, level) for f in ct.TRAP_FAMILIES for level in ct.LEVELS}
     assert [t['family'] for t in tasks[:8]] == list(ct.TRAP_FAMILIES)
     assert all(a['family'] != b['family'] for a, b in zip(tasks, tasks[1:]))
-    assert [t['id'] for t in ct.frozen_code_tasks(limit=2)] == ['I1-0', 'J1-0']
-    frozen = json.loads(ct.FROZEN_CODE_TASKS.read_text())
+    assert [t['id'] for t in ct.frozen_code_tasks(path=ct.FROZEN_CODE_TASKS_V2, limit=2)] == ['I1-0', 'J1-0']
+    frozen = json.loads(ct.FROZEN_CODE_TASKS_V2.read_text())
     assert frozen['version'] == ct.TRAP_VERSION and set(frozen['family_revision']) == set(ct.TRAP_FAMILIES)
 
 
@@ -756,7 +758,7 @@ def test_freeze_refuses_to_mix_versions_and_checks_the_version(tmp_path):
     path.write_text(json.dumps(data))
     with pytest.raises(ValueError, match='version'):
         ct.frozen_code_tasks(path)
-    with pytest.raises(ValueError, match='first-version or only second-version'):
+    with pytest.raises(ValueError, match='exactly one version'):
         ct.freeze(tmp_path / 'mixed.json', tasks + ct.generate(families=['A'], levels=(1,)))
 
 

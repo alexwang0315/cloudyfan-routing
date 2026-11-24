@@ -276,3 +276,56 @@ def test_blind_calibration_measures_first_attempt_false_accepts(tmp_path):
     assert row['first_pass'] is True and row['first_false_accept'] is True and row['attempts'] == 1
     report = json.loads((tmp_path / 'cal' / 'calibration-report.json').read_text())
     assert report['summary']['first_false_accept'] == 1 and report['summary']['hidden_first_pass'] == 0
+
+
+# ---- --task-set：calibrate／compare 選盲測題集版本（預設 v3）----
+
+def _capture_task_sets(monkeypatch):
+    from cloudyfan_jev import code_tasks
+    seen = {}
+
+    def fake_frozen(path=code_tasks.FROZEN_CODE_TASKS, limit=None):
+        seen['path'] = path
+        version = {p: v for v, p in code_tasks.FROZEN_CODE_TASK_SETS.items()}[path]
+        tasks = [{'id': f'{version}-{i}', 'family': 'X', 'level': 1, 'prompt': 'p', 'kind': 'code'} for i in range(3)]
+        return tasks[:limit] if limit else tasks
+
+    def fake_run(root, tasks, *args, **kwargs):
+        seen['tasks'] = [t['id'] for t in tasks]
+        return []
+    monkeypatch.setattr(code_tasks, 'frozen_code_tasks', fake_frozen)
+    monkeypatch.setattr(pilot, 'calibrate', fake_run)
+    monkeypatch.setattr(pilot, 'compare', fake_run)
+    return code_tasks, seen
+
+
+@pytest.mark.parametrize('task_set', [None, 'v1', 'v2', 'v3'])
+def test_blind_calibrate_reads_the_chosen_task_set(tmp_path, monkeypatch, task_set):
+    code_tasks, seen = _capture_task_sets(monkeypatch)
+    argv = ['calibrate', '--root', str(tmp_path / 'cal'), '--blind', '--anthropic-model', 'claude-haiku-5-5',
+            '--confirm-paid'] + (['--task-set', task_set] if task_set else [])
+    assert pilot.main(argv) == 0
+    assert seen['path'] == code_tasks.FROZEN_CODE_TASK_SETS[task_set or 'v3']
+    assert seen['tasks'] == [f'{task_set or "v3"}-{i}' for i in range(3)]
+
+
+@pytest.mark.parametrize('task_set', [None, 'v1', 'v2', 'v3'])
+def test_blind_compare_reads_the_chosen_task_set(tmp_path, monkeypatch, task_set):
+    code_tasks, seen = _capture_task_sets(monkeypatch)
+    argv = ['compare', '--root', str(tmp_path / 'cmp'), '--cap', '1', '--blind', '--limit', '2',
+            '--confirm-paid'] + (['--task-set', task_set] if task_set else [])
+    assert pilot.main(argv) == 0
+    assert seen['path'] == code_tasks.FROZEN_CODE_TASK_SETS[task_set or 'v3']
+    assert seen['tasks'] == [f'{task_set or "v3"}-0', f'{task_set or "v3"}-1']
+
+
+def test_task_set_rejects_unknown_versions(tmp_path, capsys):
+    with pytest.raises(SystemExit):
+        pilot.main(['compare', '--root', str(tmp_path), '--cap', '1', '--blind', '--confirm-paid', '--task-set', 'v9'])
+    assert "invalid choice: 'v9'" in capsys.readouterr().err
+
+
+def test_default_blind_task_set_is_the_ticket_style_v3():
+    from cloudyfan_jev import code_tasks
+    tasks = code_tasks.frozen_code_tasks(limit=2)
+    assert [t['id'] for t in tasks] == ['Q1-0', 'R1-0'] and all('implicit_requirements' in t for t in tasks)

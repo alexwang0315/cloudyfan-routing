@@ -1,8 +1,9 @@
 """盲測改程式題：題目產生器、凍結、取程式碼與盲測環境（設計見 plans/mrc-blind-validation-experiment-2026-11-24.md）。
 
 第一版（A～H，凍結檔 code-tasks-20261124.json）是「規格逐條寫明邊界條款」的題；校準 01 證實太簡單，
-保留只為了能重現舊凍結檔與校準證據。第二版（I～P，凍結檔 code-tasks-v2-20261124.json，現在的預設）
-是演算法陷阱題，說明見下方「第二版題集」一節。
+保留只為了能重現舊凍結檔與校準證據。第二版（I～P，凍結檔 code-tasks-v2-20261124.json）是演算法陷阱題，
+說明見下方「第二版題集」一節；校準 02、03 證實規格把陷阱點明時一樣太簡單。第三版（Q～X，凍結檔
+code-tasks-v3-20261124.json，現在的預設）是工單式題目，寫在 code_tickets.py，這裡只登記與凍結。
 
 以下說明第一版。每題要求寫一個純函式。題目文字列出完整規格與 3 個公開範例；公開範例刻意只碰一般情況，
 隱藏測試（至少 50 個，固定亂數種子產生）大量覆蓋規格裡的邊界條款。
@@ -30,9 +31,13 @@ VERSION = 'cloudyfan-code-tasks-v1'
 LEVELS = (1, 2, 3, 4, 5)
 # 各題型產生器版本；校準後改題時只升該題型的版本，其餘題目不變。
 FAMILY_REVISION = {'A': 1, 'B': 1, 'C': 1, 'D': 1, 'E': 1, 'F': 1, 'G': 1, 'H': 1,
-                   'I': 1, 'J': 1, 'K': 1, 'L': 1, 'M': 1, 'N': 1, 'O': 1, 'P': 1}
+                   'I': 1, 'J': 1, 'K': 1, 'L': 1, 'M': 1, 'N': 1, 'O': 1, 'P': 1,
+                   'Q': 1, 'R': 1, 'S': 1, 'T': 1, 'U': 1, 'V': 1, 'W': 1, 'X': 1}
 FROZEN_CODE_TASKS_V1 = Path(__file__).resolve().parents[2] / 'docs/evidence/code-tasks-20261124.json'
-FROZEN_CODE_TASKS = Path(__file__).resolve().parents[2] / 'docs/evidence/code-tasks-v2-20261124.json'
+FROZEN_CODE_TASKS_V2 = Path(__file__).resolve().parents[2] / 'docs/evidence/code-tasks-v2-20261124.json'
+FROZEN_CODE_TASKS_V3 = Path(__file__).resolve().parents[2] / 'docs/evidence/code-tasks-v3-20261124.json'
+FROZEN_CODE_TASKS = FROZEN_CODE_TASKS_V3
+FROZEN_CODE_TASK_SETS = {'v1': FROZEN_CODE_TASKS_V1, 'v2': FROZEN_CODE_TASKS_V2, 'v3': FROZEN_CODE_TASKS_V3}
 PUBLIC_COUNT = 3
 HIDDEN_MIN = 60
 HIDDEN_MAX = 120
@@ -3753,10 +3758,22 @@ def _rng(family, level, seed):
     return random.Random(f'cloudyfan-code-tasks-r{FAMILY_REVISION[family]}:{family}:{level}:{seed}')
 
 
+def _tickets():
+    """第三版題型在 code_tickets.py（它反過來引用本模組的共用函式，所以這裡延後匯入）。"""
+    from . import code_tickets
+    return code_tickets
+
+
+def ticket_families():
+    return _tickets().TICKET_FAMILIES
+
+
 def build(family, level, seed):
     """產生一題（含隱藏測試與各隱藏測試碰到的邊界條款）；同樣的 (題型, 難度, 種子) 一定得到同一題。"""
     if family in TRAP_FAMILIES:
         return build_trap(family, level, seed)
+    if family in FAMILY_REVISION and family not in FAMILIES:
+        return _tickets().build_ticket(family, level, seed)
     fam = FAMILIES[family]
     rng = _rng(family, level, seed)
     params = fam.params(rng, level)
@@ -3914,16 +3931,26 @@ def _set_version(families):
         return TRAP_VERSION
     if families and families <= set(FAMILIES):
         return VERSION
-    raise ValueError('A frozen code task set must contain only first-version or only second-version families')
+    if families and families <= set(ticket_families()):
+        return _tickets().TICKET_VERSION
+    raise ValueError('A frozen code task set must contain families of exactly one version (v1, v2 or v3)')
+
+
+def _record(task):
+    record = {'id': task['id'], 'family': task['family'], 'level': task['level'], 'seed': task['seed'],
+              'prompt_sha256': _digest(task['prompt']),
+              'tests_sha256': _digest([task['public_tests'], task['hidden_tests']])}
+    if 'implicit_requirements' in task:
+        record['requirements_sha256'] = _digest(task['implicit_requirements'])
+    return record
 
 
 def freeze(path, tasks):
     """凍結題目：存身分、每題 prompt 與測試的雜湊；題目本身由產生器重建後核對。"""
     tasks = interleave(sorted(tasks, key=lambda t: (t['family'], t['level'], t['seed'])))
-    frozen = {'version': _set_version({t['family'] for t in tasks}), 'family_revision': {f: FAMILY_REVISION[f] for f in sorted({t['family'] for t in tasks})},
-              'tasks': [{'id': t['id'], 'family': t['family'], 'level': t['level'], 'seed': t['seed'],
-                         'prompt_sha256': _digest(t['prompt']),
-                         'tests_sha256': _digest([t['public_tests'], t['hidden_tests']])} for t in tasks],
+    frozen = {'version': _set_version({t['family'] for t in tasks}),
+              'family_revision': {f: FAMILY_REVISION[f] for f in sorted({t['family'] for t in tasks})},
+              'tasks': [_record(t) for t in tasks],
               'prompts_sha256': _digest([t['prompt'] for t in tasks]),
               'tests_sha256': _digest([[t['public_tests'], t['hidden_tests']] for t in tasks])}
     Path(path).write_text(json.dumps(frozen, ensure_ascii=False, indent=1) + '\n')
@@ -3932,15 +3959,15 @@ def freeze(path, tasks):
 
 def load_frozen(frozen):
     version = frozen.get('version')
-    if version not in (VERSION, TRAP_VERSION) or _set_version({t['family'] for t in frozen['tasks']}) != version:
+    if version not in (VERSION, TRAP_VERSION, _tickets().TICKET_VERSION) \
+            or _set_version({t['family'] for t in frozen['tasks']}) != version:
         raise ValueError('Code task set version changed')
     for family, revision in frozen.get('family_revision', {}).items():
         if FAMILY_REVISION.get(family) != revision:
             raise ValueError('Code task family revision changed: ' + family)
     tasks = [make(t['family'], t['level'], t['seed']) for t in frozen['tasks']]
     for task, record in zip(tasks, frozen['tasks']):
-        if task['id'] != record['id'] or _digest(task['prompt']) != record['prompt_sha256'] \
-                or _digest([task['public_tests'], task['hidden_tests']]) != record['tests_sha256']:
+        if _record(task) != record:
             raise ValueError('Frozen code task changed: ' + record['id'])
     if _digest([t['prompt'] for t in tasks]) != frozen['prompts_sha256']:
         raise ValueError('Frozen code task prompts changed')
@@ -3948,7 +3975,7 @@ def load_frozen(frozen):
 
 
 def frozen_code_tasks(path=FROZEN_CODE_TASKS, limit=None):
-    """讀凍結檔並重建題目（凍結檔已是題型交錯的順序）。預設是第二版；第一版用 path=FROZEN_CODE_TASKS_V1。"""
+    """讀凍結檔並重建題目（凍結檔已是題型交錯的順序）。預設是第三版；舊版用 FROZEN_CODE_TASK_SETS['v1'／'v2']。"""
     tasks = load_frozen(json.loads(Path(path).read_text()))
     return tasks[:limit] if limit else tasks
 

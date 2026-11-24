@@ -32,12 +32,15 @@ LEVELS = (1, 2, 3, 4, 5)
 # 各題型產生器版本；校準後改題時只升該題型的版本，其餘題目不變。
 FAMILY_REVISION = {'A': 1, 'B': 1, 'C': 1, 'D': 1, 'E': 1, 'F': 1, 'G': 1, 'H': 1,
                    'I': 1, 'J': 1, 'K': 1, 'L': 1, 'M': 1, 'N': 1, 'O': 1, 'P': 1,
-                   'Q': 1, 'R': 1, 'S': 1, 'T': 1, 'U': 1, 'V': 1, 'W': 1, 'X': 1}
+                   'Q': 1, 'R': 1, 'S': 1, 'T': 1, 'U': 1, 'V': 1, 'W': 1, 'X': 1,
+                   'ZA': 1, 'ZB': 1, 'ZC': 1, 'ZD': 1, 'ZE': 1, 'ZF': 1, 'ZG': 1, 'ZH': 1}
 FROZEN_CODE_TASKS_V1 = Path(__file__).resolve().parents[2] / 'docs/evidence/code-tasks-20261124.json'
 FROZEN_CODE_TASKS_V2 = Path(__file__).resolve().parents[2] / 'docs/evidence/code-tasks-v2-20261124.json'
 FROZEN_CODE_TASKS_V3 = Path(__file__).resolve().parents[2] / 'docs/evidence/code-tasks-v3-20261124.json'
+FROZEN_CODE_TASKS_V4 = Path(__file__).resolve().parents[2] / 'docs/evidence/code-tasks-v4-20261124.json'
 FROZEN_CODE_TASKS = FROZEN_CODE_TASKS_V3
-FROZEN_CODE_TASK_SETS = {'v1': FROZEN_CODE_TASKS_V1, 'v2': FROZEN_CODE_TASKS_V2, 'v3': FROZEN_CODE_TASKS_V3}
+FROZEN_CODE_TASK_SETS = {'v1': FROZEN_CODE_TASKS_V1, 'v2': FROZEN_CODE_TASKS_V2, 'v3': FROZEN_CODE_TASKS_V3,
+                         'v4': FROZEN_CODE_TASKS_V4}
 PUBLIC_COUNT = 3
 HIDDEN_MIN = 60
 HIDDEN_MAX = 120
@@ -3768,6 +3771,16 @@ def ticket_families():
     return _tickets().TICKET_FAMILIES
 
 
+def _repo_tasks():
+    """第四版題型在 code_repo_tasks.py（同樣反過來引用本模組，延後匯入）。"""
+    from . import code_repo_tasks
+    return code_repo_tasks
+
+
+def repo_families():
+    return _repo_tasks().REPO_FAMILIES
+
+
 def build(family, level, seed):
     """產生一題（含隱藏測試與各隱藏測試碰到的邊界條款）；同樣的 (題型, 難度, 種子) 一定得到同一題。"""
     if family in TRAP_FAMILIES:
@@ -3933,7 +3946,9 @@ def _set_version(families):
         return VERSION
     if families and families <= set(ticket_families()):
         return _tickets().TICKET_VERSION
-    raise ValueError('A frozen code task set must contain families of exactly one version (v1, v2 or v3)')
+    if families and families <= set(repo_families()):
+        return _repo_tasks().REPO_VERSION
+    raise ValueError('A frozen code task set must contain families of exactly one version (v1, v2, v3 or v4)')
 
 
 def _record(task):
@@ -3959,7 +3974,7 @@ def freeze(path, tasks):
 
 def load_frozen(frozen):
     version = frozen.get('version')
-    if version not in (VERSION, TRAP_VERSION, _tickets().TICKET_VERSION) \
+    if version not in (VERSION, TRAP_VERSION, _tickets().TICKET_VERSION, _repo_tasks().REPO_VERSION) \
             or _set_version({t['family'] for t in frozen['tasks']}) != version:
         raise ValueError('Code task set version changed')
     for family, revision in frozen.get('family_revision', {}).items():
@@ -3993,6 +4008,14 @@ def extract_code(text):
     if not blocks or not blocks[-1].strip():
         return None
     return blocks[-1]
+
+
+def solution_code(task, text):
+    """要送進隔離執行器的程式：一般題就是回覆裡的程式區塊；程式庫情境題要把其他檔案一起包進去。"""
+    code = extract_code(text)
+    if code is None or 'repo' not in task:
+        return code
+    return _repo_tasks().solution_code(task, code)
 
 
 def _clip(text):
@@ -4050,7 +4073,7 @@ class BlindCodeEnvironment:
         return {'ok': False, 'error': {'code': 'unknown_tool', 'category': 'content'}}
 
     def validate(self, final_text):
-        outcome = code_sandbox.run_tests(extract_code(final_text), self.task['entry_point'],
+        outcome = code_sandbox.run_tests(solution_code(self.task, final_text), self.task['entry_point'],
                                          self.task['public_tests'], require_sandbox=self.require_sandbox)
         passed = outcome['status'] == 'ok' and outcome['passed'] == outcome['total']
         return {'passed': passed, 'checks': [] if passed else public_checks(self.task, outcome)}
@@ -4059,7 +4082,7 @@ class BlindCodeEnvironment:
 def grade_hidden(task, final_text, *, require_sandbox=True):
     """事後計分：隱藏測試全過才算 passed。結果只寫進計分檔，不可回給作答中的模型。"""
     # 第二版有大輸入，整體上限放寬到 HIDDEN_TIMEOUT_S；每個測試仍是 1 秒。
-    outcome = code_sandbox.run_tests(extract_code(final_text), task['entry_point'], task['hidden_tests'],
+    outcome = code_sandbox.run_tests(solution_code(task, final_text), task['entry_point'], task['hidden_tests'],
                                      timeout_s=HIDDEN_TIMEOUT_S, require_sandbox=require_sandbox)
     total = len(task['hidden_tests'])
     return {'passed': outcome['status'] == 'ok' and total > 0 and outcome['passed'] == total,

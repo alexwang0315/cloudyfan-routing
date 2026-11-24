@@ -1649,8 +1649,16 @@ def _ticket_json(family, level, seed):
     return tuple(json.dumps(part, ensure_ascii=False) for part in _build_ticket(family, level, seed))
 
 
+def ticket_family(family):
+    """第三版工單題或第四版程式庫情境題（code_repo_tasks 反過來引用本模組，所以延後匯入）。"""
+    if family in TICKET_FAMILIES:
+        return TICKET_FAMILIES[family]
+    from .code_repo_tasks import REPO_FAMILIES
+    return REPO_FAMILIES[family]
+
+
 def _build_ticket(family, level, seed):
-    fam = TICKET_FAMILIES[family]
+    fam = ticket_family(family)
     config = fam.levels[level]
     rng = _rng(family, level, seed)
     reqs, traps = set(config['reqs']), config['traps']
@@ -1722,8 +1730,11 @@ def _build_ticket(family, level, seed):
     if missing:
         raise RuntimeError(f'Hidden tests of {family}{level}-{seed} miss coverage: {missing}')
     task = {'id': f'{family}{level}-{seed}', 'family': family, 'level': level, 'seed': seed,
-            'prompt': ticket_prompt(fam, level, public), 'entry_point': fam.entry,
+            'prompt': fam.task_prompt(level, public) if hasattr(fam, 'task_prompt') else ticket_prompt(fam, level, public),
+            'entry_point': fam.entry,
             'public_tests': public, 'hidden_tests': hidden, 'kind': 'code',
             'implicit_requirements': fam.requirement_records(level)}
+    if hasattr(fam, 'repo'):
+        task['repo'] = fam.repo(level)
     return task, {'hidden': rows, 'trap_counts': dict(trap_counts), 'req_counts': dict(req_counts),
                   'regression': regression}

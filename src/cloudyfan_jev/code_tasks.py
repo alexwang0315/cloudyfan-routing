@@ -1,6 +1,10 @@
 """盲測改程式題：題目產生器、凍結、取程式碼與盲測環境（設計見 plans/mrc-blind-validation-experiment-2026-11-24.md）。
 
-每題要求寫一個純函式。題目文字列出完整規格與 3 個公開範例；公開範例刻意只碰一般情況，
+第一版（A～H，凍結檔 code-tasks-20261124.json）是「規格逐條寫明邊界條款」的題；校準 01 證實太簡單，
+保留只為了能重現舊凍結檔與校準證據。第二版（I～P，凍結檔 code-tasks-v2-20261124.json，現在的預設）
+是演算法陷阱題，說明見下方「第二版題集」一節。
+
+以下說明第一版。每題要求寫一個純函式。題目文字列出完整規格與 3 個公開範例；公開範例刻意只碰一般情況，
 隱藏測試（至少 50 個，固定亂數種子產生）大量覆蓋規格裡的邊界條款。
 
 每個題型有一個參考解 ``solve(level, params, args, skip)``。``skip`` 可以關掉一條「邊界條款」
@@ -13,7 +17,7 @@ CSV 題型用解析時記錄的事件代替開關。``tests/test_code_tasks.py``
 """
 from collections import Counter
 from datetime import date, timedelta
-from functools import cmp_to_key
+from functools import cmp_to_key, lru_cache
 import hashlib
 import json
 from pathlib import Path
@@ -25,8 +29,10 @@ from . import code_sandbox
 VERSION = 'cloudyfan-code-tasks-v1'
 LEVELS = (1, 2, 3, 4, 5)
 # 各題型產生器版本；校準後改題時只升該題型的版本，其餘題目不變。
-FAMILY_REVISION = {'A': 1, 'B': 1, 'C': 1, 'D': 1, 'E': 1, 'F': 1, 'G': 1, 'H': 1}
-FROZEN_CODE_TASKS = Path(__file__).resolve().parents[2] / 'docs/evidence/code-tasks-20261124.json'
+FAMILY_REVISION = {'A': 1, 'B': 1, 'C': 1, 'D': 1, 'E': 1, 'F': 1, 'G': 1, 'H': 1,
+                   'I': 1, 'J': 1, 'K': 1, 'L': 1, 'M': 1, 'N': 1, 'O': 1, 'P': 1}
+FROZEN_CODE_TASKS_V1 = Path(__file__).resolve().parents[2] / 'docs/evidence/code-tasks-20261124.json'
+FROZEN_CODE_TASKS = Path(__file__).resolve().parents[2] / 'docs/evidence/code-tasks-v2-20261124.json'
 PUBLIC_COUNT = 3
 HIDDEN_MIN = 60
 HIDDEN_MAX = 120
@@ -1702,6 +1708,2030 @@ FAMILIES = {f.letter: f for f in (Intervals(), Workdays(), Records(), Allocation
 FAMILY_NAMES = {k: f.name for k, f in FAMILIES.items()}
 
 
+# ==== 第二版題集：演算法陷阱（I～P）====
+#
+# 第一版的 A～H 把邊界條款逐條寫在規格裡，強模型會逐條照做（校準 01 誤放行只有 6%）。
+# 第二版每題的規格很短、完全無歧義，難處在演算法：
+# - 「看似合理」的貪婪或直覺解有反例（wrong 型陷阱）；
+# - 暴力或 O(n^2) 解在公開範例正確、在隱藏的大輸入逾時（slow 型陷阱，每個測試 1 秒）。
+# 每個題型寫出參考解與至少兩種典型錯誤解（都是可獨立執行的原始碼字串，方便丟進隔離環境）：
+# 公開範例只收「所有錯誤解都答對」的小輸入；隱藏測試保證每個 wrong 型錯誤解至少有
+# TRAP_COVERAGE 個小測試答錯，slow 型錯誤解由大輸入逾時。tests/test_code_tasks_v2.py
+# 以暴力法與第二種正確演算法核對全部期望值，並在隔離環境確認 slow 型錯誤解真的逾時。
+
+TRAP_VERSION = 'cloudyfan-code-tasks-v2'
+TRAP_COVERAGE = 3
+TRAP_SMALL_HIDDEN = 44
+TRAP_SMALL_MAX = 56
+HIDDEN_TIMEOUT_S = 30
+TIME_LIMIT_RULE = ('Hidden tests use inputs up to these limits. Each call must return within 1 second in CPython '
+                   '(standard library only), so choose an algorithm that is fast enough for the largest inputs.')
+
+
+def _fast_ints(rng, count, lo, hi):
+    """大輸入用：一次取亂數位元組，比逐一 randint 快很多；同一個 rng 狀態一定得到同一串數字。"""
+    span = hi - lo + 1
+    return [lo + v % span for v in memoryview(rng.randbytes(8 * count)).cast('Q')]
+
+
+def _compile(source, entry):
+    namespace = {'__name__': 'cloudyfan_trap'}
+    exec(compile(source, f'<{entry}>', 'exec'), namespace)
+    return namespace[entry]
+
+
+class TrapFamily:
+    """第二版題型：同一個函式簽名跨 5 級，級數只改輸入限制（規模與允許的情況）。"""
+    letter = ''
+    name = ''
+    entry = ''
+    signature = ''
+    reference_source = ''
+    trap_sources = {}
+    slow_traps = frozenset()
+    level_traps = {}
+
+    def __init__(self):
+        self._compiled = {}
+
+    def rules(self):
+        raise NotImplementedError
+
+    def limits(self, level):
+        raise NotImplementedError
+
+    def traps(self, level):
+        return self.level_traps[level]
+
+    def wrong_traps(self, level):
+        return tuple(t for t in self.traps(level) if t not in self.slow_traps)
+
+    def function(self, name=None):
+        """name=None 是參考解，否則是錯誤解。"""
+        if name not in self._compiled:
+            source = self.reference_source if name is None else self.trap_sources[name]
+            self._compiled[name] = _compile(source, self.entry)
+        return self._compiled[name]
+
+    def solve(self, args):
+        return self.function()(*_copy_args(args))
+
+    def public_case(self, rng, level):
+        raise NotImplementedError
+
+    def random_case(self, rng, level):
+        raise NotImplementedError
+
+    def large_cases(self, rng, level):
+        return []
+
+    def plain_enough(self, level, args, expected):
+        return True
+
+
+def _copy_args(args):
+    return json.loads(json.dumps(args))
+
+
+def _agrees(function, args, expected):
+    try:
+        return code_sandbox.strict_equal(json.loads(json.dumps(function(*_copy_args(args)))), expected)
+    except Exception:
+        return False
+
+
+# ---- I：多間會議室的帶權排程（貪婪、重複單間 DP 都錯；正解是最小成本流）----
+
+I_REFERENCE = r'''
+import heapq
+from bisect import bisect_right
+
+
+def _one_room(jobs):
+    jobs = sorted(jobs, key=lambda j: j[1])
+    ends = [j[1] for j in jobs]
+    best = [0] * (len(jobs) + 1)
+    for i, (s, e, p) in enumerate(jobs):
+        k = bisect_right(ends, s, 0, i)
+        best[i + 1] = max(best[i], best[k] + p)
+    return best[-1]
+
+
+def schedule(jobs, rooms):
+    if not jobs:
+        return 0
+    if rooms >= len(jobs):
+        return sum(j[2] for j in jobs)
+    if rooms == 1:
+        return _one_room(jobs)
+    # 最小成本流：時間點串成一條鏈（容量 rooms、成本 0），每個工作是一條容量 1、成本 -profit 的捷徑。
+    times = sorted({t for j in jobs for t in j[:2]})
+    index = {t: i for i, t in enumerate(times)}
+    m = len(times)
+    to, cap, cost, nxt, head = [], [], [], [], [-1] * m
+
+    def add(u, v, c, w):
+        for a, b, cc, ww in ((u, v, c, w), (v, u, 0, -w)):
+            to.append(b)
+            cap.append(cc)
+            cost.append(ww)
+            nxt.append(head[a])
+            head[a] = len(to) - 1
+    for i in range(m - 1):
+        add(i, i + 1, rooms, 0)
+    for s, e, p in jobs:
+        add(index[s], index[e], 1, -p)
+    inf = float('inf')
+    pot = [inf] * m
+    pot[0] = 0
+    for u in range(m):
+        e = head[u]
+        while e != -1:
+            if cap[e] > 0 and pot[u] + cost[e] < pot[to[e]]:
+                pot[to[e]] = pot[u] + cost[e]
+            e = nxt[e]
+    flow = total = 0
+    while flow < rooms:
+        dist = [inf] * m
+        prev = [-1] * m
+        dist[0] = 0
+        heap = [(0, 0)]
+        while heap:
+            d, u = heapq.heappop(heap)
+            if d > dist[u]:
+                continue
+            e = head[u]
+            pu = pot[u]
+            while e != -1:
+                if cap[e] > 0:
+                    v = to[e]
+                    nd = d + cost[e] + pu - pot[v]
+                    if nd < dist[v]:
+                        dist[v] = nd
+                        prev[v] = e
+                        heapq.heappush(heap, (nd, v))
+                e = nxt[e]
+        for v in range(m):
+            if dist[v] < inf:
+                pot[v] += dist[v]
+        gain = pot[m - 1] - pot[0]
+        if gain >= 0:
+            break
+        f, v = rooms - flow, m - 1
+        while v != 0:
+            e = prev[v]
+            f = min(f, cap[e])
+            v = to[e ^ 1]
+        v = m - 1
+        while v != 0:
+            e = prev[v]
+            cap[e] -= f
+            cap[e ^ 1] += f
+            v = to[e ^ 1]
+        flow += f
+        total += f * gain
+    return -total
+'''
+
+I_TRAPS = {
+    # 活動選擇法：依結束時間排，放進「最晚空出來且來得及」的房間；最大化件數，不是利潤。
+    'earliest_end': r'''
+def schedule(jobs, rooms):
+    free = [0] * rooms
+    total = 0
+    for s, e, p in sorted(jobs, key=lambda j: (j[1], j[0])):
+        best = -1
+        for r in range(rooms):
+            if free[r] <= s and (best < 0 or free[r] > free[best]):
+                best = r
+        if best >= 0:
+            free[best] = e
+            total += p
+    return total
+''',
+    # 利潤由高到低，放得下就收。
+    'max_profit_first': r'''
+def schedule(jobs, rooms):
+    chosen, total = [], 0
+    for s, e, p in sorted(jobs, key=lambda j: -j[2]):
+        trial = chosen + [(s, e)]
+        events = sorted([(a, 1) for a, b in trial] + [(b, -1) for a, b in trial])
+        depth = peak = 0
+        for _, d in events:
+            depth += d
+            peak = max(peak, depth)
+        if peak <= rooms:
+            chosen = trial
+            total += p
+    return total
+''',
+    # 單間正解，但把「結束時刻 = 下一件開始時刻」當成重疊（差一）。
+    'touching_overlap': r'''
+from bisect import bisect_left
+
+
+def schedule(jobs, rooms):
+    jobs = sorted(jobs, key=lambda j: j[1])
+    ends = [j[1] for j in jobs]
+    best = [0] * (len(jobs) + 1)
+    for i, (s, e, p) in enumerate(jobs):
+        k = bisect_left(ends, s, 0, i)
+        best[i + 1] = max(best[i], best[k] + p)
+    return best[-1]
+''',
+    # 單間正解但 O(n^2)。
+    'quadratic_dp': r'''
+def schedule(jobs, rooms):
+    jobs = sorted(jobs, key=lambda j: j[1])
+    best = []
+    for i, (s, e, p) in enumerate(jobs):
+        b = p
+        for j in range(i):
+            if jobs[j][1] <= s and best[j] + p > b:
+                b = best[j] + p
+        best.append(b)
+    return max(best, default=0)
+''',
+    # 每間房各跑一次單間最佳解，拿掉已選的再排下一間。
+    'repeat_dp': r'''
+from bisect import bisect_right
+
+
+def _pick(jobs):
+    order = sorted(range(len(jobs)), key=lambda i: jobs[i][1])
+    ends = [jobs[i][1] for i in order]
+    best, take = [0] * (len(order) + 1), [False] * len(order)
+    for t, i in enumerate(order):
+        k = bisect_right(ends, jobs[i][0], 0, t)
+        if best[k] + jobs[i][2] > best[t]:
+            best[t + 1] = best[k] + jobs[i][2]
+            take[t] = True
+        else:
+            best[t + 1] = best[t]
+    chosen, t = [], len(order)
+    while t > 0:
+        if take[t - 1]:
+            chosen.append(order[t - 1])
+            t = bisect_right(ends, jobs[order[t - 1]][0], 0, t - 1)
+        else:
+            t -= 1
+    return best[-1], set(chosen)
+
+
+def schedule(jobs, rooms):
+    jobs, total = list(jobs), 0
+    for _ in range(rooms):
+        if not jobs:
+            break
+        value, chosen = _pick(jobs)
+        total += value
+        jobs = [j for i, j in enumerate(jobs) if i not in chosen]
+    return total
+''',
+}
+
+
+class RoomSchedule(TrapFamily):
+    letter, name, entry, signature = 'I', 'weighted_room_schedule', 'schedule', 'schedule(jobs, rooms)'
+    reference_source, trap_sources = I_REFERENCE, I_TRAPS
+    slow_traps = frozenset({'quadratic_dp'})
+    level_traps = {1: ('earliest_end', 'max_profit_first', 'touching_overlap'),
+                   2: ('quadratic_dp', 'earliest_end', 'touching_overlap'),
+                   3: ('repeat_dp', 'max_profit_first', 'earliest_end'),
+                   4: ('repeat_dp', 'max_profit_first', 'earliest_end'),
+                   5: ('repeat_dp', 'max_profit_first')}
+    SIZES = {1: (12, 100, 50), 2: (50000, 10 ** 9, 10 ** 6), 3: (60, 1000, 1000), 4: (300, 10 ** 6, 10 ** 6),
+             5: (1500, 10 ** 9, 10 ** 6)}
+    ROOMS = {1: (1, 1), 2: (1, 1), 3: (2, 2), 4: (1, 4), 5: (1, 6)}
+
+    def rules(self):
+        return [
+            '`jobs` is a list of jobs `[start, end, profit]` of integers with 0 <= start < end and profit >= 1. '
+            'A job occupies the half-open time interval [start, end).',
+            'There are `rooms` identical rooms (`rooms` >= 1). Choose any subset of the jobs and put every chosen '
+            'job into one of the rooms so that two jobs in the same room never overlap. Jobs [s1, e1) and [s2, e2) '
+            'overlap when s1 < e2 and s2 < e1; in particular a job that ends at time t and a job that starts at '
+            'time t may use the same room. Jobs that are not chosen earn nothing.',
+            'Return the maximum possible total profit of the chosen jobs. If `jobs` is empty, return 0.',
+        ]
+
+    def limits(self, level):
+        n, t, p = self.SIZES[level]
+        lo, hi = self.ROOMS[level]
+        rooms = f'`rooms` is always {lo}' if lo == hi else f'{lo} <= rooms <= {hi}'
+        return [f'{rooms}; len(jobs) <= {n}; end <= {t}; profit <= {p}.']
+
+    def _jobs(self, rng, n, horizon, longest, profit):
+        jobs = []
+        for _ in range(n):
+            s = rng.randint(0, horizon - 1)
+            jobs.append([s, min(horizon, s + rng.randint(1, longest)), rng.randint(1, profit)])
+        return jobs
+
+    def _rooms(self, rng, level):
+        lo, hi = self.ROOMS[level]
+        return rng.randint(lo, min(hi, 3)) if level == 5 else rng.randint(lo, hi)
+
+    def public_case(self, rng, level):
+        rooms = self._rooms(rng, level)
+        return [self._jobs(rng, rng.randint(4, 6) + 2 * (rooms - 1), 20, 8, 20), rooms]
+
+    def plain_enough(self, level, args, expected):
+        return 0 < expected < sum(j[2] for j in args[0])
+
+    def random_case(self, rng, level):
+        rooms = self._rooms(rng, level)
+        n = rng.randint(1, 8 if level <= 2 else 11)
+        horizon = rng.choice((10, 15, 25))
+        return [self._jobs(rng, n, horizon, rng.choice((3, 6, 10)), rng.choice((5, 20, 50))), rooms]
+
+    def large_cases(self, rng, level):
+        n, horizon, profit = self.SIZES[level]
+        lo, hi = self.ROOMS[level]
+        out = []
+        for k in range(3):
+            rooms = hi if k == 0 else rng.randint(lo, hi)
+            starts = _fast_ints(rng, n, 0, horizon - 2)
+            spans = _fast_ints(rng, n, 1, max(1, horizon // max(4, n // (4 * rooms))))
+            profits = _fast_ints(rng, n, 1, profit)
+            out.append([[[s, min(horizon, s + d), p] for s, d, p in zip(starts, spans, profits)], rooms])
+        return out
+
+
+# ---- J：有工期與截止期限的接案（依期限貪婪、依利潤貪婪都錯）----
+
+J_REFERENCE = r'''
+import heapq
+
+
+def max_profit(jobs):
+    if not jobs:
+        return 0
+    if all(d == 1 for d, _, _ in jobs):
+        # 工期都是 1：依期限排，堆積只留利潤最高的 deadline 件。
+        heap = []
+        for _, deadline, profit in sorted(jobs, key=lambda j: j[1]):
+            heapq.heappush(heap, profit)
+            if len(heap) > deadline:
+                heapq.heappop(heap)
+        return sum(heap)
+    if len({p for _, _, p in jobs}) == 1:
+        # 利潤都一樣：Moore-Hodgson，超過期限就丟掉目前最長的一件。
+        heap, t = [], 0
+        for d, deadline, _ in sorted(jobs, key=lambda j: j[1]):
+            heapq.heappush(heap, -d)
+            t += d
+            if t > deadline:
+                t += heapq.heappop(heap)
+        return len(heap) * jobs[0][2]
+    # 一般情況：依期限排序後，對「總加工時間」做背包。
+    jobs = sorted(jobs, key=lambda j: j[1])
+    horizon = min(jobs[-1][1], sum(j[0] for j in jobs))
+    dp = [0] + [-1] * horizon
+    for d, deadline, p in jobs:
+        for t in range(min(deadline, horizon), d - 1, -1):
+            if dp[t - d] >= 0 and dp[t - d] + p > dp[t]:
+                dp[t] = dp[t - d] + p
+    return max(dp)
+'''
+
+_J_FEASIBLE = r'''
+def _feasible(chosen):
+    t = 0
+    for d, deadline, _ in sorted(chosen, key=lambda j: j[1]):
+        t += d
+        if t > deadline:
+            return False
+    return True
+
+
+def _greedy(jobs, key):
+    chosen = []
+    for job in sorted(jobs, key=key):
+        if _feasible(chosen + [job]):
+            chosen.append(job)
+    return sum(j[2] for j in chosen)
+'''
+
+J_TRAPS = {
+    # 依期限排，放得下就放、放不下就跳過（不回頭換掉長的）。
+    'edd_skip': r'''
+def max_profit(jobs):
+    t = total = 0
+    for d, deadline, p in sorted(jobs, key=lambda j: (j[1], j[0])):
+        if t + d <= deadline:
+            t += d
+            total += p
+    return total
+''',
+    # 短的先做，依這個順序一件接一件排，趕不上期限就跳過（不重新排順序）。
+    'spt_skip': r'''
+def max_profit(jobs):
+    t = total = 0
+    for d, deadline, p in sorted(jobs, key=lambda j: (j[0], j[1])):
+        if t + d <= deadline:
+            t += d
+            total += p
+    return total
+''',
+    # 經典「有期限的工作排序」：利潤高的先收，排得完就收（只對工期 1 正確）。
+    'profit_first': _J_FEASIBLE + r'''
+def max_profit(jobs):
+    return _greedy(jobs, lambda j: (-j[2], j[1]))
+''',
+    # 單位時間利潤高的先收。
+    'ratio_first': _J_FEASIBLE + r'''
+def max_profit(jobs):
+    return _greedy(jobs, lambda j: (-j[2] / j[0], j[1]))
+''',
+    # Moore-Hodgson 套到帶權：超過期限就丟掉利潤最低的。
+    'moore_profit': r'''
+import heapq
+
+
+def max_profit(jobs):
+    heap, t = [], 0
+    for d, deadline, p in sorted(jobs, key=lambda j: j[1]):
+        heapq.heappush(heap, (p, d))
+        t += d
+        while t > deadline:
+            t -= heapq.heappop(heap)[1]
+    return sum(p for p, _ in heap)
+''',
+    # 正確的 Moore-Hodgson，但每次用 max + remove 找最長的：O(n^2)。
+    'moore_list': r'''
+def max_profit(jobs):
+    chosen, t = [], 0
+    for d, deadline, _ in sorted(jobs, key=lambda j: j[1]):
+        chosen.append(d)
+        t += d
+        if t > deadline:
+            longest = max(chosen)
+            chosen.remove(longest)
+            t -= longest
+    return len(chosen) * (jobs[0][2] if jobs else 0)
+''',
+    # 工期 1 的經典解：利潤高的先排進期限前最晚的空檔，往前線性找空檔：O(n^2)。
+    'slot_scan': r'''
+def max_profit(jobs):
+    n = len(jobs)
+    free = [True] * (n + 1)
+    total = 0
+    for _, deadline, p in sorted(jobs, key=lambda j: -j[2]):
+        t = min(deadline, n)
+        while t > 0 and not free[t]:
+            t -= 1
+        if t > 0:
+            free[t] = False
+            total += p
+    return total
+''',
+}
+
+
+class DeadlineJobs(TrapFamily):
+    letter, name, entry, signature = 'J', 'deadline_jobs', 'max_profit', 'max_profit(jobs)'
+    reference_source, trap_sources = J_REFERENCE, J_TRAPS
+    slow_traps = frozenset({'moore_list', 'slot_scan'})
+    level_traps = {1: ('edd_skip', 'spt_skip'),
+                   2: ('moore_list', 'edd_skip', 'spt_skip'),
+                   3: ('profit_first', 'moore_profit', 'edd_skip'),
+                   4: ('profit_first', 'ratio_first', 'moore_profit'),
+                   5: ('slot_scan', 'edd_skip')}
+
+    def rules(self):
+        return [
+            '`jobs` is a list of jobs `[duration, deadline, profit]` of positive integers.',
+            'A single machine is available from time 0. It processes at most one job at a time, and a job that '
+            'has been started runs for `duration` consecutive time units without interruption. The machine may '
+            'stay idle between jobs.',
+            'Choose any subset of the jobs and an order in which to process them. Every chosen job must be '
+            'completed no later than its deadline (completion time <= deadline). Jobs that are not chosen are '
+            'skipped and earn nothing.',
+            'Return the maximum possible total profit of the chosen jobs (0 if `jobs` is empty or no job can be '
+            'completed in time).',
+        ]
+
+    def limits(self, level):
+        return {1: ['Every profit is 1. len(jobs) <= 12; duration <= 10; deadline <= 60.'],
+                2: ['Every profit is 1. len(jobs) <= 100000; duration <= 10000; deadline <= 10**9.'],
+                3: ['len(jobs) <= 12; duration <= 10; deadline <= 60; profit <= 1000.'],
+                4: ['len(jobs) <= 100; duration <= 50; deadline <= 10**9; profit <= 10**6.'],
+                5: ['Every duration is 1. len(jobs) <= 100000; deadline <= 10**9; profit <= 10**9.']}[level]
+
+    def _job(self, rng, level, horizon=None):
+        if level in (1, 2):
+            d = rng.randint(1, 10)
+            return [d, rng.randint(1, horizon or 40), 1]
+        if level == 5:
+            return [1, rng.randint(1, horizon or 8), rng.randint(1, 50)]
+        d = rng.randint(1, 10)
+        return [d, rng.randint(1, horizon or 40), rng.randint(1, 60)]
+
+    def public_case(self, rng, level):
+        return [[self._job(rng, level, 30 if level != 5 else 6) for _ in range(rng.randint(4, 6))]]
+
+    def plain_enough(self, level, args, expected):
+        if level == 5:
+            best = sum(sorted((j[2] for j in args[0]), reverse=True)[:len(args[0])])
+            return 0 < expected < best
+        return 0 < expected < sum(j[2] for j in args[0])
+
+    def random_case(self, rng, level):
+        n = rng.randint(1, 10)
+        horizon = rng.choice((15, 25, 40)) if level != 5 else rng.choice((3, 5, 8))
+        return [[self._job(rng, level, horizon) for _ in range(n)]]
+
+    def large_cases(self, rng, level):
+        if level == 1 or level == 3:
+            return [[[self._job(rng, level, 60) for _ in range(12)]] for _ in range(3)]
+        if level == 4:
+            # 期限可到 10**9，但總工期最多 5000：用「最大期限」開陣列的 DP 會爆，要以總工期為上限。
+            out = []
+            for k in range(3):
+                durations = _fast_ints(rng, 100, 1, 50)
+                total = sum(durations)
+                deadlines = _fast_ints(rng, 100, 1, total * 2 // 3)
+                deadlines[k::7] = [10 ** 9 - j for j in range(len(deadlines[k::7]))]
+                profits = _fast_ints(rng, 100, 1, 10 ** 6)
+                out.append([[list(j) for j in zip(durations, deadlines, profits)]])
+            return out
+        n = 100000
+        out = []
+        for k in range(3):
+            if level == 2:
+                durations = _fast_ints(rng, n, 1, 10000)
+                # 期限只夠做大約一半：Moore-Hodgson 要丟掉很多件，max+remove 的寫法就會很慢。
+                deadlines = _fast_ints(rng, n, 1, n * 2500 + k * n * 500)
+                out.append([[[d, dl, 1] for d, dl in zip(durations, deadlines)]])
+            else:
+                half = n // 2
+                deadlines = _fast_ints(rng, half, 1, half) + _fast_ints(rng, n - half, n, 10 ** 9)
+                profits = _fast_ints(rng, n, 1, 10 ** 9)
+                out.append([[[1, dl, p] for dl, p in zip(deadlines, profits)]])
+        return out
+
+
+# ---- K：字串切割的最低成本與方法數（最長匹配貪婪、去重字典、遞迴都會出事）----
+
+K_REFERENCE = r'''
+MOD = 1_000_000_007
+
+
+def segment(s, words):
+    best = {}
+    for word, cost in words:
+        entry = best.get(word)
+        if entry is None or cost < entry[0]:
+            best[word] = [cost, 1]
+        elif cost == entry[0]:
+            entry[1] += 1
+    lengths = sorted({len(w) for w in best})
+    n = len(s)
+    inf = float('inf')
+    costs = [inf] * (n + 1)
+    ways = [0] * (n + 1)
+    costs[0], ways[0] = 0, 1
+    for i in range(1, n + 1):
+        bc, bw = inf, 0
+        for size in lengths:
+            if size > i:
+                break
+            j = i - size
+            cj = costs[j]
+            if cj == inf:
+                continue
+            entry = best.get(s[j:i])
+            if entry is None:
+                continue
+            c = cj + entry[0]
+            if c < bc:
+                bc, bw = c, ways[j] * entry[1]
+            elif c == bc:
+                bw += ways[j] * entry[1]
+        costs[i], ways[i] = bc, bw % MOD
+    return [-1, 0] if costs[n] == inf else [costs[n], ways[n]]
+'''
+
+_K_TABLE = r'''
+MOD = 1_000_000_007
+
+
+def _table(words):
+    best = {}
+    for word, cost in words:
+        entry = best.get(word)
+        if entry is None or cost < entry[0]:
+            best[word] = [cost, 1]
+        elif cost == entry[0]:
+            entry[1] += 1
+    return best
+'''
+
+K_TRAPS = {
+    # 每一步取最長的可用字（同字取最便宜的），方法數當成 1。
+    'greedy_longest': r'''
+def segment(s, words):
+    best = {}
+    for w, c in words:
+        best[w] = min(c, best.get(w, c))
+    longest = max((len(w) for w in best), default=0)
+    i = total = 0
+    while i < len(s):
+        for size in range(min(longest, len(s) - i), 0, -1):
+            if s[i:i + size] in best:
+                total += best[s[i:i + size]]
+                i += size
+                break
+        else:
+            return [-1, 0]
+    return [total, 1]
+''',
+    # 最低成本對，但方法數算成「所有切法」而不是「最低成本的切法」。
+    'count_all': r'''
+MOD = 1_000_000_007
+
+
+def segment(s, words):
+    cheapest, copies = {}, {}
+    for w, c in words:
+        cheapest[w] = min(c, cheapest.get(w, c))
+        copies[w] = copies.get(w, 0) + 1
+    n = len(s)
+    inf = float('inf')
+    cost, ways = [0] + [inf] * n, [1] + [0] * n
+    for i in range(1, n + 1):
+        for w in cheapest:
+            j = i - len(w)
+            if j >= 0 and s[j:i] == w and cost[j] < inf:
+                cost[i] = min(cost[i], cost[j] + cheapest[w])
+                ways[i] = (ways[i] + ways[j] * copies[w]) % MOD
+    return [-1, 0] if cost[n] == inf else [cost[n], ways[n]]
+''',
+    # 字典用 {word: cost} 建：重複的字只留最後一筆，也不再算有幾筆。
+    'dedupe': r'''
+MOD = 1_000_000_007
+
+
+def segment(s, words):
+    table = {w: c for w, c in words}
+    lengths = sorted({len(w) for w in table})
+    n = len(s)
+    inf = float('inf')
+    cost, ways = [0] + [inf] * n, [1] + [0] * n
+    for i in range(1, n + 1):
+        for size in lengths:
+            j = i - size
+            if j < 0:
+                break
+            w = s[j:i]
+            if w in table and cost[j] < inf:
+                c = cost[j] + table[w]
+                if c < cost[i]:
+                    cost[i], ways[i] = c, ways[j]
+                elif c == cost[i]:
+                    ways[i] = (ways[i] + ways[j]) % MOD
+    return [-1, 0] if cost[n] == inf else [cost[n], ways[n]]
+''',
+    # 正確，但對每個切點往回試所有起點：O(n^2) 次切片。
+    'quadratic': _K_TABLE + r'''
+def segment(s, words):
+    best = _table(words)
+    n = len(s)
+    inf = float('inf')
+    cost, ways = [0] + [inf] * n, [1] + [0] * n
+    for i in range(1, n + 1):
+        for j in range(i):
+            entry = best.get(s[j:i])
+            if entry is not None and cost[j] < inf:
+                c = cost[j] + entry[0]
+                if c < cost[i]:
+                    cost[i], ways[i] = c, ways[j] * entry[1] % MOD
+                elif c == cost[i]:
+                    ways[i] = (ways[i] + ways[j] * entry[1]) % MOD
+    return [-1, 0] if cost[n] == inf else [cost[n], ways[n]]
+''',
+    # 正確，但用遞迴加快取：長字串超過遞迴深度上限。
+    'recursive': _K_TABLE + r'''
+from functools import lru_cache
+
+
+def segment(s, words):
+    best = _table(words)
+    lengths = sorted({len(w) for w in best})
+    inf = float('inf')
+
+    @lru_cache(maxsize=None)
+    def go(i):
+        if i == len(s):
+            return 0, 1
+        bc, bw = inf, 0
+        for size in lengths:
+            entry = best.get(s[i:i + size]) if i + size <= len(s) else None
+            if entry is None:
+                continue
+            c, w = go(i + size)
+            if c + entry[0] < bc:
+                bc, bw = c + entry[0], w * entry[1]
+            elif c + entry[0] == bc:
+                bw += w * entry[1]
+        return bc, bw % MOD
+    c, w = go(0)
+    return [-1, 0] if c == inf else [c, w]
+''',
+    # 正確，但每個位置都把整本字典掃一遍（startswith）：O(n * len(words))。
+    'scan_all': r'''
+MOD = 1_000_000_007
+
+
+def segment(s, words):
+    n = len(s)
+    inf = float('inf')
+    cost, ways = [0] + [inf] * n, [1] + [0] * n
+    for i in range(n):
+        if cost[i] == inf:
+            continue
+        for w, c in words:
+            if s.startswith(w, i):
+                j = i + len(w)
+                if cost[i] + c < cost[j]:
+                    cost[j], ways[j] = cost[i] + c, ways[i]
+                elif cost[i] + c == cost[j]:
+                    ways[j] = (ways[j] + ways[i]) % MOD
+    return [-1, 0] if cost[n] == inf else [cost[n], ways[n]]
+''',
+}
+
+
+class Segmentation(TrapFamily):
+    letter, name, entry, signature = 'K', 'word_segmentation', 'segment', 'segment(s, words)'
+    reference_source, trap_sources = K_REFERENCE, K_TRAPS
+    slow_traps = frozenset({'quadratic', 'recursive', 'scan_all'})
+    level_traps = {1: ('greedy_longest', 'count_all'),
+                   2: ('quadratic', 'recursive', 'greedy_longest'),
+                   3: ('dedupe', 'count_all', 'greedy_longest'),
+                   4: ('recursive', 'quadratic', 'dedupe'),
+                   5: ('scan_all', 'recursive', 'dedupe')}
+    SIZES = {1: (20, 8, 6), 2: (30000, 200, 10), 3: (20, 10, 6), 4: (20000, 500, 20), 5: (20000, 5000, 12)}
+
+    def rules(self):
+        return [
+            '`s` is a string of lowercase letters. `words` is a list of entries `[word, cost]`, where word is a '
+            'non-empty string of lowercase letters and cost is a positive integer.',
+            'A segmentation of s cuts s into consecutive non-empty pieces and assigns to every piece one entry of '
+            '`words` whose word equals that piece. Its cost is the sum of the costs of the assigned entries. Two '
+            'segmentations are different if they cut s at different positions or if they assign a different entry '
+            '(a different index in `words`) to some piece.',
+            'Return `[best, ways]`, where best is the minimum cost of a segmentation of s and ways is the number of '
+            'segmentations whose cost equals best, modulo 1000000007. If s has no segmentation, return [-1, 0]. '
+            'The empty string has exactly one segmentation (with no pieces), so it gives [0, 1].',
+        ]
+
+    def limits(self, level):
+        n, count, longest = self.SIZES[level]
+        unique = ('All words in `words` are distinct. ' if level in (1, 2) else
+                  'The same word may occur in several entries, possibly with different costs. ')
+        return [unique + f'len(s) <= {n}; len(words) <= {count}; every word has at most {longest} letters; '
+                f'cost <= 1000.']
+
+    def _words(self, rng, level, count, alphabet, longest, costs=9):
+        words, seen = [], set()
+        for _ in range(count * 4):
+            if len(words) >= count:
+                break
+            w = ''.join(rng.choice(alphabet) for _ in range(rng.randint(1, longest)))
+            if w in seen and (level in (1, 2) or rng.random() < .5):
+                continue
+            seen.add(w)
+            words.append([w, rng.randint(1, costs)])
+        return words
+
+    def _text(self, rng, words, pieces):
+        return ''.join(rng.choice(words)[0] for _ in range(pieces))
+
+    def public_case(self, rng, level):
+        words = self._words(rng, 1, rng.randint(3, 5), 'abc', 4)
+        return [self._text(rng, words, rng.randint(2, 4)), words]
+
+    def plain_enough(self, level, args, expected):
+        return expected[0] > 0 and len(args[0]) >= 4
+
+    def random_case(self, rng, level):
+        alphabet = rng.choice(('ab', 'ab', 'abc'))
+        words = self._words(rng, level, rng.randint(2, 7), alphabet, rng.choice((2, 3, 4)), rng.choice((3, 9)))
+        if level >= 3 and words and rng.random() < .6:
+            for _ in range(rng.randint(1, 3)):
+                words.append([rng.choice(words)[0], rng.randint(1, 9)])
+            rng.shuffle(words)
+        s = self._text(rng, words, rng.randint(0, 6))
+        if s and rng.random() < .15:
+            s = s[:-1] if rng.random() < .5 else s + rng.choice(alphabet)
+        return [s[:self.SIZES[level][0]], words]
+
+    def large_cases(self, rng, level):
+        n, count, longest = self.SIZES[level]
+        out = []
+        for k in range(3):
+            if level in (1, 3):
+                words = self._words(rng, level, count - 2, 'ab', 3)
+                words += [[rng.choice(words)[0], rng.randint(1, 9)] for _ in range(2 if level == 3 else 0)]
+                text = ''
+                while len(text) < n - 3:
+                    text += rng.choice(words)[0]
+                out.append([text[:n], words])
+                continue
+            alphabet = 'ab' if k < 2 else 'abc'
+            words, seen = [], set()
+            while len(words) < count:
+                size = rng.randint(1, longest)
+                w = ''.join(rng.choice(alphabet) for _ in range(size))
+                if w in seen and level == 2:
+                    continue
+                seen.add(w)
+                words.append([w, rng.randint(1, 1000)])
+            short = [w for w in words if len(w[0]) <= 3] or words
+            pieces = []
+            total = 0
+            while total < n - longest:
+                w = rng.choice(short)[0] if k == 0 else rng.choice(words)[0]
+                pieces.append(w)
+                total += len(w)
+            out.append([''.join(pieces), words])
+        return out
+
+
+# ---- L：套盒（二維嚴格遞增鏈；同寬的排序、旋轉、O(n^2) 都是陷阱）----
+
+L_REFERENCE = r'''
+from bisect import bisect_left
+
+
+def nest(boxes, rotate):
+    items = [(min(w, h), max(w, h), v) if rotate else (w, h, v) for w, h, v in boxes]
+    if not items:
+        return 0
+    if all(v == 1 for _, _, v in items):
+        # 同寬的盒子依高度遞減排，嚴格 LIS 才不會把同寬的串起來。
+        items.sort(key=lambda b: (b[0], -b[1]))
+        tails = []
+        for _, h, _ in items:
+            k = bisect_left(tails, h)
+            if k == len(tails):
+                tails.append(h)
+            else:
+                tails[k] = h
+        return len(tails)
+    heights = sorted({b[1] for b in items})
+    rank = {h: i + 1 for i, h in enumerate(heights)}
+    size = len(heights)
+    tree = [0] * (size + 1)
+    items.sort(key=lambda b: b[0])
+    best, i, n = 0, 0, len(items)
+    while i < n:
+        j = i
+        while j < n and items[j][0] == items[i][0]:
+            j += 1
+        group = []
+        for _, h, v in items[i:j]:
+            k, q = rank[h] - 1, 0
+            while k > 0:
+                if tree[k] > q:
+                    q = tree[k]
+                k &= k - 1
+            group.append((rank[h], q + v))
+        for k, value in group:
+            if value > best:
+                best = value
+            while k <= size:
+                if tree[k] < value:
+                    tree[k] = value
+                k += k & -k
+        i = j
+    return best
+'''
+
+_L_BIT = r'''
+def _chain(items, inclusive=False):
+    heights = sorted({b[1] for b in items})
+    rank = {h: i + 1 for i, h in enumerate(heights)}
+    size = len(heights)
+    tree = [0] * (size + 1)
+    best = 0
+    for _, h, v in sorted(items, key=lambda b: (b[0], b[1])):
+        k, q = rank[h] - (0 if inclusive else 1), 0
+        while k > 0:
+            q = max(q, tree[k])
+            k &= k - 1
+        value = q + v
+        best = max(best, value)
+        k = rank[h]
+        while k <= size:
+            tree[k] = max(tree[k], value)
+            k += k & -k
+    return best
+'''
+
+L_TRAPS = {
+    # 依 (寬, 高) 遞增排序後對高度做嚴格 LIS：同寬不同高的盒子會被串起來。
+    'sort_asc': r'''
+from bisect import bisect_left
+
+
+def nest(boxes, rotate):
+    items = sorted((min(w, h), max(w, h)) if rotate else (w, h) for w, h, _ in boxes)
+    tails = []
+    for _, h in items:
+        k = bisect_left(tails, h)
+        if k == len(tails):
+            tails.append(h)
+        else:
+            tails[k] = h
+    return len(tails)
+''',
+    # 排序對了，但 LIS 用 bisect_right（允許高度相等）。
+    'nonstrict': r'''
+from bisect import bisect_right
+
+
+def nest(boxes, rotate):
+    items = sorted(((min(w, h), max(w, h)) if rotate else (w, h) for w, h, _ in boxes), key=lambda b: (b[0], -b[1]))
+    tails = []
+    for _, h in items:
+        k = bisect_right(tails, h)
+        if k == len(tails):
+            tails.append(h)
+        else:
+            tails[k] = h
+    return len(tails)
+''',
+    # 正確但 O(n^2) 的 DP。
+    'quadratic': r'''
+def nest(boxes, rotate):
+    items = sorted((min(w, h), max(w, h), v) if rotate else (w, h, v) for w, h, v in boxes)
+    best = []
+    for i, (w, h, v) in enumerate(items):
+        b = v
+        for j in range(i):
+            if items[j][0] < w and items[j][1] < h and best[j] + v > b:
+                b = best[j] + v
+        best.append(b)
+    return max(best, default=0)
+''',
+    # 忽略 rotate。
+    'no_rotate': r'''
+from bisect import bisect_left
+
+
+def nest(boxes, rotate):
+    items = [tuple(b) for b in boxes]
+    if all(v == 1 for _, _, v in items):
+        items.sort(key=lambda b: (b[0], -b[1]))
+        tails = []
+        for _, h, _ in items:
+            k = bisect_left(tails, h)
+            if k == len(tails):
+                tails.append(h)
+            else:
+                tails[k] = h
+        return len(tails)
+    best = {}
+    for w, h, v in sorted(items):
+        best[(w, h, len(best))] = v + max([b for (w2, h2, _), b in best.items() if w2 < w and h2 < h], default=0)
+    return max(best.values(), default=0)
+''',
+    # 帶權樹狀陣列，但依 (寬, 高) 逐一查詢後立刻更新：同寬的盒子會互相串起來。
+    'weighted_tie': _L_BIT + r'''
+def nest(boxes, rotate):
+    items = [(min(w, h), max(w, h), v) if rotate else (w, h, v) for w, h, v in boxes]
+    return _chain(items) if items else 0
+''',
+    # 帶權樹狀陣列，但查詢包含相同高度（<= 而不是 <）。
+    'inclusive_query': r'''
+def nest(boxes, rotate):
+    items = [(min(w, h), max(w, h), v) if rotate else (w, h, v) for w, h, v in boxes]
+    if not items:
+        return 0
+    heights = sorted({b[1] for b in items})
+    rank = {h: i + 1 for i, h in enumerate(heights)}
+    size = len(heights)
+    tree = [0] * (size + 1)
+    items.sort(key=lambda b: b[0])
+    best, i = 0, 0
+    while i < len(items):
+        j = i
+        while j < len(items) and items[j][0] == items[i][0]:
+            j += 1
+        group = []
+        for _, h, v in items[i:j]:
+            k, q = rank[h], 0
+            while k > 0:
+                q = max(q, tree[k])
+                k &= k - 1
+            group.append((rank[h], q + v))
+        for k, value in group:
+            best = max(best, value)
+            while k <= size:
+                tree[k] = max(tree[k], value)
+                k += k & -k
+        i = j
+    return best
+''',
+}
+
+
+class NestedBoxes(TrapFamily):
+    letter, name, entry, signature = 'L', 'nested_boxes', 'nest', 'nest(boxes, rotate)'
+    reference_source, trap_sources = L_REFERENCE, L_TRAPS
+    slow_traps = frozenset({'quadratic'})
+    level_traps = {1: ('sort_asc', 'nonstrict'),
+                   2: ('quadratic', 'sort_asc', 'nonstrict'),
+                   3: ('quadratic', 'no_rotate', 'sort_asc'),
+                   4: ('quadratic', 'weighted_tie', 'inclusive_query'),
+                   5: ('quadratic', 'weighted_tie', 'no_rotate')}
+    SIZES = {1: 12, 2: 30000, 3: 30000, 4: 30000, 5: 30000}
+
+    def rules(self):
+        return [
+            '`boxes` is a list of boxes `[width, height, value]` of positive integers; `rotate` is a boolean.',
+            "Box A fits into box B when A's width is strictly less than B's width and A's height is strictly less "
+            "than B's height. If `rotate` is true, every box may first be turned by 90 degrees (swapping its width "
+            'and height); each box is used in a single orientation. If `rotate` is false, boxes are never turned.',
+            'A chain is a sequence of distinct boxes (different items of `boxes`) in which every box fits into the '
+            'next one. Two boxes with identical dimensions are different boxes, but they can never both be in one '
+            'chain.',
+            'Return the maximum total value of a chain. A single box is a chain; an empty list gives 0.',
+        ]
+
+    def limits(self, level):
+        n = self.SIZES[level]
+        rotate = 'rotate is always false' if level in (1, 2, 4) else 'rotate may be true or false'
+        value = 'every value is 1' if level <= 3 else 'value <= 10**6'
+        return [f'{rotate}; {value}; len(boxes) <= {n}; width and height <= 10**9.']
+
+    def _rotate(self, rng, level):
+        return level in (3, 5) and rng.random() < .7
+
+    def _box(self, rng, level, side):
+        return [rng.randint(1, side), rng.randint(1, side), 1 if level <= 3 else rng.randint(1, 20)]
+
+    def public_case(self, rng, level):
+        boxes = [self._box(rng, level, 30) for _ in range(rng.randint(5, 7))]
+        return [boxes, self._rotate(rng, level)]
+
+    def plain_enough(self, level, args, expected):
+        return 1 < expected < sum(b[2] for b in args[0])
+
+    def random_case(self, rng, level):
+        side = rng.choice((4, 6, 10))
+        return [[self._box(rng, level, side) for _ in range(rng.randint(0, 10))], self._rotate(rng, level)]
+
+    def large_cases(self, rng, level):
+        n = self.SIZES[level]
+        out = []
+        for k in range(3):
+            side = (10 ** 9, 1000, 50000)[k] if n > 100 else 20
+            ws, hs = _fast_ints(rng, n, 1, side), _fast_ints(rng, n, 1, side)
+            vs = [1] * n if level <= 3 else _fast_ints(rng, n, 1, 10 ** 6)
+            if n > 100 and k == 2:
+                # 大部分盒子幾乎排成一條長鏈：O(n^2) 的內層迴圈跑滿。
+                order = sorted(range(n), key=ws.__getitem__)
+                hs = [0] * n
+                for rank, i in enumerate(order):
+                    hs[i] = rank + 1
+            out.append([[list(b) for b in zip(ws, hs, vs)], level in (3, 5) and k != 1])
+        return out
+
+
+# ---- M：拆邊與裝回後的連通塊數（只拆不裝時是反向並查集；會裝回時要離線動態連通）----
+
+M_REFERENCE = r'''
+from bisect import bisect_left
+
+
+def _removals_only(n, edges, toggles, checkpoints):
+    # 每條邊最多切換一次＝只拆不裝：倒著把邊加回去，用並查集算塊數。
+    parent, size, count = list(range(n)), [1] * n, n
+
+    def find(x):
+        root = x
+        while parent[root] != root:
+            root = parent[root]
+        while parent[x] != root:
+            parent[x], x = root, parent[x]
+        return root
+
+    def union(u, v):
+        nonlocal count
+        a, b = find(u), find(v)
+        if a != b:
+            if size[a] < size[b]:
+                a, b = b, a
+            parent[b] = a
+            size[a] += size[b]
+            count -= 1
+    removed = set(toggles)
+    for i, (u, v) in enumerate(edges):
+        if i not in removed:
+            union(u, v)
+    at = [0] * (len(toggles) + 1)
+    at[len(toggles)] = count
+    for k in range(len(toggles) - 1, -1, -1):
+        union(*edges[toggles[k]])
+        at[k] = count
+    return [at[k] for k in checkpoints]
+
+
+def components(n, edges, toggles, checkpoints):
+    if len(set(toggles)) == len(toggles):
+        return _removals_only(n, edges, toggles, checkpoints)
+    # 會裝回：把每條邊「存在的檢查點區間」放進線段樹，深度優先走一遍，用可撤銷的並查集。
+    keys = sorted(set(checkpoints))
+    t = len(keys)
+    size = 1
+    while size < t:
+        size *= 2
+    nodes = [[] for _ in range(2 * size)]
+
+    def insert(lo, hi, edge):
+        lo, hi = bisect_left(keys, lo) + size, bisect_left(keys, hi) + size
+        while lo < hi:
+            if lo & 1:
+                nodes[lo].append(edge)
+                lo += 1
+            if hi & 1:
+                hi -= 1
+                nodes[hi].append(edge)
+            lo //= 2
+            hi //= 2
+    flips = [[] for _ in edges]
+    for k, i in enumerate(toggles):
+        flips[i].append(k + 1)
+    end = len(toggles) + 1
+    for i, edge in enumerate(edges):
+        marks = [0] + flips[i] + [end]
+        for j in range(0, len(marks) - 1, 2):
+            insert(marks[j], marks[j + 1], edge)
+    parent, weight = list(range(n)), [1] * n
+    history, count = [], n
+    answer = {}
+    stack = [(1, False)]
+    while stack:
+        value, leaving = stack.pop()
+        if leaving:
+            while len(history) > value:
+                b = history.pop()
+                a = parent[b]
+                parent[b] = b
+                weight[a] -= weight[b]
+                count += 1
+            continue
+        node = value
+        stack.append((len(history), True))
+        for u, v in nodes[node]:
+            while parent[u] != u:
+                u = parent[u]
+            while parent[v] != v:
+                v = parent[v]
+            if u != v:
+                if weight[u] < weight[v]:
+                    u, v = v, u
+                parent[v] = u
+                weight[u] += weight[v]
+                history.append(v)
+                count -= 1
+        if node >= size:
+            if node - size < t:
+                answer[keys[node - size]] = count
+        else:
+            stack.append((2 * node + 1, False))
+            stack.append((2 * node, False))
+    return [answer[k] for k in checkpoints]
+'''
+
+_M_BFS = r'''
+def _count(n, adjacency):
+    seen = [False] * n
+    count = 0
+    for start in range(n):
+        if seen[start]:
+            continue
+        count += 1
+        seen[start] = True
+        stack = [start]
+        while stack:
+            u = stack.pop()
+            for v in adjacency[u]:
+                if not seen[v]:
+                    seen[v] = True
+                    stack.append(v)
+    return count
+
+
+def _present(m, toggles, k):
+    present = [True] * m
+    for i in toggles[:k]:
+        present[i] = not present[i]
+    return present
+'''
+
+M_TRAPS = {
+    # 先在原圖找橋；之後每拆掉一座「原圖的橋」就多一塊（忽略拆邊後別的邊變成橋）。
+    'bridge_once': r'''
+def components(n, edges, toggles, checkpoints):
+    adjacency = [[] for _ in range(n)]
+    for i, (u, v) in enumerate(edges):
+        adjacency[u].append((v, i))
+        adjacency[v].append((u, i))
+    order, low, bridges, count = [-1] * n, [0] * n, set(), 0
+    clock = 0
+    for root in range(n):
+        if order[root] >= 0:
+            continue
+        count += 1
+        order[root] = low[root] = clock
+        clock += 1
+        stack = [(root, -1, iter(adjacency[root]))]
+        while stack:
+            u, via, it = stack[-1]
+            for v, i in it:
+                if i == via:
+                    continue
+                if order[v] < 0:
+                    order[v] = low[v] = clock
+                    clock += 1
+                    stack.append((v, i, iter(adjacency[v])))
+                    break
+                low[u] = min(low[u], order[v])
+            else:
+                stack.pop()
+                if stack:
+                    p = stack[-1][0]
+                    low[p] = min(low[p], low[u])
+                    if low[u] > order[p]:
+                        bridges.add(via)
+    at = [count]
+    for i in toggles:
+        at.append(at[-1] + (i in bridges))
+    return [at[k] for k in checkpoints]
+''',
+    # 用「鄰居集合」存圖：拆掉一條平行邊就把兩點之間的所有邊都拆了。
+    'simple_graph': _M_BFS + r'''
+def components(n, edges, toggles, checkpoints):
+    answers = {}
+    for k in sorted(set(checkpoints)):
+        present = _present(len(edges), toggles, k)
+        adjacency = [set() for _ in range(n)]
+        for i, (u, v) in enumerate(edges):
+            if present[i]:
+                adjacency[u].add(v)
+                adjacency[v].add(u)
+        for i in toggles[:k]:
+            u, v = edges[i]
+            if not present[i]:
+                adjacency[u].discard(v)
+                adjacency[v].discard(u)
+        answers[k] = _count(n, adjacency)
+    return [answers[k] for k in checkpoints]
+''',
+    # 只拆不裝時的標準解（倒著加回去的並查集），把每次切換都當成拆邊。
+    'reverse_dsu': r'''
+def components(n, edges, toggles, checkpoints):
+    parent = list(range(n))
+    count = n
+
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(u, v):
+        nonlocal count
+        a, b = find(u), find(v)
+        if a != b:
+            parent[a] = b
+            count -= 1
+    removed = set(toggles)
+    for i, (u, v) in enumerate(edges):
+        if i not in removed:
+            union(u, v)
+    at = [0] * (len(toggles) + 1)
+    at[len(toggles)] = count
+    for k in range(len(toggles) - 1, -1, -1):
+        union(*edges[toggles[k]])
+        at[k] = count
+    return [at[k] for k in checkpoints]
+''',
+    # 正確：每個檢查點重新 BFS 一次，O(檢查點數 * (n + m))。
+    'bfs_each': _M_BFS + r'''
+def components(n, edges, toggles, checkpoints):
+    answers = {}
+    for k in sorted(set(checkpoints)):
+        present = _present(len(edges), toggles, k)
+        adjacency = [[] for _ in range(n)]
+        for i, (u, v) in enumerate(edges):
+            if present[i]:
+                adjacency[u].append(v)
+                adjacency[v].append(u)
+        answers[k] = _count(n, adjacency)
+    return [answers[k] for k in checkpoints]
+''',
+    # 正確：每個檢查點重建一次並查集。
+    'dsu_rebuild': _M_BFS + r'''
+def components(n, edges, toggles, checkpoints):
+    answers = {}
+    for k in set(checkpoints):
+        present = _present(len(edges), toggles, k)
+        parent = list(range(n))
+
+        def find(x):
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]
+                x = parent[x]
+            return x
+        count = n
+        for i, (u, v) in enumerate(edges):
+            if present[i]:
+                a, b = find(u), find(v)
+                if a != b:
+                    parent[a] = b
+                    count -= 1
+        answers[k] = count
+    return [answers[k] for k in checkpoints]
+''',
+}
+
+
+class EdgeToggles(TrapFamily):
+    letter, name, entry, signature = 'M', 'edge_toggles', 'components', 'components(n, edges, toggles, checkpoints)'
+    reference_source, trap_sources = M_REFERENCE, M_TRAPS
+    slow_traps = frozenset({'bfs_each', 'dsu_rebuild'})
+    level_traps = {1: ('bridge_once', 'simple_graph'),
+                   2: ('bridge_once', 'simple_graph'),
+                   3: ('bfs_each', 'bridge_once', 'simple_graph'),
+                   4: ('reverse_dsu', 'simple_graph'),
+                   5: ('dsu_rebuild', 'bfs_each', 'reverse_dsu')}
+    SIZES = {1: (8, 12, 10, 12), 2: (10, 16, 20, 16), 3: (30000, 40000, 300, 40000), 4: (10, 16, 20, 30),
+             5: (5000, 5000, 2000, 10000)}
+
+    def rules(self):
+        return [
+            'The graph is undirected and has the vertices 0, 1, ..., n-1. `edges` is a list of pairs `[u, v]` with '
+            '0 <= u, v < n; edge i is edges[i]. Several edges may join the same two vertices, and every item of '
+            '`edges` is a separate edge. At the start every edge is present.',
+            '`toggles` is a list of edge indices that are processed one after another: toggling edge i removes it '
+            'if it is currently present and adds it back if it is currently absent. Toggling edge i affects only '
+            'that one item of `edges`.',
+            '`checkpoints` is a list of integers k with 0 <= k <= len(toggles). The answer for a checkpoint k is '
+            'the number of connected components of the graph after the first k toggles have been processed (every '
+            'isolated vertex is a component of its own).',
+            'Return the list of answers, one per checkpoint, in the order of `checkpoints` (checkpoints may repeat '
+            'and need not be sorted).',
+        ]
+
+    def limits(self, level):
+        n, m, c, t = self.SIZES[level]
+        loops = 'There are no self-loops (u != v always). ' if level == 1 else \
+            'Self-loops (u == v) may occur; a self-loop never connects two different vertices. '
+        repeat = ('Every index occurs at most once in `toggles` (so every toggle removes an edge). ' if level <= 3 else
+                  'An index may occur several times in `toggles`. ')
+        return [loops + repeat + f'1 <= n <= {n}; len(edges) <= {m}; len(toggles) <= {t}; '
+                f'len(checkpoints) <= {c}.']
+
+    def _graph(self, rng, level, n, m, parallel):
+        edges = []
+        for _ in range(m):
+            if edges and rng.random() < parallel:
+                edges.append(list(rng.choice(edges)) if rng.random() < .5 else rng.choice(edges)[::-1])
+                continue
+            u = rng.randrange(n)
+            others = [x for x in range(n) if x != u]
+            v = rng.randrange(n) if level >= 2 and rng.random() < .1 or not others else rng.choice(others)
+            if level == 1 and u == v:
+                continue
+            edges.append([u, v])
+        return edges
+
+    def _toggles(self, rng, level, m):
+        if m == 0:
+            return []
+        if level <= 3:
+            return rng.sample(range(m), rng.randint(0, m))
+        return [rng.randrange(m) for _ in range(rng.randint(0, 2 * m))]
+
+    def public_case(self, rng, level):
+        n = rng.randint(4, 6)
+        edges = self._graph(rng, 1, n, rng.randint(n, n + 2), 0)
+        toggles = rng.sample(range(len(edges)), rng.randint(2, len(edges)))
+        return [n, edges, toggles, list(range(len(toggles) + 1))]
+
+    def plain_enough(self, level, args, expected):
+        pairs = [tuple(sorted(e)) for e in args[1]]
+        return len(set(pairs)) == len(pairs) and len(set(expected)) >= 2 and expected[-1] < args[0]
+
+    def random_case(self, rng, level):
+        limit_n, limit_m, limit_c, limit_t = self.SIZES[level]
+        n = rng.randint(1, min(limit_n, 8))
+        edges = self._graph(rng, level, n, rng.randint(0, min(2 * n, limit_m)), rng.choice((0, .2, .4)))
+        toggles = self._toggles(rng, level, len(edges))[:limit_t]
+        checkpoints = [rng.randint(0, len(toggles)) for _ in range(rng.randint(1, 6))]
+        if rng.random() < .5:
+            checkpoints = list(range(len(toggles) + 1))[:limit_c]
+        return [n, edges, toggles, checkpoints]
+
+    def large_cases(self, rng, level):
+        n, m, c, t = self.SIZES[level]
+        out = []
+        for k in range(3):
+            if n <= 10:
+                edges = self._graph(rng, level, n, m, .2)
+                toggles = self._toggles(rng, level, len(edges))[:t]
+                out.append([n, edges, toggles, list(range(len(toggles) + 1))[:c]])
+                continue
+            size = n if k == 0 else n // 2
+            if k == 2:
+                # 一條長環：拆邊順序決定什麼時候真正斷開。
+                us, vs = [i % size for i in range(m)], [(i + 1) % size for i in range(m)]
+            else:
+                us, vs = _fast_ints(rng, m, 0, size - 1), _fast_ints(rng, m, 0, size - 1)
+            edges = [[u, v] for u, v in zip(us, vs)]
+            if level <= 3:
+                toggles = list(range(m))
+                rng.shuffle(toggles)
+                toggles = toggles[:m * 3 // 4]
+            else:
+                toggles = _fast_ints(rng, t, 0, m - 1)
+            checkpoints = sorted(_fast_ints(rng, c, 0, len(toggles)))
+            if k == 1:
+                rng.shuffle(checkpoints)
+            out.append([n, edges, toggles, checkpoints])
+        return out
+
+
+# ---- N：樹上每個點的最遠距離（邊權可為負：兩次 BFS 找直徑端點的捷徑失效；換根要排除自己的子樹）----
+
+N_REFERENCE = r'''
+def farthest(n, edges, queries):
+    adjacency = [[] for _ in range(n)]
+    for u, v, w in edges:
+        adjacency[u].append((v, w))
+        adjacency[v].append((u, w))
+    parent, up_weight = [-1] * n, [0] * n
+    seen = [False] * n
+    seen[0] = True
+    order = [0]
+    for u in order:
+        for v, w in adjacency[u]:
+            if not seen[v]:
+                seen[v] = True
+                parent[v] = u
+                up_weight[v] = w
+                order.append(v)
+    # down1/down2：往子樹走的最遠與次遠（0 代表停在自己）；via：最遠那條經過哪個孩子。
+    down1, down2, via = [0] * n, [0] * n, [-1] * n
+    for u in reversed(order):
+        p = parent[u]
+        if p >= 0:
+            c = down1[u] + up_weight[u]
+            if c > down1[p]:
+                down2[p], down1[p], via[p] = down1[p], c, u
+            elif c > down2[p]:
+                down2[p] = c
+    up = [0] * n
+    for u in order:
+        p = parent[u]
+        if p >= 0:
+            other = down2[p] if via[p] == u else down1[p]
+            up[u] = up_weight[u] + max(up[p], other)
+    return [max(down1[q], up[q]) for q in queries]
+'''
+
+_N_TREE = r'''
+def _rooted(n, edges):
+    adjacency = [[] for _ in range(n)]
+    for u, v, w in edges:
+        adjacency[u].append((v, w))
+        adjacency[v].append((u, w))
+    parent, weight, seen, order = [-1] * n, [0] * n, [False] * n, [0]
+    seen[0] = True
+    for u in order:
+        for v, w in adjacency[u]:
+            if not seen[v]:
+                seen[v] = True
+                parent[v], weight[v] = u, w
+                order.append(v)
+    return adjacency, parent, weight, order
+
+
+def _distances(n, adjacency, start):
+    dist = [None] * n
+    dist[start] = 0
+    stack = [start]
+    while stack:
+        u = stack.pop()
+        for v, w in adjacency[u]:
+            if dist[v] is None:
+                dist[v] = dist[u] + w
+                stack.append(v)
+    return dist
+'''
+
+N_TRAPS = {
+    # 換根時直接拿父節點最遠的那條，沒排除自己所在的子樹。
+    'reroot_top1': _N_TREE + r'''
+def farthest(n, edges, queries):
+    adjacency, parent, weight, order = _rooted(n, edges)
+    down = [0] * n
+    for u in reversed(order):
+        if parent[u] >= 0:
+            down[parent[u]] = max(down[parent[u]], down[u] + weight[u])
+    up = [0] * n
+    for u in order:
+        if parent[u] >= 0:
+            up[u] = weight[u] + max(up[parent[u]], down[parent[u]])
+    return [max(down[q], up[q]) for q in queries]
+''',
+    # 換根時只看父節點的其他子樹，忘了再往上（祖先那一側）。
+    'reroot_no_up': _N_TREE + r'''
+def farthest(n, edges, queries):
+    adjacency, parent, weight, order = _rooted(n, edges)
+    down1, down2, via = [0] * n, [0] * n, [-1] * n
+    for u in reversed(order):
+        p = parent[u]
+        if p >= 0:
+            c = down1[u] + weight[u]
+            if c > down1[p]:
+                down2[p], down1[p], via[p] = down1[p], c, u
+            elif c > down2[p]:
+                down2[p] = c
+    up = [0] * n
+    for u in order:
+        p = parent[u]
+        if p >= 0:
+            up[u] = weight[u] + (down2[p] if via[p] == u else down1[p])
+    return [max(down1[q], up[q]) for q in queries]
+''',
+    # 兩次掃描找直徑端點 a、b，最遠距離取 max(dist(a, x), dist(b, x))：只在邊權非負時成立。
+    'double_sweep': _N_TREE + r'''
+def farthest(n, edges, queries):
+    adjacency = _rooted(n, edges)[0]
+    d0 = _distances(n, adjacency, 0)
+    a = max(range(n), key=d0.__getitem__)
+    da = _distances(n, adjacency, a)
+    b = max(range(n), key=da.__getitem__)
+    db = _distances(n, adjacency, b)
+    return [max(da[q], db[q]) for q in queries]
+''',
+    # 只算到「別的點」的最遠距離（漏了自己這個距離 0 的點）。
+    'others_only': _N_TREE + r'''
+def farthest(n, edges, queries):
+    adjacency, parent, weight, order = _rooted(n, edges)
+    neg = float('-inf')
+    down1, down2, via = [neg] * n, [neg] * n, [-1] * n
+    for u in reversed(order):
+        p = parent[u]
+        if p >= 0:
+            c = max(down1[u], 0) + weight[u]
+            if c > down1[p]:
+                down2[p], down1[p], via[p] = down1[p], c, u
+            elif c > down2[p]:
+                down2[p] = c
+    up = [neg] * n
+    for u in order:
+        p = parent[u]
+        if p >= 0:
+            other = down2[p] if via[p] == u else down1[p]
+            up[u] = weight[u] + max(up[p], other, 0)
+    out = []
+    for q in queries:
+        best = max(down1[q], up[q])
+        out.append(best if best != neg else 0)
+    return out
+''',
+    # 正確：每個查詢從該點走一遍整棵樹。
+    'bfs_each': _N_TREE + r'''
+def farthest(n, edges, queries):
+    adjacency = _rooted(n, edges)[0]
+    return [max(_distances(n, adjacency, q)) for q in queries]
+''',
+    # 正確的換根，但用遞迴：深的樹超過遞迴深度上限。
+    'recursive': r'''
+def farthest(n, edges, queries):
+    adjacency = [[] for _ in range(n)]
+    for u, v, w in edges:
+        adjacency[u].append((v, w))
+        adjacency[v].append((u, w))
+    down1, down2, via, up = [0] * n, [0] * n, [-1] * n, [0] * n
+
+    def down(u, p):
+        for v, w in adjacency[u]:
+            if v != p:
+                down(v, u)
+                c = down1[v] + w
+                if c > down1[u]:
+                    down2[u], down1[u], via[u] = down1[u], c, v
+                elif c > down2[u]:
+                    down2[u] = c
+
+    def spread(u, p):
+        for v, w in adjacency[u]:
+            if v != p:
+                up[v] = w + max(up[u], down2[u] if via[u] == v else down1[u])
+                spread(v, u)
+    down(0, -1)
+    spread(0, -1)
+    return [max(down1[q], up[q]) for q in queries]
+''',
+}
+
+
+class TreeEccentricity(TrapFamily):
+    letter, name, entry, signature = 'N', 'tree_eccentricity', 'farthest', 'farthest(n, edges, queries)'
+    reference_source, trap_sources = N_REFERENCE, N_TRAPS
+    slow_traps = frozenset({'bfs_each', 'recursive'})
+    level_traps = {1: ('reroot_top1', 'reroot_no_up'),
+                   2: ('bfs_each', 'recursive', 'reroot_top1'),
+                   3: ('double_sweep', 'others_only', 'reroot_top1'),
+                   4: ('bfs_each', 'double_sweep', 'others_only'),
+                   5: ('recursive', 'bfs_each', 'double_sweep')}
+    SIZES = {1: (12, 1, 20), 2: (30000, 1, 10 ** 6), 3: (12, -20, 20), 4: (30000, -10 ** 6, 10 ** 6),
+             5: (50000, -10 ** 6, 10 ** 6)}
+
+    def rules(self):
+        return [
+            'The tree has the nodes 0, 1, ..., n-1 (n >= 1). `edges` contains its n - 1 edges `[u, v, w]`: an edge '
+            'between nodes u and v with integer weight w.',
+            'The distance between two nodes is the sum of the weights of the edges on the unique path between them. '
+            'The distance from a node to itself is 0.',
+            'The eccentricity of a node x is the maximum distance from x to any node of the tree, x itself '
+            'included.',
+            '`queries` is a list of nodes (values may repeat). Return the list of their eccentricities, in the '
+            'same order.',
+        ]
+
+    def limits(self, level):
+        n, lo, hi = self.SIZES[level]
+        return [f'1 <= n <= {n}; {lo} <= w <= {hi}; len(queries) <= 1000.']
+
+    def _tree(self, rng, level, n, lo, hi, spread=None):
+        labels = list(range(n))
+        rng.shuffle(labels)
+        edges = []
+        for i in range(1, n):
+            p = rng.randint(max(0, i - spread), i - 1) if spread else rng.randrange(i)
+            edges.append([labels[p], labels[i], rng.randint(lo, hi)])
+        return edges
+
+    def _weights(self, rng, level):
+        return (1, 20) if level <= 2 else rng.choice(((-20, 20), (-5, 10), (-10, 3)))
+
+    def public_case(self, rng, level):
+        n = rng.randint(4, 7)
+        lo, hi = (1, 20) if level <= 2 else (-5, 20)
+        return [n, self._tree(rng, level, n, lo, hi), sorted(rng.sample(range(n), rng.randint(2, n)))]
+
+    def plain_enough(self, level, args, expected):
+        return len(set(expected)) >= 2
+
+    def random_case(self, rng, level):
+        n = rng.randint(1, 10)
+        lo, hi = self._weights(rng, level)
+        queries = list(range(n)) if rng.random() < .6 else [rng.randrange(n) for _ in range(rng.randint(1, 5))]
+        return [n, self._tree(rng, level, n, lo, hi, rng.choice((None, 2))), queries]
+
+    def large_cases(self, rng, level):
+        n, lo, hi = self.SIZES[level]
+        if n <= 12:
+            return [[n, self._tree(rng, level, n, lo, hi, (None, 2, 1)[k]), list(range(n))] for k in range(3)]
+        out = []
+        for k in range(3):
+            labels = list(range(n))
+            rng.shuffle(labels)
+            spread = (3, 1000, n)[k]
+            offsets = _fast_ints(rng, n, 1, spread)
+            weights = _fast_ints(rng, n, lo, hi)
+            edges = [[labels[max(0, i - offsets[i])], labels[i], weights[i]] for i in range(1, n)]
+            out.append([n, edges, _fast_ints(rng, 1000, 0, n - 1)])
+        return out
+
+
+# ---- O：調成非遞減的最小加權調整量（只往上補、只往下壓都錯；值域 DP 太慢；正解是 slope trick）----
+
+O_REFERENCE = r'''
+import heapq
+
+
+def min_cost(a, weights):
+    heap, total = [], 0
+    for x, w in zip(a, weights):
+        moved, rest = 0, w
+        while rest and heap and -heap[0][0] > x:
+            top = heap[0]
+            take = top[1] if top[1] < rest else rest
+            total += (-top[0] - x) * take
+            rest -= take
+            moved += take
+            if take == top[1]:
+                heapq.heappop(heap)
+            else:
+                top[1] -= take
+        heapq.heappush(heap, [-x, w + moved])
+    return total
+'''
+
+O_TRAPS = {
+    # 由左往右，比前一個小就補到前一個的值。
+    'raise_only': r'''
+def min_cost(a, weights):
+    current, total = None, 0
+    for x, w in zip(a, weights):
+        if current is not None and x < current:
+            total += (current - x) * w
+        else:
+            current = x
+    return total
+''',
+    # 由右往左，比後一個大就壓到後一個的值。
+    'lower_only': r'''
+def min_cost(a, weights):
+    current, total = None, 0
+    for x, w in zip(reversed(a), reversed(weights)):
+        if current is not None and x > current:
+            total += (x - current) * w
+        else:
+            current = x
+    return total
+''',
+    # 正確：對所有出現過的值做 DP，O(n * 不同值個數)。
+    'compressed_dp': r'''
+def min_cost(a, weights):
+    values = sorted(set(a))
+    best = [0] * len(values)
+    for x, w in zip(a, weights):
+        running = None
+        for j, v in enumerate(values):
+            c = best[j] + w * abs(x - v)
+            if running is None or c < running:
+                running = c
+            best[j] = running
+    return best[-1] if values else 0
+''',
+    # 不帶權的 slope trick，成本再乘上權重：權重不同時答案錯。
+    'unweighted': r'''
+import heapq
+
+
+def min_cost(a, weights):
+    heap, total = [], 0
+    for x, w in zip(a, weights):
+        heapq.heappush(heap, -x)
+        if -heap[0] > x:
+            total += (-heap[0] - x) * w
+            heapq.heapreplace(heap, -x)
+    return total
+''',
+    # 正確：把權重 w 的元素展開成 w 個，再做不帶權的 slope trick；權重大時太慢。
+    'expand_weights': r'''
+import heapq
+
+
+def min_cost(a, weights):
+    heap, total = [], 0
+    for x, w in zip(a, weights):
+        for _ in range(w):
+            heapq.heappush(heap, -x)
+            if -heap[0] > x:
+                total += -heap[0] - x
+                heapq.heapreplace(heap, -x)
+    return total
+''',
+}
+
+
+class MonotoneFit(TrapFamily):
+    letter, name, entry, signature = 'O', 'monotone_fit', 'min_cost', 'min_cost(a, weights)'
+    reference_source, trap_sources = O_REFERENCE, O_TRAPS
+    slow_traps = frozenset({'compressed_dp', 'expand_weights'})
+    level_traps = {1: ('raise_only', 'lower_only'),
+                   2: ('raise_only', 'lower_only'),
+                   3: ('compressed_dp', 'raise_only', 'lower_only'),
+                   4: ('unweighted', 'raise_only', 'expand_weights'),
+                   5: ('unweighted', 'expand_weights', 'compressed_dp')}
+    SIZES = {1: (10, 20, 1), 2: (20, 10 ** 9, 1), 3: (20000, 10 ** 9, 1), 4: (12, 10 ** 9, 10 ** 6),
+             5: (20000, 10 ** 9, 10 ** 6)}
+
+    def rules(self):
+        return [
+            '`a` is a list of integers and `weights` is a list of positive integers of the same length.',
+            'Choose integers b[0], ..., b[n-1] with b[0] <= b[1] <= ... <= b[n-1]. The cost of this choice is the '
+            'sum of weights[i] * |a[i] - b[i]| over all i.',
+            'Return the minimum possible cost (0 for empty lists).',
+        ]
+
+    def limits(self, level):
+        n, value, weight = self.SIZES[level]
+        weights = 'every weight is 1' if weight == 1 else f'weights[i] <= {weight}'
+        return [f'len(a) <= {n}; |a[i]| <= {value}; {weights}.']
+
+    def _case(self, rng, level, n, value, weight):
+        a = [rng.randint(-value, value) for _ in range(n)]
+        return [a, [rng.randint(1, weight) for _ in range(n)]]
+
+    def public_case(self, rng, level):
+        return self._case(rng, level, rng.randint(5, 7), 9, 1 if level <= 3 else 4)
+
+    def plain_enough(self, level, args, expected):
+        return expected > 0
+
+    def random_case(self, rng, level):
+        n = rng.randint(0, 9)
+        value = rng.choice((3, 6, 20)) if level == 1 else rng.choice((5, 100, 10 ** 9))
+        weight = 1 if level <= 3 else rng.choice((3, 10, 10 ** 6))
+        return self._case(rng, level, n, value, weight)
+
+    def large_cases(self, rng, level):
+        n, value, weight = self.SIZES[level]
+        out = []
+        for k in range(3):
+            if n <= 20:
+                out.append(self._case(rng, level, n, min(value, 10 ** 9), weight))
+                continue
+            noise = _fast_ints(rng, n, -value // 4, value // 4)
+            trend = (0, value // n, -value // n)[k]
+            a = [max(-value, min(value, trend * (i - n // 2) + e)) for i, e in enumerate(noise)]
+            out.append([a, [1] * n if weight == 1 else _fast_ints(rng, n, weight // 2, weight)])
+        return out
+
+
+# ---- P：多路合併的最小成本（不補零的 k 路 Huffman、依序合併、每次重排都是陷阱）----
+
+P_REFERENCE = r'''
+import heapq
+
+
+def merge_cost(piles, k):
+    n = len(piles)
+    if n <= 1:
+        return 0
+    if k >= n:
+        return sum(piles)
+    # 補上大小 0 的假堆，讓每次都能剛好合併 k 堆。
+    heap = list(piles) + [0] * ((k - 1 - (n - 1) % (k - 1)) % (k - 1))
+    heapq.heapify(heap)
+    total = 0
+    while len(heap) > 1:
+        s = 0
+        for _ in range(k):
+            s += heapq.heappop(heap)
+        total += s
+        heapq.heappush(heap, s)
+    return total
+'''
+
+P_TRAPS = {
+    # 排序後由小到大依序併進同一堆。
+    'sequential': r'''
+def merge_cost(piles, k):
+    piles = sorted(piles)
+    running, total = piles[0], 0
+    for x in piles[1:]:
+        running += x
+        total += running
+    return total
+''',
+    # 只能合併相鄰兩堆的區間 DP（題目允許任意兩堆）。
+    'adjacent': r'''
+def merge_cost(piles, k):
+    n = len(piles)
+    prefix = [0]
+    for x in piles:
+        prefix.append(prefix[-1] + x)
+    cost = [[0] * n for _ in range(n)]
+    for length in range(2, n + 1):
+        for i in range(n - length + 1):
+            j = i + length - 1
+            cost[i][j] = min(cost[i][m] + cost[m + 1][j] for m in range(i, j)) + prefix[j + 1] - prefix[i]
+    return cost[0][n - 1]
+''',
+    # 正確，但每次合併前都重新排序整個清單。
+    'resort': r'''
+def merge_cost(piles, k):
+    piles = list(piles)
+    total = 0
+    first = True
+    while len(piles) > 1:
+        piles.sort()
+        take = min(k, len(piles)) if not first or k == 2 else (len(piles) - 2) % (k - 1) + 2
+        first = False
+        merged = sum(piles[:take])
+        total += merged
+        piles = piles[take:] + [merged]
+    return total
+''',
+    # 每次合併最小的 min(k, 剩下堆數) 堆，不補假堆：最後一次可能浪費在大堆上。
+    'no_pad': r'''
+import heapq
+
+
+def merge_cost(piles, k):
+    heap = list(piles)
+    heapq.heapify(heap)
+    total = 0
+    while len(heap) > 1:
+        merged = sum(heapq.heappop(heap) for _ in range(min(k, len(heap))))
+        total += merged
+        heapq.heappush(heap, merged)
+    return total
+''',
+    # 有補假堆，但補到 (堆數 - 1) 是 k 的倍數（應該是 k - 1）。
+    'pad_wrong': r'''
+import heapq
+
+
+def merge_cost(piles, k):
+    heap = list(piles)
+    while len(heap) > 1 and (len(heap) - 1) % k:
+        heap.append(0)
+    heapq.heapify(heap)
+    total = 0
+    while len(heap) > 1:
+        merged = sum(heapq.heappop(heap) for _ in range(min(k, len(heap))))
+        total += merged
+        heapq.heappush(heap, merged)
+    return total
+''',
+}
+
+
+class MergePiles(TrapFamily):
+    letter, name, entry, signature = 'P', 'merge_piles', 'merge_cost', 'merge_cost(piles, k)'
+    reference_source, trap_sources = P_REFERENCE, P_TRAPS
+    slow_traps = frozenset({'resort'})
+    level_traps = {1: ('sequential', 'adjacent'),
+                   2: ('resort', 'sequential'),
+                   3: ('no_pad', 'pad_wrong'),
+                   4: ('resort', 'no_pad'),
+                   5: ('resort', 'no_pad', 'pad_wrong')}
+    SIZES = {1: (10, 100, 2, 2), 2: (50000, 10 ** 9, 2, 2), 3: (10, 100, 3, 5), 4: (50000, 10 ** 9, 2, 10),
+             5: (50000, 10 ** 9, 2, 100000)}
+
+    def rules(self):
+        return [
+            '`piles` is a non-empty list of positive integers (pile sizes) and `k` is an integer with k >= 2.',
+            'One merge picks at least 2 and at most k of the current piles (any piles, not necessarily adjacent '
+            'in the list) and replaces them by a single pile whose size is the sum of their sizes. The merge costs '
+            'that sum.',
+            'Merges are repeated until exactly one pile is left. Return the minimum possible total cost of all '
+            'merges (0 if there is only one pile).',
+        ]
+
+    def limits(self, level):
+        n, size, lo, hi = self.SIZES[level]
+        k = f'k is always {lo}' if lo == hi else f'{lo} <= k <= {hi}'
+        return [f'{k}; len(piles) <= {n}; every pile size is at most {size}.']
+
+    def _k(self, rng, level, n):
+        lo, hi = self.SIZES[level][2:]
+        if level == 5 and rng.random() < .2:
+            return rng.randint(max(2, n - 1), n + 3)
+        return rng.randint(lo, min(hi, 6))
+
+    def public_case(self, rng, level):
+        lo, hi = self.SIZES[level][2:]
+        k = 2 if hi == 2 else rng.randint(3, min(hi, 4))
+        # 公開範例只用「剛好每次合併 k 堆」的堆數，看不出要補假堆。
+        n = 1 + (k - 1) * rng.randint(2, 3) if k > 2 else rng.randint(4, 6)
+        if level in (3, 5):
+            k = 3
+            n = 1 + k * (k - 1)
+        piles = sorted(rng.randint(1, 30) for _ in range(n))
+        return [piles if level <= 2 else rng.sample(piles, n), k]
+
+    def plain_enough(self, level, args, expected):
+        return len(args[0]) >= 4
+
+    def random_case(self, rng, level):
+        n = rng.randint(1, 9)
+        k = self._k(rng, level, n)
+        return [[rng.randint(1, rng.choice((5, 30, 100))) for _ in range(n)], k]
+
+    def large_cases(self, rng, level):
+        n, size, lo, hi = self.SIZES[level]
+        if n <= 10:
+            return [self.random_case(rng, level) for _ in range(3)]
+        out = []
+        for j in range(3):
+            k = (lo, rng.randint(lo, min(hi, 10)), hi if hi < 100 else 3)[j] if level == 5 else (lo, lo + 1, hi)[j] \
+                if level == 4 else 2
+            count = n - j * 7
+            out.append([_fast_ints(rng, count, 1, size if j != 1 else 1000), k])
+        return out
+
+
+TRAP_FAMILIES = {f.letter: f for f in (RoomSchedule(), DeadlineJobs(), Segmentation(), NestedBoxes(),
+                                       EdgeToggles(), TreeEccentricity(), MonotoneFit(), MergePiles())}
+
+
 # ---- 產生、凍結 ----
 
 def _call(entry, args):
@@ -1725,6 +3755,8 @@ def _rng(family, level, seed):
 
 def build(family, level, seed):
     """產生一題（含隱藏測試與各隱藏測試碰到的邊界條款）；同樣的 (題型, 難度, 種子) 一定得到同一題。"""
+    if family in TRAP_FAMILIES:
+        return build_trap(family, level, seed)
     fam = FAMILIES[family]
     rng = _rng(family, level, seed)
     params = fam.params(rng, level)
@@ -1773,6 +3805,84 @@ def build(family, level, seed):
     return task, {'params': params, 'hidden_edges': hidden_edges, 'edge_counts': dict(counts)}
 
 
+def build_trap_prompt(fam, level, public):
+    lines = [f'Implement the Python function `{fam.signature}` exactly as specified below.', '', 'Specification:']
+    lines += [f'{k}. {rule}' for k, rule in enumerate(fam.rules(), 1)]
+    lines += ['', 'Limits:'] + [f'- {rule}' for rule in fam.limits(level) + [TIME_LIMIT_RULE]]
+    lines += ['', 'Examples:']
+    lines += [f'- {_call(fam.entry, t["args"])} returns {t["expected"]!r}' for t in public]
+    lines += ['', REPLY_RULES.format(entry=fam.entry)]
+    return '\n'.join(lines)
+
+
+def build_trap(family, level, seed):
+    """第二版的一題。大輸入產生較慢，同一行程內快取 JSON 文字，每次呼叫回傳新的複本。"""
+    task, meta = _trap_json(family, level, seed)
+    return json.loads(task), json.loads(meta)
+
+
+@lru_cache(maxsize=None)
+def _trap_json(family, level, seed):
+    return tuple(json.dumps(part, ensure_ascii=False) for part in _build_trap(family, level, seed))
+
+
+def _build_trap(family, level, seed):
+    """公開範例只收所有錯誤解都答對的小輸入；隱藏測試讓每個 wrong 型錯誤解至少答錯
+    TRAP_COVERAGE 題，最後接上幾個大輸入（slow 型錯誤解在這裡逾時）。"""
+    fam = TRAP_FAMILIES[family]
+    rng = _rng(family, level, seed)
+    traps, wrong = fam.traps(level), fam.wrong_traps(level)
+    public, seen = [], set()
+    for _ in range(20000):
+        if len(public) == PUBLIC_COUNT:
+            break
+        args = fam.public_case(rng, level)
+        key = json.dumps(args, sort_keys=True)
+        if key in seen:
+            continue
+        expected = fam.solve(args)
+        if fam.plain_enough(level, args, expected) and all(_agrees(fam.function(t), args, expected) for t in traps):
+            seen.add(key)
+            public.append({'args': args, 'expected': expected})
+    if len(public) < PUBLIC_COUNT:
+        raise RuntimeError(f'Could not generate trap-free public examples for {family}{level}-{seed}')
+    hidden, failing, counts, plain = [], [], Counter(), 0
+    for _ in range(40000):
+        covered = all(counts[t] >= TRAP_COVERAGE for t in wrong)
+        if (len(hidden) >= TRAP_SMALL_HIDDEN and covered) or len(hidden) >= TRAP_SMALL_MAX:
+            break
+        args = fam.random_case(rng, level)
+        key = json.dumps(args, sort_keys=True)
+        if key in seen:
+            continue
+        expected = fam.solve(args)
+        fails = {t for t in wrong if not _agrees(fam.function(t), args, expected)}
+        needed = any(counts[t] < TRAP_COVERAGE for t in fails)
+        # 以打得掉錯誤解的反例為主，留約四分之一一般情況；接近下限時只收還沒覆蓋夠的錯誤解。
+        if not fails and plain >= max(8, len(hidden) // 4):
+            continue
+        if not needed and not covered and len(hidden) >= TRAP_SMALL_HIDDEN - 15:
+            continue
+        seen.add(key)
+        counts.update(fails)
+        plain += not fails
+        hidden.append({'args': args, 'expected': expected})
+        failing.append(sorted(fails))
+    missing = [t for t in wrong if counts[t] < TRAP_COVERAGE]
+    if missing:
+        raise RuntimeError(f'Hidden tests of {family}{level}-{seed} miss trap coverage: {missing}')
+    large_from = len(hidden)
+    for args in fam.large_cases(rng, level):
+        key = json.dumps(args, sort_keys=True)
+        if key not in seen:
+            seen.add(key)
+            hidden.append({'args': args, 'expected': fam.solve(args)})
+    task = {'id': f'{family}{level}-{seed}', 'family': family, 'level': level, 'seed': seed,
+            'prompt': build_trap_prompt(fam, level, public), 'entry_point': fam.entry,
+            'public_tests': public, 'hidden_tests': hidden, 'kind': 'code'}
+    return task, {'trap_failures': failing, 'trap_counts': dict(counts), 'large_from': large_from}
+
+
 def make(family, level, seed):
     return build(family, level, seed)[0]
 
@@ -1799,10 +3909,18 @@ def interleave(tasks):
     return ordered
 
 
+def _set_version(families):
+    if families and families <= set(TRAP_FAMILIES):
+        return TRAP_VERSION
+    if families and families <= set(FAMILIES):
+        return VERSION
+    raise ValueError('A frozen code task set must contain only first-version or only second-version families')
+
+
 def freeze(path, tasks):
     """凍結題目：存身分、每題 prompt 與測試的雜湊；題目本身由產生器重建後核對。"""
     tasks = interleave(sorted(tasks, key=lambda t: (t['family'], t['level'], t['seed'])))
-    frozen = {'version': VERSION, 'family_revision': {f: FAMILY_REVISION[f] for f in sorted({t['family'] for t in tasks})},
+    frozen = {'version': _set_version({t['family'] for t in tasks}), 'family_revision': {f: FAMILY_REVISION[f] for f in sorted({t['family'] for t in tasks})},
               'tasks': [{'id': t['id'], 'family': t['family'], 'level': t['level'], 'seed': t['seed'],
                          'prompt_sha256': _digest(t['prompt']),
                          'tests_sha256': _digest([t['public_tests'], t['hidden_tests']])} for t in tasks],
@@ -1813,7 +3931,8 @@ def freeze(path, tasks):
 
 
 def load_frozen(frozen):
-    if frozen.get('version') != VERSION:
+    version = frozen.get('version')
+    if version not in (VERSION, TRAP_VERSION) or _set_version({t['family'] for t in frozen['tasks']}) != version:
         raise ValueError('Code task set version changed')
     for family, revision in frozen.get('family_revision', {}).items():
         if FAMILY_REVISION.get(family) != revision:
@@ -1829,7 +3948,7 @@ def load_frozen(frozen):
 
 
 def frozen_code_tasks(path=FROZEN_CODE_TASKS, limit=None):
-    """讀凍結檔並重建題目（凍結檔已是題型交錯的順序）。"""
+    """讀凍結檔並重建題目（凍結檔已是題型交錯的順序）。預設是第二版；第一版用 path=FROZEN_CODE_TASKS_V1。"""
     tasks = load_frozen(json.loads(Path(path).read_text()))
     return tasks[:limit] if limit else tasks
 
@@ -1912,8 +4031,9 @@ class BlindCodeEnvironment:
 
 def grade_hidden(task, final_text, *, require_sandbox=True):
     """事後計分：隱藏測試全過才算 passed。結果只寫進計分檔，不可回給作答中的模型。"""
+    # 第二版有大輸入，整體上限放寬到 HIDDEN_TIMEOUT_S；每個測試仍是 1 秒。
     outcome = code_sandbox.run_tests(extract_code(final_text), task['entry_point'], task['hidden_tests'],
-                                     require_sandbox=require_sandbox)
+                                     timeout_s=HIDDEN_TIMEOUT_S, require_sandbox=require_sandbox)
     total = len(task['hidden_tests'])
     return {'passed': outcome['status'] == 'ok' and total > 0 and outcome['passed'] == total,
             'hidden_passed': outcome['passed'], 'hidden_total': total, 'status': outcome['status']}

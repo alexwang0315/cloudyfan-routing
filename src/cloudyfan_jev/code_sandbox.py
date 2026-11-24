@@ -11,6 +11,9 @@
 - ``require_sandbox=False`` 只給測試執行**可信的參考解**（CI 的 Ubuntu 沒有 sandbox-exec）。
 - 驅動程式在子行程內設 CPU 時間、檔案大小、開檔數與（能設時）記憶體上限，每題另有計時器；
   父行程另有整體逾時，逾時就殺掉整個行程群組。
+- macOS 不接受任何記憶體 rlimit（RLIMIT_AS／RLIMIT_DATA 都設不下去），所以父行程每
+  ``MEMORY_POLL_SECONDS`` 秒看一次子行程的常駐記憶體，超過 ``MEMORY_BYTES`` 就殺掉並回 ``crashed``。
+  第二版題目有大輸入，模型若開「值域大小的陣列」會一次要好幾 GB，沒有這道防線會拖垮整台機器。
 - 模型程式的 print 被導向 /dev/null；驅動程式把結果寫到事先複製的私有檔案描述子，並加上隨機分隔標記。
 - 期望值不進子行程：子行程只回傳每題的實際值，由父行程比對，所以模型程式讀不到隱藏測試的答案。
 """
@@ -31,11 +34,12 @@ MAX_TIMEOUTS = 3
 MAX_VALUE_BYTES = 64 * 1024
 MAX_OUTPUT_BYTES = 8 * 1024 * 1024
 MEMORY_BYTES = 1024 * 1024 * 1024
+MEMORY_POLL_SECONDS = 0.05
 DETAIL_CHARS = 200
 STATUSES = ('ok', 'no_code', 'syntax_error', 'timeout', 'sandbox_unavailable', 'crashed')
 
 DRIVER = r'''
-import json, os, resource, signal, sys
+import gc, json, os, resource, signal, sys
 
 def main():
     request = json.loads(sys.stdin.buffer.read().decode('utf-8'))
@@ -80,12 +84,16 @@ def main():
         report['load'] = 'entry_point_missing'
     if report['load'] == 'ok':
         timeouts = 0
-        for encoded in request['tests']:
+        # 先把全部輸入解碼並凍結在 GC 之外：大輸入有上百萬個物件，否則循環 GC 會在計時中掃過它們。
+        decoded = [json.loads(encoded) for encoded in request['tests']]
+        gc.collect()
+        gc.freeze()
+        for args in decoded:
             if timeouts >= request['max_timeouts']:
                 report['results'].append({'error': 'not_run'})
                 continue
             try:
-                value = guarded(fn, *json.loads(encoded))
+                value = guarded(fn, *args)
                 text = json.dumps(value, allow_nan=False, ensure_ascii=False)
                 if len(text) > request['max_value_bytes']:
                     report['results'].append({'error': 'result_too_large'})
@@ -172,11 +180,27 @@ def _kill(process):
     process.wait()
 
 
-def run_tests(code, entry_point, tests, *, timeout_s=10, require_sandbox=True):
+def _rss_bytes(pid):
+    """子行程目前的常駐記憶體（位元組）；讀不到就回 0。Linux 讀 /proc，macOS 用 ps。"""
+    try:
+        with open(f'/proc/{pid}/statm') as stream:
+            return int(stream.read().split()[1]) * os.sysconf('SC_PAGE_SIZE')
+    except (OSError, ValueError, IndexError):
+        pass
+    try:
+        out = subprocess.run(['/bin/ps', '-o', 'rss=', '-p', str(pid)], capture_output=True, text=True,
+                             timeout=2, env={'PATH': '/usr/bin:/bin'}).stdout
+        return int(out.strip() or 0) * 1024
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return 0
+
+
+def run_tests(code, entry_point, tests, *, timeout_s=10, per_test_s=PER_TEST_SECONDS, require_sandbox=True):
     """執行 ``code`` 中的 ``entry_point``，逐一比對 ``tests``（``[{'args': [...], 'expected': ...}]``）。
 
     回傳 ``{'status', 'passed', 'total', 'failures': [{'index', 'kind': 'wrong'|'error', 'detail'}]}``。
     ``detail`` 會帶實際值與期望值，呼叫端決定能不能公開（隱藏測試的 detail 絕不可給模型）。
+    ``timeout_s`` 是整體上限；``per_test_s`` 是每個測試的上限（預設 1 秒，不可超過整體上限）。
     """
     total = len(tests)
     if not isinstance(code, str) or not code.strip():
@@ -190,7 +214,7 @@ def run_tests(code, entry_point, tests, *, timeout_s=10, require_sandbox=True):
     request = json.dumps({
         'code': code, 'entry_point': entry_point, 'nonce': nonce,
         'tests': [json.dumps(t['args'], ensure_ascii=False) for t in tests],
-        'per_test_seconds': min(PER_TEST_SECONDS, float(timeout_s)), 'max_timeouts': MAX_TIMEOUTS,
+        'per_test_seconds': min(float(per_test_s), float(timeout_s)), 'max_timeouts': MAX_TIMEOUTS,
         'cpu_seconds': int(timeout_s) + 1, 'memory_bytes': MEMORY_BYTES, 'max_value_bytes': MAX_VALUE_BYTES,
         'max_output_bytes': MAX_OUTPUT_BYTES,
     }, ensure_ascii=False).encode('utf-8')
@@ -212,10 +236,17 @@ def run_tests(code, entry_point, tests, *, timeout_s=10, require_sandbox=True):
                                        env={'PATH': '/usr/bin:/bin'}, start_new_session=True, close_fds=True)
             deadline = time.monotonic() + float(timeout_s)
             try:
-                process.wait(timeout=max(0.1, deadline - time.monotonic()))
-            except subprocess.TimeoutExpired:
-                _kill(process)
-                return _result('timeout', total)
+                while process.poll() is None:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        _kill(process)
+                        return _result('timeout', total)
+                    try:
+                        process.wait(timeout=min(MEMORY_POLL_SECONDS, remaining))
+                    except subprocess.TimeoutExpired:
+                        if _rss_bytes(process.pid) > MEMORY_BYTES:
+                            _kill(process)
+                            return _result('crashed', total)
             finally:
                 if process.poll() is None:
                     _kill(process)

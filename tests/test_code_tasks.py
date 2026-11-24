@@ -645,7 +645,8 @@ def test_generate_interleave_and_freeze_round_trip(tmp_path):
 
 
 def test_committed_frozen_set_rebuilds_and_is_interleaved():
-    tasks = ct.frozen_code_tasks()
+    # 第一版凍結檔（校準 01 用）；預設已改成第二版，這裡確認舊檔仍能重建。
+    tasks = ct.frozen_code_tasks(path=ct.FROZEN_CODE_TASKS_V1)
     assert len(tasks) == 40
     assert {(t['family'], t['level']) for t in tasks} == {(f, l) for f in ct.FAMILIES for l in ct.LEVELS}
     assert [t['family'] for t in tasks[:8]] == list(ct.FAMILIES)

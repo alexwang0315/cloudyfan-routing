@@ -533,6 +533,9 @@ class Core:
             refs += (result.get('advisor') or {}).get('calls', [])
         if advisor is not None or plus is not None:
             refs += [c for a in result['attempts'] for c in (a.get('loop_guard') or {}).get('calls', [])]
+        if plus is not None:
+            # 交卷前評審（cloudyfan_plus review）的裁判呼叫。
+            refs += [c for a in result['attempts'] for c in (a.get('review') or {}).get('calls', [])]
         roles = {role: Decimal(0) for role in ROLES}
         cost, scenario, classifier = Decimal(0), Decimal(0), Decimal(0)
         unknown = 0

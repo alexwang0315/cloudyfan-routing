@@ -27,6 +27,9 @@ class CloudyfanPlusConfig:
     judge_calls_per_attempt: int = 1
     # ExperienceLink（#76）；None 時不附解題事實、不回寫。
     experience: object = field(default=None)
+    # 交卷前評審（2026-11-24 盲測 C 組）：公開驗收通過後，裁判不看隱藏測試審一次；
+    # 評審認為有問題就當成未通過，交回 Jev 照原規則升級。開啟時不用迴圈守衛。
+    review: bool = False
 
     def __post_init__(self):
         from copy import deepcopy
@@ -37,6 +40,10 @@ class CloudyfanPlusConfig:
             raise ValueError('loop_guard requires a LoopGuardConfig')
         if type(self.judge_calls_per_attempt) is not int or not 0 <= self.judge_calls_per_attempt <= 1:
             raise ValueError('judge_calls_per_attempt must be 0 or 1')
+        if type(self.review) is not bool:
+            raise ValueError('review must be a boolean')
+        if self.review and self.judge_calls_per_attempt != 1:
+            raise ValueError('review requires one judge call per attempt')
         if self.experience is not None:
             from .experience_card import ExperienceLink
             if not isinstance(self.experience, ExperienceLink):
@@ -50,6 +57,9 @@ class CloudyfanPlusConfig:
                 'judge_calls_per_attempt': self.judge_calls_per_attempt,
                 'loop_guard': self.loop_guard.descriptor(),
                 'stats_policy': STATS_POLICY,
+                # 只在開啟評審時寫入，既有題目的凍結描述不變。
+                **({'review': {'version': REVIEW_VERSION, 'system': REVIEW_SYSTEM,
+                               'max_issue_chars': MAX_ISSUE_CHARS}} if self.review else {}),
                 **({} if self.experience is None else {'experience': {
                     'facts_version': FACTS_VERSION, 'max_facts_bytes': MAX_CARD_BYTES,
                     'facts_header': FACTS_HEADER, 'stats_snapshot': STATS_SNAPSHOT}})}
@@ -61,6 +71,16 @@ FACTS_VERSION = 'cloudyfan-plus-facts-v1'
 # 路徑一沒有模型池快照；成績以模式版本代碼標記，避免與路徑二的池內成績混算。
 STATS_SNAPSHOT = VERSION
 SUPPORT_EXCLUDED = frozenset({'LOOP_GUARD_STUCK'})
+REVIEW_VERSION = 'cloudyfan-plus-review-v1'
+MAX_ISSUE_CHARS = 300
+REVIEW_SYSTEM = (
+    "You review a candidate answer to a task before it is accepted. The candidate already passed "
+    "the task's public examples; you cannot run any other tests. Check the candidate against every "
+    "rule in the task specification and look for a rule it violates or an edge case it handles "
+    "incorrectly. Only flag a concrete problem you can point to in the specification. Reply with "
+    "exactly one JSON object and nothing else: {\"ok\": true|false, \"issue\": <empty string when "
+    "ok, otherwise one short sentence naming the violated rule>}."
+)
 
 
 def check_experience(config, experience):
@@ -143,6 +163,8 @@ def attempt(core, env, messages, tier, prefix, index, actions, directory, previo
     """單次作答；由迴圈守衛包住工具迴圈。上一次作答的公開驗收檢查碼帶入偵測器，
     修復作答若在工具驗收上撞回同樣的檢查碼即觸發。停用裁判時照舊。"""
     config = core.cloudyfan_plus
+    if config.review:
+        return reviewed_attempt(core, env, messages, tier, prefix, index, actions, directory)
     if config.judge_calls_per_attempt == 0:
         return core._attempt(env, messages, tier, prefix, index, actions, directory)
     from .loop_guard import guarded_attempt
@@ -155,6 +177,62 @@ def attempt(core, env, messages, tier, prefix, index, actions, directory, previo
     return guarded_attempt(core, env, messages, tier, prefix, index, actions, directory,
                            judge=config.judge, settings=config.loop_guard,
                            judge_calls=config.judge_calls_per_attempt, seed_checks=seed)
+
+
+def parse_review(content):
+    """嚴格解析評審 JSON；不合規回 None。"""
+    import json
+    try:
+        body = json.loads(content) if isinstance(content, str) else None
+    except ValueError:
+        return None
+    if (not isinstance(body, dict) or set(body) != {'ok', 'issue'} or type(body['ok']) is not bool
+            or not isinstance(body['issue'], str) or (not body['ok'] and not body['issue'].strip())):
+        return None
+    return {'ok': body['ok'], 'issue': body['issue'].strip()[:MAX_ISSUE_CHARS]}
+
+
+def reviewed_attempt(core, env, messages, tier, prefix, index, actions, directory):
+    """一般作答；公開驗收通過時由裁判審一次。評審呼叫失敗或格式不合就照公開驗收結果放行
+    （不因評審故障多花錢），並照實記錄。評審紀錄另存 ``review-a<i>.json``。"""
+    import json
+    from . import client as transport
+    from .advisor import judge_call_id
+    from .engine import _encoded, _save
+    from .privacy import PolicyDenied
+    attempt = core._attempt(env, messages, tier, prefix, index, actions, directory)
+    record = {'version': REVIEW_VERSION, 'attempt': index, 'calls': [], 'outcome': 'not_reviewed'}
+    attempt['review'] = record
+    if attempt['public'].get('passed') is not True:
+        return attempt
+    profile = core.cloudyfan_plus.judge
+    if core.execution_policy is not None:
+        location = profile.get('execution_location')
+        core.execution_policy.require('generation', location)
+        if not isinstance(location, str) or not location.startswith('cloud:'):
+            raise PolicyDenied('generation', 'backend_location_mismatch')
+    task_prompt = next(m['content'] for m in messages if m['role'] == 'user')
+    review_messages = [{'role': 'system', 'content': REVIEW_SYSTEM},
+                       {'role': 'user', 'content': _encoded({'task': task_prompt,
+                                                             'candidate': attempt['final']}).decode()}]
+    cid = judge_call_id(prefix, index)
+    payload = core.generation_payload(review_messages, profile, prefix, None)
+    raw, info = core._checked(cid, transport.CHAT, payload, profile['accepted_models'],
+                              profile['provider_name'], allow_rejection=True)
+    record['calls'].append({'tier': 'judge', **info})
+    verdict = None
+    if info.get('provider_rejected'):
+        record['outcome'] = 'review_rejected'
+    else:
+        verdict = parse_review(json.loads(raw['raw'])['choices'][0]['message'].get('content'))
+        record['outcome'] = 'review_invalid' if verdict is None else ('approved' if verdict['ok'] else 'flagged')
+    record['verdict'] = verdict
+    if record['outcome'] == 'flagged':
+        attempt['public_before_review'] = attempt['public']
+        attempt['public'] = core.diagnostic_contract.project(
+            {'passed': False, 'checks': ['REVIEWER_FLAGGED', 'review: ' + verdict['issue']]})
+    _save(directory / f'review-a{index}.json', record)
+    return attempt
 
 
 def outcomes(core, result):

@@ -223,10 +223,19 @@ CALIBRATION_SYSTEM = ('You are solving a self-contained reasoning task. Everythi
 
 
 def calibrate(root, tasks, target, *, openrouter_key=None, anthropic_key=None, cap_usd, transports=None,
-              max_tokens=16000, max_input_bytes=16384, anthropic_workspace_id=None, rejection_policy_source=None):
+              max_tokens=16000, max_input_bytes=16384, anthropic_workspace_id=None, rejection_policy_source=None,
+              blind=False):
     """難度校準：每題用同一個模型作答；所有層都設成這個模型，所以答錯時的修正也由它自己做。
     回傳每題是否首答通過、最終是否通過、作答次數、檢查碼與費用；報告不含標準答案。"""
     from .hard_tasks import HardTaskEnvironment
+    environment, contract_version = HardTaskEnvironment, 'hard-tasks-calibration-v1'
+    if blind:
+        # 盲測題的難度校準：只看公開範例作答與修正，事後以隱藏測試量「誤放行」比例。
+        from .code_sandbox import sandbox_available
+        from .code_tasks import BlindCodeEnvironment
+        if not sandbox_available():
+            raise RuntimeError('Blind code tasks require sandbox-exec; refusing before any paid request')
+        environment, contract_version = BlindCodeEnvironment, 'code-tasks-blind-calibration-v1'
     root = Path(root)
     key = openrouter_key if target['vendor'] == 'openrouter' else anthropic_key
     if not key:
@@ -267,8 +276,8 @@ def calibrate(root, tasks, target, *, openrouter_key=None, anthropic_key=None, c
     for task in tasks:
         row = {'id': task['id'], 'family': task['family'], 'level': task['level']}
         try:
-            result = runner.run('cal-' + task['id'], {'prompt': task['prompt']}, lambda t=task: HardTaskEnvironment(t),
-                                contract_version='hard-tasks-calibration-v1', mode='open_source_first')
+            result = runner.run('cal-' + task['id'], {'prompt': task['prompt']}, lambda t=task: environment(t),
+                                contract_version=contract_version, mode='open_source_first')
             calls = [call for attempt in result['attempts'] for call in attempt['calls']]
             last = result['attempts'][-1] if result['attempts'] else {}
             row.update(status=result['status'], first_pass=result['first_public_pass'],
@@ -277,6 +286,11 @@ def calibrate(root, tasks, target, *, openrouter_key=None, anthropic_key=None, c
                        output_tokens=sum((c.get('usage') or {}).get('completion_tokens') or 0 for c in calls),
                        provider_rejected=any(c.get('provider_rejected') for c in calls),
                        cost_usd=result['costs']['api_usd'], wall_seconds=result.get('wall_seconds'))
+            if blind:
+                row.update({k: v for k, v in _hidden_fields(result, task).items()
+                            if k in ('hidden_by_attempt', 'public_by_attempt', 'hidden_first_pass',
+                                     'hidden_final_pass', 'false_accept', 'hidden_counts')})
+                row['first_false_accept'] = row['first_pass'] is True and row['hidden_first_pass'] is not True
         except BudgetError as error:
             row.update(status='not_run', reason='budget: ' + str(error))
         except Exception as error:  # 照實記錄，不重試
@@ -289,9 +303,15 @@ def calibrate(root, tasks, target, *, openrouter_key=None, anthropic_key=None, c
         entry['tasks'] += 1
         entry['first_pass'] += r['first_pass'] is True
         entry['final_pass'] += r['final_pass'] is True
+        if blind:
+            for key in ('hidden_first_pass', 'first_false_accept'):
+                entry[key] = entry.get(key, 0) + (r[key] is True)
     known = sum((Decimal(r['cost_usd']) for r in done if r.get('cost_usd') is not None), Decimal(0))
     report = {'stage': 'calibration', 'target': target['address'], 'cap_usd': str(cap_usd), 'rows': rows,
               'summary': {'tasks': len(done), 'first_pass': sum(r['first_pass'] is True for r in done),
+                          **({'hidden_first_pass': sum(r['hidden_first_pass'] is True for r in done),
+                              'first_false_accept': sum(r['first_false_accept'] is True for r in done)}
+                             if blind else {}),
                           'final_pass': sum(r['final_pass'] is True for r in done),
                           'not_completed': len(rows) - len(done), 'known_usd': format(known.normalize(), 'f')},
               'by_family': by_family}
@@ -308,6 +328,17 @@ JEV = {'model': 'typesafe/jev-1.13', 'version': 'typesafe/jev-1.13-20260917', 'p
        'provider_name': 'TypeSafe'}
 
 
+def _policy_valid_until(root):
+    """拒絕費政策的有效期限在資料夾第一次建立時寫下，之後沿用；
+    否則程式重新啟動後設定描述不同，讀不回同一資料夾已完成的題（#81 compare-10）。"""
+    marker = Path(root) / 'rejection-policy-valid-until.txt'
+    if marker.exists():
+        return marker.read_text().strip()
+    value = (datetime.now(timezone.utc) + timedelta(days=3)).isoformat()
+    marker.write_text(value + '\n')
+    return value
+
+
 def _role(target):
     return dict(target['profile'], open_source=True)
 
@@ -315,14 +346,17 @@ def _role(target):
 def _compare_runner(root, *, open_target, pool_targets, advisor_target, judge_target, decision,
                     decision_per_call_usd, openrouter_key, anthropic_key, ledger_exposure_usd, transports=None,
                     max_tokens=16000, max_input_bytes=24576, anthropic_workspace_id=None,
-                    rejection_policy_source=None, max_turns=1, loop_guard_mode='shadow', tools=False):
+                    rejection_policy_source=None, max_turns=1, loop_guard_mode='shadow', tools=False,
+                    advisor_pool=None):
     """組出比較用的 BudgetedCore（同一個 Core、收據與預算庫）。預算庫的授權是「帳本暫扣上限」，
     只用來容納未核帳呼叫的保守暫扣，不是要花的錢；實際花費上限由 ``compare`` 另外檢查。"""
     from .advisor import AdvisorConfig
     from .cloudyfan_plus import CloudyfanPlusConfig
     root = Path(root)
     transports = transports or {}
-    anthropic_prices = {t['vendor_model']: t['price'] for t in pool_targets.values() if t['vendor'] == 'anthropic'}
+    # 首答層、顧問與裁判也可能走 Anthropic（盲測），價格要一併交給轉接層。
+    anthropic_prices = {t['vendor_model']: t['price'] for t in (open_target, advisor_target, judge_target,
+                                                                  *pool_targets.values()) if t['vendor'] == 'anthropic'}
     vendors = {'anthropic': AnthropicVendor(anthropic_key, anthropic_prices, transport=transports.get('anthropic'),
                                             workspace_id=anthropic_workspace_id)}
     http = httpx.Client(transport=VendorTransport(transports.get('openrouter') or httpx.HTTPTransport(), vendors),
@@ -338,18 +372,27 @@ def _compare_runner(root, *, open_target, pool_targets, advisor_target, judge_ta
         policy = Text429FeePolicy(source, hashlib.sha256(source.read_bytes()).hexdigest(),
                                   [{'model': t['vendor_model'], 'provider': t['profile']['provider'],
                                     'provider_name': t['profile']['provider_name']} for t in openrouter_targets],
-                                  valid_until=(datetime.now(timezone.utc) + timedelta(days=3)).isoformat())
-    client = Client(http, openrouter_key, root / 'receipts', rejection_fee_policy=policy)
+                                  valid_until=_policy_valid_until(root))
+    # 盲測的 xhigh 長答可能超過預設 180 秒；Anthropic 轉接層本身等 600 秒。
+    client = Client(http, openrouter_key, root / 'receipts', rejection_fee_policy=policy,
+                    chat_timeout_s=600 if advisor_pool is not None else 180)
     store = BudgetStore(root / 'budget.sqlite')
     if store.report()['authorization'] is None:
         store.authorize(Authorization('pilot-ledger-exposure-only', Decimal(str(ledger_exposure_usd)),
                                       (datetime.now(timezone.utc) + timedelta(days=3)).isoformat()))
     profiles = {'open_source': dict(open_target['profile']),
                 **{tier: dict(pool_targets[tier]['profile']) for tier in ('low', 'mid', 'high')}}
-    advisor = AdvisorConfig(advisor=_role(advisor_target), judge=_role(judge_target),
-                            score_snapshot='pilot-81-20261119')
     from .loop_guard import LoopGuardConfig
-    plus = CloudyfanPlusConfig(judge=_role(judge_target), loop_guard=LoopGuardConfig(mode=loop_guard_mode))
+    if advisor_pool is None:
+        advisor = AdvisorConfig(advisor=_role(advisor_target), judge=_role(judge_target),
+                                score_snapshot='pilot-81-20261119')
+        plus = CloudyfanPlusConfig(judge=_role(judge_target), loop_guard=LoopGuardConfig(mode=loop_guard_mode))
+    else:
+        # 盲測（2026-11-24）：顧問只分派、可派 Sonnet，不用裁判與迴圈守衛；路徑一加強版只開交卷前評審。
+        advisor = AdvisorConfig(advisor=_role(advisor_target), judge=_role(judge_target),
+                                score_snapshot='blind-20261124', pool=advisor_pool, delegate_only=True,
+                                judge_calls_per_attempt=0)
+        plus = CloudyfanPlusConfig(judge=_role(judge_target), review=True)
     prices = {t['address']: t['price'] for t in (open_target, advisor_target, judge_target, *pool_targets.values())}
     prices[decision['version']] = {'per_call_usd': str(decision_per_call_usd)}
     verifier = ListPriceBounds(prices, max_input_bytes=max_input_bytes, max_output_tokens=max_tokens,
@@ -375,7 +418,7 @@ def compare_worst_case_usd(*, max_tokens=16000, max_input_bytes=24576, max_turns
 
 
 def compare(root, tasks, *, cap_usd, openrouter_key, anthropic_key, ledger_exposure_usd='100', arms=ARMS,
-            order_seed=0, tools=False, **setup):
+            order_seed=0, tools=False, blind=False, **setup):
     """#81 三組比較：每題依輪替的順序在選定的組別各跑一次。
 
     ``cap_usd`` 是**實際花費上限**：每跑一題之前檢查「帳本已知花費＋這題最壞花費」，超過就不送出（記為
@@ -384,6 +427,15 @@ def compare(root, tasks, *, cap_usd, openrouter_key, anthropic_key, ledger_expos
     from .hard_tasks import HardTaskEnvironment, HardToolTaskEnvironment, tool_prompt
     environment = HardToolTaskEnvironment if tools else HardTaskEnvironment
     contract_version = 'hard-tasks-tools-compare-v1' if tools else 'hard-tasks-compare-v1'
+    if blind:
+        if tools:
+            raise ValueError('Blind code tasks do not use the check tool')
+        from .code_tasks import BlindCodeEnvironment
+        from .code_sandbox import sandbox_available
+        if not sandbox_available():
+            # 沒有隔離就無法驗收，每題都會被當成失敗而升級、白花錢；在任何請求前拒跑。
+            raise RuntimeError('Blind code tasks require sandbox-exec; refusing before any paid request')
+        environment, contract_version = BlindCodeEnvironment, 'code-tasks-blind-v1'
     if not openrouter_key or not anthropic_key:
         raise ValueError('Both OpenRouter and Anthropic keys are required')
     unknown = set(arms) - set(ALL_ARMS)
@@ -411,17 +463,67 @@ def compare(root, tasks, *, cap_usd, openrouter_key, anthropic_key, ledger_expos
                     prompt = tool_prompt(task) if tools else task['prompt']
                     result = runner.run(run_id, {'prompt': prompt}, lambda t=task: environment(t),
                                         contract_version=contract_version, mode=arm)
-                row.update(_compare_row(result))
+                row.update(_compare_row(result, task, blind))
             except BudgetError as error:
                 row.update(status='not_run', reason='budget: ' + str(error))
             except Exception as error:  # 照實記錄，不重試
                 row.update(status='error', reason=type(error).__name__ + ': ' + str(error)[:300])
             rows.append(row)
-    _write_compare_report(root, rows, arms, cap_usd, ledger_exposure_usd, runner.store.report())
+    _write_compare_report(root, rows, arms, cap_usd, ledger_exposure_usd, runner.store.report(), blind=blind)
     return rows
 
 
-def _compare_row(result):
+ROLE_TIERS = ('advisor', 'judge')
+SONNET = 'claude-sonnet-5-5'
+
+
+def _all_calls(result):
+    """一題的全部呼叫（作答、Jev、顧問、迴圈守衛、評審），供三種成本重算。"""
+    calls = [c for a in result['attempts'] for c in a['calls']]
+    calls += [c for a in result['attempts'] for c in (a.get('loop_guard') or {}).get('calls', [])]
+    calls += [c for a in result['attempts'] for c in (a.get('review') or {}).get('calls', [])]
+    calls += (result.get('selection') or {}).get('calls', [])
+    calls += (result.get('advisor') or {}).get('calls', [])
+    return calls
+
+
+def cost_views(result):
+    """真實成本；假設一：顧問與裁判算 0；假設二：再加 Sonnet 算 0（不論首答或被分派）。
+    有任何一筆金額未知時三者都回 None。"""
+    real = result['costs'].get('api_usd')
+    if real is None:
+        return {'real_usd': None, 'roles_zero_usd': None, 'roles_sonnet_zero_usd': None}
+    roles = sonnet = Decimal(0)
+    for call in _all_calls(result):
+        amount = Decimal(str(call.get('cost_usd') or 0))
+        if call.get('tier') in ROLE_TIERS:
+            roles += amount
+        elif SONNET in str(call.get('model') or ''):
+            sonnet += amount
+    real = Decimal(real)
+    return {'real_usd': str(real), 'roles_zero_usd': str(real - roles),
+            'roles_sonnet_zero_usd': str(real - roles - sonnet)}
+
+
+def _hidden_fields(result, task):
+    """盲測事後計分：每次作答的程式碼跑隱藏測試；作答過程從未讀到這些結果。"""
+    from .code_tasks import grade_hidden
+    graded = [grade_hidden(task, a.get('final') or '') for a in result['attempts']]
+    public = [a['public']['passed'] for a in result['attempts']]
+    final_public = public[-1] if public else None
+    hidden = [g['passed'] for g in graded]
+    return {'hidden_by_attempt': hidden, 'public_by_attempt': public,
+            'hidden_first_pass': hidden[0] if hidden else False,
+            'hidden_final_pass': hidden[-1] if hidden else False,
+            # 誤放行：最後交出的答案公開驗收（或評審）放行，隱藏測試沒過。
+            'false_accept': final_public is True and not (hidden[-1] if hidden else False),
+            # 錯殺：已經是對的答案卻沒被放行，又往上升級。
+            'needless_escalations': sum(1 for i in range(len(hidden) - 1) if hidden[i] and public[i] is not True),
+            'review_flags': sum(1 for a in result['attempts'] if (a.get('review') or {}).get('outcome') == 'flagged'),
+            'hidden_counts': [[g['hidden_passed'], g['hidden_total']] for g in graded]}
+
+
+def _compare_row(result, task=None, blind=False):
     calls = [c for a in result['attempts'] for c in a['calls']]
     advisor = (result.get('advisor') or {}).get('decision') or {}
     last = result['attempts'][-1] if result['attempts'] else {}
@@ -436,10 +538,14 @@ def _compare_row(result):
             'formal_usd': result['costs']['hypothetical_open_source_zero_usd'],
             'wall_seconds': result.get('wall_seconds'),
             'stops': [a['stop'] for a in result['attempts']],
-            'tool_calls': last.get('cumulative_actions', 0)}
+            'tool_calls': last.get('cumulative_actions', 0),
+            **cost_views(result),
+            **({'advisor_settings': [a.get('setting') for a in result['attempts']]}
+               if result.get('advisor') else {}),
+            **(_hidden_fields(result, task) if blind else {})}
 
 
-def _write_compare_report(root, rows, arms, cap_usd, ledger_exposure_usd, ledger):
+def _write_compare_report(root, rows, arms, cap_usd, ledger_exposure_usd, ledger, blind=False):
     def total(items, key):
         return format(sum((Decimal(r[key]) for r in items if r.get(key) is not None), Decimal(0)).normalize(), 'f')
     summary = {}
@@ -457,8 +563,17 @@ def _write_compare_report(root, rows, arms, cap_usd, ledger_exposure_usd, ledger
                         'advisor_answer': sum(r['advisor_outcome'] == 'answer' for r in done),
                         'advisor_delegate': sum(r['advisor_outcome'] == 'delegate' for r in done),
                         'advisor_incomplete': sum(r['advisor_outcome'] == 'incomplete' for r in done),
-                        'provider_rejected': sum(r['provider_rejected'] for r in done)}
-    report = {'stage': 'compare', 'spend_cap_usd': str(cap_usd), 'ledger_exposure_usd': str(ledger_exposure_usd),
+                        'provider_rejected': sum(r['provider_rejected'] for r in done),
+                        'real_usd': total(done, 'real_usd'), 'roles_zero_usd': total(done, 'roles_zero_usd'),
+                        'roles_sonnet_zero_usd': total(done, 'roles_sonnet_zero_usd')}
+        if blind:
+            summary[arm].update({
+                'hidden_first_pass': sum(r['hidden_first_pass'] is True for r in done),
+                'hidden_final_pass': sum(r['hidden_final_pass'] is True for r in done),
+                'false_accept': sum(r['false_accept'] is True for r in done),
+                'needless_escalations': sum(r['needless_escalations'] for r in done),
+                'review_flags': sum(r['review_flags'] for r in done)})
+    report = {'stage': 'blind-compare' if blind else 'compare', 'spend_cap_usd': str(cap_usd), 'ledger_exposure_usd': str(ledger_exposure_usd),
               'ledger': {k: ledger[k] for k in ('known_usd', 'verified_usd', 'provisional_hold_usd', 'unknown_events')},
               'arms': summary, 'rows': rows}
     (root / 'compare-report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
@@ -484,6 +599,32 @@ def pilot_setup():
                              'mid': anthropic_target('claude-sonnet-5-5', effort='medium'),
                              'high': anthropic_target('claude-fable-5-2', effort='high')},
             'decision': JEV, 'decision_per_call_usd': '0.01'}
+
+
+BLIND_ARMS = ('fixed_high', 'cloudyfan', 'cloudyfan_plus', 'advisor_first')
+
+
+def _price_note(target):
+    price = target['price']
+    return f"US${price['input_per_mtok']} input / US${price['output_per_mtok']} output per million tokens"
+
+
+def blind_setup():
+    """2026-11-24 使用者指定的盲測角色：除 Jev 外全走 Anthropic。
+
+    首答層 Sonnet 5.5 xhigh；低池 Opus 5.5 low、中池 Opus 5.5 xhigh、高池 Fable 5.2 xhigh；
+    顧問與評審 Haiku 5.5 xhigh。顧問只分派，可派到 Sonnet 與三個池，候選清單附價格。"""
+    sonnet = anthropic_target(SONNET, effort='xhigh')
+    haiku = anthropic_target('claude-haiku-5-5', effort='xhigh')
+    pools = {'low': anthropic_target('claude-opus-5-5', effort='low'),
+             'mid': anthropic_target('claude-opus-5-5', effort='xhigh'),
+             'high': anthropic_target('claude-fable-5-2', effort='xhigh')}
+    labelled = (('sonnet-xhigh', 'low', sonnet), ('opus-low', 'low', pools['low']),
+                ('opus-xhigh', 'mid', pools['mid']), ('fable-xhigh', 'high', pools['high']))
+    advisor_pool = {key: {**target['profile'], 'tier': tier, 'price': _price_note(target)}
+                    for key, tier, target in labelled}
+    return {'open_target': sonnet, 'advisor_target': haiku, 'judge_target': haiku, 'pool_targets': pools,
+            'advisor_pool': advisor_pool, 'decision': JEV, 'decision_per_call_usd': '0.01'}
 
 
 def frozen_tasks(limit=None, *, interleave=True, only=None, path=FROZEN_TASKS):
@@ -539,11 +680,19 @@ def main(argv=None):
     cal.add_argument('--openrouter-key-file', type=Path)
     cal.add_argument('--openrouter-env-file', type=Path)
     cal.add_argument('--openrouter-env-name', default='OPENROUTER_API_KEY')
-    cal.add_argument('--openrouter-model', required=True)
-    cal.add_argument('--openrouter-provider', required=True)
-    cal.add_argument('--openrouter-provider-name', required=True)
-    cal.add_argument('--openrouter-input-price', required=True)
-    cal.add_argument('--openrouter-output-price', required=True)
+    cal.add_argument('--openrouter-model')
+    cal.add_argument('--openrouter-provider')
+    cal.add_argument('--openrouter-provider-name')
+    cal.add_argument('--openrouter-input-price')
+    cal.add_argument('--openrouter-output-price')
+    cal.add_argument('--blind', action='store_true', help='改程式題（盲測題集）校準；用 --anthropic-model 指定模型')
+    cal.add_argument('--anthropic-model', help='盲測校準用的 Anthropic 模型，例如 claude-sonnet-5-5')
+    cal.add_argument('--effort', choices=('low', 'medium', 'high', 'xhigh', 'max'), default='xhigh')
+    cal.add_argument('--task', action='append', default=[], help='盲測校準只跑指定題目編號')
+    cal.add_argument('--anthropic-env-file', type=Path)
+    cal.add_argument('--anthropic-key-file', type=Path)
+    cal.add_argument('--anthropic-env-name', default='ANTHROPIC_API_KEY')
+    cal.add_argument('--anthropic-workspace-id')
     cal.add_argument('--rejection-policy-source', type=Path)
     cal.add_argument('--confirm-paid', action='store_true')
     cmp = sub.add_parser('compare', help='三組比較：凍結的難題在各路徑上各跑一次（會發出真實付費請求）')
@@ -560,6 +709,8 @@ def main(argv=None):
     cmp.add_argument('--max-turns', type=int, help='每次作答的回合上限；工具題預設 6，否則 1')
     cmp.add_argument('--max-input-bytes', type=int, help='每次請求的輸入上限；工具題預設 131072，否則 24576')
     cmp.add_argument('--loop-guard', choices=('shadow', 'active'), default='shadow', help='路徑一加強版的迴圈守衛模式')
+    cmp.add_argument('--blind', action='store_true',
+                     help='盲測：改程式題、只看公開測試，事後用隱藏測試計分；角色依 blind_setup')
     cmp.add_argument('--openrouter-env-file', type=Path)
     cmp.add_argument('--openrouter-key-file', type=Path)
     cmp.add_argument('--openrouter-env-name', default='OPENROUTER_API_KEY')
@@ -606,16 +757,25 @@ def main(argv=None):
     if args.command == 'compare':
         if not args.confirm_paid:
             parser.error('paid_requests_require_--confirm-paid')
-        setup_ = pilot_setup()
+        if args.blind and (args.tools or args.high_model or args.high_effort):
+            parser.error('blind_uses_fixed_roles_without_tools')
+        setup_ = blind_setup() if args.blind else pilot_setup()
         if args.high_model or args.high_effort:
             current = setup_['pool_targets']['high']
             setup_['pool_targets']['high'] = anthropic_target(args.high_model or current['vendor_model'],
                                                               effort=args.high_effort or current['profile']['effort'])
-        rows = compare(args.root, frozen_tasks(args.limit, only=args.task or None), **setup_,
+        if args.blind:
+            from .code_tasks import frozen_code_tasks
+            tasks = frozen_code_tasks(limit=args.limit)
+            if args.task:
+                tasks = [t for t in tasks if t['id'] in set(args.task)]
+        else:
+            tasks = frozen_tasks(args.limit, only=args.task or None)
+        rows = compare(args.root, tasks, **setup_, blind=args.blind,
                        ledger_exposure_usd=args.ledger_exposure,
                        openrouter_key=key_from_args(args, 'openrouter'),
                        anthropic_key=key_from_args(args, 'anthropic'), cap_usd=args.cap,
-                       arms=tuple(args.arm) or ARMS, max_tokens=args.max_tokens,
+                       arms=tuple(args.arm) or (BLIND_ARMS if args.blind else ARMS), max_tokens=args.max_tokens,
                        anthropic_workspace_id=args.anthropic_workspace_id,
                        rejection_policy_source=args.rejection_policy_source, tools=args.tools,
                        max_turns=args.max_turns or (6 if args.tools else 1),
@@ -627,6 +787,22 @@ def main(argv=None):
     if args.command == 'calibrate':
         if not args.confirm_paid:
             parser.error('paid_requests_require_--confirm-paid')
+        if args.blind:
+            if not args.anthropic_model:
+                parser.error('blind_calibration_requires_--anthropic-model')
+            from .code_tasks import frozen_code_tasks
+            tasks = [t for t in frozen_code_tasks() if (not args.task or t['id'] in set(args.task))
+                     and (not args.family or t['family'] in args.family)]
+            rows = calibrate(args.root, tasks, anthropic_target(args.anthropic_model, effort=args.effort),
+                             anthropic_key=key_from_args(args, 'anthropic'), cap_usd=args.cap,
+                             max_tokens=args.max_tokens, max_input_bytes=24576,
+                             anthropic_workspace_id=args.anthropic_workspace_id, blind=True)
+            for row in rows:
+                print(json.dumps(row, ensure_ascii=False), flush=True)
+            return 0
+        if not all((args.openrouter_model, args.openrouter_provider, args.openrouter_provider_name,
+                    args.openrouter_input_price, args.openrouter_output_price)):
+            parser.error('openrouter_calibration_requires_model_provider_and_prices')
         from . import hard_tasks
         tasks = [t for t in hard_tasks.candidates(args.seeds_per_level)
                  if not args.family or t['family'] in args.family]

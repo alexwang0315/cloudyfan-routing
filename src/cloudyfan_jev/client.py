@@ -156,12 +156,14 @@ def rate_limit_rejection(record, requested_model, accepted_models, provider_name
 
 
 class Client(ReceiptStore):
-    def __init__(self, http, key, root: Path, *, rejection_fee_policy=None):
+    def __init__(self, http, key, root: Path, *, rejection_fee_policy=None, chat_timeout_s=180):
         if not isinstance(key, str) or not key:
             raise ValueError("A nonempty credential must be supplied without logging it")
         super().__init__(root)
         self.http, self.key = http, key
         self.rejection_fee_policy = rejection_fee_policy
+        # 單次生成請求的等待上限；高推理強度的長答可調高（盲測用 600 秒），避免送出後才逾時留下未知費用。
+        self.chat_timeout_s = chat_timeout_s
 
     def _original_record(self, directory):
         record = super()._load(directory)
@@ -270,7 +272,7 @@ class Client(ReceiptStore):
                 response = (self.http.send(prepared, follow_redirects=False) if dispatch is not None else
                     self.http.post(url, json=payload,
                     headers={"Authorization": "Bearer " + self.key, "X-OpenRouter-Metadata": "enabled"},
-                    timeout=180, follow_redirects=False))
+                    timeout=self.chat_timeout_s, follow_redirects=False))
                 record = {"call_id": cid, "request_sha256": request_hash,
                           "http_status": response.status_code, "elapsed_ms": (perf_counter() - started) * 1000,
                           "raw": response.text.replace(self.key, "[REDACTED]"),

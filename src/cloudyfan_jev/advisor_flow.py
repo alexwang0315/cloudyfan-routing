@@ -30,9 +30,27 @@ ADVISOR_SYSTEM = (
     "\"recommendations\": [{\"setting\": <pool setting id>, \"tier\": <its tier>, "
     "\"reason\": <short reason>}, ...]}. Never recommend a setting that is not in the pool."
 )
+# 只分派模式（2026-11-24 盲測，使用者決定）：顧問不自己作答，只依價格與能力排出候選。
+ADVISOR_SYSTEM_DELEGATE_ONLY = (
+    "You are the advisor of a model-routing service. Read the public task and the list of "
+    "in-pool model settings, including each setting's price when given. Do not solve the task. "
+    "Delegate it: recommend at least two in-pool settings in priority order, putting first the "
+    "cheapest setting that is likely to solve the task correctly, followed by fallbacks. "
+    "Reply with exactly one JSON object and nothing else: "
+    "{\"mode\": \"delegate\", \"recommendations\": [{\"setting\": <pool setting id>, "
+    "\"tier\": <its tier>, \"reason\": <short reason>}, ...]}. "
+    "Never recommend a setting that is not in the pool."
+)
 _DECISION_KEYS = {'mode', 'answer', 'recommendations'}
 _RECOMMENDATION_KEYS = {'setting', 'tier', 'reason'}
 _POOL_FIELDS = ('model_version', 'effort', 'provider_name')
+# 選用欄位：池內設定有標價格說明時一併列給顧問（只分派模式使用）。
+_POOL_OPTIONAL_FIELDS = ('price',)
+
+
+def advisor_system(config):
+    """凍結進描述的顧問系統提示；只分派模式用另一段固定文字。"""
+    return ADVISOR_SYSTEM_DELEGATE_ONLY if getattr(config, 'delegate_only', False) else ADVISOR_SYSTEM
 
 
 def _now():
@@ -57,11 +75,12 @@ def _text(value):
     return isinstance(value, str) and bool(value.strip())
 
 
-def parse_decision(content, pool):
+def parse_decision(content, pool, *, delegate_only=False):
     """嚴格解析顧問 JSON，逐項比對池內設定；不合規的建議作廢並記錄原因。
 
     回傳的 ``outcome`` 為 ``answer``／``delegate``／``incomplete``。解析失敗或
     建議全部作廢都視為顧問未完成（ADR 0034 第 4 點），此時不採用其回答。
+    只分派模式下顧問若仍自行作答，答案捨棄不用、照建議分派，並記 ``answer_ignored``。
     """
     def incomplete(reason, voided=()):
         return {'outcome': 'incomplete', 'incomplete_reason': reason, 'answer': None,
@@ -79,6 +98,9 @@ def parse_decision(content, pool):
     answer = body.get('answer')
     if (mode == 'answer' and not _text(answer)) or (mode == 'delegate' and answer is not None):
         return incomplete('invalid_schema')
+    ignored = delegate_only and mode == 'answer'
+    if ignored:
+        mode, answer = 'delegate', None
     items = body.get('recommendations')
     if not isinstance(items, list) or len(items) < 2:
         return incomplete('too_few_recommendations')
@@ -100,23 +122,27 @@ def parse_decision(content, pool):
         voided.append({'rank': rank, 'recommendation': item, 'reason': reason})
     if not valid:
         return incomplete('no_valid_recommendations', voided)
-    return {'outcome': mode, 'incomplete_reason': None, 'answer': answer if mode == 'answer' else None,
-            'recommendations': valid, 'voided': voided}
+    decision = {'outcome': mode, 'incomplete_reason': None, 'answer': answer if mode == 'answer' else None,
+                'recommendations': valid, 'voided': voided}
+    if ignored:
+        decision['answer_ignored'] = True
+    return decision
 
 
-def advisor_messages(task, pool, card=None):
+def advisor_messages(task, pool, card=None, *, delegate_only=False):
     """顧問輸入：只放公開題目與池內設定識別；私有欄位一律擋下。
     有凍結的經驗卡時（#76）附上卡片，並在系統提示補一段固定說明。"""
     routing._reject_private(task)
     public = routing.project_public({'task': task})
-    listing = [{'setting': key, 'tier': profile['tier'], **{k: profile[k] for k in _POOL_FIELDS}}
+    listing = [{'setting': key, 'tier': profile['tier'], **{k: profile[k] for k in _POOL_FIELDS},
+                **({k: profile[k] for k in _POOL_OPTIONAL_FIELDS if k in profile} if delegate_only else {})}
                for key, profile in pool.items()]
     content = {'task': public['task'], 'pool': listing}
-    system = ADVISOR_SYSTEM
+    system = ADVISOR_SYSTEM_DELEGATE_ONLY if delegate_only else ADVISOR_SYSTEM
     if card is not None:
         from .experience_card import ADVISOR_NOTE, advisor_view
         content['experience_card'] = advisor_view(card)
-        system = ADVISOR_SYSTEM + ' ' + ADVISOR_NOTE
+        system = system + ' ' + ADVISOR_NOTE
     routing._reject_private(content)
     return [{'role': 'system', 'content': system},
             {'role': 'user', 'content': json.dumps(content, sort_keys=True, ensure_ascii=False)}]
@@ -130,7 +156,8 @@ def _consult(core, prefix, task, pool, card=None):
         core.execution_policy.require('generation', location)
         if not isinstance(location, str) or not location.startswith('cloud:'):
             raise PolicyDenied('generation', 'backend_location_mismatch')
-    messages = advisor_messages(task, pool, card)
+    delegate_only = core.advisor_first.delegate_only
+    messages = advisor_messages(task, pool, card, delegate_only=delegate_only)
     cid = advisor_call_id(prefix)
     payload = core.generation_payload(messages, profile, prefix, None)
     record, info = core._checked(cid, transport.CHAT, payload, profile['accepted_models'],
@@ -140,7 +167,7 @@ def _consult(core, prefix, task, pool, card=None):
         return calls, {'outcome': 'incomplete', 'incomplete_reason': 'provider_rejected', 'answer': None,
                        'recommendations': [], 'voided': []}
     message = json.loads(record['raw'])['choices'][0]['message']
-    return calls, parse_decision(message.get('content'), pool)
+    return calls, parse_decision(message.get('content'), pool, delegate_only=delegate_only)
 
 
 def run(core, run_id, task, environment_factory, *, contract_version, experience=None):
@@ -153,7 +180,7 @@ def run(core, run_id, task, environment_factory, *, contract_version, experience
             raise ValueError('Contract experience requires an ExperienceLink in AdvisorConfig')
         experience_card.check_context(experience)
     # 任何 I/O 前先擋私有欄位，並確認候選所依據的評分快照仍有效。
-    advisor_messages(task, pool)
+    advisor_messages(task, pool, delegate_only=config.delegate_only)
     directory = Path(core.client.root) / 'runs' / run_id
     if directory.is_symlink():
         raise ValueError('Run directory cannot be a symlink')

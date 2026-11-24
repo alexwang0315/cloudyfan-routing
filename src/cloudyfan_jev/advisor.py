@@ -60,6 +60,8 @@ class AdvisorConfig:
     experience: object = field(default=None)
     # 由 from_snapshot 建立時記錄評分快照的有效期限；過期後路徑二在任何呼叫前拒跑。
     snapshot_valid_until: str | None = field(default=None)
+    # 只分派（2026-11-24 盲測）：顧問不自己作答；池內設定可附 ``price`` 說明供顧問比價。
+    delegate_only: bool = False
 
     def __post_init__(self):
         for role in ROLES:
@@ -73,6 +75,8 @@ class AdvisorConfig:
             raise ValueError('judge_calls_per_attempt must be 0 or 1')
         if not isinstance(self.loop_guard, LoopGuardConfig):
             raise ValueError('loop_guard requires a LoopGuardConfig')
+        if type(self.delegate_only) is not bool:
+            raise ValueError('delegate_only must be a boolean')
         if self.pool is not None:
             object.__setattr__(self, 'pool', deepcopy(self.pool))
         if self.experience is not None:
@@ -95,8 +99,10 @@ class AdvisorConfig:
         return deepcopy(pool)
 
     def descriptor(self, profiles):
-        from .advisor_flow import ADVISOR_SYSTEM, FLOW_VERSION
-        return {'version': VERSION, 'flow': {'version': FLOW_VERSION, 'advisor_system': ADVISOR_SYSTEM},
+        from .advisor_flow import FLOW_VERSION, advisor_system
+        return {'version': VERSION, 'flow': {'version': FLOW_VERSION, 'advisor_system': advisor_system(self)},
+                # 只分派模式才寫入，既有題目的凍結描述不變。
+                **({'delegate_only': True} if self.delegate_only else {}),
                 'advisor': deepcopy(self.advisor), 'judge': deepcopy(self.judge),
                 'score_snapshot': self.score_snapshot, 'max_attempts': self.max_attempts,
                 'judge_calls_per_attempt': self.judge_calls_per_attempt,

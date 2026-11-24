@@ -332,15 +332,9 @@ class _ApproveEnvironment:
         return {'passed': True, 'checks': []}
 
 
-def review_replay(root, source_root, tasks, target, *, anthropic_key, cap_usd, transports=None,
-                  max_tokens=16000, max_input_bytes=24576, anthropic_workspace_id=None):
-    """離線量評審：把一次盲測校準的首答（已過公開驗收的）原樣交給路徑一加強版的評審，
-    評審提示與訊息格式和 ``cloudyfan_plus.reviewed_attempt`` 相同。對照校準時量到的隱藏測試結果，
-    算抓到幾題錯、誤報幾題對。不重跑首答。"""
-    from .cloudyfan_plus import REVIEW_SYSTEM, parse_review
-    from .engine import _encoded
-    root, source_root = Path(root), Path(source_root)
-    source = {r['id']: r for r in json.loads((source_root / 'calibration-report.json').read_text())['rows']}
+def _single_call_runner(root, target, system, label, *, anthropic_key, cap_usd, transports=None,
+                        max_tokens=16000, max_input_bytes=24576, anthropic_workspace_id=None):
+    """重播用：每題只送一次的 Anthropic 呼叫，照樣經過收據、預算庫與牌價上界。"""
     vendors = {'anthropic': AnthropicVendor(anthropic_key, {target['vendor_model']: target['price']},
                                             transport=(transports or {}).get('anthropic'),
                                             workspace_id=anthropic_workspace_id)}
@@ -350,42 +344,67 @@ def review_replay(root, source_root, tasks, target, *, anthropic_key, cap_usd, t
     client = Client(http, 'no-openrouter-key-configured', root / 'receipts')
     store = BudgetStore(root / 'budget.sqlite')
     if store.report()['authorization'] is None:
-        store.authorize(Authorization('pilot-review-replay', Decimal(str(cap_usd)),
+        store.authorize(Authorization(label, Decimal(str(cap_usd)),
                                       (datetime.now(timezone.utc) + timedelta(days=2)).isoformat()))
     profiles = {tier: dict(target['profile']) for tier in ('open_source', 'low', 'mid', 'high')}
     _, decision = example_config()
     verifier = ListPriceBounds({target['address']: target['price']}, max_input_bytes=max_input_bytes,
                                max_output_tokens=max_tokens)
-    core = Core(client, profiles, decision, system=REVIEW_SYSTEM,
+    core = Core(client, profiles, decision, system=system,
                 limits=Limits(max_turns=1, max_tokens=max_tokens, max_context_bytes=max_input_bytes))
-    runner = BudgetedCore(core, store, model_bounds=verifier.model_bounds(), tool_bounds={}, verify_bound=verifier)
+    return BudgetedCore(core, store, model_bounds=verifier.model_bounds(), tool_bounds={}, verify_bound=verifier)
+
+
+def _single_call(runner, run_id, prompt, contract_version):
+    """送一次；回傳回覆文字（供應商拒絕時為 None）與費用欄位。預算或其他錯誤照實寫進列裡，不重試。"""
+    try:
+        result = runner.run(run_id, {'prompt': prompt}, _ApproveEnvironment,
+                            contract_version=contract_version, mode='fixed_high')
+    except BudgetError as error:
+        return None, {'status': 'not_run', 'outcome': 'not_run', 'reason': 'budget: ' + str(error)}
+    except Exception as error:  # 照實記錄，不重試
+        return None, {'status': 'error', 'outcome': 'error',
+                      'reason': type(error).__name__ + ': ' + str(error)[:300]}
+    calls = [c for a in result['attempts'] for c in a['calls']]
+    rejected = any(c.get('provider_rejected') for c in calls)
+    fields = {'status': result['status'], 'cost_usd': result['costs']['api_usd'],
+              'output_tokens': sum((c.get('usage') or {}).get('completion_tokens') or 0 for c in calls)}
+    if rejected:
+        fields['outcome'] = 'rejected'
+    return None if rejected else result['attempts'][-1]['final'], fields
+
+
+def _calibration_rows(source_root):
+    return {r['id']: r for r in json.loads((Path(source_root) / 'calibration-report.json').read_text())['rows']}
+
+
+def review_replay(root, source_root, tasks, target, *, anthropic_key, cap_usd, **options):
+    """離線量評審：把一次盲測校準的首答（已過公開驗收的）原樣交給路徑一加強版的評審，
+    評審提示與訊息格式和 ``cloudyfan_plus.reviewed_attempt`` 相同。對照校準時量到的隱藏測試結果，
+    算抓到幾題錯、誤報幾題對。不重跑首答。"""
+    from .cloudyfan_plus import REVIEW_SYSTEM, parse_review
+    from .engine import _encoded
+    root, source_root = Path(root), Path(source_root)
+    source = _calibration_rows(source_root)
+    runner = _single_call_runner(root, target, REVIEW_SYSTEM, 'pilot-review-replay', anthropic_key=anthropic_key,
+                                 cap_usd=cap_usd, **options)
     rows = []
     for task in tasks:
-        origin = source[task['id']]
         first = json.loads((source_root / 'receipts' / 'runs' / ('cal-' + task['id']) / 'result.json')
                            .read_text())['attempts'][0]
         row = {'id': task['id'], 'family': task['family'], 'level': task['level'],
-               'hidden_first_pass': origin['hidden_first_pass']}
+               'hidden_first_pass': source[task['id']]['hidden_first_pass']}
         if first['public'].get('passed') is not True:
             row.update(status='not_reviewed', outcome='not_reviewed')
             rows.append(row)
             continue
         prompt = _encoded({'task': task['prompt'], 'candidate': first['final']}).decode()
-        try:
-            result = runner.run('review-' + task['id'], {'prompt': prompt}, _ApproveEnvironment,
-                                contract_version='cloudyfan-plus-review-replay-v1', mode='fixed_high')
-            calls = [c for a in result['attempts'] for c in a['calls']]
-            verdict = None if any(c.get('provider_rejected') for c in calls) else parse_review(
-                result['attempts'][-1]['final'])
-            outcome = ('review_rejected' if any(c.get('provider_rejected') for c in calls) else
-                       'review_invalid' if verdict is None else 'approved' if verdict['ok'] else 'flagged')
-            row.update(status=result['status'], outcome=outcome,
-                       issue=(verdict or {}).get('issue', ''), cost_usd=result['costs']['api_usd'],
-                       output_tokens=sum((c.get('usage') or {}).get('completion_tokens') or 0 for c in calls))
-        except BudgetError as error:
-            row.update(status='not_run', outcome='not_run', reason='budget: ' + str(error))
-        except Exception as error:  # 照實記錄，不重試
-            row.update(status='error', outcome='error', reason=type(error).__name__ + ': ' + str(error)[:300])
+        text, fields = _single_call(runner, 'review-' + task['id'], prompt, 'cloudyfan-plus-review-replay-v1')
+        row.update(fields)
+        if 'outcome' not in row:
+            verdict = parse_review(text)
+            row['outcome'] = 'review_invalid' if verdict is None else 'approved' if verdict['ok'] else 'flagged'
+            row['issue'] = (verdict or {}).get('issue', '')
         rows.append(row)
     reviewed = [r for r in rows if r['outcome'] in ('approved', 'flagged')]
     wrong = [r for r in reviewed if r['hidden_first_pass'] is not True]
@@ -399,6 +418,63 @@ def review_replay(root, source_root, tasks, target, *, anthropic_key, cap_usd, t
                           'right': len(right), 'false_flags': sum(r['outcome'] == 'flagged' for r in right),
                           'not_completed': len(rows) - len(reviewed), 'known_usd': format(known.normalize(), 'f')}}
     (root / 'review-replay-report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+    return rows
+
+
+def replay_advisor_pool():
+    """顧問重播的候選：盲測顧問池最前面加上校準用的最便宜首答 Haiku 5.5 low，其餘照 ``blind_setup``。"""
+    haiku = anthropic_target('claude-haiku-5-5', effort='low')
+    return {'haiku-low': {**haiku['profile'], 'tier': 'low', 'price': _price_note(haiku)},
+            **blind_setup()['advisor_pool']}
+
+
+def advisor_replay(root, answers, tasks, target, *, anthropic_key, cap_usd, pool=None, **options):
+    """離線量顧問分派：每題把公開題目與候選清單交給只分派的顧問（提示與訊息格式同 ``advisor_flow``），
+    記下它的第一順位。``answers`` 是 {設定: [校準資料夾...]}；第一順位有現成答案時，
+    用該答案的隱藏測試結果與花費推算路徑二的結果，沒有時記為未量。"""
+    from .advisor_flow import ADVISOR_SYSTEM_DELEGATE_ONLY, advisor_messages, parse_decision
+    root = Path(root)
+    pool = pool or replay_advisor_pool()
+    known_answers = {setting: {k: v for d in dirs for k, v in _calibration_rows(d).items()
+                               if 'hidden_first_pass' in v}
+                     for setting, dirs in answers.items()}
+    runner = _single_call_runner(root, target, ADVISOR_SYSTEM_DELEGATE_ONLY, 'pilot-advisor-replay',
+                                 anthropic_key=anthropic_key, cap_usd=cap_usd, **options)
+    rows = []
+    for task in tasks:
+        messages = advisor_messages({'prompt': task['prompt']}, pool, delegate_only=True)
+        text, fields = _single_call(runner, 'advise-' + task['id'], messages[1]['content'],
+                                    'advisor-first-replay-v1')
+        row = {'id': task['id'], 'family': task['family'], 'level': task['level'], **fields}
+        if 'outcome' not in row:
+            decision = parse_decision(text, pool, delegate_only=True)
+            row['outcome'] = decision['outcome']
+            row['choices'] = [r['setting'] for r in decision['recommendations']]
+            row['reasons'] = [r['reason'] for r in decision['recommendations']]
+            first = row['choices'][0] if row['choices'] else None
+            measured = known_answers.get(first, {}).get(task['id'])
+            row['first'] = first
+            row['answer_hidden_pass'] = None if measured is None else measured['hidden_first_pass']
+            row['answer_cost_usd'] = None if measured is None else measured.get('cost_usd')
+        rows.append(row)
+    done = [r for r in rows if r['outcome'] == 'delegate']
+    by_first = {}
+    for r in done:
+        by_first.setdefault(r['first'], {'tasks': 0, 'measured_right': 0, 'measured_wrong': 0, 'unmeasured': 0})
+        entry = by_first[r['first']]
+        entry['tasks'] += 1
+        key = ('unmeasured' if r['answer_hidden_pass'] is None else
+               'measured_right' if r['answer_hidden_pass'] else 'measured_wrong')
+        entry[key] += 1
+    known = sum((Decimal(r['cost_usd']) for r in rows if r.get('cost_usd') is not None), Decimal(0))
+    report = {'stage': 'advisor_replay', 'target': target['address'], 'effort': target['profile']['effort'],
+              'advisor_system': ADVISOR_SYSTEM_DELEGATE_ONLY, 'pool': pool,
+              'answers': {k: [str(d) for d in v] for k, v in answers.items()}, 'cap_usd': str(cap_usd),
+              'rows': rows,
+              'summary': {'tasks': len(rows), 'delegated': len(done), 'by_first': by_first,
+                          'not_completed': len(rows) - len(done), 'known_usd': format(known.normalize(), 'f')}}
+    (root / 'advisor-replay-report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2,
+                                                                 sort_keys=True))
     return rows
 
 
@@ -823,6 +899,19 @@ def main(argv=None):
     rev.add_argument('--anthropic-env-name', default='ANTHROPIC_API_KEY')
     rev.add_argument('--anthropic-workspace-id')
     rev.add_argument('--confirm-paid', action='store_true')
+    adv = sub.add_parser('advisor-replay', help='把盲測題交給只分派的顧問，記下分派並對照現成答案（會發出真實付費請求）')
+    adv.add_argument('--root', type=Path, required=True)
+    adv.add_argument('--answers', action='append', default=[], help='設定=校準資料夾，可重複，例如 haiku-low=DIR')
+    adv.add_argument('--cap', default='1')
+    adv.add_argument('--task-set', choices=CODE_TASK_SETS, default='v4')
+    adv.add_argument('--task', action='append', default=[])
+    adv.add_argument('--anthropic-model', default='claude-haiku-5-5')
+    adv.add_argument('--effort', choices=('low', 'medium', 'high', 'xhigh', 'max'), default='xhigh')
+    adv.add_argument('--anthropic-env-file', type=Path)
+    adv.add_argument('--anthropic-key-file', type=Path)
+    adv.add_argument('--anthropic-env-name', default='ANTHROPIC_API_KEY')
+    adv.add_argument('--anthropic-workspace-id')
+    adv.add_argument('--confirm-paid', action='store_true')
     run = sub.add_parser('connect', help='階段 0 連線驗證（會發出真實付費請求）')
     run.add_argument('--root', type=Path, required=True, help='這次試跑的新資料夾（收據、帳本、報告）')
     run.add_argument('--cap', default='1', help='這一階段的美元上限')
@@ -884,6 +973,24 @@ def main(argv=None):
                        max_turns=args.max_turns or (6 if args.tools else 1),
                        max_input_bytes=args.max_input_bytes or (131072 if args.tools else 24576),
                        loop_guard_mode=args.loop_guard)
+        for row in rows:
+            print(json.dumps(row, ensure_ascii=False), flush=True)
+        return 0
+    if args.command == 'advisor-replay':
+        if not args.confirm_paid:
+            parser.error('paid_requests_require_--confirm-paid')
+        answers = {}
+        for item in args.answers:
+            setting, _, folder = item.partition('=')
+            if setting not in replay_advisor_pool() or not folder:
+                parser.error('answers_must_be_SETTING=DIR_with_a_pool_setting')
+            answers.setdefault(setting, []).append(Path(folder))
+        from .code_tasks import FROZEN_CODE_TASK_SETS, frozen_code_tasks
+        tasks = [t for t in frozen_code_tasks(path=FROZEN_CODE_TASK_SETS[args.task_set])
+                 if not args.task or t['id'] in set(args.task)]
+        rows = advisor_replay(args.root, answers, tasks, anthropic_target(args.anthropic_model, effort=args.effort),
+                              anthropic_key=key_from_args(args, 'anthropic'), cap_usd=args.cap,
+                              anthropic_workspace_id=args.anthropic_workspace_id)
         for row in rows:
             print(json.dumps(row, ensure_ascii=False), flush=True)
         return 0

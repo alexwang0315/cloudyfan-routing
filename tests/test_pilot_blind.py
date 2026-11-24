@@ -383,3 +383,52 @@ def test_review_replay_scores_caught_errors_and_false_flags(tmp_path):
 def test_review_replay_requires_confirm_paid(tmp_path):
     with pytest.raises(SystemExit):
         pilot.main(['review-replay', '--root', str(tmp_path / 'r'), '--source', str(tmp_path / 's')])
+
+
+# ---- advisor-replay：只分派的顧問看同一批題目（離線假顧問）----
+
+def test_advisor_replay_records_routing_and_projects_from_existing_answers(tmp_path):
+    haiku, sonnet = tmp_path / 'haiku', tmp_path / 'sonnet'
+    for folder, rows in ((haiku, [{'id': 'A-0', 'hidden_first_pass': True, 'cost_usd': '0.001'},
+                                  {'id': 'B-0', 'hidden_first_pass': False, 'cost_usd': '0.001'}]),
+                         (sonnet, [{'id': 'B-0', 'hidden_first_pass': True, 'cost_usd': '0.02'},
+                                   {'id': 'C-0', 'status': 'not_run'}])):
+        folder.mkdir()
+        (folder / 'calibration-report.json').write_text(json.dumps({'rows': rows}))
+    tasks = [{'id': t, 'family': t[0], 'level': 5, 'prompt': 'Ticket ' + t} for t in ('A-0', 'B-0', 'C-0', 'D-0')]
+    route = {'A-0': ['haiku-low', 'sonnet-xhigh'], 'B-0': ['sonnet-xhigh', 'fable-xhigh'],
+             'C-0': ['sonnet-xhigh', 'fable-xhigh'], 'D-0': ['haiku-low']}
+    pool = pilot.replay_advisor_pool()
+    seen = []
+
+    def advisor(request):
+        body = json.loads(request.content)
+        user = json.loads(body['messages'][-1]['content'])
+        seen.append((body.get('system'), body['messages'][-1]['content'], user))
+        tid = user['task']['prompt'].split()[-1]
+        text = json.dumps({'mode': 'delegate', 'recommendations': [
+            {'setting': s, 'tier': pool[s]['tier'], 'reason': 'r'} for s in route[tid]]})
+        return httpx.Response(200, json={'id': f'msg_a{len(seen)}', 'type': 'message', 'role': 'assistant',
+            'model': body['model'], 'content': [{'type': 'text', 'text': text}], 'stop_reason': 'end_turn',
+            'usage': {'input_tokens': 2500, 'output_tokens': 300}})
+    rows = pilot.advisor_replay(tmp_path / 'adv', {'haiku-low': [haiku], 'sonnet-xhigh': [sonnet]}, tasks,
+                                pilot.anthropic_target('claude-haiku-5-5', effort='xhigh'),
+                                anthropic_key='an-key', cap_usd='1',
+                                transports={'anthropic': httpx.MockTransport(advisor)})
+    expected = advisor_messages({'prompt': 'Ticket A-0'}, pool, delegate_only=True)
+    assert seen[0][0] == ADVISOR_SYSTEM_DELEGATE_ONLY and seen[0][1] == expected[1]['content']
+    assert [s['setting'] for s in seen[0][2]['pool']][0] == 'haiku-low'
+    assert all('price' in s for s in seen[0][2]['pool'])
+    assert [(r['first'], r['answer_hidden_pass']) for r in rows] == [
+        ('haiku-low', True), ('sonnet-xhigh', True), ('sonnet-xhigh', None), (None, None)]
+    assert rows[3]['outcome'] == 'incomplete'
+    summary = json.loads((tmp_path / 'adv' / 'advisor-replay-report.json').read_text())['summary']
+    assert summary['by_first'] == {
+        'haiku-low': {'tasks': 1, 'measured_right': 1, 'measured_wrong': 0, 'unmeasured': 0},
+        'sonnet-xhigh': {'tasks': 2, 'measured_right': 1, 'measured_wrong': 0, 'unmeasured': 1}}
+    assert summary['delegated'] == 3 and summary['not_completed'] == 1
+
+
+def test_advisor_replay_rejects_unknown_answer_setting(tmp_path):
+    with pytest.raises(SystemExit):
+        pilot.main(['advisor-replay', '--root', str(tmp_path / 'r'), '--answers', 'gpt=x', '--confirm-paid'])

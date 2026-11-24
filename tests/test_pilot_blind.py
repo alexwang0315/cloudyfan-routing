@@ -329,3 +329,57 @@ def test_default_blind_task_set_is_the_ticket_style_v3():
     from cloudyfan_jev import code_tasks
     tasks = code_tasks.frozen_code_tasks(limit=2)
     assert [t['id'] for t in tasks] == ['Q1-0', 'R1-0'] and all('implicit_requirements' in t for t in tasks)
+
+
+# ---- review-replay：把校準的首答交給評審重審（離線假評審）----
+
+def _replay_source(tmp_path):
+    source = tmp_path / 'cal'
+    cases = {'R1-0': ('SOLUTION BUG', True, False), 'R1-1': ('SOLUTION OK', True, True),
+             'R1-2': ('SOLUTION OK fenced', True, True), 'R1-3': ('draft', False, False)}
+    rows = []
+    for tid, (final, public, hidden) in cases.items():
+        run = source / 'receipts' / 'runs' / ('cal-' + tid)
+        run.mkdir(parents=True)
+        (run / 'result.json').write_text(json.dumps({'attempts': [{'final': final, 'public': {'passed': public}}]}))
+        rows.append({'id': tid, 'hidden_first_pass': hidden})
+    (source / 'calibration-report.json').write_text(json.dumps({'rows': rows}))
+    tasks = [{'id': tid, 'family': 'R', 'level': 5, 'prompt': 'Fix shop/x.py for ' + tid} for tid in cases]
+    return source, tasks
+
+
+def test_review_replay_scores_caught_errors_and_false_flags(tmp_path):
+    from cloudyfan_jev.cloudyfan_plus import REVIEW_SYSTEM
+    source, tasks = _replay_source(tmp_path)
+    seen = []
+
+    def judge(request):
+        body = json.loads(request.content)
+        user = json.loads(body['messages'][-1]['content'])
+        seen.append((body['model'], body.get('output_config', {}).get('effort'), body.get('system'), user))
+        bug = 'BUG' in user['candidate']
+        text = json.dumps({'ok': not bug, 'issue': 'Closed accounts must be excluded.' if bug else ''})
+        if 'fenced' in user['candidate']:
+            text = '```json\n' + text + '\n```'
+        return httpx.Response(200, json={'id': f'msg_r{len(seen)}', 'type': 'message', 'role': 'assistant',
+            'model': body['model'], 'content': [{'type': 'text', 'text': text}], 'stop_reason': 'end_turn',
+            'usage': {'input_tokens': 3000, 'output_tokens': 400}})
+    rows = pilot.review_replay(tmp_path / 'rev', source, tasks,
+                               pilot.anthropic_target('claude-haiku-5-5', effort='xhigh'),
+                               anthropic_key='an-key', cap_usd='1',
+                               transports={'anthropic': httpx.MockTransport(judge)})
+    assert [r['outcome'] for r in rows] == ['flagged', 'approved', 'review_invalid', 'not_reviewed']
+    assert len(seen) == 3
+    assert all(m == 'claude-haiku-5-5' and e == 'xhigh' for m, e, _, _ in seen)
+    assert REVIEW_SYSTEM in str(seen[0][2])
+    assert seen[0][3] == {'task': 'Fix shop/x.py for R1-0', 'candidate': 'SOLUTION BUG'}
+    assert rows[0]['issue'] == 'Closed accounts must be excluded.'
+    summary = json.loads((tmp_path / 'rev' / 'review-replay-report.json').read_text())['summary']
+    assert summary == {'tasks': 4, 'reviewed': 2, 'wrong': 1, 'caught': 1, 'right': 1, 'false_flags': 0,
+                       'not_completed': 2, 'known_usd': summary['known_usd']}
+    assert Decimal(summary['known_usd']) > 0
+
+
+def test_review_replay_requires_confirm_paid(tmp_path):
+    with pytest.raises(SystemExit):
+        pilot.main(['review-replay', '--root', str(tmp_path / 'r'), '--source', str(tmp_path / 's')])

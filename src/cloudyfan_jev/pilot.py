@@ -319,6 +319,89 @@ def calibrate(root, tasks, target, *, openrouter_key=None, anthropic_key=None, c
     return rows
 
 
+class _ApproveEnvironment:
+    """審查重播用：評審只回一次，不論內容都放行，避免格式不合時觸發修正（多花錢）。"""
+
+    def tools_schema(self):
+        return []
+
+    def call(self, name, arguments):
+        raise ValueError('Review replay has no tools')
+
+    def validate(self, final_text):
+        return {'passed': True, 'checks': []}
+
+
+def review_replay(root, source_root, tasks, target, *, anthropic_key, cap_usd, transports=None,
+                  max_tokens=16000, max_input_bytes=24576, anthropic_workspace_id=None):
+    """離線量評審：把一次盲測校準的首答（已過公開驗收的）原樣交給路徑一加強版的評審，
+    評審提示與訊息格式和 ``cloudyfan_plus.reviewed_attempt`` 相同。對照校準時量到的隱藏測試結果，
+    算抓到幾題錯、誤報幾題對。不重跑首答。"""
+    from .cloudyfan_plus import REVIEW_SYSTEM, parse_review
+    from .engine import _encoded
+    root, source_root = Path(root), Path(source_root)
+    source = {r['id']: r for r in json.loads((source_root / 'calibration-report.json').read_text())['rows']}
+    vendors = {'anthropic': AnthropicVendor(anthropic_key, {target['vendor_model']: target['price']},
+                                            transport=(transports or {}).get('anthropic'),
+                                            workspace_id=anthropic_workspace_id)}
+    http = httpx.Client(transport=VendorTransport(httpx.HTTPTransport(), vendors),
+                        follow_redirects=False, trust_env=False)
+    root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    client = Client(http, 'no-openrouter-key-configured', root / 'receipts')
+    store = BudgetStore(root / 'budget.sqlite')
+    if store.report()['authorization'] is None:
+        store.authorize(Authorization('pilot-review-replay', Decimal(str(cap_usd)),
+                                      (datetime.now(timezone.utc) + timedelta(days=2)).isoformat()))
+    profiles = {tier: dict(target['profile']) for tier in ('open_source', 'low', 'mid', 'high')}
+    _, decision = example_config()
+    verifier = ListPriceBounds({target['address']: target['price']}, max_input_bytes=max_input_bytes,
+                               max_output_tokens=max_tokens)
+    core = Core(client, profiles, decision, system=REVIEW_SYSTEM,
+                limits=Limits(max_turns=1, max_tokens=max_tokens, max_context_bytes=max_input_bytes))
+    runner = BudgetedCore(core, store, model_bounds=verifier.model_bounds(), tool_bounds={}, verify_bound=verifier)
+    rows = []
+    for task in tasks:
+        origin = source[task['id']]
+        first = json.loads((source_root / 'receipts' / 'runs' / ('cal-' + task['id']) / 'result.json')
+                           .read_text())['attempts'][0]
+        row = {'id': task['id'], 'family': task['family'], 'level': task['level'],
+               'hidden_first_pass': origin['hidden_first_pass']}
+        if first['public'].get('passed') is not True:
+            row.update(status='not_reviewed', outcome='not_reviewed')
+            rows.append(row)
+            continue
+        prompt = _encoded({'task': task['prompt'], 'candidate': first['final']}).decode()
+        try:
+            result = runner.run('review-' + task['id'], {'prompt': prompt}, _ApproveEnvironment,
+                                contract_version='cloudyfan-plus-review-replay-v1', mode='fixed_high')
+            calls = [c for a in result['attempts'] for c in a['calls']]
+            verdict = None if any(c.get('provider_rejected') for c in calls) else parse_review(
+                result['attempts'][-1]['final'])
+            outcome = ('review_rejected' if any(c.get('provider_rejected') for c in calls) else
+                       'review_invalid' if verdict is None else 'approved' if verdict['ok'] else 'flagged')
+            row.update(status=result['status'], outcome=outcome,
+                       issue=(verdict or {}).get('issue', ''), cost_usd=result['costs']['api_usd'],
+                       output_tokens=sum((c.get('usage') or {}).get('completion_tokens') or 0 for c in calls))
+        except BudgetError as error:
+            row.update(status='not_run', outcome='not_run', reason='budget: ' + str(error))
+        except Exception as error:  # 照實記錄，不重試
+            row.update(status='error', outcome='error', reason=type(error).__name__ + ': ' + str(error)[:300])
+        rows.append(row)
+    reviewed = [r for r in rows if r['outcome'] in ('approved', 'flagged')]
+    wrong = [r for r in reviewed if r['hidden_first_pass'] is not True]
+    right = [r for r in reviewed if r['hidden_first_pass'] is True]
+    known = sum((Decimal(r['cost_usd']) for r in rows if r.get('cost_usd') is not None), Decimal(0))
+    report = {'stage': 'review_replay', 'source': str(source_root), 'target': target['address'],
+              'effort': target['profile']['effort'], 'review_system': REVIEW_SYSTEM, 'cap_usd': str(cap_usd),
+              'rows': rows,
+              'summary': {'tasks': len(rows), 'reviewed': len(reviewed),
+                          'wrong': len(wrong), 'caught': sum(r['outcome'] == 'flagged' for r in wrong),
+                          'right': len(right), 'false_flags': sum(r['outcome'] == 'flagged' for r in right),
+                          'not_completed': len(rows) - len(reviewed), 'known_usd': format(known.normalize(), 'f')}}
+    (root / 'review-replay-report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+    return rows
+
+
 ARMS = ('cloudyfan', 'cloudyfan_plus', 'advisor_first')
 # 對照組：每題直接交給高池（不換模型、一路用前沿模型）；答錯時同一高池再修一次。只在指定 --arm 時跑。
 ALL_ARMS = ARMS + ('fixed_high',)
@@ -727,6 +810,19 @@ def main(argv=None):
     cmp.add_argument('--anthropic-workspace-id')
     cmp.add_argument('--rejection-policy-source', type=Path)
     cmp.add_argument('--confirm-paid', action='store_true')
+    rev = sub.add_parser('review-replay', help='把盲測校準的首答交給評審重審，量抓錯與誤報（會發出真實付費請求）')
+    rev.add_argument('--root', type=Path, required=True, help='這次重審的新資料夾')
+    rev.add_argument('--source', type=Path, required=True, help='盲測校準的資料夾（含 calibration-report.json）')
+    rev.add_argument('--cap', default='1')
+    rev.add_argument('--task-set', choices=CODE_TASK_SETS, default='v4')
+    rev.add_argument('--task', action='append', default=[])
+    rev.add_argument('--anthropic-model', default='claude-haiku-5-5')
+    rev.add_argument('--effort', choices=('low', 'medium', 'high', 'xhigh', 'max'), default='xhigh')
+    rev.add_argument('--anthropic-env-file', type=Path)
+    rev.add_argument('--anthropic-key-file', type=Path)
+    rev.add_argument('--anthropic-env-name', default='ANTHROPIC_API_KEY')
+    rev.add_argument('--anthropic-workspace-id')
+    rev.add_argument('--confirm-paid', action='store_true')
     run = sub.add_parser('connect', help='階段 0 連線驗證（會發出真實付費請求）')
     run.add_argument('--root', type=Path, required=True, help='這次試跑的新資料夾（收據、帳本、報告）')
     run.add_argument('--cap', default='1', help='這一階段的美元上限')
@@ -788,6 +884,20 @@ def main(argv=None):
                        max_turns=args.max_turns or (6 if args.tools else 1),
                        max_input_bytes=args.max_input_bytes or (131072 if args.tools else 24576),
                        loop_guard_mode=args.loop_guard)
+        for row in rows:
+            print(json.dumps(row, ensure_ascii=False), flush=True)
+        return 0
+    if args.command == 'review-replay':
+        if not args.confirm_paid:
+            parser.error('paid_requests_require_--confirm-paid')
+        from .code_tasks import FROZEN_CODE_TASK_SETS, frozen_code_tasks
+        done = {r['id'] for r in json.loads((args.source / 'calibration-report.json').read_text())['rows']
+                if 'hidden_first_pass' in r}
+        tasks = [t for t in frozen_code_tasks(path=FROZEN_CODE_TASK_SETS[args.task_set])
+                 if t['id'] in done and (not args.task or t['id'] in set(args.task))]
+        rows = review_replay(args.root, args.source, tasks, anthropic_target(args.anthropic_model, effort=args.effort),
+                             anthropic_key=key_from_args(args, 'anthropic'), cap_usd=args.cap,
+                             anthropic_workspace_id=args.anthropic_workspace_id)
         for row in rows:
             print(json.dumps(row, ensure_ascii=False), flush=True)
         return 0

@@ -1654,7 +1654,10 @@ def ticket_family(family):
     if family in TICKET_FAMILIES:
         return TICKET_FAMILIES[family]
     from .code_repo_tasks import REPO_FAMILIES
-    return REPO_FAMILIES[family]
+    if family in REPO_FAMILIES:
+        return REPO_FAMILIES[family]
+    from .code_repo_tasks_v5 import REPO_FAMILIES as REPO_FAMILIES_V5
+    return REPO_FAMILIES_V5[family]
 
 
 def _build_ticket(family, level, seed):

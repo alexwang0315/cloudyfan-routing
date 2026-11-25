@@ -33,14 +33,16 @@ LEVELS = (1, 2, 3, 4, 5)
 FAMILY_REVISION = {'A': 1, 'B': 1, 'C': 1, 'D': 1, 'E': 1, 'F': 1, 'G': 1, 'H': 1,
                    'I': 1, 'J': 1, 'K': 1, 'L': 1, 'M': 1, 'N': 1, 'O': 1, 'P': 1,
                    'Q': 1, 'R': 1, 'S': 1, 'T': 1, 'U': 1, 'V': 1, 'W': 1, 'X': 1,
-                   'ZA': 1, 'ZB': 1, 'ZC': 2, 'ZD': 1, 'ZE': 1, 'ZF': 1, 'ZG': 1, 'ZH': 1}
+                   'ZA': 1, 'ZB': 1, 'ZC': 2, 'ZD': 1, 'ZE': 1, 'ZF': 1, 'ZG': 1, 'ZH': 1,
+                   'ZI': 1, 'ZJ': 1, 'ZK': 1, 'ZL': 1, 'ZM': 1, 'ZN': 1, 'ZO': 1, 'ZP': 1}
 FROZEN_CODE_TASKS_V1 = Path(__file__).resolve().parents[2] / 'docs/evidence/code-tasks-20261124.json'
 FROZEN_CODE_TASKS_V2 = Path(__file__).resolve().parents[2] / 'docs/evidence/code-tasks-v2-20261124.json'
 FROZEN_CODE_TASKS_V3 = Path(__file__).resolve().parents[2] / 'docs/evidence/code-tasks-v3-20261124.json'
 FROZEN_CODE_TASKS_V4 = Path(__file__).resolve().parents[2] / 'docs/evidence/code-tasks-v4-20261124.json'
+FROZEN_CODE_TASKS_V5 = Path(__file__).resolve().parents[2] / 'docs/evidence/code-tasks-v5-20261125.json'
 FROZEN_CODE_TASKS = FROZEN_CODE_TASKS_V3
 FROZEN_CODE_TASK_SETS = {'v1': FROZEN_CODE_TASKS_V1, 'v2': FROZEN_CODE_TASKS_V2, 'v3': FROZEN_CODE_TASKS_V3,
-                         'v4': FROZEN_CODE_TASKS_V4}
+                         'v4': FROZEN_CODE_TASKS_V4, 'v5': FROZEN_CODE_TASKS_V5}
 PUBLIC_COUNT = 3
 HIDDEN_MIN = 60
 HIDDEN_MAX = 120
@@ -3781,6 +3783,16 @@ def repo_families():
     return _repo_tasks().REPO_FAMILIES
 
 
+def _repo_tasks_v5():
+    """第五版題型在 code_repo_tasks_v5.py（延後匯入，理由同上）。"""
+    from . import code_repo_tasks_v5
+    return code_repo_tasks_v5
+
+
+def repo_families_v5():
+    return _repo_tasks_v5().REPO_FAMILIES
+
+
 def build(family, level, seed):
     """產生一題（含隱藏測試與各隱藏測試碰到的邊界條款）；同樣的 (題型, 難度, 種子) 一定得到同一題。"""
     if family in TRAP_FAMILIES:
@@ -3948,7 +3960,9 @@ def _set_version(families):
         return _tickets().TICKET_VERSION
     if families and families <= set(repo_families()):
         return _repo_tasks().REPO_VERSION
-    raise ValueError('A frozen code task set must contain families of exactly one version (v1, v2, v3 or v4)')
+    if families and families <= set(repo_families_v5()):
+        return _repo_tasks_v5().REPO_VERSION
+    raise ValueError('A frozen code task set must contain families of exactly one version (v1, v2, v3, v4 or v5)')
 
 
 def _record(task):
@@ -3974,7 +3988,8 @@ def freeze(path, tasks):
 
 def load_frozen(frozen):
     version = frozen.get('version')
-    if version not in (VERSION, TRAP_VERSION, _tickets().TICKET_VERSION, _repo_tasks().REPO_VERSION) \
+    if version not in (VERSION, TRAP_VERSION, _tickets().TICKET_VERSION, _repo_tasks().REPO_VERSION,
+                       _repo_tasks_v5().REPO_VERSION) \
             or _set_version({t['family'] for t in frozen['tasks']}) != version:
         raise ValueError('Code task set version changed')
     for family, revision in frozen.get('family_revision', {}).items():

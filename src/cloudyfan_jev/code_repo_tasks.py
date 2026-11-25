@@ -255,9 +255,13 @@ def _repo_namespace(program):
     return namespace
 
 
+# 程式庫版本 -> (檔案, CONVENTIONS.md)。第五版（code_repo_tasks_v5）匯入時登記自己的程式庫。
+BASES = {'v4': (BASE_FILES, CONVENTIONS)}
+
+
 @lru_cache(maxsize=None)
-def _base_namespace(target, target_source, entry):
-    return _repo_namespace(repo_program(BASE_FILES, target, target_source, entry))
+def _base_namespace(target, target_source, entry, base='v4'):
+    return _repo_namespace(repo_program(BASES[base][0], target, target_source, entry))
 
 
 # ---- 產生測試資料用的小工具（在本行程，不進程式庫）----
@@ -330,17 +334,19 @@ class RepoFamily(tk.TicketFamily):
     ticket = ('', '')      # 新功能題：(標題, 內文)
     reference_target = ''  # 參考解（目標檔案內容，含 _solve）
     trap_targets = {}      # 錯誤解 -> 目標檔案內容
+    base = 'v4'            # 用哪一套程式庫（BASES 的鍵）；第五版題目用擴充過的程式庫
 
     def files(self, level):
-        files = dict(BASE_FILES)
+        base_files, conventions = BASES[self.base]
+        files = dict(base_files)
         if self.kind == 'bugfix':
             files[self.target] = self.original_target
         if level == 3:
-            files = {'CONVENTIONS.md': CONVENTIONS, **files}
+            files = {'CONVENTIONS.md': conventions, **files}
         return files
 
     def _module(self, target_source):
-        return _base_namespace(self.target, target_source, self.entry)
+        return _base_namespace(self.target, target_source, self.entry, self.base)
 
     def reference(self):
         return self._module(self.reference_target)[self.entry]

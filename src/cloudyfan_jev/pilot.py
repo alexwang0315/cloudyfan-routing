@@ -816,7 +816,7 @@ def key_from_args(args, vendor):
     return None
 
 
-CODE_TASK_SETS = ('v1', 'v2', 'v3', 'v4')
+CODE_TASK_SETS = ('v1', 'v2', 'v3', 'v4', 'v5')
 
 
 def main(argv=None):

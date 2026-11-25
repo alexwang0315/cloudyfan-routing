@@ -388,9 +388,9 @@ class AverageOrderValue(RepoFamilyV5):
     reference_target, trap_targets = ZI_REFERENCE, ZI_TRAPS
     ticket = ('Average order value per day',
               'Finance wants to watch the average order value. Please add `average_order_value(orders)` to the '
-              'reports module: for each business day (the same days as `daily_revenue`), the average revenue per '
-              'order, over the orders that count toward that day\'s revenue. Amounts are in cents, rounded to a '
-              'whole cent.')
+              'reports module: for each business day, the average revenue per order, over the orders that count '
+              'toward that day\'s revenue. Business days work the same way as in `daily_revenue`. Amounts are in '
+              'cents, rounded to a whole cent.')
     trap_breaks = {'gift_in': {'zi_gift'}, 'round_builtin': {'zi_round'}}
     requirements = {
         'zi_gift': ('營收用 revenue_total：訂單裡的禮券品項不算營收。',
@@ -476,8 +476,9 @@ class CustomersPerDay(RepoFamilyV5):
     reference_target, trap_targets = ZJ_REFERENCE, ZJ_TRAPS
     ticket = ('How many customers came in each day',
               'The store managers want to see foot traffic next to revenue. Please add `customers_per_day(orders)` '
-              'to the reports module: for each business day (the same days as `daily_revenue`), how many different '
-              'customers bought something that day, e.g. {"2026-03-02": 41}.')
+              'to the reports module: for each business day, how many different customers bought something that '
+              'day, e.g. {"2026-03-02": 41}. Business days work the same way as in `daily_revenue`. Leave out days '
+              'when no customer bought anything.')
     trap_breaks = {'count_guest': {'zj_guest'}, 'count_staff': {'zj_staff'}}
     requirements = {
         'zj_guest': ('「guest」不算顧客：沒有會員卡的散客都記在 guest 這個 id 底下。',

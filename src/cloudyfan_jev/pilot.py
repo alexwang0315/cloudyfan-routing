@@ -421,6 +421,64 @@ def review_replay(root, source_root, tasks, target, *, anthropic_key, cap_usd, *
     return rows
 
 
+def open_answer(root, items, target, *, anthropic_key, cap_usd, **options):
+    """開放題作答：每題送一次（只有情境、問題與作答格式），回答原樣存檔，不判對錯。"""
+    from . import open_reasoning as orq
+    root = Path(root)
+    background, answer_format, all_items = orq.load()
+    wanted = [i for i in all_items if not items or i['id'] in set(items)]
+    runner = _single_call_runner(root, target, orq.ANSWER_SYSTEM, 'pilot-open-answer', anthropic_key=anthropic_key,
+                                 cap_usd=cap_usd, **options)
+    rows = []
+    for item in wanted:
+        text, fields = _single_call(runner, 'open-' + item['id'], orq.answer_prompt(background, answer_format, item),
+                                    'open-reasoning-answer-v1')
+        rows.append({'id': item['id'], **fields, 'answer': text})
+    _open_report(root, 'open-answer-report.json', 'open_answer', target, orq, cap_usd, rows)
+    return rows
+
+
+def open_judge(root, answers, target, *, anthropic_key, cap_usd, items=(), **options):
+    """開放題評審：``answers`` 是 {作答者: open_answer 的資料夾}。評審看不到作答者是誰，
+    每份回答各評一次，依 §11.2 的評分表給四個面向 0～2 分。"""
+    from . import open_reasoning as orq
+    root = Path(root)
+    background, _, all_items = orq.load()
+    runner = _single_call_runner(root, target, orq.JUDGE_SYSTEM, 'pilot-open-judge', anthropic_key=anthropic_key,
+                                 cap_usd=cap_usd, **options)
+    texts = {writer: {r['id']: r['answer'] for r in json.loads(
+        (Path(folder) / 'open-answer-report.json').read_text())['rows'] if r.get('answer')}
+        for writer, folder in answers.items()}
+    rows = []
+    for item in all_items:
+        if items and item['id'] not in set(items):
+            continue
+        for n, writer in enumerate(sorted(texts)):
+            if item['id'] not in texts[writer]:
+                continue
+            text, fields = _single_call(runner, f'judge-{item["id"]}-{n}',
+                                        orq.judge_prompt(background, item, texts[writer][item['id']]),
+                                        'open-reasoning-judge-v1')
+            row = {'id': item['id'], 'writer': writer, **fields}
+            if 'outcome' not in row:
+                verdict = orq.parse_judgment(text)
+                row['outcome'] = 'judged' if verdict else 'judge_invalid'
+                row.update(verdict or {'raw': text})
+            rows.append(row)
+    _open_report(root, 'open-judge-report.json', 'open_judge', target, orq, cap_usd, rows,
+                 answers={k: str(v) for k, v in answers.items()})
+    return rows
+
+
+def _open_report(root, name, stage, target, orq, cap_usd, rows, **extra):
+    known = sum((Decimal(r['cost_usd']) for r in rows if r.get('cost_usd') is not None), Decimal(0))
+    report = {'stage': stage, 'target': target['address'], 'effort': target['profile']['effort'],
+              'items_sha256': orq.FROZEN_ITEMS_SHA256, 'cap_usd': str(cap_usd), **extra, 'rows': rows,
+              'summary': {'rows': len(rows), 'completed': sum(r['status'] == 'passed' for r in rows),
+                          'known_usd': format(known.normalize(), 'f')}}
+    (root / name).write_text(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+
+
 def replay_advisor_pool():
     """顧問重播的候選：盲測顧問池最前面加上校準用的最便宜首答 Haiku 5.5 low，其餘照 ``blind_setup``。"""
     haiku = anthropic_target('claude-haiku-5-5', effort='low')
@@ -912,6 +970,25 @@ def main(argv=None):
     adv.add_argument('--anthropic-env-name', default='ANTHROPIC_API_KEY')
     adv.add_argument('--anthropic-workspace-id')
     adv.add_argument('--confirm-paid', action='store_true')
+    for name, helptext in (('open-answer', '開放題作答：決策點題目每題送一次（會發出真實付費請求）'),
+                           ('open-judge', '開放題評審：照評分表評作答者的回答（會發出真實付費請求）')):
+        op = sub.add_parser(name, help=helptext)
+        op.add_argument('--root', type=Path, required=True)
+        op.add_argument('--cap', default='1')
+        op.add_argument('--item', action='append', default=[])
+        op.add_argument('--anthropic-model', required=True)
+        op.add_argument('--effort', choices=('low', 'medium', 'high', 'xhigh', 'max'), required=True)
+        op.add_argument('--max-tokens', type=int, default=12000)
+        op.add_argument('--anthropic-env-file', type=Path)
+        op.add_argument('--anthropic-key-file', type=Path)
+        op.add_argument('--anthropic-env-name', default='ANTHROPIC_API_KEY')
+        op.add_argument('--anthropic-workspace-id')
+        op.add_argument('--confirm-paid', action='store_true')
+        if name == 'open-judge':
+            op.add_argument('--answers', action='append', default=[], help='作答者=open-answer 的資料夾，可重複')
+    sheet = sub.add_parser('open-sheet', help='開放題盲評表：把各作答者的回答打亂成評分表（不收費）')
+    sheet.add_argument('--out', type=Path, required=True, help='評分表 Markdown；代號對照另存成同名 .key.json')
+    sheet.add_argument('--answers', action='append', default=[], help='作答者=open-answer 的資料夾，可重複')
     run = sub.add_parser('connect', help='階段 0 連線驗證（會發出真實付費請求）')
     run.add_argument('--root', type=Path, required=True, help='這次試跑的新資料夾（收據、帳本、報告）')
     run.add_argument('--cap', default='1', help='這一階段的美元上限')
@@ -1007,6 +1084,34 @@ def main(argv=None):
                              anthropic_workspace_id=args.anthropic_workspace_id)
         for row in rows:
             print(json.dumps(row, ensure_ascii=False), flush=True)
+        return 0
+    if args.command == 'open-sheet':
+        from . import open_reasoning as orq
+        background, _, items = orq.load()
+        folders = dict(a.split('=', 1) for a in args.answers)
+        texts = {w: {r['id']: r['answer'] for r in json.loads((Path(f) / 'open-answer-report.json').read_text())['rows']
+                     if r.get('answer')} for w, f in folders.items()}
+        sheet_text, key = orq.blind_sheet(background, items, texts)
+        if args.out.exists() or args.out.with_suffix('.key.json').exists():
+            parser.error('open_sheet_output_exists')
+        args.out.write_text(sheet_text)
+        args.out.with_suffix('.key.json').write_text(json.dumps(key, ensure_ascii=False, indent=2))
+        return 0
+    if args.command in ('open-answer', 'open-judge'):
+        if not args.confirm_paid:
+            parser.error('paid_requests_require_--confirm-paid')
+        options = dict(anthropic_key=key_from_args(args, 'anthropic'), cap_usd=args.cap, max_tokens=args.max_tokens,
+                       max_input_bytes=49152, anthropic_workspace_id=args.anthropic_workspace_id)
+        target = anthropic_target(args.anthropic_model, effort=args.effort)
+        if args.command == 'open-answer':
+            rows = open_answer(args.root, args.item, target, **options)
+        else:
+            answers = dict(a.split('=', 1) for a in args.answers)
+            if not answers:
+                parser.error('open_judge_requires_--answers')
+            rows = open_judge(args.root, answers, target, items=args.item, **options)
+        for row in rows:
+            print(json.dumps({k: v for k, v in row.items() if k != 'answer'}, ensure_ascii=False), flush=True)
         return 0
     if args.command == 'calibrate':
         if not args.confirm_paid:

@@ -1088,9 +1088,12 @@ def main(argv=None):
     if args.command == 'open-sheet':
         from . import open_reasoning as orq
         background, _, items = orq.load()
-        folders = dict(a.split('=', 1) for a in args.answers)
-        texts = {w: {r['id']: r['answer'] for r in json.loads((Path(f) / 'open-answer-report.json').read_text())['rows']
-                     if r.get('answer')} for w, f in folders.items()}
+        texts = {}
+        for pair in args.answers:   # 同一個作答者可以給多個資料夾（補跑的題目），後面的補上前面沒交的題
+            writer, folder = pair.split('=', 1)
+            for r in json.loads((Path(folder) / 'open-answer-report.json').read_text())['rows']:
+                if r.get('answer'):
+                    texts.setdefault(writer, {}).setdefault(r['id'], r['answer'])
         sheet_text, key = orq.blind_sheet(background, items, texts)
         if args.out.exists() or args.out.with_suffix('.key.json').exists():
             parser.error('open_sheet_output_exists')

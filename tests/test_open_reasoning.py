@@ -115,3 +115,19 @@ def test_open_commands_require_confirm_paid(tmp_path):
         with pytest.raises(SystemExit):
             pilot.main([command, '--root', str(tmp_path / 'r'), '--anthropic-model', 'claude-haiku-5-5',
                         '--effort', 'low'])
+
+
+def test_open_sheet_merges_folders_of_the_same_writer(tmp_path):
+    for name, rows in (('first', [{'id': 'D1', 'answer': 'one'}, {'id': 'D2', 'answer': ''}]),
+                       ('rerun', [{'id': 'D2', 'answer': 'two'}, {'id': 'D1', 'answer': 'late'}]),
+                       ('other', [{'id': 'D1', 'answer': 'x'}, {'id': 'D2', 'answer': 'y'}])):
+        (tmp_path / name).mkdir()
+        (tmp_path / name / 'open-answer-report.json').write_text(json.dumps({'rows': rows}))
+    out = tmp_path / 'sheet.md'
+    assert pilot.main(['open-sheet', '--out', str(out), '--answers', f'w={tmp_path / "first"}',
+                       '--answers', f'w={tmp_path / "rerun"}', '--answers', f'v={tmp_path / "other"}']) == 0
+    sheet = out.read_text()
+    assert 'one' in sheet and 'two' in sheet and 'late' not in sheet
+    assert json.loads(out.with_suffix('.key.json').read_text())['D2'] in ({'A': 'v', 'B': 'w'}, {'A': 'w', 'B': 'v'})
+    with pytest.raises(SystemExit):   # 不覆寫既有的評分表
+        pilot.main(['open-sheet', '--out', str(out), '--answers', f'w={tmp_path / "first"}'])

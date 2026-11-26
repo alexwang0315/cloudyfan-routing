@@ -199,3 +199,8 @@ def test_route_classify_prompt_v2_is_selectable_and_recorded(tmp_path):
     assert pilot.ROUTE_SYSTEM_V2 in str(seen[0].get('system')) and pilot.ROUTE_SYSTEM not in str(seen[0].get('system'))
     report = json.loads((tmp_path / 'v2' / 'route-classify-report.json').read_text())
     assert report['prompt_version'] == 'v2' and report['route_system'] == pilot.ROUTE_SYSTEM_V2
+
+
+def test_route_prompt_versions_are_distinct():
+    assert set(pilot.ROUTE_SYSTEMS) == {'v1', 'v2', 'v3'} and len(set(pilot.ROUTE_SYSTEMS.values())) == 3
+    assert 'Tests are never complete' in pilot.ROUTE_SYSTEM_V3

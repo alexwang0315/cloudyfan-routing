@@ -500,7 +500,19 @@ ROUTE_SYSTEM_V2 = (
     'given checks cover only part of what is asked while the rest (quality, ranking, style, design) is left to '
     'judgment.\n'
     'Reply with only a JSON object: {"route": "path1" or "path2", "reason": "one short sentence"}.')
-ROUTE_SYSTEMS = {'v1': ROUTE_SYSTEM, 'v2': ROUTE_SYSTEM_V2}
+# 第 3 版（2026-11-26）：第 1 版太鬆（只有輸入也派路徑一）、第 2 版太嚴（測試不完整就派路徑二）。
+# 有預期結果就走路徑一，測試本來就不完整、漏的交給審查；沒有預期結果或主要靠人判斷才走路徑二。
+ROUTE_SYSTEM_V3 = (
+    'You route incoming tasks in a model-routing system. Each task arrives alone. Decide which path it takes.\n'
+    '- "path1": the task asks for a concrete deliverable such as code, a query or an exact output, AND it states '
+    'expected results the answer can be checked against, such as expected outputs, assertions or an exact target '
+    'value. Inputs listed without their expected results do not count as checks. Tests are never complete: do not '
+    'choose path2 just because the given checks miss edge cases or rules documented elsewhere in the code; a '
+    'later review step handles those.\n'
+    '- "path2": the task states no expected results, or its main point is something people have to judge, such as '
+    'analysis, a diagnosis, a design, a recommendation, ranking quality or style, even if a few checks are given.\n'
+    'Reply with only a JSON object: {"route": "path1" or "path2", "reason": "one short sentence"}.')
+ROUTE_SYSTEMS = {'v1': ROUTE_SYSTEM, 'v2': ROUTE_SYSTEM_V2, 'v3': ROUTE_SYSTEM_V3}
 
 
 def route_entries(code_tasks, seed='route-classify-v1'):
@@ -1091,7 +1103,7 @@ def main(argv=None):
     rc.add_argument('--root', type=Path, required=True)
     rc.add_argument('--cap', default='1')
     rc.add_argument('--task-set', choices=CODE_TASK_SETS, default='v5')
-    rc.add_argument('--prompt-version', choices=('v1', 'v2'), default='v1')
+    rc.add_argument('--prompt-version', choices=('v1', 'v2', 'v3'), default='v1')
     rc.add_argument('--gray', action='store_true', help='改跑灰色地帶題（docs/evidence/route-gray-items-20261126.json）')
     rc.add_argument('--anthropic-model', default='claude-haiku-5-5')
     rc.add_argument('--effort', choices=('low', 'medium', 'high', 'xhigh', 'max'), default='xhigh')

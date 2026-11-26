@@ -24,7 +24,7 @@ MRC 多了一種路由模式「顧問先分流」（`advisor_triage`），要明
 | `path1_mode` | 路徑一沿用的既有模式：`cloudyfan` 或 `cloudyfan_plus`（交卷前評審） |
 | `path2_max_tokens` | 路徑二輸出上限，至少 32,000 |
 
-路徑二的顧問本身沿用 Core 的 `AdvisorConfig`，也就是 ADR 0034 的開源顧問與裁判；沒有它就不能建立分流模式。顧問提示是 ADR 0034 的原提示，再加一段 `OPEN_TASK_NOTE`：「需要判斷、建議或決策的題目，沒有把握就派送」，一起凍結。設定寫進 `configuration_descriptor()['advisor_triage']`，每題凍結。沒有提供 `TriageConfig` 時，描述、模式清單與預算都和以前一模一樣。
+路徑二的顧問本身沿用 Core 的 `AdvisorConfig`，也就是 ADR 0034 的開源顧問與裁判；沒有它就不能建立分流模式。顧問提示是 ADR 0034 的原提示，再加一段 `OPEN_ADVISOR_RULE`：「需要判斷、建議或決策的題目，沒有把握就派送」，一起凍結。設定寫進 `configuration_descriptor()['advisor_triage']`，每題凍結。沒有提供 `TriageConfig` 時，描述、模式清單與預算都和以前一模一樣。
 
 ### `overrides`（`POST /v1/tasks` 選填欄位）
 
@@ -95,7 +95,16 @@ HTTP 的 `outcome.json` 與 `GET /v1/tasks/<id>/result` 多一個 `routing` 物�
   - mod：`claude plugin validate` 通過；`claude plugin test` 5 項通過；TypeScript 6.0.3 型別檢查無誤。
 - 還沒驗證：
   - 沒有用真實模型跑過這個模式。分流準確率只來自 2026-11-26 的 72 題測驗，花費都是牌價計算值。
-  - 開源顧問在開放題上會自答幾題、派送幾題、自答品質如何，沒有測過。ADR 0038 第 5 點要求上線前用 10 題開放題實測。
+  - 2026-11-26 開放題顧問先答測驗（盲測計畫 §11.12，顧問暫用 Haiku 5.5 xhigh，10 題）：
+    - 用原本的顧問提示：10 題全部自答、從不派送，品質約 6.3～6.4／8，比 Sonnet 低。
+    - 加上 `OPEN_ADVISOR_RULE`：10 題全部派送，但顧問的第一順位一律是 Opus xhigh。推測原因是一般模式的池清單不附價格。
+    - 開源顧問本身還沒測。
+- 待使用者定案：
+  - 開放題的池清單要不要附價格給顧問，或把開放題的池限定為 Sonnet（預設）加 Fable（高風險）。
+    - 目前派送第一順位固定依風險，不採用顧問的第一選擇。
+    - 有驗收器而且沒過時，第二順位起照顧問建議，可能派到 Opus。
+    - 池裡放哪些設定是部署設定，不改程式就能限定；附價格要改程式。
+  - 顧問回覆無法使用時，目前照 ADR 0034 結束（`advisor_incomplete`），不自動派給 Sonnet。
   - mod 只用測試工具與驗證器檢查過，還沒在 App 裡實際點過面板。
   - 在 Claude Code 輸入框打 `/風險 高` 這類中文斜線字會不會被當成未知指令，沒有測。skill 建議改用 `/mrc 風險 高` 或單題標記。
 - 還沒做：

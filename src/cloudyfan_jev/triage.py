@@ -36,11 +36,11 @@ ROUTE_SYSTEM_V3 = (
     '- "path2": the task states no expected results, or its main point is something people have to judge, such as '
     'analysis, a diagnosis, a design, a recommendation, ranking quality or style, even if a few checks are given.\n'
     'Reply with only a JSON object: {"route": "path1" or "path2", "reason": "one short sentence"}.')
-# 開放題顧問（ADR 0038 第 5 點，2026-11-26 使用者定案）：附在 ADR 0034 顧問提示之後、一起凍結。
-OPEN_TASK_NOTE = (
-    'This task was routed to you because it has no automatic check: its value lies in judgment, analysis, '
-    'recommendations or a decision. Answer it yourself only if you are confident your answer would be as '
-    'strong as the best in-pool setting. If you are not sure, delegate.')
+# 開放題顧問（ADR 0038 第 5 點）：附在 ADR 0034 顧問提示之後、一起凍結。文字與 2026-11-26 開放題
+# 顧問先答測驗（pilot.OPEN_ADVISOR_RULE，d483072，盲測計畫 §11.12）逐字相同，量到的行為才適用。
+OPEN_ADVISOR_RULE = ('Tasks that ask for judgment, a diagnosis, a design, a recommendation or a decision have no '
+                     'automatic check on your answer; if you are not confident your own answer would be as good as '
+                     'a stronger setting, delegate.')
 ROUTES = ('path1', 'path2')
 # 一次分流加一次重問（ADR 0038 第 3 點）；兩次都計入預算預留（第 6 點）。
 TRIAGE_CALLS = 2
@@ -120,7 +120,7 @@ class TriageConfig:
         return {'version': VERSION, 'prompt': {'version': PROMPT_VERSION, 'system': ROUTE_SYSTEM_V3},
                 'triage_calls': TRIAGE_CALLS, 'triager': deepcopy(self.triager),
                 'pool': deepcopy(self.pool), 'path1_mode': self.path1_mode,
-                'path2': {'flow': 'advisor_first', 'advisor_note': OPEN_TASK_NOTE,
+                'path2': {'flow': 'advisor_first', 'advisor_note': OPEN_ADVISOR_RULE,
                           'default': self.path2_default, 'high_risk': self.path2_high_risk,
                           'max_tokens': self.path2_max_tokens}}
 
@@ -266,7 +266,7 @@ def _save_replay_policy(env, directory):
 
 def advisor_system(core):
     from .advisor_flow import advisor_system as base
-    return base(core.advisor_first) + ' ' + OPEN_TASK_NOTE
+    return base(core.advisor_first) + ' ' + OPEN_ADVISOR_RULE
 
 
 def _advisor_path(core, env, task, prefix, directory, plan):

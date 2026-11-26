@@ -14,7 +14,7 @@ from cloudyfan_jev.budget import Authorization, BudgetedCore, BudgetError, Budge
 from cloudyfan_jev.client import Client
 from cloudyfan_jev.demo import ArithmeticEnvironment, example_config
 from cloudyfan_jev.engine import Core
-from cloudyfan_jev.triage import (ADVISOR_TRIAGE, OPEN_TASK_NOTE, ROUTE_SYSTEM_V3, OverrideError, TriageConfig,
+from cloudyfan_jev.triage import (ADVISOR_TRIAGE, OPEN_ADVISOR_RULE, ROUTE_SYSTEM_V3, OverrideError, TriageConfig,
                                   effective_plan, normalize_overrides)
 
 TASK = {'prompt': 'Return only the integer sum of 1 and 1. Expected output: 2'}
@@ -148,7 +148,7 @@ def test_triage_path2_runs_the_advisor_which_delegates_to_the_risk_default(tmp_p
               answers={'example/sonnet': '建議先做 A'})
     result = run(make_core(tmp_path, api), env=OpenEnvironment)
     assert api.models() == [TRIAGER, ADVISOR, 'example/sonnet']
-    assert api.requests[1]['messages'][0]['content'].endswith(OPEN_TASK_NOTE)
+    assert api.requests[1]['messages'][0]['content'].endswith(OPEN_ADVISOR_RULE)
     assert [p['max_tokens'] for p in api.requests[1:]] == [32000, 32000]
     assert result['status'] == 'unverifiable' and result['final_public_pass'] is None
     assert result['plan']['route'] == 'path2' and result['plan']['executor'] == 'advisor'

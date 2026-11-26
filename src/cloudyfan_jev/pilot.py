@@ -489,6 +489,18 @@ ROUTE_SYSTEM = (
     '- "path2": the task asks for analysis, judgment, a diagnosis or a recommendation about what to do next, '
     'with no objective check the system could run on the answer.\n'
     'Reply with only a JSON object: {"route": "path1" or "path2", "reason": "one short sentence"}.')
+# 第 2 版（2026-11-26 灰色地帶測驗後）：要有預期結果、而且檢查要涵蓋主要要求，才走路徑一。
+ROUTE_SYSTEM_V2 = (
+    'You route incoming tasks in a model-routing system. Each task arrives alone. Decide which path it takes.\n'
+    '- "path1" only if ALL of these hold: (a) the task asks for a concrete deliverable such as code, a query or an '
+    'exact output; (b) the task itself states the expected results, such as expected outputs, assertions or an '
+    'exact target value, that a program could compare the answer against; inputs listed without their expected '
+    'results do not count; (c) those checks cover the main requirement of the task.\n'
+    '- "path2" otherwise: the task asks for analysis, judgment, a diagnosis, a design or a recommendation, or the '
+    'given checks cover only part of what is asked while the rest (quality, ranking, style, design) is left to '
+    'judgment.\n'
+    'Reply with only a JSON object: {"route": "path1" or "path2", "reason": "one short sentence"}.')
+ROUTE_SYSTEMS = {'v1': ROUTE_SYSTEM, 'v2': ROUTE_SYSTEM_V2}
 
 
 def route_entries(code_tasks, seed='route-classify-v1'):
@@ -524,15 +536,16 @@ def parse_route(text):
     return {'route': value['route'], 'reason': str(value.get('reason', ''))}
 
 
-def route_classify(root, entries, target, *, anthropic_key, cap_usd, **options):
+def route_classify(root, entries, target, *, anthropic_key, cap_usd, prompt_version='v1', **options):
     """顧問先分類：每題單獨送一次，記下分到哪條路徑、對不對、花多少、多等幾秒（模擬真實使用，一次一題）。"""
     root = Path(root)
-    runner = _single_call_runner(root, target, ROUTE_SYSTEM, 'pilot-route-classify', anthropic_key=anthropic_key,
+    system = ROUTE_SYSTEMS[prompt_version]
+    runner = _single_call_runner(root, target, system, 'pilot-route-classify', anthropic_key=anthropic_key,
                                  cap_usd=cap_usd, **options)
     rows = []
     for entry in entries:
         started = time.monotonic()
-        text, fields = _single_call(runner, 'route-' + entry['id'], entry['prompt'], 'route-classify-v1')
+        text, fields = _single_call(runner, 'route-' + entry['id'], entry['prompt'], 'route-classify-' + prompt_version)
         row = {'id': entry['id'], 'kind': entry['kind'], 'expected': entry['expected'], **fields,
                'seconds': round(time.monotonic() - started, 2)}
         if 'outcome' not in row:
@@ -554,7 +567,7 @@ def route_classify(root, entries, target, *, anthropic_key, cap_usd, **options):
         entry = by_expected.setdefault(r['expected'], {'path1': 0, 'path2': 0})
         entry[r['route']] += 1
     report = {'stage': 'route_classify', 'target': target['address'], 'effort': target['profile']['effort'],
-              'route_system': ROUTE_SYSTEM, 'cap_usd': str(cap_usd), 'rows': rows,
+              'route_system': system, 'prompt_version': prompt_version, 'cap_usd': str(cap_usd), 'rows': rows,
               'summary': {'tasks': len(rows), 'classified': len(done),
                           'scored': sum(r['correct'] is not None for r in done),
                           'correct': sum(r['correct'] is True for r in done),
@@ -1078,6 +1091,7 @@ def main(argv=None):
     rc.add_argument('--root', type=Path, required=True)
     rc.add_argument('--cap', default='1')
     rc.add_argument('--task-set', choices=CODE_TASK_SETS, default='v5')
+    rc.add_argument('--prompt-version', choices=('v1', 'v2'), default='v1')
     rc.add_argument('--gray', action='store_true', help='改跑灰色地帶題（docs/evidence/route-gray-items-20261126.json）')
     rc.add_argument('--anthropic-model', default='claude-haiku-5-5')
     rc.add_argument('--effort', choices=('low', 'medium', 'high', 'xhigh', 'max'), default='xhigh')
@@ -1193,7 +1207,8 @@ def main(argv=None):
             route_entries(frozen_code_tasks(path=FROZEN_CODE_TASK_SETS[args.task_set]))
         rows = route_classify(args.root, entries, anthropic_target(args.anthropic_model, effort=args.effort),
                               anthropic_key=key_from_args(args, 'anthropic'), cap_usd=args.cap,
-                              max_input_bytes=49152, anthropic_workspace_id=args.anthropic_workspace_id)
+                              prompt_version=args.prompt_version, max_input_bytes=49152,
+                              anthropic_workspace_id=args.anthropic_workspace_id)
         for row in rows:
             print(json.dumps(row, ensure_ascii=False), flush=True)
         return 0

@@ -188,3 +188,14 @@ def test_gray_items_are_fixed_and_ambiguous_ones_are_not_scored(tmp_path):
     summary = json.loads((tmp_path / 'g' / 'route-classify-report.json').read_text())['summary']
     assert summary['scored'] == 1 and summary['correct'] == 1
     assert summary['by_expected'] == {'ambiguous': {'path1': 1, 'path2': 0}, 'path1': {'path1': 1, 'path2': 0}}
+
+
+def test_route_classify_prompt_v2_is_selectable_and_recorded(tmp_path):
+    seen = []
+    entry = {'id': 'G8', 'kind': 'gray', 'expected': 'path2', 'prompt': 'Write a date parser.'}
+    pilot.route_classify(tmp_path / 'v2', [entry], pilot.anthropic_target('claude-haiku-5-5', effort='xhigh'),
+                         anthropic_key='an-key', cap_usd='1', prompt_version='v2',
+                         transports=_fake(lambda b: '{"route": "path2", "reason": "no expected results"}', seen))
+    assert pilot.ROUTE_SYSTEM_V2 in str(seen[0].get('system')) and pilot.ROUTE_SYSTEM not in str(seen[0].get('system'))
+    report = json.loads((tmp_path / 'v2' / 'route-classify-report.json').read_text())
+    assert report['prompt_version'] == 'v2' and report['route_system'] == pilot.ROUTE_SYSTEM_V2

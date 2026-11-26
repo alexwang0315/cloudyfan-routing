@@ -749,7 +749,7 @@ class TaskService:
                               'unknown_events': result['budget']['run_unknown_events'],
                               'model_and_classifier': result['costs']},
                     'wall_seconds': result['wall_seconds'],
-                    **({'routing': triage_mode.routing_summary(result, registered.core._generation_profile)}
+                    **({'routing': triage_mode.routing_summary(result, registered.core)}
                        if result.get('mode') == triage_mode.ADVISOR_TRIAGE else {})})
             except PolicyDenied as error:
                 state = {'run_id': run_id, 'status': 'policy_denied', 'error': error.body()['error']}

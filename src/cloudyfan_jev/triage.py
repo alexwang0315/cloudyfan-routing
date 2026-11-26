@@ -5,7 +5,8 @@
 之後這題只走那一條路徑，不中途切換、不融合（延續 ADR 0034 第 1、5 點）。
 
 - 路徑一：交給 Core 既有的 ``cloudyfan``／``cloudyfan_plus`` 流程（Jev 升級，規則一字不改）。
-- 路徑二：池內單一設定直接作答（預設 Sonnet 5.5 xhigh，高風險 Fable 5.2 high）。
+- 路徑二：走顧問先答流程（ADR 0034）。開源顧問先試著自己回答，沒把握就由同一個顧問派給池內設定；
+  派送第一順位依風險決定（預設 Sonnet 5.5 xhigh，高風險 Fable 5.2 high），其後依顧問建議順序。
 - 分流回覆格式錯就用同一提示重問一次；仍錯就走路徑二。
 - 環境回報這題建不出驗收器時，路徑一改走路徑二，並照實記為 ``no_verifier``。
 
@@ -35,6 +36,11 @@ ROUTE_SYSTEM_V3 = (
     '- "path2": the task states no expected results, or its main point is something people have to judge, such as '
     'analysis, a diagnosis, a design, a recommendation, ranking quality or style, even if a few checks are given.\n'
     'Reply with only a JSON object: {"route": "path1" or "path2", "reason": "one short sentence"}.')
+# 開放題顧問（ADR 0038 第 5 點，2026-11-26 使用者定案）：附在 ADR 0034 顧問提示之後、一起凍結。
+OPEN_TASK_NOTE = (
+    'This task was routed to you because it has no automatic check: its value lies in judgment, analysis, '
+    'recommendations or a decision. Answer it yourself only if you are confident your answer would be as '
+    'strong as the best in-pool setting. If you are not sure, delegate.')
 ROUTES = ('path1', 'path2')
 # 一次分流加一次重問（ADR 0038 第 3 點）；兩次都計入預算預留（第 6 點）。
 TRIAGE_CALLS = 2
@@ -78,8 +84,9 @@ def parse_route(text):
 class TriageConfig:
     """分流顧問、路徑二的池內設定與路徑一所用的既有模式；建構時即驗證。
 
-    ``pool`` 是路徑二與使用者「指定模型」可用的池內固定設定（設定識別 → 含 ``tier`` 的設定）；
-    池外的設定一律拒絕（ADR 0034 第 2 點、ADR 0038 第 7 點）。
+    ``pool`` 是路徑二顧問可派送、以及使用者「指定模型」可用的池內固定設定（設定識別 → 含 ``tier``
+    的設定）；池外的設定一律拒絕（ADR 0034 第 2 點、ADR 0038 第 7 點）。路徑二的顧問本身沿用
+    Core 的 ``AdvisorConfig``（開源模型，ADR 0034 第 3 點）。
     """
     triager: dict
     pool: dict
@@ -113,7 +120,8 @@ class TriageConfig:
         return {'version': VERSION, 'prompt': {'version': PROMPT_VERSION, 'system': ROUTE_SYSTEM_V3},
                 'triage_calls': TRIAGE_CALLS, 'triager': deepcopy(self.triager),
                 'pool': deepcopy(self.pool), 'path1_mode': self.path1_mode,
-                'path2': {'default': self.path2_default, 'high_risk': self.path2_high_risk,
+                'path2': {'flow': 'advisor_first', 'advisor_note': OPEN_TASK_NOTE,
+                          'default': self.path2_default, 'high_risk': self.path2_high_risk,
                           'max_tokens': self.path2_max_tokens}}
 
 
@@ -168,19 +176,19 @@ def effective_plan(config, triage_route, overrides, verifier_available):
     if 'setting' in o:
         plan.update(executor='single', setting=o['setting'], setting_source='override')
     elif route == 'path2':
-        plan.update(executor='single', setting_source='risk_' + risk,
+        plan.update(executor='advisor', setting_source='risk_' + risk,
                     setting=config.path2_high_risk if risk == 'high' else config.path2_default)
     elif escalation == 'off':
         plan.update(executor='single', setting=None, setting_source='path1_first_answer')
     else:
         plan.update(executor='ladder', setting=None, setting_source='path1_ladder')
-    plan['tier'] = (None if plan['executor'] == 'ladder' else
+    plan['tier'] = (None if plan['executor'] in ('ladder', 'advisor') else
                     PATH1_FIRST_TIER if plan['setting'] is None else SETTING_PREFIX + plan['setting'])
     return plan
 
 
 def reachable_branches(config, overrides):
-    """預算預留要涵蓋的分支：``('single', tier)`` 或 ``('ladder', mode)``。
+    """預算預留要涵蓋的分支：``('single', tier)``、``('advisor', 派送預設)`` 或 ``('ladder', mode)``。
 
     路徑二永遠可到達（分流失敗、建不出驗收器都會轉過去），除非使用者已指定模型。
     """
@@ -188,7 +196,7 @@ def reachable_branches(config, overrides):
     if 'setting' in o:
         return [('single', SETTING_PREFIX + o['setting'])]
     path2 = config.path2_high_risk if o.get('risk') == 'high' else config.path2_default
-    branches = [('single', SETTING_PREFIX + path2)]
+    branches = [('advisor', path2)]
     if o.get('route') != 'path2':
         branches.append(('single', PATH1_FIRST_TIER) if o.get('escalation') == 'off'
                         else ('ladder', config.path1_mode))
@@ -247,6 +255,64 @@ def _single_engine(core, tier):
     return engine
 
 
+def _save_replay_policy(env, directory):
+    from .engine import _save
+    replayable = getattr(env, 'replayable_tools', ())
+    if (not isinstance(replayable, (tuple, list, set, frozenset))
+            or any(not isinstance(name, str) or not name for name in replayable)):
+        raise ValueError('replayable_tools must explicitly name deterministic local tools')
+    _save(directory / 'tool-replay-policy.json', {'replayable_tools': sorted(set(replayable))})
+
+
+def advisor_system(core):
+    from .advisor_flow import advisor_system as base
+    return base(core.advisor_first) + ' ' + OPEN_TASK_NOTE
+
+
+def _advisor_path(core, env, task, prefix, directory, plan):
+    """開放題的顧問先答流程（ADR 0038 第 5 點、ADR 0034 第 2、4、10 點）。
+
+    開源顧問先看題目：自己回答，或改派。改派時第一順位是依風險決定的派送預設，其後依顧問的
+    有效建議順序；回答無法驗收（``passed`` 為 None）就停下，不再改派。顧問回覆無法使用時照
+    ADR 0034 結束（``advisor_incomplete``），不設預設接手。每題最多 ``max_attempts`` 次作答。
+    """
+    from .advisor_flow import _consult
+    from .engine import _save
+    config, pool = core.advisor_first, core.advisor_triage.pool
+    engine = _single_engine(core, SETTING_PREFIX)
+    calls, decision = _consult(engine, prefix, task, pool, system=advisor_system(core))
+    _save(directory / 'advisor-decision.json', decision)
+    attempts, actions = [], []
+    if decision['outcome'] == 'answer':
+        public = core.diagnostic_contract.project(env.validate(decision['answer']))
+        _save(directory / 'validation-a0.json', public)
+        attempts.append({'attempt': 0, 'source': 'advisor_answer', 'tier': 'advisor', 'calls': [],
+                         'final': decision['answer'], 'stop': 'advisor_answer', 'public': public,
+                         'cumulative_actions': 0})
+    if decision['outcome'] == 'incomplete':
+        return {'calls': calls, 'decision': decision}, attempts, actions, 'advisor_incomplete'
+    ranks = {r['setting']: r['rank'] for r in decision['recommendations']}
+    order = [plan['setting']] + [r['setting'] for r in decision['recommendations'] if r['setting'] != plan['setting']]
+    end_reason = 'recommendations_exhausted'
+    for index, setting in enumerate(order, start=1):
+        if attempts and attempts[-1]['public']['passed'] is not False:
+            break
+        if len(attempts) >= config.max_attempts:
+            end_reason = 'attempt_limit'
+            break
+        attempt = engine._advisor_delegated_attempt(env, engine._advisor_answer_messages(task),
+                                                    SETTING_PREFIX + setting, prefix, index, actions, directory)
+        attempt.update(source='delegated', setting=setting, pool_tier=pool[setting]['tier'],
+                       dispatch='risk_default' if index == 1 else 'advisor_recommendation',
+                       recommendation_rank=ranks.get(setting))
+        attempts.append(attempt)
+    if attempts and attempts[-1]['public']['passed'] is True:
+        end_reason = 'passed'
+    elif attempts and attempts[-1]['public']['passed'] is None:
+        end_reason = attempts[-1]['source'] + '_unverifiable'
+    return {'calls': calls, 'decision': decision}, attempts, actions, end_reason
+
+
 def run(core, run_id, task, environment_factory, *, contract_version, overrides=None):
     from .engine import _encoded, _lock, _read, _save
     import hashlib
@@ -295,13 +361,18 @@ def run(core, run_id, task, environment_factory, *, contract_version, overrides=
             sub = core.run(branch['run_id'], task, environment_factory, contract_version=contract_version,
                            mode=config.path1_mode)
             attempts, actions, selection, status = sub['attempts'], sub['actions'], sub['selection'], sub['status']
+        elif plan['executor'] == 'advisor':
+            branch = {'kind': 'advisor', 'flow': 'advisor_first', 'first_dispatch': plan['setting']}
+            _save_replay_policy(env, directory)
+            advisor, attempts, actions, end_reason = _advisor_path(core, env, task, prefix, directory, plan)
+            branch['end_reason'] = end_reason
+            selection = None
+            passed = attempts[-1]['public']['passed'] if attempts else None
+            status = ('advisor_incomplete' if not attempts else 'passed' if passed is True
+                      else 'failed' if passed is False else 'unverifiable')
         else:
             branch = {'kind': 'single', 'tier': plan['tier']}
-            replayable = getattr(env, 'replayable_tools', ())
-            if (not isinstance(replayable, (tuple, list, set, frozenset))
-                    or any(not isinstance(name, str) or not name for name in replayable)):
-                raise ValueError('replayable_tools must explicitly name deterministic local tools')
-            _save(directory / 'tool-replay-policy.json', {'replayable_tools': sorted(set(replayable))})
+            _save_replay_policy(env, directory)
             messages = [{'role': 'system', 'content': core.system}, {'role': 'user', 'content': task['prompt']}]
             actions, selection = [], None
             attempt = _single_engine(core, plan['tier'])._attempt(env, messages, plan['tier'], prefix, 0,
@@ -311,24 +382,27 @@ def run(core, run_id, task, environment_factory, *, contract_version, overrides=
             status = 'passed' if passed is True else 'failed' if passed is False else 'unverifiable'
         result = {'run_id': run_id, 'mode': ADVISOR_TRIAGE, 'triage': triage, 'plan': plan, 'branch': branch,
                   **({'overrides': overrides} if overrides is not None else {}),
+                  **({'advisor': advisor} if plan['executor'] == 'advisor' else {}),
                   'attempts': attempts, 'actions': actions, 'selection': selection,
-                  'first_public_pass': attempts[0]['public']['passed'],
-                  'final_public_pass': attempts[-1]['public']['passed'], 'status': status,
+                  'first_public_pass': attempts[0]['public']['passed'] if attempts else None,
+                  'final_public_pass': attempts[-1]['public']['passed'] if attempts else None, 'status': status,
                   'resumed': resumed, 'wall_seconds': None if resumed else perf_counter() - began,
                   'config_sha256': hashlib.sha256(_encoded(frozen)).hexdigest()}
         _save(completed, result)
         return core._with_costs(result)
 
 
-def routing_summary(result, profile_of):
+def routing_summary(result, core):
     """每題一行回報的資料（ADR 0038 第 7 點）：路徑、模型、風險、分流原判斷與覆寫了哪些項目。"""
     plan, triage = result['plan'], result['triage']
     last = result['attempts'][-1]['tier'] if result['attempts'] else None
-    profile = profile_of(last) if last is not None else None
+    profile = (None if last is None else core.advisor_first.advisor if last == 'advisor'
+               else core._generation_profile(last))
     return {'version': VERSION, 'route': plan['route'], 'route_source': plan['route_source'],
             'triage_route': triage['route'], 'triage_reason': triage['reason'],
             'triage_retried': triage['retried'], 'triage_fallback': triage['fallback'],
             'risk': plan['risk'], 'escalation': plan['escalation'], 'setting': plan['setting'],
+            'end_reason': result['branch'].get('end_reason'),
             'final_tier': last, 'model': None if profile is None else profile['model_version'],
             'effort': None if profile is None else profile['effort'],
             'overridden': sorted(result.get('overrides') or {})}

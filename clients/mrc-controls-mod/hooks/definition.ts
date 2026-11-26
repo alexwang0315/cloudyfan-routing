@@ -70,7 +70,7 @@ export const DEFINITION = {
       }
     }
   },
-  "high_risk_note": "改用高風險時，開放題改由 Fable 5.2 high 作答，每題花費約為一般（Sonnet 5.5 xhigh）的 2.5 倍（2026-11-26 盲測的牌價計算值，未和帳單核對）。",
+  "high_risk_note": "改用高風險時，開放題由顧問派送時改用 Fable 5.2 high，作答花費約為一般（Sonnet 5.5 xhigh）的 2.5 倍（2026-11-26 盲測的牌價計算值，未和帳單核對）；顧問自己回答時不變。",
   "max_usd_presets": [
     "0.10",
     "0.50",

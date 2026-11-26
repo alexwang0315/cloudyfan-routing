@@ -9,15 +9,17 @@ import json
 import httpx
 import pytest
 
+from cloudyfan_jev.advisor import AdvisorConfig
 from cloudyfan_jev.budget import Authorization, BudgetedCore, BudgetError, BudgetStore, EnforcedBound
 from cloudyfan_jev.client import Client
 from cloudyfan_jev.demo import ArithmeticEnvironment, example_config
 from cloudyfan_jev.engine import Core
-from cloudyfan_jev.triage import (ADVISOR_TRIAGE, ROUTE_SYSTEM_V3, OverrideError, TriageConfig,
+from cloudyfan_jev.triage import (ADVISOR_TRIAGE, OPEN_TASK_NOTE, ROUTE_SYSTEM_V3, OverrideError, TriageConfig,
                                   effective_plan, normalize_overrides)
 
 TASK = {'prompt': 'Return only the integer sum of 1 and 1. Expected output: 2'}
 TRIAGER = 'anthropic:claude-haiku-5-5'
+ADVISOR = 'oss/advisor-v1'
 
 
 def profile(model, tier=None, *, effort='xhigh', open_source=None):
@@ -28,6 +30,14 @@ def profile(model, tier=None, *, effort='xhigh', open_source=None):
     if open_source is not None:
         p['open_source'] = open_source
     return p
+
+
+def advisor_config(**fields):
+    def role(name):
+        return {**profile('oss/' + name + '-v1', effort='medium', open_source=True)}
+    values = {'advisor': role('advisor'), 'judge': role('judge'), 'score_snapshot': 'snapshot-20261126-a'}
+    values.update(fields)
+    return AdvisorConfig(**values)
 
 
 def triage_config(**fields):
@@ -57,10 +67,22 @@ def route(value, reason='有預期輸出'):
     return json.dumps({'route': value, 'reason': reason})
 
 
+def delegate(*settings):
+    return json.dumps({'mode': 'delegate', 'recommendations': [
+        {'setting': s, 'tier': triage_config().pool[s]['tier'], 'reason': '需要判斷'}
+        for s in (settings or ('sonnet-xhigh', 'fable-high'))]})
+
+
+def answer(text, *settings):
+    return json.dumps({'mode': 'answer', 'answer': text, 'recommendations': json.loads(delegate(*settings))[
+        'recommendations']})
+
+
 class API:
     """分流顧問依序回 ``triage`` 內容（字串或 HTTP 狀態碼）；作答模型依名稱回答；Jev 回 ``choices``。"""
-    def __init__(self, triage=(route('path1'),), answers=None, choices=('low',)):
+    def __init__(self, triage=(route('path1'),), answers=None, choices=('low',), advisor=None):
         self.triage, self.answers, self.choices = list(triage), answers or {}, iter(choices)
+        self.advisor = advisor or delegate()
         self.requests = []
 
     def models(self):
@@ -83,6 +105,8 @@ class API:
                 return httpx.Response(content, json={'id': f'gen-{i}', 'provider': 'Example', 'usage': {'cost': 0},
                                                      'error': {'code': content, 'message': 'rate limited'}})
             cost = .0005
+        elif p['model'] == ADVISOR:
+            content, cost = self.advisor, .001
         else:
             content, cost = self.answers.get(p['model'], '3'), .01
         return httpx.Response(200, json={'id': f'gen-{i}', 'model': p['model'], 'provider': 'Example',
@@ -93,6 +117,7 @@ class API:
 def make_core(tmp_path, api, config=None, **kwargs):
     http = httpx.Client(transport=httpx.MockTransport(api))
     profiles, decision = example_config()
+    kwargs.setdefault('advisor_first', advisor_config())
     return Core(Client(http, 'mock-only-key', tmp_path), profiles, decision,
                 advisor_triage=config or triage_config(), **kwargs)
 
@@ -118,22 +143,61 @@ def test_triage_path1_runs_existing_jev_ladder_and_records_triage(tmp_path):
     assert Decimal(result['costs']['api_usd']) == Decimal('.0005') + Decimal('.02') + Decimal('.0001')
 
 
-def test_triage_path2_answers_with_default_setting_and_large_output_limit(tmp_path):
-    api = API(triage=(route('path2', '要人判斷'),), answers={'example/sonnet': '建議先做 A'})
+def test_triage_path2_runs_the_advisor_which_delegates_to_the_risk_default(tmp_path):
+    api = API(triage=(route('path2', '要人判斷'),), advisor=delegate('fable-high', 'sonnet-xhigh'),
+              answers={'example/sonnet': '建議先做 A'})
     result = run(make_core(tmp_path, api), env=OpenEnvironment)
-    assert api.models() == [TRIAGER, 'example/sonnet']
-    assert api.requests[1]['max_tokens'] == 32000
+    assert api.models() == [TRIAGER, ADVISOR, 'example/sonnet']
+    assert api.requests[1]['messages'][0]['content'].endswith(OPEN_TASK_NOTE)
+    assert [p['max_tokens'] for p in api.requests[1:]] == [32000, 32000]
     assert result['status'] == 'unverifiable' and result['final_public_pass'] is None
-    assert result['plan']['route'] == 'path2' and result['plan']['setting'] == 'sonnet-xhigh'
-    assert result['attempts'][0]['tier'] == 'triage:sonnet-xhigh'
-    assert result['attempts'][0]['final'] == '建議先做 A'
-    assert result['selection'] is None
+    assert result['plan']['route'] == 'path2' and result['plan']['executor'] == 'advisor'
+    assert result['branch']['end_reason'] == 'delegated_unverifiable'
+    attempt = result['attempts'][0]
+    assert attempt['tier'] == 'triage:sonnet-xhigh' and attempt['dispatch'] == 'risk_default'
+    assert attempt['recommendation_rank'] == 1 and attempt['final'] == '建議先做 A'
+    assert result['advisor']['decision']['outcome'] == 'delegate'
+    assert result['costs']['advisor_usd'] == '0.001' and result['selection'] is None
+
+
+def test_advisor_answers_an_open_task_itself_and_stops(tmp_path):
+    from cloudyfan_jev.triage import routing_summary
+    api = API(triage=(route('path2'),), advisor=answer('先做小規模試驗'))
+    engine = make_core(tmp_path, api)
+    result = run(engine, env=OpenEnvironment)
+    assert api.models() == [TRIAGER, ADVISOR]
+    summary = routing_summary(result, engine)
+    assert summary['model'] == ADVISOR and summary['end_reason'] == 'advisor_answer_unverifiable'
+    assert result['status'] == 'unverifiable' and result['attempts'][0]['final'] == '先做小規模試驗'
+    assert result['branch']['end_reason'] == 'advisor_answer_unverifiable'
+
+
+def test_unusable_advisor_reply_ends_without_dispatch(tmp_path):
+    api = API(triage=(route('path2'),), advisor='我覺得應該先做 A')
+    result = run(make_core(tmp_path, api), env=OpenEnvironment)
+    assert api.models() == [TRIAGER, ADVISOR]
+    assert result['status'] == 'advisor_incomplete' and result['attempts'] == []
+    assert result['branch']['end_reason'] == 'advisor_incomplete'
+
+
+def test_failed_verifiable_dispatch_continues_with_advisor_recommendations(tmp_path):
+    api = API(triage=(route('path2'),), advisor=delegate('haiku-low', 'fable-high'),
+              answers={'example/sonnet': '3', 'example/haiku': '2'})
+    result = run(make_core(tmp_path, api), overrides={'route': 'path2'})
+    assert api.models() == [TRIAGER, ADVISOR, 'example/sonnet', 'example/haiku']
+    assert [a['dispatch'] for a in result['attempts']] == ['risk_default', 'advisor_recommendation']
+    assert result['status'] == 'passed' and result['branch']['end_reason'] == 'passed'
+
+
+def test_triage_requires_the_open_source_advisor_configuration(tmp_path):
+    with pytest.raises(ValueError, match='AdvisorConfig'):
+        make_core(tmp_path, API(), advisor_first=None)
 
 
 def test_high_risk_override_uses_high_risk_setting(tmp_path):
     api = API(triage=(route('path2'),))
     result = run(make_core(tmp_path, api), env=OpenEnvironment, overrides={'risk': 'high'})
-    assert api.models() == [TRIAGER, 'example/fable']
+    assert api.models() == [TRIAGER, ADVISOR, 'example/fable']
     assert result['plan']['risk'] == 'high' and result['plan']['setting_source'] == 'risk_high'
     assert result['overrides'] == {'risk': 'high'}
 
@@ -151,9 +215,9 @@ def test_invalid_triage_reply_is_asked_once_more(tmp_path):
 
 @pytest.mark.parametrize('replies', [('not json', 'still not json'), (429, 429)])
 def test_triage_failing_twice_falls_back_to_path2(tmp_path, replies):
-    api = API(triage=replies)
+    api = API(triage=replies, answers={'example/sonnet': '2'})
     result = run(make_core(tmp_path, api))
-    assert api.models() == [TRIAGER, TRIAGER, 'example/sonnet']
+    assert api.models() == [TRIAGER, TRIAGER, ADVISOR, 'example/sonnet']
     assert result['triage']['route'] is None and result['triage']['fallback'] is True
     assert result['plan']['route'] == 'path2' and result['plan']['route_source'] == 'triage_fallback'
 
@@ -161,15 +225,15 @@ def test_triage_failing_twice_falls_back_to_path2(tmp_path, replies):
 def test_path1_without_verifier_is_sent_to_path2_and_recorded(tmp_path):
     api = API(triage=(route('path1'),))
     result = run(make_core(tmp_path, api), env=OpenEnvironment)
-    assert api.models() == [TRIAGER, 'example/sonnet']
+    assert api.models() == [TRIAGER, ADVISOR, 'example/sonnet']
     assert result['triage']['route'] == 'path1'
     assert result['plan']['route'] == 'path2' and result['plan']['route_source'] == 'no_verifier'
 
 
 def test_route_override_keeps_triage_original_judgment(tmp_path):
     api = API(triage=(route('path1'),))
-    result = run(make_core(tmp_path, api), overrides={'route': 'path2'})
-    assert api.models() == [TRIAGER, 'example/sonnet']
+    result = run(make_core(tmp_path, api), env=OpenEnvironment, overrides={'route': 'path2'})
+    assert api.models() == [TRIAGER, ADVISOR, 'example/sonnet']
     assert result['triage']['route'] == 'path1'
     assert result['plan']['route'] == 'path2' and result['plan']['route_source'] == 'override'
     decision = json.loads((tmp_path / 'runs' / 'r' / 'triage-decision.json').read_text())
@@ -299,6 +363,7 @@ def budgeted(tmp_path, api, *, total='5'):
                    for p in engine.advisor_triage.pool.values()})
     bounds[engine.decision['version']] = EnforcedBound('.001', 'offline hard cap')
     bounds[TRIAGER] = EnforcedBound('.002', 'offline hard cap')
+    bounds.update({m: EnforcedBound('.001', 'offline hard cap') for m in (ADVISOR, 'oss/judge-v1')})
     return BudgetedCore(engine, store, model_bounds=bounds, tool_bounds={}, verify_bound=lambda *a: True)
 
 
@@ -306,10 +371,12 @@ def test_reservation_covers_two_triage_calls_and_the_most_expensive_branch(tmp_p
     runner = budgeted(tmp_path, API())
     turns = runner.core.limits.max_turns
     ladder = Decimal(runner.worst_case_usd('cloudyfan'))
-    path2 = Decimal('.05') * turns
+    # 開放題：顧問一次＋三次作答的池內最高上界＋每次作答一次裁判。
+    path2 = Decimal('.001') + Decimal('.05') * 3 * turns + Decimal('.001') * 3
+    single = Decimal('.05') * turns
     assert Decimal(runner.worst_case_usd(ADVISOR_TRIAGE)) == Decimal('.004') + max(ladder, path2)
     # 指定模型只剩一條分支；關閉升級時路徑一只剩首答。
-    assert Decimal(runner.worst_case_usd(ADVISOR_TRIAGE, {'setting': 'haiku-low'})) == Decimal('.004') + path2
+    assert Decimal(runner.worst_case_usd(ADVISOR_TRIAGE, {'setting': 'haiku-low'})) == Decimal('.004') + single
     off = Decimal(runner.worst_case_usd(ADVISOR_TRIAGE, {'route': 'path1', 'escalation': 'off'}))
     assert off == Decimal('.004') + max(Decimal('.03') * turns, path2)
 
@@ -327,7 +394,7 @@ def test_budgeted_triage_run_records_every_call_under_one_reservation(tmp_path):
     api = API(answers={'example/open_source': '3', 'example/low': '2'})
     runner = budgeted(tmp_path, api)
     result = runner.run('r', TASK, VerifiableEnvironment, contract_version='v1', mode=ADVISOR_TRIAGE,
-                        overrides={'max_usd': '1'})
+                        overrides={'max_usd': '2'})
     assert result['status'] == 'passed'
     assert result['budget']['run_unknown_events'] == 0
     assert Decimal(result['budget']['run_total_usd']) == Decimal(result['costs']['api_usd'])

@@ -196,6 +196,8 @@ class Core:
         if advisor_triage is not None:
             if not isinstance(advisor_triage, TriageConfig):
                 raise ValueError('advisor_triage requires a TriageConfig')
+            if advisor_first is None:
+                raise ValueError('advisor_triage path2 requires the ADR 0034 AdvisorConfig')
             if advisor_triage.path1_mode == 'cloudyfan_plus' and cloudyfan_plus is None:
                 raise ValueError('advisor_triage path1 cloudyfan_plus requires a CloudyfanPlusConfig')
         self.advisor_triage = advisor_triage

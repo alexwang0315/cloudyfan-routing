@@ -715,8 +715,11 @@ class BudgetedCore:
         config = getattr(self.core, 'advisor_first', None)
         if config is None:
             raise ValueError('Unknown workflow mode')
+        return self._advisor_reservation(config, config.resolved_pool(self.core.profiles))
+
+    def _advisor_reservation(self, config, pool):
+        """顧問先答流程的最壞預留；路徑二與顧問先分流的開放題共用（池可不同）。"""
         limits = self.core.limits
-        pool = config.resolved_pool(self.core.profiles)
         attempts = config.max_attempts
         amount = _exact((self._model_cap(config.advisor, 'model_version'),
                          _exact((max(self._model_cap(p, 'model_version') for p in pool.values()),),
@@ -745,7 +748,8 @@ class BudgetedCore:
 
     def _admit_advisor_triage(self, overrides):
         """顧問先分流最壞預留（ADR 0038 第 6 點）：分流顧問兩次（含重問），加上所有可到達
-        分支中最貴的一條。路徑一階梯照該模式原本的預留；單一作答以該設定上界乘以回合上限。
+        分支中最貴的一條。路徑一階梯照該模式原本的預留；開放題照顧問先答流程、以分流池計算；
+        指定模型或關閉升級的單一作答以該設定上界乘以回合上限。
         帶 ``max_usd`` 時，最壞預留超過上限就在任何呼叫前拒跑，不中途停下。"""
         from .triage import TRIAGE_CALLS, normalize_overrides, reachable_branches
         config = getattr(self.core, 'advisor_triage', None)
@@ -760,8 +764,14 @@ class BudgetedCore:
             return _exact((_exact((cap,), limits.max_turns),
                            _exact((self._tool_max(),), limits.max_turns * limits.max_tool_calls)))
 
-        branches = [single(target) if kind == 'single' else self._admit(target)
-                    for kind, target in reachable_branches(config, overrides)]
+        def branch(kind, target):
+            if kind == 'single':
+                return single(target)
+            if kind == 'advisor':
+                return self._advisor_reservation(self.core.advisor_first, config.pool)
+            return self._admit(target)
+
+        branches = [branch(kind, target) for kind, target in reachable_branches(config, overrides)]
         amount = _exact((_exact((self._model_cap(config.triager, 'model_version'),), TRIAGE_CALLS),
                          max(branches)))
         if overrides is not None and 'max_usd' in overrides and amount > money(overrides['max_usd']):

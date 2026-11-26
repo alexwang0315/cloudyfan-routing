@@ -8,7 +8,7 @@
 MRC 多了一種路由模式「顧問先分流」（`advisor_triage`），要明示選用，預設關閉。每題先請 Haiku 5.5 判斷這題能不能驗收：
 
 - 能驗收就走路徑一，便宜模型先答，答錯才升級。
-- 開放題走路徑二，由 Sonnet 直接作答；高風險改用 Fable。
+- 開放題走路徑二，也就是顧問先答流程（ADR 0034）。開源顧問先試著自己回答；沒把握就由同一個顧問派給池內設定，預設 Sonnet，高風險改用 Fable（2026-11-26 使用者定案）。
 
 使用者可以在送題時帶 `overrides`，推翻自動判斷。對話裡用 skill 的文字指令，Claude Code 裡用 mod 的面板，兩者送出同一組覆寫。MRC 逐項檢查，不合規的一律拒絕，並回明確的錯誤碼。
 
@@ -19,20 +19,20 @@ MRC 多了一種路由模式「顧問先分流」（`advisor_triage`），要明
 | 欄位 | 意思 |
 | --- | --- |
 | `triager` | 分流顧問設定（Haiku 5.5 xhigh）；要明示 `open_source`，分流費照實計入 |
-| `pool` | 路徑二與「指定模型」可用的池內設定：`{設定識別: 設定（含 tier）}` |
-| `path2_default`／`path2_high_risk` | 路徑二預設與高風險用的設定識別，必須在 `pool` 內 |
+| `pool` | 路徑二顧問可派送、以及「指定模型」可用的池內設定：`{設定識別: 設定（含 tier）}` |
+| `path2_default`／`path2_high_risk` | 路徑二派送的第一順位（一般／高風險），必須在 `pool` 內 |
 | `path1_mode` | 路徑一沿用的既有模式：`cloudyfan` 或 `cloudyfan_plus`（交卷前評審） |
 | `path2_max_tokens` | 路徑二輸出上限，至少 32,000 |
 
-設定寫進 `configuration_descriptor()['advisor_triage']`，每題凍結。沒有提供 `TriageConfig` 時，描述、模式清單與預算都和以前一模一樣。
+路徑二的顧問本身沿用 Core 的 `AdvisorConfig`，也就是 ADR 0034 的開源顧問與裁判；沒有它就不能建立分流模式。顧問提示是 ADR 0034 的原提示，再加一段 `OPEN_TASK_NOTE`：「需要判斷、建議或決策的題目，沒有把握就派送」，一起凍結。設定寫進 `configuration_descriptor()['advisor_triage']`，每題凍結。沒有提供 `TriageConfig` 時，描述、模式清單與預算都和以前一模一樣。
 
 ### `overrides`（`POST /v1/tasks` 選填欄位）
 
 | 欄位 | 值 | 作用 |
 | --- | --- | --- |
-| `risk` | `normal`／`high` | 路徑二用預設或高風險設定（路徑一不受影響，照實記錄） |
+| `risk` | `normal`／`high` | 路徑二派送的第一順位用預設或高風險設定（路徑一不受影響，照實記錄） |
 | `route` | `path1`／`path2` | 推翻分流顧問；分流顧問仍會呼叫一次，原判斷照實保存 |
-| `setting` | 池內設定識別 | 這題只用這個設定作答一次，不升級 |
+| `setting` | 池內設定識別 | 這題只用這個設定作答一次，不經顧問、不升級 |
 | `escalation` | `auto`／`off` | `off`：路徑一只做首答與驗收，不呼叫 Jev、不升級 |
 | `max_usd` | 字串金額 | 這題最壞預留超過它就在任何呼叫前拒跑 |
 
@@ -54,10 +54,15 @@ MRC 多了一種路由模式「顧問先分流」（`advisor_triage`），要明
 3. 呼叫分流顧問（`run-<id>-triage`）。格式錯或供應商拒收就重問一次（`run-<id>-triage-2`）。仍錯就走路徑二，記為 `triage_fallback`。
 4. 用 `effective_plan()` 決定實際路徑。路徑一但建不出驗收器時，改走路徑二，記為 `no_verifier`。
 5. 寫 `triage-decision.json`，內容是分流原判斷、覆寫與實際計畫。
-6. 分兩種執行方式：
-   - `ladder`：以 `<id>-p1` 子任務跑既有的 `cloudyfan`／`cloudyfan_plus`，Jev 升級規則一字不改。
-   - `single`：池內單一設定作答一次，再用環境的驗收器驗收。
-7. `result.json` 保存 `triage`、`plan`、`branch`、`overrides`。費用另列 `triage_usd`。
+6. 分三種執行方式：
+   - `ladder`（路徑一）：以 `<id>-p1` 子任務跑既有的 `cloudyfan`／`cloudyfan_plus`，Jev 升級規則一字不改。
+   - `advisor`（路徑二）：開源顧問先看題目，自己回答或改派。
+     - 改派時第一順位是依風險決定的設定，其後依顧問的有效建議順序。
+     - 回答無法驗收就停下，不再改派。
+     - 顧問回覆無法使用時照 ADR 0034 結束，記為 `advisor_incomplete`，不設預設接手。
+     - 顧問與派送作答的輸出上限都是 `path2_max_tokens`。
+   - `single`：指定模型，或路徑一關閉升級時，單一設定作答一次，再用環境的驗收器驗收。
+7. `result.json` 保存 `triage`、`plan`、`branch`、`overrides`，走路徑二時還有 `advisor`（顧問的呼叫與決定）。費用另列 `triage_usd`、`advisor_usd`、`judge_usd`。
 
 HTTP 的 `outcome.json` 與 `GET /v1/tasks/<id>/result` 多一個 `routing` 物件，供每題一行回報使用。它只出現在 `advisor_triage` 的題目。
 
@@ -65,7 +70,7 @@ HTTP 的 `outcome.json` 與 `GET /v1/tasks/<id>/result` 多一個 `routing` 物�
 
 預留額 = 分流顧問上界 × 2（含重問），加上所有可到達分支中最貴的一條。
 
-- 路徑二永遠可到達，因為分流失敗或建不出驗收器都會轉過去。
+- 路徑二永遠可到達，因為分流失敗或建不出驗收器都會轉過去。它照顧問先答流程的預留，以分流池計算：顧問一次，加上每次作答的池內最高上界乘以回合上限、每次作答一次裁判，最多三次作答。
 - 路徑一階梯照該模式原本的預留。
 - 單一作答以該設定上界乘以回合上限。
 - 指定模型時只剩一條分支；關閉升級時，路徑一只算首答。
@@ -84,12 +89,13 @@ HTTP 的 `outcome.json` 與 `GET /v1/tasks/<id>/result` 多一個 `routing` 物�
 ## 驗證範圍
 
 - 已做的離線測試：
-  - `tests/test_advisor_triage.py`：Core 流程、重問與備案、`no_verifier`、覆寫、續跑不重付、預算預留與 `max_usd`。
+  - `tests/test_advisor_triage.py`：Core 流程、重問與備案、`no_verifier`、開放題的顧問自答／派送／無法使用、覆寫、續跑不重付、預算預留與 `max_usd`。
   - `tests/test_http_triage_overrides.py`：HTTP 欄位、合約允許清單、池外設定、凍結、不帶覆寫時行為不變。
   - `tests/test_controls.py`：指令解析、高風險提醒與每題回報。
   - mod：`claude plugin validate` 通過；`claude plugin test` 5 項通過；TypeScript 6.0.3 型別檢查無誤。
 - 還沒驗證：
   - 沒有用真實模型跑過這個模式。分流準確率只來自 2026-11-26 的 72 題測驗，花費都是牌價計算值。
+  - 開源顧問在開放題上會自答幾題、派送幾題、自答品質如何，沒有測過。ADR 0038 第 5 點要求上線前用 10 題開放題實測。
   - mod 只用測試工具與驗證器檢查過，還沒在 App 裡實際點過面板。
   - 在 Claude Code 輸入框打 `/風險 高` 這類中文斜線字會不會被當成未知指令，沒有測。skill 建議改用 `/mrc 風險 高` 或單題標記。
 - 還沒做：

@@ -129,16 +129,18 @@ def parse_decision(content, pool, *, delegate_only=False):
     return decision
 
 
-def advisor_messages(task, pool, card=None, *, delegate_only=False):
+def advisor_messages(task, pool, card=None, *, delegate_only=False, system=None):
     """顧問輸入：只放公開題目與池內設定識別；私有欄位一律擋下。
-    有凍結的經驗卡時（#76）附上卡片，並在系統提示補一段固定說明。"""
+    有凍結的經驗卡時（#76）附上卡片，並在系統提示補一段固定說明。
+    ``system`` 由呼叫端指定已凍結的系統提示（顧問先分流的開放題，ADR 0038）；省略時照舊。"""
     routing._reject_private(task)
     public = routing.project_public({'task': task})
     listing = [{'setting': key, 'tier': profile['tier'], **{k: profile[k] for k in _POOL_FIELDS},
                 **({k: profile[k] for k in _POOL_OPTIONAL_FIELDS if k in profile} if delegate_only else {})}
                for key, profile in pool.items()]
     content = {'task': public['task'], 'pool': listing}
-    system = ADVISOR_SYSTEM_DELEGATE_ONLY if delegate_only else ADVISOR_SYSTEM
+    if system is None:
+        system = ADVISOR_SYSTEM_DELEGATE_ONLY if delegate_only else ADVISOR_SYSTEM
     if card is not None:
         from .experience_card import ADVISOR_NOTE, advisor_view
         content['experience_card'] = advisor_view(card)
@@ -148,7 +150,7 @@ def advisor_messages(task, pool, card=None, *, delegate_only=False):
             {'role': 'user', 'content': json.dumps(content, sort_keys=True, ensure_ascii=False)}]
 
 
-def _consult(core, prefix, task, pool, card=None):
+def _consult(core, prefix, task, pool, card=None, *, system=None):
     """呼叫顧問一次（同 call_id 續跑讀舊收據，不重付）並解析。"""
     profile = core.advisor_first.advisor
     if core.execution_policy is not None:
@@ -157,7 +159,7 @@ def _consult(core, prefix, task, pool, card=None):
         if not isinstance(location, str) or not location.startswith('cloud:'):
             raise PolicyDenied('generation', 'backend_location_mismatch')
     delegate_only = core.advisor_first.delegate_only
-    messages = advisor_messages(task, pool, card, delegate_only=delegate_only)
+    messages = advisor_messages(task, pool, card, delegate_only=delegate_only, system=system)
     cid = advisor_call_id(prefix)
     payload = core.generation_payload(messages, profile, prefix, None)
     record, info = core._checked(cid, transport.CHAT, payload, profile['accepted_models'],

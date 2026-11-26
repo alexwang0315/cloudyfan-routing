@@ -11,7 +11,7 @@ from cloudyfan_jev.budget import EnforcedBound
 from cloudyfan_jev.http_api import HTTPApp, RegisteredContract, TaskService
 from cloudyfan_jev.privacy import ExecutionPolicy
 from cloudyfan_jev.triage import ADVISOR_TRIAGE, OVERRIDE_FIELDS
-from test_advisor_triage import API, TRIAGER, VerifiableEnvironment, route, triage_config
+from test_advisor_triage import ADVISOR, API, TRIAGER, VerifiableEnvironment, advisor_config, route, triage_config
 from test_budget import controlled
 from test_http_api import TASK, block_real_network  # noqa: F401  (autouse：禁止真實連線)
 
@@ -22,12 +22,16 @@ def located(profile):
     return {**profile, 'execution_location': 'cloud:fixture'}
 
 
-def service(tmp_path, api, *, allowed=ALL, ceiling='0.5', mode=ADVISOR_TRIAGE, extra_contracts=None):
+def service(tmp_path, api, *, allowed=ALL, ceiling='1', mode=ADVISOR_TRIAGE, extra_contracts=None):
     runner = controlled(tmp_path / 'runner', api)
     runner.core.execution_policy = ExecutionPolicy(mode='unrestricted', origin='home:fixture',
                                                    classifier='cloud:typesafe')
     for profile in runner.core.profiles.values():
         profile['execution_location'] = 'cloud:fixture'
+    advisor = advisor_config()
+    runner.core.advisor_first = advisor_config(advisor=located(advisor.advisor), judge=located(advisor.judge))
+    for model in (ADVISOR, 'oss/judge-v1'):
+        runner.model_bounds[model] = EnforcedBound('.003', 'offline hard cap')
     base = triage_config()
     runner.core.advisor_triage = triage_config(triager=located(base.triager),
                                                pool={k: located(v) for k, v in base.pool.items()})
@@ -65,10 +69,10 @@ def test_task_without_overrides_runs_triage_and_reports_one_line_routing(tmp_pat
 def test_overrides_are_frozen_and_both_judgments_are_kept(tmp_path):
     api = API(triage=(route('path1'),), answers={'example/fable': '2'})
     client, svc = service(tmp_path, api)
-    overrides = {'route': 'path2', 'risk': 'high', 'max_usd': '0.5'}
+    overrides = {'route': 'path2', 'risk': 'high', 'max_usd': '1'}
     response = client.post('/v1/tasks', json={**TASK, 'overrides': overrides})
     assert response.status_code == 200
-    assert api.models() == [TRIAGER, 'example/fable']
+    assert api.models() == [TRIAGER, ADVISOR, 'example/fable']
     routing = outcome(svc)['routing']
     assert routing['triage_route'] == 'path1' and routing['route'] == 'path2'
     assert routing['route_source'] == 'override' and routing['overridden'] == ['max_usd', 'risk', 'route']
@@ -79,7 +83,7 @@ def test_overrides_are_frozen_and_both_judgments_are_kept(tmp_path):
     changed = client.post('/v1/tasks', json={**TASK, 'overrides': {'route': 'path1'}})
     assert changed.status_code == 409 and changed.json()['error']['code'] == 'frozen_task_changed'
     same = client.post('/v1/tasks', json={**TASK, 'overrides': overrides})
-    assert same.status_code == 200 and len(api.requests) == 2
+    assert same.status_code == 200 and len(api.requests) == 3
 
 
 @pytest.mark.parametrize('overrides,status,code', [
@@ -87,7 +91,7 @@ def test_overrides_are_frozen_and_both_judgments_are_kept(tmp_path):
     ({'setting': 'opus-xhigh'}, 422, 'setting_not_in_pool'),
     ({'risk': 'HIGH'}, 422, 'invalid_override_value'),
     ({'escalation': False}, 422, 'invalid_override_value'),
-    ({'max_usd': '0.75'}, 422, 'max_usd_exceeds_contract'),
+    ({'max_usd': '1.5'}, 422, 'max_usd_exceeds_contract'),
     ({'max_usd': '0.01'}, 409, 'max_usd_below_worst_case'),
     ({'max_usd': 1}, 422, 'invalid_override_value'),
     ({'setting': 'haiku-low', 'escalation': 'auto'}, 422, 'override_conflict'),

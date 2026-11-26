@@ -79,6 +79,9 @@ def test_report_line_names_overrides_and_the_triage_original_judgment():
     assert line == ('本題：開放題／anthropic:claude-sonnet-5-5 xhigh／高風險／約 US$0.11'
                     '（你指定了路徑；你改了路徑；分流顧問原判：可驗收題）')
     assert '建不出驗收器' in report_line(outcome(route_source='no_verifier', triage_route='path1'))
+    fallback = outcome()
+    fallback['routing']['advisor_incomplete_dispatch'] = {'setting': 'sonnet-xhigh', 'reason': 'invalid_json'}
+    assert report_line(fallback).endswith('（顧問未完成、改派 sonnet-xhigh）')
     cheap = outcome()
     cheap['costs']['complete_api_usd'] = '0.0008'
     assert report_line(cheap).endswith('約 US$0.0008')

@@ -293,8 +293,11 @@ def _advisor_path(core, env, task, prefix, directory, plan):
     """開放題的顧問先答流程（ADR 0038 第 5 點、ADR 0034 第 2、4、10 點）。
 
     開源顧問先看題目：自己回答，或改派。改派時第一順位是依風險決定的派送預設，其後依顧問的
-    有效建議順序；回答無法驗收（``passed`` 為 None）就停下，不再改派。顧問回覆無法使用時照
-    ADR 0034 結束（``advisor_incomplete``），不設預設接手。每題最多 ``max_attempts`` 次作答。
+    有效建議順序；回答無法驗收（``passed`` 為 None）就停下，不再改派。每題最多 ``max_attempts`` 次作答。
+
+    開放題專用的例外（2026-11-26 使用者定案「改派 Sonnet」，不照 ADR 0034 第 10 點直接結束）：
+    顧問回覆無法使用（解析失敗或建議全部無效）時，記為「顧問未完成、改派」，一律派給一般預設
+    ``path2_default``（Sonnet 5.5 xhigh）；使用者只說改派 Sonnet，高風險題也照字面派一般預設。
     """
     from .advisor_flow import _consult
     from .engine import _save
@@ -309,10 +312,10 @@ def _advisor_path(core, env, task, prefix, directory, plan):
         attempts.append({'attempt': 0, 'source': 'advisor_answer', 'tier': 'advisor', 'calls': [],
                          'final': decision['answer'], 'stop': 'advisor_answer', 'public': public,
                          'cumulative_actions': 0})
-    if decision['outcome'] == 'incomplete':
-        return {'calls': calls, 'decision': decision}, attempts, actions, 'advisor_incomplete'
+    incomplete = decision['outcome'] == 'incomplete'
     ranks = {r['setting']: r['rank'] for r in decision['recommendations']}
-    order = [plan['setting']] + [r['setting'] for r in decision['recommendations'] if r['setting'] != plan['setting']]
+    first = core.advisor_triage.path2_default if incomplete else plan['setting']
+    order = [first] + [r['setting'] for r in decision['recommendations'] if r['setting'] != first]
     end_reason = 'recommendations_exhausted'
     for index, setting in enumerate(order, start=1):
         if attempts and attempts[-1]['public']['passed'] is not False:
@@ -323,14 +326,18 @@ def _advisor_path(core, env, task, prefix, directory, plan):
         attempt = engine._advisor_delegated_attempt(env, engine._advisor_answer_messages(task),
                                                     SETTING_PREFIX + setting, prefix, index, actions, directory)
         attempt.update(source='delegated', setting=setting, pool_tier=pool[setting]['tier'],
-                       dispatch='risk_default' if index == 1 else 'advisor_recommendation',
+                       dispatch=('advisor_incomplete_default' if incomplete else
+                                 'risk_default' if index == 1 else 'advisor_recommendation'),
                        recommendation_rank=ranks.get(setting))
         attempts.append(attempt)
     if attempts and attempts[-1]['public']['passed'] is True:
         end_reason = 'passed'
     elif attempts and attempts[-1]['public']['passed'] is None:
         end_reason = attempts[-1]['source'] + '_unverifiable'
-    return {'calls': calls, 'decision': decision}, attempts, actions, end_reason
+    advisor = {'calls': calls, 'decision': decision}
+    if incomplete:
+        advisor['incomplete_dispatch'] = {'setting': first, 'reason': decision['incomplete_reason']}
+    return advisor, attempts, actions, end_reason
 
 
 def run(core, run_id, task, environment_factory, *, contract_version, overrides=None):
@@ -423,6 +430,7 @@ def routing_summary(result, core):
             'triage_retried': triage['retried'], 'triage_fallback': triage['fallback'],
             'risk': plan['risk'], 'escalation': plan['escalation'], 'setting': plan['setting'],
             'end_reason': result['branch'].get('end_reason'),
+            'advisor_incomplete_dispatch': (result.get('advisor') or {}).get('incomplete_dispatch'),
             'final_tier': last, 'model': None if profile is None else profile['model_version'],
             'effort': None if profile is None else profile['effort'],
             'overridden': sorted(result.get('overrides') or {})}

@@ -172,12 +172,24 @@ def test_advisor_answers_an_open_task_itself_and_stops(tmp_path):
     assert result['branch']['end_reason'] == 'advisor_answer_unverifiable'
 
 
-def test_unusable_advisor_reply_ends_without_dispatch(tmp_path):
-    api = API(triage=(route('path2'),), advisor='我覺得應該先做 A')
-    result = run(make_core(tmp_path, api), env=OpenEnvironment)
-    assert api.models() == [TRIAGER, ADVISOR]
-    assert result['status'] == 'advisor_incomplete' and result['attempts'] == []
-    assert result['branch']['end_reason'] == 'advisor_incomplete'
+OUT_OF_POOL = json.dumps({'mode': 'delegate', 'recommendations': [
+    {'setting': 'opus-xhigh', 'tier': 'high', 'reason': '最強'}, {'setting': 'gpt-x', 'tier': 'high', 'reason': '備援'}]})
+
+
+@pytest.mark.parametrize('risk', ['normal', 'high'])
+@pytest.mark.parametrize('reply', ['我覺得應該先做 A', OUT_OF_POOL])
+def test_unusable_advisor_reply_is_dispatched_to_sonnet_even_for_high_risk(tmp_path, reply, risk):
+    # 2026-11-26 使用者定案「改派 Sonnet」：開放題專用的例外；高風險也照字面派一般預設。
+    from cloudyfan_jev.triage import routing_summary
+    api = API(triage=(route('path2'),), advisor=reply, answers={'example/sonnet': '建議先做 A'})
+    engine = make_core(tmp_path, api)
+    result = run(engine, env=OpenEnvironment, overrides={'risk': risk})
+    assert api.models() == [TRIAGER, ADVISOR, 'example/sonnet']
+    assert result['advisor']['decision']['outcome'] == 'incomplete'
+    assert result['advisor']['incomplete_dispatch']['setting'] == 'sonnet-xhigh'
+    assert [a['dispatch'] for a in result['attempts']] == ['advisor_incomplete_default']
+    assert result['status'] == 'unverifiable' and result['attempts'][0]['final'] == '建議先做 A'
+    assert routing_summary(result, engine)['advisor_incomplete_dispatch']['setting'] == 'sonnet-xhigh'
 
 
 def test_failed_verifiable_dispatch_continues_with_advisor_recommendations(tmp_path):

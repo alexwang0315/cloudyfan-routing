@@ -61,7 +61,10 @@ MRC 多了一種路由模式「顧問先分流」（`advisor_triage`），要明
    - `advisor`（路徑二）：開源顧問先看題目，自己回答或改派。
      - 改派時第一順位是依風險決定的設定，其後依顧問的有效建議順序。
      - 回答無法驗收就停下，不再改派。
-     - 顧問回覆無法使用時照 ADR 0034 結束，記為 `advisor_incomplete`，不設預設接手。
+     - 顧問回覆無法使用（解析失敗或建議全部無效）時，記為「顧問未完成、改派 Sonnet」，一律派給一般預設 `path2_default`（Sonnet 5.5 xhigh）。這是開放題專用的例外，不照 ADR 0034 第 10 點直接結束。
+       - 紀錄：`advisor.incomplete_dispatch`（派給誰、顧問未完成的原因），以及作答的 `dispatch: advisor_incomplete_default`。
+       - 每題一行回報會附「顧問未完成、改派 sonnet-xhigh」。
+       - 使用者只說「改派 Sonnet」，沒提高風險題要不要改派 Fable，所以照字面，高風險題也派 Sonnet。
      - 顧問與派送作答的輸出上限都是 `path2_max_tokens`。
    - `single`：指定模型，或路徑一關閉升級時，單一設定作答一次，再用環境的驗收器驗收。
 7. `result.json` 保存 `triage`、`plan`、`branch`、`overrides`，走路徑二時還有 `advisor`（顧問的呼叫與決定）。費用另列 `triage_usd`、`advisor_usd`、`judge_usd`。
@@ -102,7 +105,7 @@ HTTP 的 `outcome.json` 與 `GET /v1/tasks/<id>/result` 多一個 `routing` 物�
     - 加上 `OPEN_ADVISOR_RULE`：10 題全部派送，但顧問的第一順位一律是 Opus xhigh。推測原因是一般模式的池清單不附價格。
     - 開源顧問本身還沒測。
 - 已定案（2026-11-26）：開放題的池限定為 Sonnet 5.5 xhigh（預設）加 Fable 5.2 high（高風險），不放 Haiku 與 Opus，所以不必附價格。已在程式裡強制（`path2_pool()`），並由 `test_open_task_advisor_sees_and_dispatches_only_sonnet_and_fable` 驗證。
-- 待使用者定案：顧問回覆無法使用時，目前照 ADR 0034 結束（`advisor_incomplete`），不自動派給 Sonnet。
+- 已定案（2026-11-26）：開放題的顧問回覆無法使用時改派 Sonnet 5.5 xhigh（使用者原話「改派 Sonnet」）。高風險題也照字面派 Sonnet，因為使用者沒提到要不要改派 Fable。由 `test_unusable_advisor_reply_is_dispatched_to_sonnet_even_for_high_risk` 驗證。
   - mod 只用測試工具與驗證器檢查過，還沒在 App 裡實際點過面板。
   - 在 Claude Code 輸入框打 `/風險 高` 這類中文斜線字會不會被當成未知指令，沒有測。skill 建議改用 `/mrc 風險 高` 或單題標記。
 - 還沒做：

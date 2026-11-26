@@ -186,6 +186,8 @@ def report_line(outcome):
     notes = []
     if routing['route_source'] in SOURCE_NOTES:
         notes.append(SOURCE_NOTES[routing['route_source']])
+    if routing.get('advisor_incomplete_dispatch'):
+        notes.append('顧問未完成、改派 ' + routing['advisor_incomplete_dispatch']['setting'])
     if routing['overridden']:
         notes.append('你改了' + '、'.join(FIELD_LABELS[f] for f in routing['overridden']))
     if routing['triage_route'] and routing['triage_route'] != routing['route']:

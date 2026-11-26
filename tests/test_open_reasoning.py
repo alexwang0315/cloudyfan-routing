@@ -171,4 +171,20 @@ def test_route_classify_sends_one_task_per_call_and_scores_each(tmp_path):
     summary = json.loads((tmp_path / 'rc' / 'route-classify-report.json').read_text())['summary']
     assert summary['correct'] == 2 and summary['by_kind'] == {'code': {'tasks': 1, 'classified': 1, 'correct': 1},
                                                                'open': {'tasks': 2, 'classified': 2, 'correct': 1}}
+    assert summary['by_expected'] == {'path1': {'path1': 1, 'path2': 0}, 'path2': {'path1': 1, 'path2': 1}}
     assert Decimal(summary['mean_usd_per_task']) > 0
+
+
+def test_gray_items_are_fixed_and_ambiguous_ones_are_not_scored(tmp_path):
+    entries = pilot.gray_entries()
+    expected = {e['id']: e['expected'] for e in entries}
+    assert len(entries) == 14 and set(expected.values()) == {'path1', 'path2', 'ambiguous'}
+    assert sum(v == 'ambiguous' for v in expected.values()) == 3 and pilot.gray_entries() == entries
+    picked = [e for e in entries if e['expected'] == 'ambiguous'][:1] + [e for e in entries if e['expected'] == 'path1'][:1]
+    rows = pilot.route_classify(tmp_path / 'g', picked, pilot.anthropic_target('claude-haiku-5-5', effort='xhigh'),
+                                anthropic_key='an-key', cap_usd='1',
+                                transports=_fake(lambda b: '{"route": "path1", "reason": "r"}', []))
+    assert [r['correct'] for r in rows] == [None, True]
+    summary = json.loads((tmp_path / 'g' / 'route-classify-report.json').read_text())['summary']
+    assert summary['scored'] == 1 and summary['correct'] == 1
+    assert summary['by_expected'] == {'ambiguous': {'path1': 1, 'path2': 0}, 'path1': {'path1': 1, 'path2': 0}}

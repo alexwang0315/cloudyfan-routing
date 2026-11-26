@@ -502,6 +502,17 @@ def route_entries(code_tasks, seed='route-classify-v1'):
     return entries
 
 
+ROUTE_GRAY_ITEMS = Path(__file__).resolve().parents[2] / 'docs/evidence/route-gray-items-20261126.json'
+
+
+def gray_entries(path=ROUTE_GRAY_ITEMS, seed='route-gray-v1'):
+    """灰色地帶題：表面像另一類的題目；``expected`` 是事先照規則定的路徑，``ambiguous`` 只記錄、不算對錯。"""
+    items = json.loads(Path(path).read_text())['items']
+    entries = [{'id': i['id'], 'expected': i['expected'], 'kind': 'gray', 'prompt': i['prompt']} for i in items]
+    random.Random(seed).shuffle(entries)
+    return entries
+
+
 def parse_route(text):
     match = re.search(r'\{.*\}', text or '', re.S)
     try:
@@ -528,19 +539,26 @@ def route_classify(root, entries, target, *, anthropic_key, cap_usd, **options):
             verdict = parse_route(text)
             row['outcome'] = 'classified' if verdict else 'route_invalid'
             row.update(verdict or {'raw': text})
-            row['correct'] = bool(verdict) and verdict['route'] == entry['expected']
+            row['correct'] = None if entry['expected'] == 'ambiguous' else \
+                bool(verdict) and verdict['route'] == entry['expected']
         rows.append(row)
     done = [r for r in rows if r['outcome'] == 'classified']
     known = sum((Decimal(r['cost_usd']) for r in rows if r.get('cost_usd') is not None), Decimal(0))
     by_kind = {}
-    for kind in ('code', 'open'):
+    for kind in sorted({r['kind'] for r in rows}):
         mine = [r for r in done if r['kind'] == kind]
         by_kind[kind] = {'tasks': sum(r['kind'] == kind for r in rows), 'classified': len(mine),
-                         'correct': sum(r['correct'] for r in mine)}
+                         'correct': sum(r['correct'] is True for r in mine)}
+    by_expected = {}
+    for r in done:
+        entry = by_expected.setdefault(r['expected'], {'path1': 0, 'path2': 0})
+        entry[r['route']] += 1
     report = {'stage': 'route_classify', 'target': target['address'], 'effort': target['profile']['effort'],
               'route_system': ROUTE_SYSTEM, 'cap_usd': str(cap_usd), 'rows': rows,
-              'summary': {'tasks': len(rows), 'classified': len(done), 'correct': sum(r['correct'] for r in done),
-                          'by_kind': by_kind, 'known_usd': format(known.normalize(), 'f'),
+              'summary': {'tasks': len(rows), 'classified': len(done),
+                          'scored': sum(r['correct'] is not None for r in done),
+                          'correct': sum(r['correct'] is True for r in done),
+                          'by_kind': by_kind, 'by_expected': by_expected, 'known_usd': format(known.normalize(), 'f'),
                           'mean_usd_per_task': format((known / len(rows)).quantize(Decimal('0.000001')), 'f')
                           if rows else '0',
                           'mean_seconds': round(sum(r['seconds'] for r in rows) / len(rows), 2) if rows else 0,
@@ -1060,6 +1078,7 @@ def main(argv=None):
     rc.add_argument('--root', type=Path, required=True)
     rc.add_argument('--cap', default='1')
     rc.add_argument('--task-set', choices=CODE_TASK_SETS, default='v5')
+    rc.add_argument('--gray', action='store_true', help='改跑灰色地帶題（docs/evidence/route-gray-items-20261126.json）')
     rc.add_argument('--anthropic-model', default='claude-haiku-5-5')
     rc.add_argument('--effort', choices=('low', 'medium', 'high', 'xhigh', 'max'), default='xhigh')
     rc.add_argument('--anthropic-env-file', type=Path)
@@ -1170,7 +1189,8 @@ def main(argv=None):
         if not args.confirm_paid:
             parser.error('paid_requests_require_--confirm-paid')
         from .code_tasks import FROZEN_CODE_TASK_SETS, frozen_code_tasks
-        entries = route_entries(frozen_code_tasks(path=FROZEN_CODE_TASK_SETS[args.task_set]))
+        entries = gray_entries() if args.gray else \
+            route_entries(frozen_code_tasks(path=FROZEN_CODE_TASK_SETS[args.task_set]))
         rows = route_classify(args.root, entries, anthropic_target(args.anthropic_model, effort=args.effort),
                               anthropic_key=key_from_args(args, 'anthropic'), cap_usd=args.cap,
                               max_input_bytes=49152, anthropic_workspace_id=args.anthropic_workspace_id)

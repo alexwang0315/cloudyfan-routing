@@ -1,0 +1,6 @@
+{
+  "name": "mrc-controls",
+  "version": "0.1.0",
+  "description": "MRC 使用者控制：狀態列、控制面板與高風險確認按鈕，送出與 mrc-controls skill 相同的覆寫（ADR 0038）",
+  "types": "./types/index.d.ts"
+}

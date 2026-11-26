@@ -28,6 +28,7 @@ from .retention import (RetentionError, RetentionPolicy, RetentionStore, digest,
                         inventory, open_file_paths, maintenance_lock, purge_exact)
 from .task_features import FeatureRecorder, feature_computation, not_provided, unavailable
 from . import task_recommendations as advice
+from . import triage as triage_mode
 
 _CREATION_SELECTION = ContextVar('task_service_creation_selection', default=())
 _CREATION_UNSET = object()
@@ -101,6 +102,10 @@ class RegisteredContract:
     mode: str = 'cloudyfan'
     # 明示選用的參考區塊準備政策（#50）；None 表示此契約不接受結構化參考區塊。
     context_policy: dict | None = None
+    # 使用者覆寫（ADR 0038 第 7 點）：只有顧問先分流契約可以允許；空的就不收 ``overrides``。
+    allowed_overrides: tuple[str, ...] = ()
+    # 允許 ``max_usd`` 時必填：這份契約每題花費上限的最大值（字串金額）。
+    max_usd_ceiling: str | None = None
 
     def descriptor(self):
         if (not isinstance(self.version, str) or not self.version.strip()
@@ -113,13 +118,32 @@ class RegisteredContract:
         # 路徑二（ADR 0034）只能在 Core 明示提供顧問設定時選用。
         if self.mode == 'advisor_first' and getattr(core, 'advisor_first', None) is None:
             raise ValueError('advisor_first mode requires an advisor configuration')
+        if self.mode == triage_mode.ADVISOR_TRIAGE and getattr(core, 'advisor_triage', None) is None:
+            raise ValueError('advisor_triage mode requires a TriageConfig')
+        overrides = {}
+        if self.allowed_overrides or self.max_usd_ceiling is not None:
+            allowed = tuple(self.allowed_overrides)
+            if self.mode != triage_mode.ADVISOR_TRIAGE:
+                raise ValueError('Only advisor_triage contracts can allow overrides')
+            if (not allowed or len(set(allowed)) != len(allowed)
+                    or any(name not in triage_mode.OVERRIDE_FIELDS for name in allowed)):
+                raise ValueError('allowed_overrides must name distinct override fields')
+            if ('max_usd' in allowed) != (self.max_usd_ceiling is not None):
+                raise ValueError('max_usd override requires exactly one max_usd_ceiling')
+            if self.max_usd_ceiling is not None and (
+                    not isinstance(self.max_usd_ceiling, str)
+                    or not triage_mode._MONEY.fullmatch(self.max_usd_ceiling)
+                    or Decimal(self.max_usd_ceiling) <= 0):
+                raise ValueError('max_usd_ceiling must be a positive decimal string')
+            overrides = {'overrides_policy': {'allowed': sorted(allowed),
+                                              'max_usd_ceiling': self.max_usd_ceiling}}
         # 路徑一加強版（#79）同樣只能在明示提供設定時選用；設定只凍結在選用它的契約中。
         plus = {}
         if self.mode == 'cloudyfan_plus':
             if getattr(core, 'cloudyfan_plus', None) is None:
                 raise ValueError('cloudyfan_plus mode requires a CloudyfanPlusConfig')
             plus = {'cloudyfan_plus': core.cloudyfan_plus.descriptor()}
-        return {**core.configuration_descriptor(), **plus,
+        return {**core.configuration_descriptor(), **plus, **overrides,
                 'version': self.version, 'mode': self.mode, 'tool_names': list(self.tool_names),
                 'model_bounds': {key: asdict(bound) for key, bound in self.runner.model_bounds.items()},
                 'tool_bounds': {key: asdict(bound) for key, bound in self.runner.tool_bounds.items()},
@@ -166,6 +190,12 @@ def _provenance(result, frozen):
         # 路徑二（ADR 0034）：改派作答的 tier 是 ``pool:<設定>``，顧問／裁判是角色名；
         # 都從該題凍結的 advisor_first 設定找回，不讀目前設定。
         advisor = frozen.get('advisor_first') or {}
+        triage = frozen.get('advisor_triage') or {}
+        if tier.startswith(triage_mode.SETTING_PREFIX) and tier.removeprefix(
+                triage_mode.SETTING_PREFIX) in triage.get('pool', {}):
+            return triage['pool'][tier.removeprefix(triage_mode.SETTING_PREFIX)]
+        if tier == 'triage' and isinstance(triage.get('triager'), dict):
+            return triage['triager']
         if tier.startswith('pool:') and tier.removeprefix('pool:') in advisor.get('pool', {}):
             return advisor['pool'][tier.removeprefix('pool:')]
         if tier in ('advisor', 'judge') and isinstance(advisor.get(tier), dict):
@@ -196,7 +226,9 @@ def _provenance(result, frozen):
             'attempts': [{'attempt': attempt['attempt'], 'tier': attempt['tier'],
                           'calls': [call_metadata(call) for call in attempt['calls']]}
                          for attempt in result['attempts']],
-            'classifier_calls': [call_metadata(call) for call in (result.get('selection') or {}).get('calls', [])]}
+            'classifier_calls': [call_metadata(call) for call in (result.get('selection') or {}).get('calls', [])],
+            **({'triage_calls': [call_metadata(call) for call in result['triage']['calls']]}
+               if 'triage' in result else {})}
 
 
 class _RegisteredEnvironment:
@@ -226,6 +258,13 @@ class _RegisteredEnvironment:
 
     def validate(self, final):
         return self.environment.validate(final)
+
+    def verifier_available(self, task):
+        # 顧問先分流（ADR 0038 第 4 點）：環境要明示這題建不建得出驗收器；沒宣告就拒跑。
+        check = getattr(self.environment, 'verifier_available', None)
+        if not callable(check):
+            raise ValueError('Registered environment does not declare verifier_available(task)')
+        return check(task)
 
 
 def _retained(method):
@@ -430,7 +469,8 @@ class TaskService:
             if not QueuePreparation.is_accepting(self.queue_scheduler):
                 return self.queue_scheduler.submit(principal, payload)
             controlled_queue_required = True
-        if not isinstance(payload, dict) or set(payload) - {'context'} != {'run_id', 'contract_id', 'prompt'}:
+        if (not isinstance(payload, dict)
+                or set(payload) - {'context', 'overrides'} != {'run_id', 'contract_id', 'prompt'}):
             raise ServiceError('unsupported_task_fields')
         if (not isinstance(payload['prompt'], str) or not payload['prompt'].strip()
                 or len(payload['prompt'].encode()) > 32768):
@@ -438,6 +478,8 @@ class TaskService:
         contract = self.contracts.get(payload['contract_id']) if isinstance(payload['contract_id'], str) else None
         if contract is None:
             raise ServiceError('unregistered_contract')
+        if 'overrides' in payload:
+            self._check_overrides(contract, payload['overrides'])
         directory = self._directory(principal, payload['run_id'])
         frozen = json.loads(_encode({'request': payload, 'registered': contract.descriptor()}))
         prepared = None
@@ -490,6 +532,23 @@ class TaskService:
                     except Exception:
                         pass  # Auxiliary evidence never changes original creation or dispatch.
         return self.status(principal, payload['run_id'])
+
+    @staticmethod
+    def _check_overrides(contract, overrides):
+        """建立時逐項檢查覆寫（ADR 0038 第 7 點）；不合規就拒絕，不寫入任何紀錄。"""
+        if not contract.allowed_overrides:
+            raise ServiceError('override_not_allowed', 403)
+        config = contract.runner.core.advisor_triage
+        try:
+            triage_mode.normalize_overrides(overrides, config, allowed=contract.allowed_overrides,
+                                            max_usd_ceiling=contract.max_usd_ceiling)
+            if 'max_usd' in overrides:
+                contract.runner.worst_case_usd(contract.mode, overrides)
+        except triage_mode.OverrideError as error:
+            raise ServiceError(error.code, error.status) from None
+        except BudgetError as error:
+            code = 'max_usd_below_worst_case' if str(error) == 'max_usd_below_worst_case' else 'budget_admission_denied'
+            raise ServiceError(code, 409) from None
 
     def feature_observation(self, principal, run_id, job=None):
         return self.creation_observation(principal, run_id, job)['task_features']
@@ -675,6 +734,7 @@ class TaskService:
                     {'prompt': task_prompt(job)}, environment,
                     contract_version=contract.version, mode=contract.mode,
                     **({"experience": job["experience"]} if "experience" in job else {}),
+                    **({"overrides": job["request"]["overrides"]} if "overrides" in job["request"] else {}),
                     **({"capacity_context": context, "capacity_descriptor": job["registered"]}
                        if self.capacity_controller is not None else {}))
                 if self.capacity_controller is not None:
@@ -688,7 +748,9 @@ class TaskService:
                               'known_api_usd': result['budget']['run_known_usd'],
                               'unknown_events': result['budget']['run_unknown_events'],
                               'model_and_classifier': result['costs']},
-                    'wall_seconds': result['wall_seconds']})
+                    'wall_seconds': result['wall_seconds'],
+                    **({'routing': triage_mode.routing_summary(result, registered.core._generation_profile)}
+                       if result.get('mode') == triage_mode.ADVISOR_TRIAGE else {})})
             except PolicyDenied as error:
                 state = {'run_id': run_id, 'status': 'policy_denied', 'error': error.body()['error']}
             except BudgetError:

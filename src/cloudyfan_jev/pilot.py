@@ -12,7 +12,6 @@ from decimal import Decimal
 import json
 from pathlib import Path
 import random
-import re
 import time
 
 import httpx
@@ -22,6 +21,7 @@ from .client import Client
 from .demo import ArithmeticEnvironment, example_config
 from .engine import Core, Limits
 from .pilot_bounds import ListPriceBounds
+from .triage import ROUTE_SYSTEM_V3, parse_route
 from .vendors import AnthropicVendor, VendorTransport
 
 OPENROUTER_MODELS = 'https://openrouter.ai/api/v1/models'
@@ -500,18 +500,7 @@ ROUTE_SYSTEM_V2 = (
     'given checks cover only part of what is asked while the rest (quality, ranking, style, design) is left to '
     'judgment.\n'
     'Reply with only a JSON object: {"route": "path1" or "path2", "reason": "one short sentence"}.')
-# 第 3 版（2026-11-26）：第 1 版太鬆（只有輸入也派路徑一）、第 2 版太嚴（測試不完整就派路徑二）。
-# 有預期結果就走路徑一，測試本來就不完整、漏的交給審查；沒有預期結果或主要靠人判斷才走路徑二。
-ROUTE_SYSTEM_V3 = (
-    'You route incoming tasks in a model-routing system. Each task arrives alone. Decide which path it takes.\n'
-    '- "path1": the task asks for a concrete deliverable such as code, a query or an exact output, AND it states '
-    'expected results the answer can be checked against, such as expected outputs, assertions or an exact target '
-    'value. Inputs listed without their expected results do not count as checks. Tests are never complete: do not '
-    'choose path2 just because the given checks miss edge cases or rules documented elsewhere in the code; a '
-    'later review step handles those.\n'
-    '- "path2": the task states no expected results, or its main point is something people have to judge, such as '
-    'analysis, a diagnosis, a design, a recommendation, ranking quality or style, even if a few checks are given.\n'
-    'Reply with only a JSON object: {"route": "path1" or "path2", "reason": "one short sentence"}.')
+# 第 3 版（2026-11-26）：正式分流模式（ADR 0038）與測驗共用同一段提示，定義在 triage。
 ROUTE_SYSTEMS = {'v1': ROUTE_SYSTEM, 'v2': ROUTE_SYSTEM_V2, 'v3': ROUTE_SYSTEM_V3}
 
 
@@ -535,17 +524,6 @@ def gray_entries(path=ROUTE_GRAY_ITEMS, seed='route-gray-v1'):
     entries = [{'id': i['id'], 'expected': i['expected'], 'kind': 'gray', 'prompt': i['prompt']} for i in items]
     random.Random(seed).shuffle(entries)
     return entries
-
-
-def parse_route(text):
-    match = re.search(r'\{.*\}', text or '', re.S)
-    try:
-        value = json.loads(match.group(0)) if match else None
-    except ValueError:
-        value = None
-    if not isinstance(value, dict) or value.get('route') not in ('path1', 'path2'):
-        return None
-    return {'route': value['route'], 'reason': str(value.get('reason', ''))}
 
 
 def route_classify(root, entries, target, *, anthropic_key, cap_usd, prompt_version='v1', **options):

@@ -743,9 +743,43 @@ class BudgetedCore:
                                             attempts * config.judge_calls_per_attempt)))
         return amount
 
-    def _admit(self, mode):
+    def _admit_advisor_triage(self, overrides):
+        """顧問先分流最壞預留（ADR 0038 第 6 點）：分流顧問兩次（含重問），加上所有可到達
+        分支中最貴的一條。路徑一階梯照該模式原本的預留；單一作答以該設定上界乘以回合上限。
+        帶 ``max_usd`` 時，最壞預留超過上限就在任何呼叫前拒跑，不中途停下。"""
+        from .triage import TRIAGE_CALLS, normalize_overrides, reachable_branches
+        config = getattr(self.core, 'advisor_triage', None)
+        if config is None:
+            raise ValueError('Unknown workflow mode')
+        if overrides is not None:
+            overrides = normalize_overrides(overrides, config)
+        limits = self.core.limits
+
+        def single(tier):
+            cap = self._model_cap(self.core._generation_profile(tier), 'model_version')
+            return _exact((_exact((cap,), limits.max_turns),
+                           _exact((self._tool_max(),), limits.max_turns * limits.max_tool_calls)))
+
+        branches = [single(target) if kind == 'single' else self._admit(target)
+                    for kind, target in reachable_branches(config, overrides)]
+        amount = _exact((_exact((self._model_cap(config.triager, 'model_version'),), TRIAGE_CALLS),
+                         max(branches)))
+        if overrides is not None and 'max_usd' in overrides and amount > money(overrides['max_usd']):
+            raise BudgetError('max_usd_below_worst_case')
+        return amount
+
+    def worst_case_usd(self, mode, overrides=None):
+        """建立任務時檢查花費上限用；與開跑時的預留是同一個計算，不寫入任何紀錄。"""
+        return str(self._admit(mode, overrides))
+
+    def _admit(self, mode, overrides=None):
         from .advisor import ADVISOR_FIRST
         from .cloudyfan_plus import CLOUDYFAN_PLUS
+        from .triage import ADVISOR_TRIAGE
+        if mode == ADVISOR_TRIAGE:
+            return self._admit_advisor_triage(overrides)
+        if overrides is not None:
+            raise ValueError('Overrides are only available in advisor_triage mode')
         if mode == ADVISOR_FIRST:
             return self._admit_advisor_first()
         if mode == CLOUDYFAN_PLUS:
@@ -845,13 +879,15 @@ class BudgetedCore:
         if descriptor is not None:
             frozen['enforcement'] = descriptor
         plus = getattr(self.core, 'cloudyfan_plus', None)
-        if mode == 'cloudyfan_plus' and plus is not None:
+        triage = getattr(self.core, 'advisor_triage', None)
+        if plus is not None and (mode == 'cloudyfan_plus' or (
+                mode == 'advisor_triage' and triage is not None and triage.path1_mode == 'cloudyfan_plus')):
             # 路徑一加強版設定只凍結在該模式的預留中，純 cloudyfan 的預留指紋不變。
             frozen['cloudyfan_plus'] = plus.descriptor()
         self.sync_client(self.core.client)
         if getattr(self.core, 'local_backend', None) is not None:
             self.sync_client(self.core.local_backend)
-        amount = self._admit(mode)
+        amount = self._admit(mode, kwargs.get('overrides'))
         self.store.reserve(run_id, _fingerprint(frozen), amount)
         engine = copy(self.core)
         engine.client = _BudgetClient(self.core.client, self, run_id)

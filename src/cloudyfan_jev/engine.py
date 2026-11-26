@@ -23,6 +23,7 @@ from .advisor import ADVISOR_FIRST, ROLES, AdvisorConfig
 from .diagnostics import DiagnosticContract
 from .generation_request import reasoning_fields, request_model
 from .privacy import PolicyDenied
+from .triage import ADVISOR_TRIAGE, SETTING_PREFIX as TRIAGE_PREFIX, TriageConfig
 
 INITIAL = {"fixed_high": "high", "low_first": "low", "open_source_first": "open_source",
            "cloudyfan": "open_source"}
@@ -146,7 +147,7 @@ class Core:
     """
     def __init__(self, client, profiles, decision_profile, *, limits=None, system=SYSTEM,
                  local_backend=None, diagnostic_contract=None, execution_policy=None, selection_policy=None,
-                 advisor_first=None, cloudyfan_plus=None):
+                 advisor_first=None, cloudyfan_plus=None, advisor_triage=None):
         self.client = client
         self.profiles = deepcopy(profiles)
         self.decision = deepcopy(decision_profile)
@@ -191,6 +192,13 @@ class Core:
             if not isinstance(cloudyfan_plus, CloudyfanPlusConfig):
                 raise ValueError('cloudyfan_plus requires a CloudyfanPlusConfig')
         self.cloudyfan_plus = cloudyfan_plus
+        # 顧問先分流（ADR 0038）明示選用；None 時一切行為與既有版本相同。
+        if advisor_triage is not None:
+            if not isinstance(advisor_triage, TriageConfig):
+                raise ValueError('advisor_triage requires a TriageConfig')
+            if advisor_triage.path1_mode == 'cloudyfan_plus' and cloudyfan_plus is None:
+                raise ValueError('advisor_triage path1 cloudyfan_plus requires a CloudyfanPlusConfig')
+        self.advisor_triage = advisor_triage
 
     def workflow_modes(self):
         """可用的路由模式；只有提供顧問設定時才註冊路徑二。"""
@@ -200,6 +208,8 @@ class Core:
         if getattr(self, 'cloudyfan_plus', None) is not None:
             from .cloudyfan_plus import CLOUDYFAN_PLUS
             modes += (CLOUDYFAN_PLUS,)
+        if getattr(self, 'advisor_triage', None) is not None:
+            modes += (ADVISOR_TRIAGE,)
         return modes
 
     def run_advisor_first(self, run_id, task, environment_factory, *, contract_version, experience=None):
@@ -243,6 +253,8 @@ class Core:
             if getattr(self, '_advisor_pool', (None, None))[0] is not self.advisor_first:
                 self._advisor_pool = self._resolve_advisor_pool()
             return self._advisor_pool[1][tier.removeprefix('pool:')]
+        if tier.startswith(TRIAGE_PREFIX) and getattr(self, 'advisor_triage', None) is not None:
+            return self.advisor_triage.pool[tier.removeprefix(TRIAGE_PREFIX)]
         return self.profiles[tier]
 
     def configuration_descriptor(self):
@@ -269,6 +281,8 @@ class Core:
             descriptor['rejection_fee_policy'] = rejection_policy.descriptor()
         if getattr(self, 'advisor_first', None) is not None:
             descriptor['advisor_first'] = self.advisor_first.descriptor(self.profiles)
+        if getattr(self, 'advisor_triage', None) is not None:
+            descriptor['advisor_triage'] = self.advisor_triage.descriptor()
         return deepcopy(descriptor)
 
     def execution_contract_descriptor(self, contract_version):
@@ -528,7 +542,11 @@ class Core:
         refs = [c for a in result['attempts'] for c in a['calls']] + (result.get('selection') or {}).get('calls', [])
         advisor = getattr(self, 'advisor_first', None)
         # 路徑一加強版（#79）的裁判設定只用於該模式的結果。
-        plus = (getattr(self, 'cloudyfan_plus', None) if result.get('mode') == 'cloudyfan_plus' else None)
+        triage = getattr(self, 'advisor_triage', None) if result.get('mode') == ADVISOR_TRIAGE else None
+        plus = (getattr(self, 'cloudyfan_plus', None) if result.get('mode') == 'cloudyfan_plus'
+                or (triage is not None and result.get('branch', {}).get('mode') == 'cloudyfan_plus') else None)
+        if triage is not None:
+            refs += result['triage']['calls']
         if advisor is not None:
             refs += (result.get('advisor') or {}).get('calls', [])
         if advisor is not None or plus is not None:
@@ -537,7 +555,7 @@ class Core:
             # 交卷前評審（cloudyfan_plus review）的裁判呼叫。
             refs += [c for a in result['attempts'] for c in (a.get('review') or {}).get('calls', [])]
         roles = {role: Decimal(0) for role in ROLES}
-        cost, scenario, classifier = Decimal(0), Decimal(0), Decimal(0)
+        cost, scenario, classifier, triage_usd = Decimal(0), Decimal(0), Decimal(0), Decimal(0)
         unknown = 0
         for call in refs:
             if call.get('execution_kind') == 'local':
@@ -549,7 +567,11 @@ class Core:
                 continue
             record = self.client._load(self.client._directory(call['call_id']))
             info = transport.usage(record)
-            if call['tier'] in ROLES:
+            if call['tier'] == 'triage':
+                if triage is None:
+                    raise RuntimeError('Triage call without triage configuration: ' + call['call_id'])
+                profile = triage.triager
+            elif call['tier'] in ROLES:
                 # 顧問／裁判角色只在明示設定路徑二或路徑一加強版時存在；身分照樣以收據核對。
                 if plus is not None and call['tier'] == 'judge':
                     profile = plus.judge
@@ -575,16 +597,21 @@ class Core:
             amount = Decimal(info['cost_usd'])
             cost += amount
             # 零模型費用情境：開源池層級，或設定中明示 open_source 的顧問／裁判角色。
-            if call['tier'] != 'open_source' and not (call['tier'] in ROLES and profile['open_source'] is True):
+            if call['tier'] != 'open_source' and not (call['tier'] in (*ROLES, 'triage')
+                                                      and profile['open_source'] is True):
                 scenario += amount
             if call['tier'] == 'classifier':
                 classifier += amount
             if call['tier'] in ROLES:
                 roles[call['tier']] += amount
+            if call['tier'] == 'triage':
+                triage_usd += amount
         result['costs'] = {'known_api_usd': str(cost), 'unknown_calls': unknown,
                            'api_usd': None if unknown else str(cost), 'classifier_usd': str(classifier),
                            'hypothetical_open_source_zero_usd': None if unknown else str(scenario),
                            'host_and_human_usd': None, 'calls': len(refs)}
+        if triage is not None:
+            result['costs']['triage_usd'] = str(triage_usd)
         if plus is not None:
             result['costs']['judge_usd'] = str(roles['judge'])
         elif advisor is not None:
@@ -605,8 +632,10 @@ class Core:
                 raise ValueError('Retired run cannot be read or dispatched again')
             frozen = _read(directory / 'manifest.json')
             expected = {'local_backend': None, 'execution_policy': None, 'advisor_first': None,
-                        **self.configuration_descriptor()}
-            if frozen.get('mode') == 'cloudyfan_plus':
+                        'advisor_triage': None, **self.configuration_descriptor()}
+            if frozen.get('mode') == 'cloudyfan_plus' or (
+                    frozen.get('mode') == ADVISOR_TRIAGE
+                    and (frozen.get('advisor_triage') or {}).get('path1_mode') == 'cloudyfan_plus'):
                 # 路徑一加強版（#79）的設定只凍結在該模式的題目中。
                 plus = getattr(self, 'cloudyfan_plus', None)
                 expected['cloudyfan_plus'] = None if plus is None else plus.descriptor()
@@ -617,7 +646,8 @@ class Core:
                 raise ValueError('Completed result identity changed')
             return self._with_costs(result)
 
-    def run(self, run_id, task, environment_factory, *, contract_version, mode='cloudyfan', experience=None):
+    def run(self, run_id, task, environment_factory, *, contract_version, mode='cloudyfan', experience=None,
+            overrides=None):
         if not isinstance(run_id, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,79}', run_id):
             raise ValueError("run_id must be a short stable identifier")
         if mode not in self.workflow_modes():
@@ -632,6 +662,14 @@ class Core:
         if self.selection_policy is not None and self.execution_contract_descriptor(contract_version) != (
                 self.selection_policy.plan['policy']['execution_contract']):
             raise ValueError('QCS calibrated execution contract differs from actual Core')
+        if overrides is not None and mode != ADVISOR_TRIAGE:
+            raise ValueError('Overrides are only available in advisor_triage mode')
+        if mode == ADVISOR_TRIAGE:
+            if experience is not None:
+                raise ValueError('Contract experience is not available in advisor_triage mode')
+            from . import triage
+            return triage.run(self, run_id, task, environment_factory, contract_version=contract_version,
+                              overrides=overrides)
         # 路徑一加強版（#79）沿用 cloudyfan 的階段與 Jev 升級規則。
         plus = mode == 'cloudyfan_plus'
         route = 'cloudyfan' if plus else mode

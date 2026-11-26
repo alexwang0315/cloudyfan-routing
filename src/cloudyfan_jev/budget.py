@@ -768,7 +768,7 @@ class BudgetedCore:
             if kind == 'single':
                 return single(target)
             if kind == 'advisor':
-                return self._advisor_reservation(self.core.advisor_first, config.pool)
+                return self._advisor_reservation(self.core.advisor_first, config.path2_pool())
             return self._admit(target)
 
         branches = [branch(kind, target) for kind, target in reachable_branches(config, overrides)]

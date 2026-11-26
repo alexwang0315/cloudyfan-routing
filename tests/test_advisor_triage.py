@@ -181,12 +181,35 @@ def test_unusable_advisor_reply_ends_without_dispatch(tmp_path):
 
 
 def test_failed_verifiable_dispatch_continues_with_advisor_recommendations(tmp_path):
-    api = API(triage=(route('path2'),), advisor=delegate('haiku-low', 'fable-high'),
-              answers={'example/sonnet': '3', 'example/haiku': '2'})
+    api = API(triage=(route('path2'),), advisor=delegate('fable-high', 'sonnet-xhigh'),
+              answers={'example/sonnet': '3', 'example/fable': '2'})
     result = run(make_core(tmp_path, api), overrides={'route': 'path2'})
-    assert api.models() == [TRIAGER, ADVISOR, 'example/sonnet', 'example/haiku']
+    assert api.models() == [TRIAGER, ADVISOR, 'example/sonnet', 'example/fable']
     assert [a['dispatch'] for a in result['attempts']] == ['risk_default', 'advisor_recommendation']
     assert result['status'] == 'passed' and result['branch']['end_reason'] == 'passed'
+
+
+def test_open_task_advisor_sees_and_dispatches_only_sonnet_and_fable(tmp_path):
+    # 2026-11-26 使用者定案：開放題的池只有 Sonnet（預設）與 Fable（高風險）；Haiku 只供使用者指定。
+    api = API(triage=(route('path2'),), advisor=delegate('haiku-low', 'fable-high'),
+              answers={'example/sonnet': '3', 'example/fable': '3', 'example/haiku': '2'})
+    result = run(make_core(tmp_path, api), overrides={'route': 'path2'})
+    listing = json.loads(api.requests[1]['messages'][1]['content'])['pool']
+    assert [item['setting'] for item in listing] == ['sonnet-xhigh', 'fable-high']
+    assert api.models() == [TRIAGER, ADVISOR, 'example/sonnet', 'example/fable']
+    assert [v['reason'] for v in result['advisor']['decision']['voided']] == ['not_in_pool']
+    assert {a['setting'] for a in result['attempts']} == {'sonnet-xhigh', 'fable-high'}
+    assert result['status'] == 'failed' and result['branch']['end_reason'] == 'recommendations_exhausted'
+
+
+def test_standard_config_is_the_decided_layout():
+    from cloudyfan_jev.triage import standard_config
+    config = standard_config()
+    assert config.triager['model_version'] == 'anthropic:claude-haiku-5-5' and config.triager['effort'] == 'xhigh'
+    assert {k: (p['model_version'], p['effort']) for k, p in config.path2_pool().items()} == {
+        'sonnet-xhigh': ('anthropic:claude-sonnet-5-5', 'xhigh'), 'fable-high': ('anthropic:claude-fable-5-2', 'high')}
+    assert set(config.pool) == {'sonnet-xhigh', 'fable-high'}
+    assert config.descriptor()['path2']['advisor_pool'] == ['sonnet-xhigh', 'fable-high']
 
 
 def test_triage_requires_the_open_source_advisor_configuration(tmp_path):

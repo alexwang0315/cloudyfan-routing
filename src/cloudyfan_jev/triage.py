@@ -116,13 +116,33 @@ class TriageConfig:
         if type(self.path2_max_tokens) is not int or self.path2_max_tokens < MIN_PATH2_MAX_TOKENS:
             raise ValueError('path2_max_tokens must be an integer of at least 32000')
 
+    def path2_pool(self):
+        """開放題顧問看得到、能派送的池：只有一般預設與高風險兩個設定（2026-11-26 使用者定案）。
+        ``pool`` 其餘設定只供使用者「指定模型」；顧問建議池外設定照 ADR 0034 作廢。"""
+        return {key: deepcopy(self.pool[key]) for key in dict.fromkeys((self.path2_default, self.path2_high_risk))}
+
     def descriptor(self):
         return {'version': VERSION, 'prompt': {'version': PROMPT_VERSION, 'system': ROUTE_SYSTEM_V3},
                 'triage_calls': TRIAGE_CALLS, 'triager': deepcopy(self.triager),
                 'pool': deepcopy(self.pool), 'path1_mode': self.path1_mode,
                 'path2': {'flow': 'advisor_first', 'advisor_note': OPEN_ADVISOR_RULE,
+                          'advisor_pool': list(self.path2_pool()),
                           'default': self.path2_default, 'high_risk': self.path2_high_risk,
                           'max_tokens': self.path2_max_tokens}}
+
+
+def standard_config(*, path1_mode='cloudyfan'):
+    """ADR 0038 定案的佈局：分流顧問 Haiku 5.5 xhigh；開放題預設 Sonnet 5.5 xhigh、高風險 Fable 5.2 high，
+    池裡不放 Haiku 與 Opus（2026-11-26 使用者定案）。路徑二的開源顧問與路徑一的層級另由 Core 設定。"""
+    from .pilot import anthropic_target
+
+    def setting(model, effort, tier):
+        return {**anthropic_target(model, effort=effort)['profile'], 'tier': tier}
+
+    return TriageConfig(triager={**anthropic_target('claude-haiku-5-5', effort='xhigh')['profile'], 'open_source': False},
+                        pool={'sonnet-xhigh': setting('claude-sonnet-5-5', 'xhigh', 'mid'),
+                              'fable-high': setting('claude-fable-5-2', 'high', 'high')},
+                        path2_default='sonnet-xhigh', path2_high_risk='fable-high', path1_mode=path1_mode)
 
 
 def normalize_overrides(raw, config, *, allowed=OVERRIDE_FIELDS, max_usd_ceiling=None):
@@ -278,7 +298,7 @@ def _advisor_path(core, env, task, prefix, directory, plan):
     """
     from .advisor_flow import _consult
     from .engine import _save
-    config, pool = core.advisor_first, core.advisor_triage.pool
+    config, pool = core.advisor_first, core.advisor_triage.path2_pool()
     engine = _single_engine(core, SETTING_PREFIX)
     calls, decision = _consult(engine, prefix, task, pool, system=advisor_system(core))
     _save(directory / 'advisor-decision.json', decision)

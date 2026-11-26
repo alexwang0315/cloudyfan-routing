@@ -19,10 +19,12 @@ MRC 多了一種路由模式「顧問先分流」（`advisor_triage`），要明
 | 欄位 | 意思 |
 | --- | --- |
 | `triager` | 分流顧問設定（Haiku 5.5 xhigh）；要明示 `open_source`，分流費照實計入 |
-| `pool` | 路徑二顧問可派送、以及「指定模型」可用的池內設定：`{設定識別: 設定（含 tier）}` |
-| `path2_default`／`path2_high_risk` | 路徑二派送的第一順位（一般／高風險），必須在 `pool` 內 |
+| `pool` | 使用者「指定模型」可用的池內設定：`{設定識別: 設定（含 tier）}` |
+| `path2_default`／`path2_high_risk` | 開放題派送的第一順位（一般／高風險），必須在 `pool` 內 |
 | `path1_mode` | 路徑一沿用的既有模式：`cloudyfan` 或 `cloudyfan_plus`（交卷前評審） |
 | `path2_max_tokens` | 路徑二輸出上限，至少 32,000 |
+
+開放題顧問看得到、能派送的池只有 `path2_default` 與 `path2_high_risk` 兩個設定（`path2_pool()`，2026-11-26 使用者定案「限定 Sonnet＋Fable」）。`pool` 的其餘設定只供使用者「指定模型」。顧問建議池外設定，照 ADR 0034 作廢（`not_in_pool`），第二順位起也派不出去。`standard_config()` 是定案的佈局：分流顧問 Haiku 5.5 xhigh，開放題 Sonnet 5.5 xhigh（預設）與 Fable 5.2 high（高風險），不放 Haiku 與 Opus。
 
 路徑二的顧問本身沿用 Core 的 `AdvisorConfig`，也就是 ADR 0034 的開源顧問與裁判；沒有它就不能建立分流模式。顧問提示是 ADR 0034 的原提示，再加一段 `OPEN_ADVISOR_RULE`：「需要判斷、建議或決策的題目，沒有把握就派送」，一起凍結。設定寫進 `configuration_descriptor()['advisor_triage']`，每題凍結。沒有提供 `TriageConfig` 時，描述、模式清單與預算都和以前一模一樣。
 
@@ -70,7 +72,7 @@ HTTP 的 `outcome.json` 與 `GET /v1/tasks/<id>/result` 多一個 `routing` 物�
 
 預留額 = 分流顧問上界 × 2（含重問），加上所有可到達分支中最貴的一條。
 
-- 路徑二永遠可到達，因為分流失敗或建不出驗收器都會轉過去。它照顧問先答流程的預留，以分流池計算：顧問一次，加上每次作答的池內最高上界乘以回合上限、每次作答一次裁判，最多三次作答。
+- 路徑二永遠可到達，因為分流失敗或建不出驗收器都會轉過去。它照顧問先答流程的預留，以開放題的池（`path2_pool()`）計算：顧問一次，加上每次作答的池內最高上界乘以回合上限、每次作答一次裁判，最多三次作答。
 - 路徑一階梯照該模式原本的預留。
 - 單一作答以該設定上界乘以回合上限。
 - 指定模型時只剩一條分支；關閉升級時，路徑一只算首答。
@@ -99,12 +101,8 @@ HTTP 的 `outcome.json` 與 `GET /v1/tasks/<id>/result` 多一個 `routing` 物�
     - 用原本的顧問提示：10 題全部自答、從不派送，品質約 6.3～6.4／8，比 Sonnet 低。
     - 加上 `OPEN_ADVISOR_RULE`：10 題全部派送，但顧問的第一順位一律是 Opus xhigh。推測原因是一般模式的池清單不附價格。
     - 開源顧問本身還沒測。
-- 待使用者定案：
-  - 開放題的池清單要不要附價格給顧問，或把開放題的池限定為 Sonnet（預設）加 Fable（高風險）。
-    - 目前派送第一順位固定依風險，不採用顧問的第一選擇。
-    - 有驗收器而且沒過時，第二順位起照顧問建議，可能派到 Opus。
-    - 池裡放哪些設定是部署設定，不改程式就能限定；附價格要改程式。
-  - 顧問回覆無法使用時，目前照 ADR 0034 結束（`advisor_incomplete`），不自動派給 Sonnet。
+- 已定案（2026-11-26）：開放題的池限定為 Sonnet 5.5 xhigh（預設）加 Fable 5.2 high（高風險），不放 Haiku 與 Opus，所以不必附價格。已在程式裡強制（`path2_pool()`），並由 `test_open_task_advisor_sees_and_dispatches_only_sonnet_and_fable` 驗證。
+- 待使用者定案：顧問回覆無法使用時，目前照 ADR 0034 結束（`advisor_incomplete`），不自動派給 Sonnet。
   - mod 只用測試工具與驗證器檢查過，還沒在 App 裡實際點過面板。
   - 在 Claude Code 輸入框打 `/風險 高` 這類中文斜線字會不會被當成未知指令，沒有測。skill 建議改用 `/mrc 風險 高` 或單題標記。
 - 還沒做：

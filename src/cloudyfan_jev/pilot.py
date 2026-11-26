@@ -11,6 +11,9 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import json
 from pathlib import Path
+import random
+import re
+import time
 
 import httpx
 
@@ -477,6 +480,73 @@ def _open_report(root, name, stage, target, orq, cap_usd, rows, **extra):
               'summary': {'rows': len(rows), 'completed': sum(r['status'] == 'passed' for r in rows),
                           'known_usd': format(known.normalize(), 'f')}}
     (root / name).write_text(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+
+
+ROUTE_SYSTEM = (
+    'You route incoming tasks in a model-routing system. Each task arrives alone. Decide which path it takes.\n'
+    '- "path1": the task asks for a concrete deliverable whose correctness can be checked automatically against '
+    'what the task itself provides, such as code that must make given examples or tests pass.\n'
+    '- "path2": the task asks for analysis, judgment, a diagnosis or a recommendation about what to do next, '
+    'with no objective check the system could run on the answer.\n'
+    'Reply with only a JSON object: {"route": "path1" or "path2", "reason": "one short sentence"}.')
+
+
+def route_entries(code_tasks, seed='route-classify-v1'):
+    """分類測驗的題目：程式題（應走路徑一）加開放題（應走路徑二），用固定種子打亂，一題一題送。"""
+    from . import open_reasoning as orq
+    background, answer_format, items = orq.load()
+    entries = [{'id': t['id'], 'expected': 'path1', 'kind': 'code', 'prompt': t['prompt']} for t in code_tasks]
+    entries += [{'id': i['id'], 'expected': 'path2', 'kind': 'open',
+                 'prompt': orq.answer_prompt(background, answer_format, i)} for i in items]
+    random.Random(seed).shuffle(entries)
+    return entries
+
+
+def parse_route(text):
+    match = re.search(r'\{.*\}', text or '', re.S)
+    try:
+        value = json.loads(match.group(0)) if match else None
+    except ValueError:
+        value = None
+    if not isinstance(value, dict) or value.get('route') not in ('path1', 'path2'):
+        return None
+    return {'route': value['route'], 'reason': str(value.get('reason', ''))}
+
+
+def route_classify(root, entries, target, *, anthropic_key, cap_usd, **options):
+    """顧問先分類：每題單獨送一次，記下分到哪條路徑、對不對、花多少、多等幾秒（模擬真實使用，一次一題）。"""
+    root = Path(root)
+    runner = _single_call_runner(root, target, ROUTE_SYSTEM, 'pilot-route-classify', anthropic_key=anthropic_key,
+                                 cap_usd=cap_usd, **options)
+    rows = []
+    for entry in entries:
+        started = time.monotonic()
+        text, fields = _single_call(runner, 'route-' + entry['id'], entry['prompt'], 'route-classify-v1')
+        row = {'id': entry['id'], 'kind': entry['kind'], 'expected': entry['expected'], **fields,
+               'seconds': round(time.monotonic() - started, 2)}
+        if 'outcome' not in row:
+            verdict = parse_route(text)
+            row['outcome'] = 'classified' if verdict else 'route_invalid'
+            row.update(verdict or {'raw': text})
+            row['correct'] = bool(verdict) and verdict['route'] == entry['expected']
+        rows.append(row)
+    done = [r for r in rows if r['outcome'] == 'classified']
+    known = sum((Decimal(r['cost_usd']) for r in rows if r.get('cost_usd') is not None), Decimal(0))
+    by_kind = {}
+    for kind in ('code', 'open'):
+        mine = [r for r in done if r['kind'] == kind]
+        by_kind[kind] = {'tasks': sum(r['kind'] == kind for r in rows), 'classified': len(mine),
+                         'correct': sum(r['correct'] for r in mine)}
+    report = {'stage': 'route_classify', 'target': target['address'], 'effort': target['profile']['effort'],
+              'route_system': ROUTE_SYSTEM, 'cap_usd': str(cap_usd), 'rows': rows,
+              'summary': {'tasks': len(rows), 'classified': len(done), 'correct': sum(r['correct'] for r in done),
+                          'by_kind': by_kind, 'known_usd': format(known.normalize(), 'f'),
+                          'mean_usd_per_task': format((known / len(rows)).quantize(Decimal('0.000001')), 'f')
+                          if rows else '0',
+                          'mean_seconds': round(sum(r['seconds'] for r in rows) / len(rows), 2) if rows else 0,
+                          'max_seconds': max((r['seconds'] for r in rows), default=0)}}
+    (root / 'route-classify-report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+    return rows
 
 
 def replay_advisor_pool():
@@ -986,6 +1056,17 @@ def main(argv=None):
         op.add_argument('--confirm-paid', action='store_true')
         if name == 'open-judge':
             op.add_argument('--answers', action='append', default=[], help='作答者=open-answer 的資料夾，可重複')
+    rc = sub.add_parser('route-classify', help='顧問先分類：程式題與開放題混在一起、一題一題送（會發出真實付費請求）')
+    rc.add_argument('--root', type=Path, required=True)
+    rc.add_argument('--cap', default='1')
+    rc.add_argument('--task-set', choices=CODE_TASK_SETS, default='v5')
+    rc.add_argument('--anthropic-model', default='claude-haiku-5-5')
+    rc.add_argument('--effort', choices=('low', 'medium', 'high', 'xhigh', 'max'), default='xhigh')
+    rc.add_argument('--anthropic-env-file', type=Path)
+    rc.add_argument('--anthropic-key-file', type=Path)
+    rc.add_argument('--anthropic-env-name', default='ANTHROPIC_API_KEY')
+    rc.add_argument('--anthropic-workspace-id')
+    rc.add_argument('--confirm-paid', action='store_true')
     sheet = sub.add_parser('open-sheet', help='開放題盲評表：把各作答者的回答打亂成評分表（不收費）')
     sheet.add_argument('--out', type=Path, required=True, help='評分表 Markdown；代號對照另存成同名 .key.json')
     sheet.add_argument('--answers', action='append', default=[], help='作答者=open-answer 的資料夾，可重複')
@@ -1082,6 +1163,17 @@ def main(argv=None):
         rows = review_replay(args.root, args.source, tasks, anthropic_target(args.anthropic_model, effort=args.effort),
                              anthropic_key=key_from_args(args, 'anthropic'), cap_usd=args.cap,
                              anthropic_workspace_id=args.anthropic_workspace_id)
+        for row in rows:
+            print(json.dumps(row, ensure_ascii=False), flush=True)
+        return 0
+    if args.command == 'route-classify':
+        if not args.confirm_paid:
+            parser.error('paid_requests_require_--confirm-paid')
+        from .code_tasks import FROZEN_CODE_TASK_SETS, frozen_code_tasks
+        entries = route_entries(frozen_code_tasks(path=FROZEN_CODE_TASK_SETS[args.task_set]))
+        rows = route_classify(args.root, entries, anthropic_target(args.anthropic_model, effort=args.effort),
+                              anthropic_key=key_from_args(args, 'anthropic'), cap_usd=args.cap,
+                              max_input_bytes=49152, anthropic_workspace_id=args.anthropic_workspace_id)
         for row in rows:
             print(json.dumps(row, ensure_ascii=False), flush=True)
         return 0

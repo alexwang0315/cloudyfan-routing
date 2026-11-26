@@ -131,3 +131,44 @@ def test_open_sheet_merges_folders_of_the_same_writer(tmp_path):
     assert json.loads(out.with_suffix('.key.json').read_text())['D2'] in ({'A': 'v', 'B': 'w'}, {'A': 'w', 'B': 'v'})
     with pytest.raises(SystemExit):   # 不覆寫既有的評分表
         pilot.main(['open-sheet', '--out', str(out), '--answers', f'w={tmp_path / "first"}'])
+
+
+# ---- 顧問先分類（route-classify）----
+
+def test_route_entries_mix_code_and_open_tasks_in_a_fixed_shuffled_order():
+    code = [{'id': f'Z{n}', 'prompt': f'code task {n}'} for n in range(6)]
+    entries = pilot.route_entries(code)
+    assert sorted(e['id'] for e in entries) == sorted([c['id'] for c in code] + [i['id'] for i in ITEMS])
+    assert {e['expected'] for e in entries if e['kind'] == 'code'} == {'path1'}
+    assert {e['expected'] for e in entries if e['kind'] == 'open'} == {'path2'}
+    kinds = [e['kind'] for e in entries]
+    assert kinds != sorted(kinds) and pilot.route_entries(code) == entries   # 混在一起、每次順序相同
+    assert all(ITEMS[0]['truth'] not in e['prompt'] for e in entries)
+
+
+def test_parse_route():
+    assert pilot.parse_route('sure {"route": "path2", "reason": "judgment"}') == {'route': 'path2', 'reason': 'judgment'}
+    for bad in ('{"route": "path3"}', 'none', None, '{"route": 1}'):
+        assert pilot.parse_route(bad) is None
+
+
+def test_route_classify_sends_one_task_per_call_and_scores_each(tmp_path):
+    seen = []
+    entries = [{'id': 'Z1', 'kind': 'code', 'expected': 'path1', 'prompt': 'Fix shop/x.py, examples ...'},
+               {'id': 'D1', 'kind': 'open', 'expected': 'path2', 'prompt': 'What should we do next?'},
+               {'id': 'D2', 'kind': 'open', 'expected': 'path2', 'prompt': 'Is this a fair test?'}]
+
+    def reply(body):
+        text = _user_text(body)
+        if 'Fix' in text:
+            return '{"route": "path1", "reason": "tests"}'
+        return '{"route": "path1", "reason": "wrong"}' if 'fair' in text else '{"route": "path2", "reason": "advice"}'
+    rows = pilot.route_classify(tmp_path / 'rc', entries, pilot.anthropic_target('claude-haiku-5-5', effort='xhigh'),
+                                anthropic_key='an-key', cap_usd='1', transports=_fake(reply, seen))
+    assert len(seen) == 3 and [_user_text(b) for b in seen] == [e['prompt'] for e in entries]   # 一次一題
+    assert pilot.ROUTE_SYSTEM in str(seen[0].get('system'))
+    assert [r['correct'] for r in rows] == [True, True, False] and all(r['seconds'] >= 0 for r in rows)
+    summary = json.loads((tmp_path / 'rc' / 'route-classify-report.json').read_text())['summary']
+    assert summary['correct'] == 2 and summary['by_kind'] == {'code': {'tasks': 1, 'classified': 1, 'correct': 1},
+                                                               'open': {'tasks': 2, 'classified': 2, 'correct': 1}}
+    assert Decimal(summary['mean_usd_per_task']) > 0

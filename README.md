@@ -2,7 +2,7 @@
 
 Cloudyfami 平台的平台轉送：把一個客戶端的訊息送給另一個客戶端，兩端各自連到平台，不必在同一個網路。依據 [ADR 0039](../docs/adr/0039-platform-relay-of-hca-summaries-to-granted-clients.md) 與 [ADR 0040](../docs/adr/0040-cloudyfami-platform-one-software-two-deployments.md)，整體規格見 [Cloudyfami 平台規格 v0.1](../docs/cloudyfami-portal-spec-v0.1-2026-11-27.md)。
 
-目前完成 [#85](https://github.com/alexwang0315/cloudyfan-routing/issues/85) 與 [#86](https://github.com/alexwang0315/cloudyfan-routing/issues/86)：訊息信封、轉送服務、網際網路（HTTP）這一條鏈路，以及離線排隊、重新投遞與過期。**只在本機驗證過**，還沒有部署，也還沒在兩台不同網路的設備上測過。第一階段不做授權檢查，客戶端以名稱自報身分，只適用於內部測試環境。
+目前完成 [#85](https://github.com/alexwang0315/cloudyfan-routing/issues/85)、[#86](https://github.com/alexwang0315/cloudyfan-routing/issues/86)、[#87](https://github.com/alexwang0315/cloudyfan-routing/issues/87)：訊息信封、轉送服務、網際網路（HTTP）這一條鏈路、離線排隊與重新投遞，以及大檔分塊傳輸。**只在本機驗證過**，還沒有部署，也還沒在兩台不同網路的設備上測過。第一階段不做授權檢查，客戶端以名稱自報身分，只適用於內部測試環境。
 
 ## 執行
 
@@ -32,6 +32,8 @@ PYTHONPATH=src python3 -m cloudyfami_portal serve --db /tmp/portal.sqlite3 --por
 |---|---|
 | `envelope.py` | 訊息信封。完整形式是 JSON；精簡形式是一個不超過 200 位元組的封包，供 LoRa 使用。兩種形式可互相轉換，內容不變 |
 | `relay.py` | 轉送服務：排隊、領取、回條、狀態查詢與傳送紀錄，存在 SQLite。它不知道訊息走哪條鏈路 |
+| `transfer.py` | 大檔：檔案清單、平台端的分塊暫存、續傳、損壞偵測與空間上限 |
+| `connectivity.py` | 斷線判定 |
 | `http_link.py` | 網際網路這條鏈路：HTTP 轉接層，以及主動連出的客戶端 |
 | `__main__.py` | `demo` 與 `serve` 兩個指令 |
 
@@ -89,7 +91,35 @@ PYTHONPATH=src python3 -m cloudyfami_portal serve --db /tmp/portal.sqlite3 --por
 | `GET /v1/messages/{id}?until=acked&wait=秒` | 查一則訊息的狀態與歷程；可等到指定狀態 |
 | `GET /v1/inbox/{客戶端}?wait=秒&limit=則數` | 領取排隊中的訊息，沒有訊息時可等待 |
 | `POST /v1/inbox/{客戶端}/{id}/ack` | 回條 |
-| `GET /v1/transmissions` | 傳送紀錄 |
+| `GET /v1/transmissions` | 傳送紀錄，含每個檔案傳輸的統計 |
+| `POST /v1/transfers` | 登記一個檔案傳輸並預留暫存空間；再登記一次會回報還缺哪些塊 |
+| `GET /v1/transfers/{id}` | 檔案傳輸的狀態、缺少的塊與統計 |
+| `PUT /v1/transfers/{id}/chunks/{序號}` | 上傳一塊 |
+| `GET /v1/transfers/{id}/chunks/{序號}` | 下載一塊 |
+
+## 大檔傳輸
+
+```text
+寄件端                         平台                               收件端
+  │ 登記檔案清單（大小、總雜湊、每塊雜湊）
+  ├──────────────────────────► 預留暫存空間，不夠就拒收並記下原因
+  │ 逐塊上傳，每塊核對雜湊值
+  ├──────────────────────────► 收齊後核對總雜湊值
+  │                            送出一則「檔案清單」訊息 ─────────► 收到清單
+  │                                                    ◄───────── 逐塊下載，每塊核對
+  │                                                               重組後核對總雜湊值
+  │                            暫存空間釋放 ◄───────────────────── 回條
+```
+
+- **分塊：** 預設每塊 1 MiB，可設 64 KiB 到 8 MiB。
+- **續傳：** 中斷後再呼叫一次上傳，客戶端只補傳平台回報缺少的塊。
+- **傳輸途中損壞：** 收件端發現某塊雜湊值不符，重新下載那一塊，最多 3 次。
+- **平台上損壞：** 平台在交出一塊之前重新核對。不符就把那塊標為缺少，回報收件端，寄件端再上傳一次即可。
+- **空間上限：** 未完成的傳輸共用暫存空間，預設 2 GiB，由 `serve --spool-limit` 設定。超過時拒收，原因記在傳送紀錄。
+- **釋放：** 收件端回條、訊息過期或失敗時刪除暫存；上傳一直沒完成的傳輸，超過保存時間也會過期並刪除。
+- **檔案清單也是一般訊息**，類型為 `transfer`，所以回條、重新投遞與過期都和其他訊息相同。
+
+實測一個 200 MB 的檔案在本機約 9 秒傳完，兩端雜湊值一致。這是同一台電腦上的數字，不代表跨網路的速度。
 
 ## 新增一條鏈路
 
@@ -97,6 +127,6 @@ PYTHONPATH=src python3 -m cloudyfami_portal serve --db /tmp/portal.sqlite3 --por
 
 ## 還沒做的
 
-- 大檔分塊（#87）。目前單則上限約 8 MB，整則放在記憶體裡。
+- 下載不能續傳。下載中斷時，收件端要從第一塊重新下載。
 - 命令列收發工具（#88）、MCP 伺服器（#89）。
 - LoRa 鏈路（#93）、基地部署與斷網切換（#94）。

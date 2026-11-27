@@ -26,9 +26,10 @@ class Kind(Enum):
     TEXT = 1
     SIGNAL = 2
     FILE = 3
+    TRANSFER = 4
 
 
-def _name_bytes(field, value):
+def check_name(field, value):
     if not isinstance(value, str):
         raise EnvelopeError(f'{field} must be text')
     raw = value.encode('utf-8')
@@ -51,8 +52,8 @@ class Envelope:
     def __post_init__(self):
         if not isinstance(self.message_id, bytes) or len(self.message_id) != 16:
             raise EnvelopeError('message_id must be 16 bytes')
-        _name_bytes('sender', self.sender)
-        _name_bytes('recipient', self.recipient)
+        check_name('sender', self.sender)
+        check_name('recipient', self.recipient)
         if isinstance(self.created_at, bool) or not isinstance(self.created_at, int) \
                 or not 0 <= self.created_at < 2**32:
             raise EnvelopeError('created_at must be whole seconds since the epoch')
@@ -105,8 +106,8 @@ class Envelope:
         return envelope
 
     def to_compact(self):
-        sender = _name_bytes('sender', self.sender)
-        recipient = _name_bytes('recipient', self.recipient)
+        sender = check_name('sender', self.sender)
+        recipient = check_name('recipient', self.recipient)
         packet = b''.join((
             _FIXED.pack(COMPACT_VERSION, self.message_id, self.created_at, self.kind.value),
             bytes([len(sender)]), sender, bytes([len(recipient)]), recipient,

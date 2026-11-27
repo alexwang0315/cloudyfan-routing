@@ -5,6 +5,7 @@ import time
 
 from .http_link import HttpLink, PortalClient
 from .relay import DeliveryPolicy, Relay, State
+from .transfer import DEFAULT_SPOOL_LIMIT, Transfers
 
 
 def demo():
@@ -38,7 +39,8 @@ def demo():
 
 def serve(args):
     relay = Relay(args.db, policy=DeliveryPolicy(args.ack_timeout, args.max_attempts, args.ttl))
-    link = HttpLink(relay, args.host, args.port)
+    transfers = Transfers(relay, args.spool or f'{args.db}.spool', limit=args.spool_limit)
+    link = HttpLink(relay, args.host, args.port, transfers=transfers)
     print(f'Cloudyfami portal relay listening on {link.url} (db: {args.db})', flush=True)
     try:
         link.serve_forever()
@@ -62,6 +64,9 @@ def main(argv=None):
                          help='hand-outs without a receipt before a message is marked failed')
     serving.add_argument('--ttl', type=float, default=DeliveryPolicy.ttl,
                          help='seconds a message is kept before it is marked expired')
+    serving.add_argument('--spool', help='folder for file chunks (default: next to --db)')
+    serving.add_argument('--spool-limit', type=int, default=DEFAULT_SPOOL_LIMIT,
+                         help='bytes of spool shared by unfinished file transfers')
     args = parser.parse_args(argv)
     if args.command == 'demo':
         demo()

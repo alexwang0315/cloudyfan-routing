@@ -2,12 +2,13 @@
 import sqlite3
 import threading
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
 
 from .envelope import Envelope, Kind
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 SYSTEM_LINK = 'relay'
 
 
@@ -51,6 +52,8 @@ class Conflict(ValueError):
     pass
 
 
+TERMINAL = frozenset({State.ACKED, State.EXPIRED, State.FAILED})
+
 _SCHEMA = '''
 CREATE TABLE IF NOT EXISTS messages (
     seq INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -76,6 +79,26 @@ CREATE TABLE IF NOT EXISTS transmissions (
     to_state TEXT NOT NULL,
     link TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS transfers (
+    transfer_id BLOB PRIMARY KEY,
+    manifest BLOB NOT NULL,
+    size INTEGER NOT NULL,
+    chunk_count INTEGER NOT NULL,
+    state TEXT NOT NULL,
+    reason TEXT,
+    started_at REAL NOT NULL,
+    uploaded_at REAL,
+    finished_at REAL,
+    uploads INTEGER NOT NULL DEFAULT 0,
+    upload_rejects INTEGER NOT NULL DEFAULT 0,
+    downloads INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS transfer_chunks (
+    transfer_id BLOB NOT NULL,
+    idx INTEGER NOT NULL,
+    present INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (transfer_id, idx)
+);
 '''
 
 _LIVE = (State.QUEUED.value, State.DELIVERED.value)
@@ -86,6 +109,8 @@ class Relay:
         self._clock = clock
         self.policy = policy
         self._changed = threading.Condition()
+        self._settled = []
+        self.settle_listeners = []
         self._db = sqlite3.connect(path, check_same_thread=False, isolation_level=None)
         self._db.row_factory = sqlite3.Row
         self._db.execute('PRAGMA journal_mode=WAL')
@@ -98,34 +123,52 @@ class Relay:
         self._db.executescript(_SCHEMA)
         self._db.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')
 
+    @property
+    def now(self):
+        return self._clock()
+
     def close(self):
         with self._changed:
             self._db.close()
 
-    def submit(self, envelope, link):
-        """Queue a message. Submitting the same message again returns its current state."""
+    @contextmanager
+    def transaction(self):
+        """Run one write transaction under the relay's lock.
+
+        Listeners in `settle_listeners` hear about every message that reached a final state, after
+        the transaction commits.
+        """
         with self._changed:
             self._db.execute('BEGIN IMMEDIATE')
             try:
-                self._sweep()
-                row = self._row(envelope.message_id)
-                if row is not None:
-                    if _envelope(row) != envelope:
-                        raise Conflict(f'message {envelope.id} already exists with different content')
-                    self._db.execute('COMMIT')
-                    return State(row['state'])
-                self._db.execute(
-                    'INSERT INTO messages (message_id, sender, recipient, created_at, kind, body, size, sha256,'
-                    ' state, queued_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                    (envelope.message_id, envelope.sender, envelope.recipient, envelope.created_at,
-                     envelope.kind.value, envelope.body, envelope.size, envelope.sha256, State.QUEUED.value,
-                     self._clock()))
-                self._log(envelope.message_id, None, State.QUEUED, link)
+                yield self._db
             except BaseException:
                 self._db.execute('ROLLBACK')
+                self._settled.clear()
                 raise
             self._db.execute('COMMIT')
+            settled, self._settled = self._settled, []
             self._changed.notify_all()
+            for message_id, state in settled:
+                for listener in self.settle_listeners:
+                    listener(message_id, state)
+
+    def submit(self, envelope, link):
+        """Queue a message. Submitting the same message again returns its current state."""
+        with self.transaction():
+            self._sweep()
+            row = self._row(envelope.message_id)
+            if row is not None:
+                if _envelope(row) != envelope:
+                    raise Conflict(f'message {envelope.id} already exists with different content')
+                return State(row['state'])
+            self._db.execute(
+                'INSERT INTO messages (message_id, sender, recipient, created_at, kind, body, size, sha256,'
+                ' state, queued_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                (envelope.message_id, envelope.sender, envelope.recipient, envelope.created_at,
+                 envelope.kind.value, envelope.body, envelope.size, envelope.sha256, State.QUEUED.value,
+                 self._clock()))
+            self._log(envelope.message_id, None, State.QUEUED, link)
             return State.QUEUED
 
     def claim(self, recipient, link, *, limit=10, wait=0.0):
@@ -135,79 +178,61 @@ class Relay:
         policy's ack timeout. Each hand-out counts as one attempt.
         """
         deadline = time.monotonic() + wait
-        with self._changed:
-            while True:
-                self._db.execute('BEGIN IMMEDIATE')
-                try:
-                    self._sweep()
-                    now = self._clock()
-                    rows = self._db.execute(
-                        'SELECT * FROM messages WHERE recipient = ? AND (state = ? OR (state = ?'
-                        ' AND next_attempt_at <= ? AND attempts < ?)) ORDER BY seq LIMIT ?',
-                        (recipient, State.QUEUED.value, State.DELIVERED.value, now, self.policy.max_attempts,
-                         limit)).fetchall()
-                    for row in rows:
-                        self._move(row, State.DELIVERED, link)
-                        self._db.execute(
-                            'UPDATE messages SET attempts = attempts + 1, next_attempt_at = ? WHERE seq = ?',
-                            (now + self.policy.ack_timeout, row['seq']))
-                except BaseException:
-                    self._db.execute('ROLLBACK')
-                    raise
-                self._db.execute('COMMIT')
-                remaining = deadline - time.monotonic()
-                if rows or remaining <= 0:
-                    break
-                # Redeliveries become due by time rather than by a notify, so wake up periodically.
+        while True:
+            with self.transaction():
+                self._sweep()
+                now = self._clock()
+                rows = self._db.execute(
+                    'SELECT * FROM messages WHERE recipient = ? AND (state = ? OR (state = ?'
+                    ' AND next_attempt_at <= ? AND attempts < ?)) ORDER BY seq LIMIT ?',
+                    (recipient, State.QUEUED.value, State.DELIVERED.value, now, self.policy.max_attempts,
+                     limit)).fetchall()
+                for row in rows:
+                    self._move(row, State.DELIVERED, link)
+                    self._db.execute(
+                        'UPDATE messages SET attempts = attempts + 1, next_attempt_at = ? WHERE seq = ?',
+                        (now + self.policy.ack_timeout, row['seq']))
+            remaining = deadline - time.monotonic()
+            if rows or remaining <= 0:
+                return [_envelope(row) for row in rows]
+            # Redeliveries become due by time rather than by a notify, so wake up periodically.
+            with self._changed:
                 self._changed.wait(min(remaining, 0.5))
-            if rows:
-                self._changed.notify_all()
-            return [_envelope(row) for row in rows]
 
     def ack(self, recipient, message_id, link):
         """Record the recipient's receipt. Acknowledging twice is harmless."""
-        with self._changed:
+        with self.transaction():
             row = self._row(message_id)
             if row is None or row['recipient'] != recipient:
                 raise NotFound(f'no message {message_id.hex()} for {recipient}')
-            if row['state'] == State.ACKED.value:
-                return State.ACKED
-            self._db.execute('BEGIN IMMEDIATE')
-            try:
+            if row['state'] != State.ACKED.value:
                 self._move(row, State.ACKED, link)
-            except BaseException:
-                self._db.execute('ROLLBACK')
-                raise
-            self._db.execute('COMMIT')
-            self._changed.notify_all()
             return State.ACKED
 
     def sweep(self):
         """Expire messages past their time to live and fail those out of delivery attempts."""
+        with self.transaction():
+            return self._sweep()
+
+    def exists(self, message_id):
         with self._changed:
-            self._db.execute('BEGIN IMMEDIATE')
-            changed = self._sweep()
-            self._db.execute('COMMIT')
-            if changed:
-                self._changed.notify_all()
-            return changed
+            return self._row(message_id) is not None
 
     def status(self, message_id, *, wait_for=None, wait=0.0):
         """Return a message's delivery record, optionally waiting until it reaches `wait_for`."""
         deadline = time.monotonic() + wait
-        with self._changed:
-            while True:
-                self._db.execute('BEGIN IMMEDIATE')
+        while True:
+            with self.transaction():
                 self._sweep()
-                self._db.execute('COMMIT')
                 row = self._row(message_id)
                 if row is None:
                     raise NotFound(f'no message {message_id.hex()}')
-                remaining = deadline - time.monotonic()
-                state = State(row['state'])
-                if wait_for is None or state is wait_for or state not in (State.QUEUED, State.DELIVERED) \
-                        or remaining <= 0:
-                    return self._record(row)
+                record = self._record(row)
+            state = State(record['state'])
+            remaining = deadline - time.monotonic()
+            if wait_for is None or state is wait_for or state in TERMINAL or remaining <= 0:
+                return record
+            with self._changed:
                 self._changed.wait(min(remaining, 0.5))
 
     def transmissions(self, limit=100):
@@ -246,6 +271,8 @@ class Relay:
             raise Conflict(f'message {row["message_id"].hex()} cannot go from {current.value} to {target.value}')
         self._db.execute('UPDATE messages SET state = ? WHERE message_id = ?', (target.value, row['message_id']))
         self._log(row['message_id'], current, target, link)
+        if target in TERMINAL:
+            self._settled.append((bytes(row['message_id']), target))
 
     def _log(self, message_id, source, target, link):
         self._db.execute(

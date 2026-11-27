@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# Run the portal in its cloud role on this machine and expose it through a Cloudflare quick tunnel.
+#   scripts/cloud-tunnel start | stop | status | url | logs
+# The quick tunnel needs no Cloudflare account. Its HTTPS address changes on every start.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+DATA="${CLOUDYFAMI_PORTAL_DATA:-$HOME/.local/share/cloudyfami-portal}"
+PORT="${CLOUDYFAMI_PORTAL_PORT:-8790}"
+PYTHON="${PYTHON:-python3}"
+CLOUDFLARED="${CLOUDFLARED:-cloudflared}"
+mkdir -p "$DATA"
+
+running() { [[ -f "$DATA/$1.pid" ]] && kill -0 "$(cat "$DATA/$1.pid")" 2>/dev/null; }
+
+url() { grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' "$DATA/tunnel.log" 2>/dev/null | tail -1; }
+
+start() {
+  command -v "$CLOUDFLARED" >/dev/null || { echo "cloudflared not found; set CLOUDFLARED=/path/to/cloudflared" >&2; exit 1; }
+  if running relay; then echo "relay already running (pid $(cat "$DATA/relay.pid"))"; else
+    PYTHONPATH="$ROOT/src" nohup "$PYTHON" -B -m cloudyfami_portal serve --db "$DATA/cloud.sqlite3" \
+      --port "$PORT" >>"$DATA/relay.log" 2>&1 &
+    echo $! >"$DATA/relay.pid"
+  fi
+  for _ in $(seq 50); do curl -fs "http://127.0.0.1:$PORT/health" >/dev/null && break; sleep 0.2; done
+  curl -fs "http://127.0.0.1:$PORT/health" >/dev/null || { echo "relay did not start; see $DATA/relay.log" >&2; exit 1; }
+  if running tunnel; then echo "tunnel already running (pid $(cat "$DATA/tunnel.pid"))"; else
+    : >"$DATA/tunnel.log"
+    nohup "$CLOUDFLARED" tunnel --no-autoupdate --url "http://127.0.0.1:$PORT" >>"$DATA/tunnel.log" 2>&1 &
+    echo $! >"$DATA/tunnel.pid"
+  fi
+  for _ in $(seq 60); do [[ -n "$(url)" ]] && break; sleep 0.5; done
+  [[ -n "$(url)" ]] || { echo "tunnel gave no address; see $DATA/tunnel.log" >&2; exit 1; }
+  echo "portal: $(url)"
+}
+
+stop() {
+  for name in tunnel relay; do
+    if running "$name"; then kill "$(cat "$DATA/$name.pid")"; echo "stopped $name"; fi
+    rm -f "$DATA/$name.pid"
+  done
+}
+
+status() {
+  running relay && echo "relay: running on 127.0.0.1:$PORT" || echo "relay: stopped"
+  running tunnel && echo "tunnel: running at $(url)" || echo "tunnel: stopped"
+  if running tunnel && [[ -n "$(url)" ]]; then
+    curl -fs --max-time 10 "$(url)/health" >/dev/null && echo "public health check: ok" || echo "public health check: failed"
+  fi
+}
+
+case "${1:-}" in
+  start) start ;;
+  stop) stop ;;
+  status) status ;;
+  url) url ;;
+  logs) tail -n 50 "$DATA/relay.log" "$DATA/tunnel.log" 2>/dev/null ;;
+  *) echo "usage: $0 start|stop|status|url|logs" >&2; exit 2 ;;
+esac

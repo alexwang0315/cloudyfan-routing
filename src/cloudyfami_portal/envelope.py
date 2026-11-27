@@ -105,7 +105,8 @@ class Envelope:
             raise EnvelopeError('size or sha256 does not match the body')
         return envelope
 
-    def to_compact(self):
+    def to_compact(self, limit=COMPACT_MAX_BYTES):
+        """Binary form for narrow links. `limit=None` lifts the single-packet limit for segmenting."""
         sender = check_name('sender', self.sender)
         recipient = check_name('recipient', self.recipient)
         packet = b''.join((
@@ -113,13 +114,13 @@ class Envelope:
             bytes([len(sender)]), sender, bytes([len(recipient)]), recipient,
             hashlib.sha256(self.body).digest()[:_HASH_PREFIX], self.body,
         ))
-        if len(packet) > COMPACT_MAX_BYTES:
-            raise TooLargeForCompact(f'compact form is {len(packet)} bytes, limit {COMPACT_MAX_BYTES}')
+        if limit is not None and len(packet) > limit:
+            raise TooLargeForCompact(f'compact form is {len(packet)} bytes, limit {limit}')
         return packet
 
     @classmethod
-    def from_compact(cls, packet):
-        if not isinstance(packet, bytes) or len(packet) > COMPACT_MAX_BYTES:
+    def from_compact(cls, packet, limit=COMPACT_MAX_BYTES):
+        if not isinstance(packet, bytes) or (limit is not None and len(packet) > limit):
             raise EnvelopeError('compact packet must be bytes within the packet limit')
         try:
             version, message_id, created_at, kind = _FIXED.unpack_from(packet)

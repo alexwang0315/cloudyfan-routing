@@ -18,6 +18,7 @@ packages = ["src/cloudyfami_portal"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+tmp_path_retention_policy = "failed"
 
 [tool.ruff]
 line-length = 110

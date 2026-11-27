@@ -109,6 +109,8 @@ def _handler(relay, transfers):
                 case 'POST', ['v1', 'inbox', recipient, message_id, 'ack']:
                     state = relay.ack(recipient, _message_id(message_id), LINK)
                     return 200, {'state': state.value}
+                case 'GET', ['v1', 'clients']:
+                    return 200, {'clients': relay.clients()}
                 case 'GET', ['v1', 'transmissions']:
                     return 200, {'transmissions': relay.transmissions(),
                                  'transfers': transfers.list() if transfers else []}
@@ -251,6 +253,9 @@ class PortalClient:
 
     def transmissions(self):
         return self._call('GET', '/v1/transmissions')['transmissions']
+
+    def clients(self):
+        return self._call('GET', '/v1/clients')['clients']
 
     def transfers(self):
         return self._call('GET', '/v1/transmissions')['transfers']

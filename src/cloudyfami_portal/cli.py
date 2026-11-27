@@ -11,10 +11,11 @@ import time
 import tomllib
 from pathlib import Path
 
+from . import inbox
 from .envelope import Kind
 from .http_link import HttpLink, PortalClient, PortalError
 from .relay import DeliveryPolicy, Relay, State
-from .transfer import DEFAULT_SPOOL_LIMIT, Manifest, Transfers
+from .transfer import DEFAULT_SPOOL_LIMIT, Transfers
 
 DEFAULT_CONFIG = Path('~/.config/cloudyfami-portal/client.toml').expanduser()
 
@@ -77,13 +78,6 @@ def cmd_send_file(args):
     return 0 if args.wait_ack <= 0 or state == 'acked' else 1
 
 
-def _save_path(folder, manifest):
-    target = folder / (manifest.name or manifest.id)
-    if target.exists():
-        target = target.with_name(f'{target.stem}-{manifest.id[:8]}{target.suffix}')
-    return target
-
-
 def cmd_listen(args):
     client = _client(args)
     save_dir = Path(args.save_dir).expanduser()
@@ -91,27 +85,15 @@ def cmd_listen(args):
     handled = []
 
     def handle(envelope):
-        record = {'id': envelope.id, 'sender': envelope.sender, 'kind': envelope.kind.name.lower(),
-                  'size': envelope.size, 'created_at': envelope.created_at}
-        stdin = envelope.body
-        if envelope.kind is Kind.TRANSFER:
-            manifest = Manifest.from_envelope(envelope)
-            save_dir.mkdir(parents=True, exist_ok=True)
-            target = _save_path(save_dir, manifest)
-            client.fetch(envelope, target)
-            record.update(file=str(target), name=manifest.name, size=manifest.size, sha256=manifest.sha256)
-            stdin = b''
-            shown = f'檔案 {target}（{manifest.size} 位元組）'
-        else:
-            text = envelope.body.decode('utf-8', 'replace')
-            record['text'] = text
-            shown = text
+        record = inbox.store(client, envelope, save_dir)
         if args.exec:
             env = {**os.environ, 'CLOUDYFAMI_MESSAGE_ID': envelope.id, 'CLOUDYFAMI_SENDER': envelope.sender,
                    'CLOUDYFAMI_KIND': record['kind'], 'CLOUDYFAMI_FILE': record.get('file', '')}
+            stdin = b'' if 'file' in record else envelope.body
             result = subprocess.run(args.exec, shell=True, input=stdin, env=env, check=False)
             if result.returncode != 0:
                 raise RuntimeError(f'handler exited with {result.returncode}')
+        shown = f'檔案 {record["file"]}（{record["size"]} 位元組）' if 'file' in record else record['text']
         stamp = time.strftime('%H:%M:%S', time.localtime(envelope.created_at))
         _print(args, record, f'{stamp} {envelope.sender} [{record["kind"]}] {envelope.id[:8]} {shown}')
         handled.append(envelope.id)
@@ -155,6 +137,25 @@ def cmd_log(args):
         reason = f'：{item["reason"]}' if item['reason'] else ''
         print(f'檔案 {item["id"][:8]} {item["size"]}B {item["chunks"]} 塊 {item["state"]}{reason}'
               f'（上傳 {item["uploads"]}、下載 {item["downloads"]}、重傳 {item["retransmissions"]}）')
+    return 0
+
+
+def cmd_clients(args):
+    clients = _client(args).clients()
+    if args.json:
+        _print(args, {'clients': clients}, '')
+        return 0
+    for item in clients:
+        stamp = time.strftime('%H:%M:%S', time.localtime(item['last_seen']))
+        print(f'{item["name"]} {"在線" if item["online"] else "離線"}（最後出現 {stamp}，{item["link"]}）')
+    return 0
+
+
+def cmd_mcp(args):
+    from .mcp_server import McpServer
+
+    url, name = client_settings(args)
+    McpServer(PortalClient(url, name), args.save_dir).serve()
     return 0
 
 
@@ -259,11 +260,18 @@ def build_parser():
 
     log = commands.add_parser('log', help='show the transmission log and file transfers')
     _client_options(log)
+
+    clients = commands.add_parser('clients', help='list clients the portal has heard from')
+    _client_options(clients)
+
+    mcp = commands.add_parser('mcp', help='run an MCP server on stdio for an AI agent')
+    _client_options(mcp)
+    mcp.add_argument('--save-dir', default='~/Downloads/cloudyfami-portal', help='where received files are written')
     return parser
 
 
 COMMANDS = {'demo': cmd_demo, 'serve': cmd_serve, 'send': cmd_send, 'send-file': cmd_send_file,
-            'listen': cmd_listen, 'status': cmd_status, 'log': cmd_log}
+            'listen': cmd_listen, 'status': cmd_status, 'log': cmd_log, 'clients': cmd_clients, 'mcp': cmd_mcp}
 
 
 def main(argv=None):

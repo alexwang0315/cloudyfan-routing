@@ -8,7 +8,8 @@ from enum import Enum
 
 from .envelope import Envelope, Kind
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
+PRESENCE_WINDOW = 60.0
 SYSTEM_LINK = 'relay'
 
 
@@ -93,6 +94,11 @@ CREATE TABLE IF NOT EXISTS transfers (
     upload_rejects INTEGER NOT NULL DEFAULT 0,
     downloads INTEGER NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS clients (
+    name TEXT PRIMARY KEY,
+    last_seen REAL NOT NULL,
+    link TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS transfer_chunks (
     transfer_id BLOB NOT NULL,
     idx INTEGER NOT NULL,
@@ -169,6 +175,7 @@ class Relay:
                  envelope.kind.value, envelope.body, envelope.size, envelope.sha256, State.QUEUED.value,
                  self._clock()))
             self._log(envelope.message_id, None, State.QUEUED, link)
+            self._touch(envelope.sender, link)
             return State.QUEUED
 
     def claim(self, recipient, link, *, limit=10, wait=0.0):
@@ -182,6 +189,7 @@ class Relay:
             with self.transaction():
                 self._sweep()
                 now = self._clock()
+                self._touch(recipient, link)
                 rows = self._db.execute(
                     'SELECT * FROM messages WHERE recipient = ? AND (state = ? OR (state = ?'
                     ' AND next_attempt_at <= ? AND attempts < ?)) ORDER BY seq LIMIT ?',
@@ -207,6 +215,7 @@ class Relay:
                 raise NotFound(f'no message {message_id.hex()} for {recipient}')
             if row['state'] != State.ACKED.value:
                 self._move(row, State.ACKED, link)
+            self._touch(recipient, link)
             return State.ACKED
 
     def sweep(self):
@@ -235,6 +244,18 @@ class Relay:
             with self._changed:
                 self._changed.wait(min(remaining, 0.5))
 
+    def clients(self, window=PRESENCE_WINDOW):
+        """Every client the relay has heard from, newest first; online means heard from within `window`.
+
+        A client is heard from when it sends, polls its inbox or acknowledges. A listening client
+        polls at least every 30 seconds, so it stays online for as long as it listens.
+        """
+        with self._changed:
+            rows = self._db.execute('SELECT * FROM clients ORDER BY last_seen DESC').fetchall()
+            now = self._clock()
+        return [{'name': row['name'], 'last_seen': row['last_seen'], 'link': row['link'],
+                 'online': now - row['last_seen'] <= window} for row in rows]
+
     def transmissions(self, limit=100):
         """The debugging log: who sent what to whom, when, how big, and each state change."""
         with self._changed:
@@ -261,6 +282,11 @@ class Relay:
         for row in exhausted:
             self._move(row, State.FAILED, SYSTEM_LINK)
         return len(expired) + len(exhausted)
+
+    def _touch(self, name, link):
+        self._db.execute('INSERT INTO clients (name, last_seen, link) VALUES (?, ?, ?) ON CONFLICT (name)'
+                         ' DO UPDATE SET last_seen = excluded.last_seen, link = excluded.link',
+                         (name, self._clock(), link))
 
     def _row(self, message_id):
         return self._db.execute('SELECT * FROM messages WHERE message_id = ?', (message_id,)).fetchone()

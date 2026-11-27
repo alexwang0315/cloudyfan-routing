@@ -1,8 +1,8 @@
 import hashlib
 import os
-import socket
 
 import pytest
+from support import free_port
 
 from cloudyfami_portal import DeliveryPolicy, Relay
 from cloudyfami_portal.http_link import (
@@ -34,12 +34,6 @@ def sha256_of(path):
         while piece := source.read(MiB):
             digest.update(piece)
     return digest.hexdigest()
-
-
-def free_port():
-    with socket.socket() as probe:
-        probe.bind(('127.0.0.1', 0))
-        return probe.getsockname()[1]
 
 
 class Portal:

@@ -2,11 +2,13 @@
 
 Cloudyfami 平台的平台轉送：把一個客戶端的訊息送給另一個客戶端，兩端各自連到平台，不必在同一個網路。依據 [ADR 0039](../docs/adr/0039-platform-relay-of-hca-summaries-to-granted-clients.md) 與 [ADR 0040](../docs/adr/0040-cloudyfami-platform-one-software-two-deployments.md)，整體規格見 [Cloudyfami 平台規格 v0.1](../docs/cloudyfami-portal-spec-v0.1-2026-11-27.md)。
 
-目前完成 [#85](https://github.com/alexwang0315/cloudyfan-routing/issues/85)、[#86](https://github.com/alexwang0315/cloudyfan-routing/issues/86)、[#87](https://github.com/alexwang0315/cloudyfan-routing/issues/87)：訊息信封、轉送服務、網際網路（HTTP）這一條鏈路、離線排隊與重新投遞，以及大檔分塊傳輸。**只在本機驗證過**，還沒有部署，也還沒在兩台不同網路的設備上測過。第一階段不做授權檢查，客戶端以名稱自報身分，只適用於內部測試環境。
+目前完成 [#85](https://github.com/alexwang0315/cloudyfan-routing/issues/85)、[#86](https://github.com/alexwang0315/cloudyfan-routing/issues/86)、[#87](https://github.com/alexwang0315/cloudyfan-routing/issues/87)、[#88](https://github.com/alexwang0315/cloudyfan-routing/issues/88)：訊息信封、轉送服務、網際網路（HTTP）這一條鏈路、離線排隊與重新投遞、大檔分塊傳輸，以及客戶端程式庫與命令列工具。**只在本機驗證過**，還沒有部署，也還沒在兩台不同網路的設備上測過。第一階段不做授權檢查，客戶端以名稱自報身分，只適用於內部測試環境。
 
 ## 執行
 
 只用 Python 標準函式庫，需要 Python 3.12 以上。測試借用 `../cloudyfan-mrc` 的環境裡的 pytest。
+
+**照著做一次來回：** 見[使用說明](docs/usage.md)，用三個終端機視窗完成文字、回條、傳檔與查紀錄。
 
 在本機跑一次完整來回：
 
@@ -35,7 +37,7 @@ PYTHONPATH=src python3 -m cloudyfami_portal serve --db /tmp/portal.sqlite3 --por
 | `transfer.py` | 大檔：檔案清單、平台端的分塊暫存、續傳、損壞偵測與空間上限 |
 | `connectivity.py` | 斷線判定 |
 | `http_link.py` | 網際網路這條鏈路：HTTP 轉接層，以及主動連出的客戶端 |
-| `__main__.py` | `demo` 與 `serve` 兩個指令 |
+| `cli.py` | `cloudyfami-portal` 指令：`serve`、`demo`、`send`、`send-file`、`listen`、`status`、`log` |
 
 ## 訊息信封
 
@@ -128,5 +130,5 @@ PYTHONPATH=src python3 -m cloudyfami_portal serve --db /tmp/portal.sqlite3 --por
 ## 還沒做的
 
 - 下載不能續傳。下載中斷時，收件端要從第一塊重新下載。
-- 命令列收發工具（#88）、MCP 伺服器（#89）。
+- MCP 伺服器（#89）。
 - LoRa 鏈路（#93）、基地部署與斷網切換（#94）。

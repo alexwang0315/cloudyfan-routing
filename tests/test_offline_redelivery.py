@@ -1,17 +1,11 @@
-import os
 import signal
-import socket
-import subprocess
-import sys
 import time
-from pathlib import Path
 
 import pytest
+from support import free_port, start_server
 
 from cloudyfami_portal import Connectivity, DeliveryPolicy, Envelope, Mode, Relay
 from cloudyfami_portal.http_link import HttpLink, PortalClient, PortalUnreachable
-
-SRC = Path(__file__).resolve().parents[1] / 'src'
 
 
 class Clock:
@@ -40,12 +34,6 @@ def portal(relay):
     link = HttpLink(relay).start()
     yield link.url
     link.stop()
-
-
-def free_port():
-    with socket.socket() as probe:
-        probe.bind(('127.0.0.1', 0))
-        return probe.getsockname()[1]
 
 
 def test_messages_sent_while_the_recipient_is_offline_arrive_in_order_once_it_returns(portal):
@@ -153,27 +141,10 @@ def test_client_reports_offline_only_after_three_failed_calls():
     assert not client.online
 
 
-def start_server(db, port):
-    env = {**os.environ, 'PYTHONPATH': str(SRC)}
-    process = subprocess.Popen(
-        [sys.executable, '-B', '-m', 'cloudyfami_portal', 'serve', '--db', str(db), '--port', str(port),
-         '--ack-timeout', '0.5'], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    probe = PortalClient(f'http://127.0.0.1:{port}', 'probe', timeout=1, retry_delays=())
-    deadline = time.monotonic() + 10
-    while time.monotonic() < deadline:
-        try:
-            probe._call('GET', '/health')
-            return process
-        except PortalUnreachable:
-            time.sleep(0.1)
-    process.kill()
-    raise AssertionError('relay did not start')
-
-
 def test_killing_the_relay_mid_delivery_loses_nothing_and_shows_nothing_twice(tmp_path):
     db, port = tmp_path / 'portal.sqlite3', free_port()
     url = f'http://127.0.0.1:{port}'
-    server = start_server(db, port)
+    server = start_server(db, port, '--ack-timeout', '0.5')
     try:
         alice = PortalClient(url, '甲')
         sent = [alice.send('乙', f'第 {n} 則') for n in range(10)]
@@ -187,7 +158,7 @@ def test_killing_the_relay_mid_delivery_loses_nothing_and_shows_nothing_twice(tm
             with pytest.raises(PortalUnreachable):
                 bob.ack(envelope)
 
-        server = start_server(db, port)
+        server = start_server(db, port, '--ack-timeout', '0.5')
         shown = list(first)
         deadline = time.monotonic() + 10
         while len(shown) < 10 and time.monotonic() < deadline:

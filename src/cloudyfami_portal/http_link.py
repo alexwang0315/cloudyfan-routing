@@ -1,6 +1,7 @@
 """The internet link: an HTTP adapter in front of the relay, and the client that dials out to it."""
 import hashlib
 import json
+import logging
 import threading
 import time
 from collections import OrderedDict
@@ -191,6 +192,7 @@ _ERROR_CODES = {'storage_full': StorageFullError, 'chunk_unavailable': ChunkUnav
 
 
 DEFAULT_RETRY_DELAYS = (0.5, 1.0, 2.0)
+log = logging.getLogger(__name__)
 _REMEMBERED_ACKS = 10_000
 
 
@@ -296,6 +298,42 @@ class PortalClient:
         finally:
             partial.unlink(missing_ok=True)
         return manifest
+
+    def listen(self, handler, *, stop=None, until=None, wait=20.0, backoff=(0.5, 1.0, 2.0, 5.0, 10.0)):
+        """Hand every incoming message to `handler` until `stop` is set, reconnecting on its own.
+
+        `until` is a `time.monotonic()` deadline; no long poll runs past it.
+
+        A message is acknowledged only after `handler` returns. If `handler` raises, the message is
+        left unacknowledged and the portal hands it out again after its ack timeout.
+        """
+        stop = stop or threading.Event()
+        failures = 0
+        while not stop.is_set():
+            remaining = None if until is None else until - time.monotonic()
+            if remaining is not None and remaining <= 0:
+                return
+            try:
+                batch = self.receive(wait=wait if remaining is None else min(wait, remaining))
+                failures = 0
+            except PortalUnreachable as error:
+                delay = backoff[min(failures, len(backoff) - 1)]
+                log.warning('portal unreachable, retrying in %.1fs: %s', delay, error)
+                stop.wait(delay if remaining is None else min(delay, remaining))
+                failures += 1
+                continue
+            for envelope in batch:
+                if stop.is_set():
+                    return
+                try:
+                    handler(envelope)
+                except Exception:
+                    log.exception('handler failed for message %s; it will be handed out again', envelope.id)
+                    continue
+                try:
+                    self.ack(envelope)
+                except PortalUnreachable as error:
+                    log.warning('receipt for %s not delivered yet, will resend it: %s', envelope.id, error)
 
     def _download_chunk(self, transfer_id, index):
         return self._retrying('GET', f'/v1/transfers/{transfer_id}/chunks/{index}', raw=True)

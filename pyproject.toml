@@ -6,7 +6,7 @@ requires-python = ">=3.12"
 dependencies = []
 
 [project.scripts]
-cloudyfami-portal = "cloudyfami_portal.__main__:main"
+cloudyfami-portal = "cloudyfami_portal.cli:main"
 
 [build-system]
 requires = ["hatchling"]

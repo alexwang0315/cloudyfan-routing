@@ -19,6 +19,7 @@ CHUNK_MIN = 64 * 1024
 CHUNK_MAX = 8 * 1024 * 1024
 DEFAULT_CHUNK = 1024 * 1024
 DEFAULT_SPOOL_LIMIT = 2 * 1024**3
+MAX_FILE_NAME_BYTES = 255
 
 
 class TransferError(ValueError):
@@ -47,6 +48,7 @@ class Manifest:
     sha256: str
     chunk_size: int
     chunks: tuple
+    name: str = ''
 
     def __post_init__(self):
         if not isinstance(self.transfer_id, bytes) or len(self.transfer_id) != 16:
@@ -65,6 +67,9 @@ class Manifest:
             raise TransferError('chunk count does not match size and chunk_size')
         if not _is_sha256(self.sha256) or not all(_is_sha256(chunk) for chunk in self.chunks):
             raise TransferError('hashes must be lowercase hex sha256')
+        if not isinstance(self.name, str) or len(self.name.encode('utf-8')) > MAX_FILE_NAME_BYTES \
+                or self.name in ('.', '..') or any(ch in self.name for ch in '/\\\0'):
+            raise TransferError(f'file name must be a plain name of at most {MAX_FILE_NAME_BYTES} bytes')
 
     @property
     def id(self):
@@ -86,6 +91,7 @@ class Manifest:
         return {
             'id': self.id, 'sender': self.sender, 'recipient': self.recipient, 'created_at': self.created_at,
             'size': self.size, 'sha256': self.sha256, 'chunk_size': self.chunk_size, 'chunks': list(self.chunks),
+            'name': self.name,
         }
 
     def to_bytes(self):
@@ -95,7 +101,7 @@ class Manifest:
     def from_json(cls, data):
         try:
             return cls(bytes.fromhex(data['id']), data['sender'], data['recipient'], data['created_at'],
-                       data['size'], data['sha256'], data['chunk_size'], tuple(data['chunks']))
+                       data['size'], data['sha256'], data['chunk_size'], tuple(data['chunks']), data.get('name', ''))
         except (TransferError, EnvelopeError):
             raise
         except (KeyError, TypeError, ValueError) as error:
@@ -111,7 +117,7 @@ class Manifest:
                 chunks.append(hashlib.sha256(piece).hexdigest())
                 size += len(piece)
         return cls(os.urandom(16), sender, recipient, int(clock()), size, whole.hexdigest(), chunk_size,
-                   tuple(chunks))
+                   tuple(chunks), Path(path).name)
 
     def envelope(self):
         return Envelope(self.transfer_id, self.sender, self.recipient, self.created_at, Kind.TRANSFER,

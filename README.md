@@ -2,7 +2,7 @@
 
 Cloudyfami 平台的平台轉送：把一個客戶端的訊息送給另一個客戶端，兩端各自連到平台，不必在同一個網路。依據 [ADR 0039](../docs/adr/0039-platform-relay-of-hca-summaries-to-granted-clients.md) 與 [ADR 0040](../docs/adr/0040-cloudyfami-platform-one-software-two-deployments.md)，整體規格見 [Cloudyfami 平台規格 v0.1](../docs/cloudyfami-portal-spec-v0.1-2026-11-27.md)。
 
-目前完成 [#85](https://github.com/alexwang0315/cloudyfan-routing/issues/85)：訊息信封、轉送服務與網際網路（HTTP）這一條鏈路。**只在本機驗證過**，還沒有部署，也還沒在兩台不同網路的設備上測過。第一階段不做授權檢查，客戶端以名稱自報身分，只適用於內部測試環境。
+目前完成 [#85](https://github.com/alexwang0315/cloudyfan-routing/issues/85) 與 [#86](https://github.com/alexwang0315/cloudyfan-routing/issues/86)：訊息信封、轉送服務、網際網路（HTTP）這一條鏈路，以及離線排隊、重新投遞與過期。**只在本機驗證過**，還沒有部署，也還沒在兩台不同網路的設備上測過。第一階段不做授權檢查，客戶端以名稱自報身分，只適用於內部測試環境。
 
 ## 執行
 
@@ -51,12 +51,32 @@ PYTHONPATH=src python3 -m cloudyfami_portal serve --db /tmp/portal.sqlite3 --por
 ## 投遞狀態
 
 ```text
+                    ┌─────┐ 逾時沒回條，重新投遞
+                    ▼     │
 已排隊 queued ──► 已送達 delivered ──► 已回條 acked
    │                  │
    └──► 已過期 expired / 失敗 failed ◄──┘
 ```
 
 狀態只能往前。已回條、已過期、失敗是終點。「已送達」代表收件端領走了，「已回條」代表收件端確認收到。
+
+| 規則 | 預設 | 指令參數 |
+|---|---|---|
+| 領走後多久沒回條就重新投遞 | 60 秒 | `--ack-timeout` |
+| 最多投遞幾次，用完仍沒回條就標為失敗 | 5 次 | `--max-attempts` |
+| 從排隊起保存多久，超過就標為已過期 | 7 天 | `--ttl` |
+
+過期與失敗由服務自己判定，傳送紀錄的鏈路欄寫 `relay`。收件端不在線時，訊息一直排隊到過期為止，上線後依原本順序領取。
+
+## 不重複的保證
+
+- **寄件端：** 送出失敗時，客戶端用同一個訊息代號重試（預設間隔 0.5、1、2 秒）。平台對同一個代號只保留一份。
+- **收件端：** 客戶端記得自己回條過的訊息代號。回條在路上遺失、平台重新投遞時，客戶端直接補回條，不把訊息再交給使用者。這份記錄放在記憶體裡，收件程式重開後會清空，所以重開後可能再看到一次尚未成功回條的訊息。
+- **服務重啟：** 佇列與狀態都在 SQLite。實測以 `kill -9` 強制結束服務，重啟後 10 則訊息沒有遺失，也沒有重複交給使用者。
+
+## 斷線判定
+
+客戶端沿用 `scout-lora-qa` 的規則：連續 3 次連不上才算斷線，連續 2 次成功才算恢復，避免一次失敗就來回切換。`PortalClient.online` 回報目前判定。
 
 ## HTTP 介面
 
@@ -77,7 +97,6 @@ PYTHONPATH=src python3 -m cloudyfami_portal serve --db /tmp/portal.sqlite3 --por
 
 ## 還沒做的
 
-- 沒有回條時的重新投遞、過期、斷線重連（#86）。目前領走但沒回條的訊息會停在「已送達」。
 - 大檔分塊（#87）。目前單則上限約 8 MB，整則放在記憶體裡。
 - 命令列收發工具（#88）、MCP 伺服器（#89）。
 - LoRa 鏈路（#93）、基地部署與斷網切換（#94）。

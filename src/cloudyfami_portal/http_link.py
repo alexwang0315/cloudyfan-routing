@@ -1,9 +1,12 @@
 """The internet link: an HTTP adapter in front of the relay, and the client that dials out to it."""
 import json
 import threading
+import time
+from collections import OrderedDict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib import error, parse, request
 
+from .connectivity import Connectivity, Mode
 from .envelope import Envelope, EnvelopeError, Kind
 from .relay import Conflict, NotFound, State
 
@@ -132,28 +135,63 @@ class HttpLink:
 
 
 class PortalError(RuntimeError):
-    pass
+    """A request the portal answered with an error. Retrying the same request will not help."""
+
+
+class PortalUnreachable(PortalError):
+    """The portal could not be reached, or failed on its side. Retrying the same request may help."""
+
+
+DEFAULT_RETRY_DELAYS = (0.5, 1.0, 2.0)
+_REMEMBERED_ACKS = 10_000
 
 
 class PortalClient:
-    def __init__(self, base_url, name, *, timeout=10.0):
+    """A client that dials out to the portal.
+
+    Sends and acknowledgements are retried with the same message id, so a retry never creates a
+    second message. Messages this client already acknowledged are dropped if the portal hands them
+    out again, which happens when an acknowledgement was lost on the way.
+    """
+
+    def __init__(self, base_url, name, *, timeout=10.0, retry_delays=DEFAULT_RETRY_DELAYS, sleep=time.sleep):
         self._base = base_url.rstrip('/')
         self.name = name
         self._timeout = timeout
+        self._retry_delays = tuple(retry_delays)
+        self._sleep = sleep
+        self._acked = OrderedDict()
+        self.connectivity = Connectivity(mode=Mode.ONLINE)
+
+    @property
+    def online(self):
+        return self.connectivity.mode is Mode.ONLINE
 
     def send(self, recipient, body, kind=Kind.TEXT):
-        envelope = Envelope.new(self.name, recipient, body, kind)
-        self._call('POST', '/v1/messages', envelope.to_json())
+        return self.resend(Envelope.new(self.name, recipient, body, kind))
+
+    def resend(self, envelope):
+        """Send an envelope that may already have reached the portal. The portal keeps only one copy."""
+        self._retrying('POST', '/v1/messages', envelope.to_json())
         return envelope
 
     def receive(self, *, wait=0.0, limit=10):
         path = f'/v1/inbox/{parse.quote(self.name, safe="")}?wait={wait}&limit={limit}'
         data = self._call('GET', path, extra_timeout=wait)
-        return [Envelope.from_json(item) for item in data['messages']]
+        fresh = []
+        for item in data['messages']:
+            envelope = Envelope.from_json(item)
+            if envelope.id in self._acked:
+                self._ack_remote(envelope.id)
+            else:
+                fresh.append(envelope)
+        return fresh
 
     def ack(self, envelope):
-        path = f'/v1/inbox/{parse.quote(self.name, safe="")}/{envelope.id}/ack'
-        return self._call('POST', path, {})['state']
+        self._acked[envelope.id] = None
+        while len(self._acked) > _REMEMBERED_ACKS:
+            self._acked.popitem(last=False)
+        return self._ack_remote(envelope.id)
 
     def status(self, message_id, *, until=None, wait=0.0):
         path = f'/v1/messages/{message_id}?wait={wait}'
@@ -164,15 +202,34 @@ class PortalClient:
     def transmissions(self):
         return self._call('GET', '/v1/transmissions')['transmissions']
 
+    def _ack_remote(self, message_id):
+        path = f'/v1/inbox/{parse.quote(self.name, safe="")}/{message_id}/ack'
+        return self._retrying('POST', path, {})['state']
+
+    def _retrying(self, method, path, payload):
+        for delay in self._retry_delays:
+            try:
+                return self._call(method, path, payload)
+            except PortalUnreachable:
+                self._sleep(delay)
+        return self._call(method, path, payload)
+
     def _call(self, method, path, payload=None, *, extra_timeout=0.0):
         data = None if payload is None else json.dumps(payload).encode('utf-8')
         req = request.Request(self._base + path, data=data, method=method,
                               headers={'Content-Type': 'application/json'})
         try:
             with request.urlopen(req, timeout=self._timeout + extra_timeout) as response:
-                return json.loads(response.read())
+                result = json.loads(response.read())
         except error.HTTPError as exc:
             detail = exc.read().decode('utf-8', 'replace')
-            raise PortalError(f'{method} {path} failed with {exc.code}: {detail}') from exc
-        except error.URLError as exc:
-            raise PortalError(f'cannot reach the portal at {self._base}: {exc.reason}') from exc
+            reachable = exc.code < 500
+            self.connectivity = self.connectivity.observe(reachable)
+            kind = PortalError if reachable else PortalUnreachable
+            raise kind(f'{method} {path} failed with {exc.code}: {detail}') from exc
+        except (error.URLError, OSError) as exc:
+            self.connectivity = self.connectivity.observe(False)
+            reason = getattr(exc, 'reason', exc)
+            raise PortalUnreachable(f'cannot reach the portal at {self._base}: {reason}') from exc
+        self.connectivity = self.connectivity.observe(True)
+        return result

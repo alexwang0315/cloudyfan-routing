@@ -70,4 +70,4 @@ def test_malformed_and_unknown_requests_are_reported_not_swallowed(portal):
 
 def test_unreachable_portal_is_an_explicit_error():
     with pytest.raises(PortalError, match='cannot reach'):
-        PortalClient('http://127.0.0.1:1', '甲', timeout=1).receive()
+        PortalClient('http://127.0.0.1:1', '甲', timeout=1, retry_delays=()).receive()

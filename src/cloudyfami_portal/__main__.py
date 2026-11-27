@@ -4,7 +4,7 @@ import tempfile
 import time
 
 from .http_link import HttpLink, PortalClient
-from .relay import Relay, State
+from .relay import DeliveryPolicy, Relay, State
 
 
 def demo():
@@ -37,7 +37,7 @@ def demo():
 
 
 def serve(args):
-    relay = Relay(args.db)
+    relay = Relay(args.db, policy=DeliveryPolicy(args.ack_timeout, args.max_attempts, args.ttl))
     link = HttpLink(relay, args.host, args.port)
     print(f'Cloudyfami portal relay listening on {link.url} (db: {args.db})', flush=True)
     try:
@@ -56,6 +56,12 @@ def main(argv=None):
     serving.add_argument('--db', required=True)
     serving.add_argument('--host', default='127.0.0.1')
     serving.add_argument('--port', type=int, default=8790)
+    serving.add_argument('--ack-timeout', type=float, default=DeliveryPolicy.ack_timeout,
+                         help='seconds to wait for a receipt before handing a message out again')
+    serving.add_argument('--max-attempts', type=int, default=DeliveryPolicy.max_attempts,
+                         help='hand-outs without a receipt before a message is marked failed')
+    serving.add_argument('--ttl', type=float, default=DeliveryPolicy.ttl,
+                         help='seconds a message is kept before it is marked expired')
     args = parser.parse_args(argv)
     if args.command == 'demo':
         demo()

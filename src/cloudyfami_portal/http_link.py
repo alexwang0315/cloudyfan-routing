@@ -214,6 +214,7 @@ class PortalClient:
         self._sleep = sleep
         self._acked = OrderedDict()
         self.connectivity = Connectivity(mode=Mode.ONLINE)
+        self.keep_receipts = False
 
     @property
     def online(self):
@@ -233,7 +234,9 @@ class PortalClient:
         fresh = []
         for item in data['messages']:
             envelope = Envelope.from_json(item)
-            if envelope.id in self._acked:
+            if envelope.kind is Kind.RECEIPT and not self.keep_receipts:
+                self.ack(envelope)
+            elif envelope.id in self._acked:
                 self._ack_remote(envelope.id)
             else:
                 fresh.append(envelope)
@@ -267,14 +270,20 @@ class PortalClient:
 
     def upload(self, manifest, path, *, on_chunk=None):
         """Upload whatever chunks the portal is still missing. Safe to call again after an interruption."""
-        record = self._retrying('POST', '/v1/transfers', manifest.to_json())
         with open(path, 'rb') as source:
-            for index in record['missing']:
+            def read_chunk(index):
                 source.seek(index * manifest.chunk_size)
-                data = source.read(manifest.chunk_length(index))
-                record = self._retrying('PUT', f'/v1/transfers/{manifest.id}/chunks/{index}', body=data)
-                if on_chunk:
-                    on_chunk(index)
+                return source.read(manifest.chunk_length(index))
+
+            return self.upload_chunks(manifest, read_chunk, on_chunk=on_chunk)
+
+    def upload_chunks(self, manifest, read_chunk, *, on_chunk=None):
+        """Like `upload`, with chunks coming from `read_chunk(index)` instead of a file."""
+        record = self._retrying('POST', '/v1/transfers', manifest.to_json())
+        for index in record['missing']:
+            record = self._retrying('PUT', f'/v1/transfers/{manifest.id}/chunks/{index}', body=read_chunk(index))
+            if on_chunk:
+                on_chunk(index)
         return record
 
     def transfer(self, transfer_id):
@@ -339,6 +348,9 @@ class PortalClient:
                     self.ack(envelope)
                 except PortalUnreachable as error:
                     log.warning('receipt for %s not delivered yet, will resend it: %s', envelope.id, error)
+
+    def download_chunk(self, transfer_id, index):
+        return self._download_chunk(transfer_id, index)
 
     def _download_chunk(self, transfer_id, index):
         return self._retrying('GET', f'/v1/transfers/{transfer_id}/chunks/{index}', raw=True)

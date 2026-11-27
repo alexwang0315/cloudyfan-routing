@@ -27,6 +27,7 @@ class Kind(Enum):
     SIGNAL = 2
     FILE = 3
     TRANSFER = 4
+    RECEIPT = 5
 
 
 def check_name(field, value):

@@ -178,11 +178,12 @@ class Relay:
             self._touch(envelope.sender, link)
             return State.QUEUED
 
-    def claim(self, recipient, link, *, limit=10, wait=0.0):
+    def claim(self, recipient, link, *, limit=10, wait=0.0, accept=None):
         """Hand the recipient its due messages, oldest first, and mark them delivered.
 
         A message is due when it is queued, or when it was delivered but not acknowledged within the
-        policy's ack timeout. Each hand-out counts as one attempt.
+        policy's ack timeout. Each hand-out counts as one attempt. With `accept`, only messages it
+        returns true for are handed out; the rest stay as they are.
         """
         deadline = time.monotonic() + wait
         while True:
@@ -192,9 +193,11 @@ class Relay:
                 self._touch(recipient, link)
                 rows = self._db.execute(
                     'SELECT * FROM messages WHERE recipient = ? AND (state = ? OR (state = ?'
-                    ' AND next_attempt_at <= ? AND attempts < ?)) ORDER BY seq LIMIT ?',
+                    ' AND next_attempt_at <= ? AND attempts < ?)) ORDER BY seq' + ('' if accept else ' LIMIT ?'),
                     (recipient, State.QUEUED.value, State.DELIVERED.value, now, self.policy.max_attempts,
-                     limit)).fetchall()
+                     *(() if accept else (limit,)))).fetchall()
+                if accept:
+                    rows = [row for row in rows if accept(_envelope(row))][:limit]
                 for row in rows:
                     self._move(row, State.DELIVERED, link)
                     self._db.execute(
@@ -222,6 +225,14 @@ class Relay:
         """Expire messages past their time to live and fail those out of delivery attempts."""
         with self.transaction():
             return self._sweep()
+
+    def due_recipients(self):
+        """Recipients that have messages still on their way."""
+        with self._changed:
+            rows = self._db.execute(
+                f'SELECT DISTINCT recipient FROM messages WHERE state IN ({",".join("?" * len(_LIVE))})',
+                _LIVE).fetchall()
+        return [row['recipient'] for row in rows]
 
     def exists(self, message_id):
         with self._changed:
@@ -312,6 +323,7 @@ class Relay:
         return {
             'id': row['message_id'].hex(), 'sender': row['sender'], 'recipient': row['recipient'],
             'size': row['size'], 'sha256': row['sha256'], 'state': row['state'], 'attempts': row['attempts'],
+            'kind': Kind(row['kind']).name.lower(),
             'history': [{'at': item['at'], 'state': item['to_state'], 'link': item['link']} for item in history],
         }
 

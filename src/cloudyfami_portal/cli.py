@@ -188,16 +188,62 @@ def cmd_demo(args):
     return 0
 
 
+def _base_config(path):
+    from .gateway import BaseConfig
+
+    try:
+        data = tomllib.loads(Path(path).expanduser().read_text(encoding='utf-8'))
+        config = BaseConfig(data['name'], dict(data.get('homes', {})), data.get('max_hops', 3))
+        return config, data.get('cloud'), float(data.get('tick_seconds', 1.0))
+    except (OSError, tomllib.TOMLDecodeError, KeyError, TypeError, ValueError) as error:
+        raise SettingsError(f'cannot use base config {path}: {error}') from error
+
+
 def cmd_serve(args):
-    relay = Relay(args.db, policy=DeliveryPolicy(args.ack_timeout, args.max_attempts, args.ttl))
+    if args.role == 'base' and not args.base_config:
+        raise SettingsError('--role base needs --base-config')
+    if args.role == 'base':
+        from .gateway import BASE_POLICY
+
+        policy = DeliveryPolicy(args.ack_timeout if args.ack_timeout is not None else BASE_POLICY.ack_timeout,
+                                args.max_attempts or BASE_POLICY.max_attempts, args.ttl)
+    else:
+        policy = DeliveryPolicy(args.ack_timeout if args.ack_timeout is not None else DeliveryPolicy.ack_timeout,
+                                args.max_attempts or DeliveryPolicy.max_attempts, args.ttl)
+    relay = Relay(args.db, policy=policy)
     transfers = Transfers(relay, args.spool or f'{args.db}.spool', limit=args.spool_limit)
     link = HttpLink(relay, args.host, args.port, transfers=transfers)
-    print(f'Cloudyfami portal relay listening on {link.url} (db: {args.db})', flush=True)
+    stop = threading.Event()
+    worker = None
+    if args.role == 'base':
+        from .gateway import Base, HttpUplink
+
+        config, cloud, tick = _base_config(args.base_config)
+        base = Base(config, relay, transfers, uplink=HttpUplink(cloud) if cloud else None)
+
+        def run_base():
+            ticks = 0
+            while not stop.wait(tick):
+                ticks += 1
+                try:
+                    base.step(ticks)
+                except Exception:
+                    logging.getLogger(__name__).exception('base step failed')
+
+        worker = threading.Thread(target=run_base, daemon=True)
+        worker.start()
+        print(f'Cloudyfami portal base {config.name!r} listening on {link.url} (db: {args.db}, '
+              f'cloud: {cloud or "none"}, no LoRa radio configured)', flush=True)
+    else:
+        print(f'Cloudyfami portal relay listening on {link.url} (db: {args.db})', flush=True)
     try:
         link.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
+        stop.set()
+        if worker:
+            worker.join(timeout=5)
         relay.close()
     return 0
 
@@ -219,10 +265,15 @@ def build_parser():
     serving.add_argument('--db', required=True)
     serving.add_argument('--host', default='127.0.0.1')
     serving.add_argument('--port', type=int, default=8790)
-    serving.add_argument('--ack-timeout', type=float, default=DeliveryPolicy.ack_timeout,
-                         help='seconds to wait for a receipt before handing a message out again')
-    serving.add_argument('--max-attempts', type=int, default=DeliveryPolicy.max_attempts,
-                         help='hand-outs without a receipt before a message is marked failed')
+    serving.add_argument('--role', choices=('cloud', 'base'), default='cloud',
+                         help='cloud relays between bases; base also forwards for the clients homed there')
+    serving.add_argument('--base-config', help='TOML with name, cloud, homes and max_hops (needed for --role base)')
+    serving.add_argument('--ack-timeout', type=float, default=None,
+                         help='seconds to wait for a receipt before handing a message out again '
+                              '(default 60 for cloud, 120 for base)')
+    serving.add_argument('--max-attempts', type=int, default=None,
+                         help='hand-outs without a receipt before a message is marked failed '
+                              '(default 5 for cloud, 50 for base)')
     serving.add_argument('--ttl', type=float, default=DeliveryPolicy.ttl,
                          help='seconds a message is kept before it is marked expired')
     serving.add_argument('--spool', help='folder for file chunks (default: next to --db)')

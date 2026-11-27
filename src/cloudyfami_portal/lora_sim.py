@@ -24,11 +24,12 @@ class LossyAir:
 
 
 class Channel:
-    """Links that all hear each other over one shared stretch of air."""
+    """Links sharing a stretch of air. With `neighbors` (name -> names), each hears only its neighbors."""
 
-    def __init__(self, links, air):
+    def __init__(self, links, air, neighbors=None):
         self.links = list(links)
         self.air = air
+        self.neighbors = neighbors
         self.now = 0
         self.on_air = []
 
@@ -41,7 +42,8 @@ class Channel:
                     raise AssertionError(f'{sender.name} built a {len(frame)}-byte frame')
                 self.on_air.append((self.now, sender.name, frame))
             for receiver in self.links:
-                if receiver is not sender:
+                if receiver is not sender and (self.neighbors is None
+                                               or receiver.name in self.neighbors.get(sender.name, ())):
                     for frame in self.air.carry(frames):
                         receiver.receive(frame, self.now)
 

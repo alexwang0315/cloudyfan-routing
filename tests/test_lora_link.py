@@ -13,7 +13,7 @@ DEFAULT = LinkPolicy()
 class Endpoint:
     def __init__(self, name, policy=DEFAULT):
         self.received, self.delivered, self.failed = [], [], []
-        self.link = LoRaLink(name, policy=policy, on_message=self.received.append,
+        self.link = LoRaLink(name, policy=policy, on_message=lambda envelope, hops: self.received.append(envelope),
                              on_delivered=self.delivered.append,
                              on_failed=lambda envelope, reason: self.failed.append((envelope, reason)))
 
@@ -147,7 +147,7 @@ def test_the_relay_carries_messages_over_lora_without_any_change(tmp_path):
     base_b = Relay(tmp_path / 'b.sqlite3')
     try:
         link_a = LoRaLink('基地-甲', on_delivered=lambda envelope: base_a.ack('乙', envelope.message_id, 'lora'))
-        link_b = LoRaLink('基地-乙', on_message=lambda envelope: base_b.submit(envelope, 'lora'))
+        link_b = LoRaLink('基地-乙', on_message=lambda envelope, hops: base_b.submit(envelope, 'lora'))
         channel = Channel([link_a, link_b], LossyAir(random.Random(7), loss=0.3, duplicate=0.2, reorder=0.5))
         sent = [Envelope.new('甲', '乙', f'第 {n} 則，' + '內容' * 60) for n in range(3)]
         for envelope in sent:

@@ -2,11 +2,12 @@
 
 Frames (every frame fits one packet of FRAME_MAX_BYTES):
 
-    DATA    0x01 | tag (6) | index (1) | total (1) | segment of the compact envelope
+    DATA    0x01 | tag (6) | index (1) | total (1) | segment of (hops (1) + compact envelope)
     STATUS  0x02 | tag (6) | total (1) | bitmap of the segments received so far
     DONE    0x03 | tag (6)
 
-The tag is the first six bytes of the message id. The receiver answers DONE once it holds every
+The tag is the first six bytes of the message id. `hops` is how many more LoRa transmissions the
+message may take; bases use it to stop forwarding (ADR 0040). The receiver answers DONE once it holds every
 segment, or STATUS with what it is missing when segments stop arriving. The sender resends only the
 missing segments, for a bounded number of rounds, then gives up and records why.
 
@@ -37,7 +38,8 @@ class Priority(IntEnum):
     FILE = 2
 
 
-_PRIORITY = {Kind.SIGNAL: Priority.SIGNAL, Kind.TEXT: Priority.TEXT, Kind.FILE: Priority.FILE}
+_PRIORITY = {Kind.SIGNAL: Priority.SIGNAL, Kind.TEXT: Priority.TEXT, Kind.RECEIPT: Priority.TEXT,
+             Kind.FILE: Priority.FILE}
 
 
 @dataclass(frozen=True)
@@ -99,7 +101,7 @@ class LoRaLink:
     def __init__(self, name, *, policy=DEFAULT_LINK_POLICY, on_message=None, on_delivered=None, on_failed=None):
         self.name = name
         self.policy = policy
-        self.on_message = on_message or (lambda envelope: None)
+        self.on_message = on_message or (lambda envelope, hops: None)
         self.on_delivered = on_delivered or (lambda envelope: None)
         self.on_failed = on_failed or (lambda envelope, reason: None)
         self.log = []
@@ -110,8 +112,13 @@ class LoRaLink:
         self._incoming = {}
         self._finished = OrderedDict()
 
-    def send(self, envelope, now=0):
+    def accepts(self, envelope):
+        return self._refusal(envelope) is None
+
+    def send(self, envelope, now=0, *, hops=0):
         """Queue a message. Raises RefusedOnLink when it cannot go over LoRa at all."""
+        if not 0 <= hops <= 255:
+            raise ValueError('hops must be 0..255')
         reason = self._refusal(envelope)
         if reason:
             self._record(now, envelope.id, 'refused', reason)
@@ -119,7 +126,7 @@ class LoRaLink:
         tag = envelope.message_id[:TAG_BYTES]
         if tag in self._outgoing:
             return
-        packed = envelope.to_compact(limit=None)
+        packed = bytes([hops]) + envelope.to_compact(limit=None)
         segments = [packed[at:at + SEGMENT_BYTES] for at in range(0, len(packed), SEGMENT_BYTES)]
         item = _Outgoing(envelope, _PRIORITY[envelope.kind], next(self._order), segments, list(range(len(segments))))
         self._outgoing[tag] = item
@@ -164,7 +171,7 @@ class LoRaLink:
     def _refusal(self, envelope):
         if envelope.kind is Kind.TRANSFER:
             return 'file transfers wait for the internet; their chunks are not reachable over LoRa'
-        size = len(envelope.to_compact(limit=None))
+        size = 1 + len(envelope.to_compact(limit=None))
         if size > self.policy.max_message_bytes:
             return (f'{size} bytes exceeds the LoRa limit of {self.policy.max_message_bytes} bytes; '
                     'waits for the internet')
@@ -188,7 +195,7 @@ class LoRaLink:
         del self._incoming[tag]
         packed = b''.join(incoming.segments[i] for i in range(total))
         try:
-            envelope = Envelope.from_compact(packed, limit=None)
+            hops, envelope = packed[0], Envelope.from_compact(packed[1:], limit=None)
         except EnvelopeError as error:
             self._record(now, tag.hex(), 'discarded', f'reassembled message is invalid: {error}')
             return
@@ -200,7 +207,7 @@ class LoRaLink:
             self._finished.popitem(last=False)
         self._queue_control(bytes([DONE]) + tag)
         self._record(now, envelope.id, 'received', f'{len(packed)} bytes in {total} segments')
-        self.on_message(envelope)
+        self.on_message(envelope, hops)
 
     def _on_status(self, tag, total, bits, now):
         item = self._outgoing.get(tag)
